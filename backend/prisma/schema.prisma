@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth ───────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  isAdmin      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  inviteCodeUsed InviteCode?
+  offerings      Offering[]
+  audiences      Audience[]
+}
+
+model InviteCode {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  usedById  String?  @unique
+  usedBy    User?    @relation(fields: [usedById], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// ─── Offerings ──────────────────────────────────────────
+
+model Offering {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  smeRole     String   @default("")
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  elements OfferingElement[]
+  drafts   ThreeTierDraft[]
+}
+
+model OfferingElement {
+  id         String   @id @default(cuid())
+  offeringId String
+  offering   Offering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+  text       String
+  source     String   @default("manual") // manual | ai_extracted
+  sortOrder  Int      @default(0)
+
+  mappings Mapping[]
+}
+
+// ─── Audiences ──────────────────────────────────────────
+
+model Audience {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  priorities Priority[]
+  drafts     ThreeTierDraft[]
+}
+
+model Priority {
+  id                 String   @id @default(cuid())
+  audienceId         String
+  audience           Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  text               String
+  rank               Int      @default(0)
+  isSpoken           Boolean  @default(true)
+  motivatingFactor   String   @default("")
+  whatAudienceThinks String   @default("")
+  sortOrder          Int      @default(0)
+
+  mappings        Mapping[]
+  tier2Statements Tier2Statement[]
+}
+
+// ─── Three Tier Draft ───────────────────────────────────
+
+model ThreeTierDraft {
+  id          String   @id @default(cuid())
+  offeringId  String
+  offering    Offering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+  audienceId  String
+  audience    Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  currentStep Int      @default(1) // 1-8
+  status      String   @default("in_progress") // in_progress | completed
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  mappings       Mapping[]
+  tier1Statement Tier1Statement?
+  tier2Statements Tier2Statement[]
+  tableVersions  TableVersion[]
+  stories        FiveChapterStory[]
+  conversations  ConversationMessage[]
+
+  @@unique([offeringId, audienceId])
+}
+
+model Mapping {
+  id         String          @id @default(cuid())
+  draftId    String
+  draft      ThreeTierDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  priorityId String
+  priority   Priority        @relation(fields: [priorityId], references: [id], onDelete: Cascade)
+  elementId  String
+  element    OfferingElement @relation(fields: [elementId], references: [id], onDelete: Cascade)
+  confidence Float           @default(0.0)
+  status     String          @default("suggested") // suggested | confirmed | rejected
+  createdAt  DateTime        @default(now())
+}
+
+// ─── Tier Statements ────────────────────────────────────
+
+model Tier1Statement {
+  id       String         @id @default(cuid())
+  draftId  String         @unique
+  draft    ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  text     String
+
+  cellVersions CellVersion[]
+}
+
+model Tier2Statement {
+  id         String         @id @default(cuid())
+  draftId    String
+  draft      ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  text       String
+  sortOrder  Int            @default(0)
+  priorityId String?
+  priority   Priority?      @relation(fields: [priorityId], references: [id], onDelete: SetNull)
+
+  tier3Bullets Tier3Bullet[]
+  cellVersions CellVersion[]
+}
+
+model Tier3Bullet {
+  id        String         @id @default(cuid())
+  tier2Id   String
+  tier2     Tier2Statement @relation(fields: [tier2Id], references: [id], onDelete: Cascade)
+  text      String
+  sortOrder Int            @default(0)
+
+  cellVersions CellVersion[]
+}
+
+// ─── Five Chapter Story ─────────────────────────────────
+
+model FiveChapterStory {
+  id          String         @id @default(cuid())
+  draftId     String
+  draft       ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  medium      String         // "15s" | "1m" | "5m"
+  cta         String
+  emphasis    String         @default("")
+  blendedText String         @default("")
+  version     Int            @default(1)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  chapters ChapterContent[]
+}
+
+model ChapterContent {
+  id         String           @id @default(cuid())
+  storyId    String
+  story      FiveChapterStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  chapterNum Int              // 1-5
+  title      String
+  content    String
+
+  @@unique([storyId, chapterNum])
+}
+
+// ─── Version History ────────────────────────────────────
+
+model CellVersion {
+  id           String          @id @default(cuid())
+  tier1Id      String?
+  tier1        Tier1Statement? @relation(fields: [tier1Id], references: [id], onDelete: Cascade)
+  tier2Id      String?
+  tier2        Tier2Statement? @relation(fields: [tier2Id], references: [id], onDelete: Cascade)
+  tier3Id      String?
+  tier3        Tier3Bullet?    @relation(fields: [tier3Id], references: [id], onDelete: Cascade)
+  text         String
+  versionNum   Int
+  changeSource String          @default("manual") // manual | ai_generate | poetry_pass | refine | magic_hour
+  createdAt    DateTime        @default(now())
+}
+
+model TableVersion {
+  id         String         @id @default(cuid())
+  draftId    String
+  draft      ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  snapshot   Json
+  label      String
+  versionNum Int
+  createdAt  DateTime       @default(now())
+}
+
+// ─── Conversation History ───────────────────────────────
+
+model ConversationMessage {
+  id        String         @id @default(cuid())
+  draftId   String
+  draft     ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  step      Int
+  role      String         // "user" | "assistant"
+  content   String
+  createdAt DateTime       @default(now())
+}

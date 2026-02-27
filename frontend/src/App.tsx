@@ -1,0 +1,28 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './auth/AuthContext';
+import { ProtectedRoute } from './auth/ProtectedRoute';
+import { LoginPage } from './auth/LoginPage';
+import { RegisterPage } from './auth/RegisterPage';
+import { Layout } from './shared/Layout';
+import { DashboardPage } from './dashboard/DashboardPage';
+import { ThreeTierShell } from './three-tier/ThreeTierShell';
+import { FiveChapterShell } from './five-chapter/FiveChapterShell';
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
+          <Route path="/three-tier/:draftId" element={<ProtectedRoute><Layout><ThreeTierShell /></Layout></ProtectedRoute>} />
+          <Route path="/five-chapter/:draftId" element={<ProtectedRoute><Layout><FiveChapterShell /></Layout></ProtectedRoute>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+
+export default App;
