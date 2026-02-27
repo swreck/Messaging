@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd frontend && npm install && npm run build && cd ../backend && npm install && cp -r ../frontend/dist/* public/ && npx prisma generate && npm run build"
+
+[deploy]
+startCommand = "cd backend && npx prisma migrate deploy && node dist/index.js"
+healthcheckPath = "/api/health"
+restartPolicyType = "on_failure"
