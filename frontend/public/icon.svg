@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0077ed"/>
+      <stop offset="100%" stop-color="#005ec4"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background (iOS-style) -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- Bold M letterform, shifted slightly left to make room for pen -->
+  <path d="M100 388V124h10l130 178 130-178h10v264h-42V214L244 338h-8L142 214v174h-42z" fill="white"/>
+  <!-- Pen accent, lower-right — angled as if just finishing a stroke -->
+  <g transform="translate(400, 320) rotate(-45)" opacity="0.85">
+    <!-- Pen shaft -->
+    <rect x="-6" y="-68" width="12" height="52" rx="4" fill="white"/>
+    <!-- Pen grip ring -->
+    <rect x="-8" y="-18" width="16" height="6" rx="2" fill="white" opacity="0.6"/>
+    <!-- Nib -->
+    <path d="M-6,-12 L0,8 L6,-12 Z" fill="white"/>
+    <!-- Ink dot at tip -->
+    <circle cx="0" cy="14" r="4" fill="white" opacity="0.45"/>
+  </g>
+</svg>
