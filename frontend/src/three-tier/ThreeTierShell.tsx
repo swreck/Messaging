@@ -16,7 +16,7 @@ export function ThreeTierShell() {
   const { draftId } = useParams<{ draftId: string }>();
   const navigate = useNavigate();
   const [draft, setDraft] = useState<ThreeTierDraft | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [activeStep, setActiveStep] = useState(1);
   const [navigating, setNavigating] = useState(false);
   const lastInteraction = useRef(Date.now());
@@ -93,7 +93,7 @@ export function ThreeTierShell() {
     if (activeStep > 1) setActiveStep(activeStep - 1);
   }
 
-  if (loading || !draft) return <div className="loading-screen"><Spinner size={32} /></div>;
+  if (!draft) return <div className="loading-screen"><Spinner size={32} /></div>;
 
   const stepProps = { draft, loadDraft, refreshDraft, nextStep, prevStep, goToStep };
 
