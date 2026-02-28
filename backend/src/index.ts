@@ -14,6 +14,7 @@ import storyRoutes from './routes/stories.js';
 import versionRoutes from './routes/versions.js';
 import aiRoutes from './routes/ai.js';
 import assistantRoutes from './routes/assistant.js';
+import settingsRoutes from './routes/settings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -33,6 +34,7 @@ app.use('/api/stories', storyRoutes);
 app.use('/api/versions', versionRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/assistant', assistantRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

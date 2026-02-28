@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { path: '/offerings', label: 'Offerings' },
   { path: '/three-tiers', label: 'Three Tiers' },
   { path: '/five-chapters', label: 'Five Chapters' },
+  { path: '/settings', label: 'Settings' },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

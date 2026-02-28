@@ -13,6 +13,7 @@ import { ThreeTiersPage } from './pages/ThreeTiersPage';
 import { FiveChaptersPage } from './pages/FiveChaptersPage';
 import { ThreeTierShell } from './three-tier/ThreeTierShell';
 import { FiveChapterShell } from './five-chapter/FiveChapterShell';
+import { SettingsPage } from './pages/SettingsPage';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
           <Route path="/five-chapters" element={<ProtectedRoute><Layout><FiveChaptersPage /></Layout></ProtectedRoute>} />
           <Route path="/three-tier/:draftId" element={<ProtectedRoute><Layout><ThreeTierShell /></Layout></ProtectedRoute>} />
           <Route path="/five-chapter/:draftId" element={<ProtectedRoute><Layout><FiveChapterShell /></Layout></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </MariaProvider>
