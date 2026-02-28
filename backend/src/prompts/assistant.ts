@@ -140,12 +140,12 @@ export function buildAssistantPrompt(context: {
 
   // Offerings listing page (no specific offering selected)
   if (context.page === 'offerings' && !context.offeringId) {
-    actions.push('- create_offering: Create a new offering. Params: { name: string, description?: string }');
+    actions.push('- create_offering: Create a new offering, optionally with initial capabilities. Params: { name: string, description?: string, capabilities?: string[] }');
   }
 
   // Audiences listing page (no specific audience selected)
   if (context.page === 'audiences' && !context.audienceId) {
-    actions.push('- create_audience: Create a new audience. Params: { name: string, description?: string }');
+    actions.push('- create_audience: Create a new audience, optionally with initial priorities. Params: { name: string, description?: string, priorities?: string[] } — priorities is an ordered array of priority texts, rank follows array order');
   }
 
   // Five Chapter Story actions
@@ -193,8 +193,12 @@ RESPONSE FORMAT:
 Always respond with JSON:
 {
   "response": "Your conversational response to the user",
-  "action": null OR { "type": "action_name", "params": { ... } }
+  "actions": [] OR [{ "type": "action_name", "params": { ... } }, ...]
 }
+
+Use an empty array [] when no actions are needed (chat only).
+Use multiple actions when the user's request requires more than one step — e.g. "create an audience with priorities, then delete duplicates from another" = [create_audience, delete_priorities].
+Actions execute in array order. Each action executes independently.
 
 CRITICAL RULE — read_page vs. direct action:
 If the user tells you WHAT to change or do, TAKE THE ACTION IMMEDIATELY. Do NOT use read_page first. You do NOT need to see the current content to dispatch an action — the backend handles the data.
@@ -221,7 +225,7 @@ When you use read_page, set response to a brief acknowledgment like "Let me take
 
 RULES:
 1. Be concise. 1-3 sentences for simple questions. For methodology explanations, use as many sentences as needed to be accurate and complete — but no padding.
-2. Only include an action if the user clearly wants something done. Chat-only responses use action: null.
+2. Only include actions if the user clearly wants something done. Chat-only responses use actions: [].
 3. If you're not sure what the user wants, ask — don't guess and take action.
 4. When discussing methodology, ONLY use the METHODOLOGY REFERENCE above. Do NOT supplement with outside knowledge, general sales frameworks, or things that "sound right." If a user asks about a concept not covered in the reference, say so: "That's not part of Ken's methodology as I know it." NEVER fabricate rules, invent chapter purposes, or paraphrase loosely. Quote the specific rules.
 5. Never say "I can't do that" — instead suggest what you CAN do or where to find the answer.

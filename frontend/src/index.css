@@ -1733,8 +1733,11 @@ p { line-height: 1.5; color: var(--text-secondary); }
   position: relative;
   background: var(--bg-card);
   border-top: 1px solid var(--border-light);
-  max-height: 280px;
+  max-height: min(50vh, 400px);
   overflow-y: auto;
+  overflow-x: hidden;
+  contain: paint;
+  isolation: isolate;
 }
 .maria-conversation-inner {
   padding: 10px 14px;
@@ -1745,6 +1748,8 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .maria-msg {
   font-size: 13px;
   line-height: 1.5;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 .maria-msg-user {
   color: var(--text-secondary);
@@ -1753,7 +1758,12 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .maria-msg-assistant {
   color: var(--text-primary);
 }
-.maria-msg-text { display: block; }
+.maria-msg-text {
+  display: block;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
 .maria-reading {
   display: flex;
   align-items: center;

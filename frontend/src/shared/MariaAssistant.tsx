@@ -134,6 +134,21 @@ export function MariaAssistant() {
         <div
           className="maria-conversation"
           ref={conversationRef}
+          onKeyDown={(e) => {
+            // Cmd-A inside conversation selects only conversation text
+            if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+              e.preventDefault();
+              e.stopPropagation();
+              const sel = window.getSelection();
+              const range = document.createRange();
+              if (conversationRef.current) {
+                range.selectNodeContents(conversationRef.current);
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+              }
+            }
+          }}
+          tabIndex={0}
         >
           <div className="maria-conversation-inner">
             {messages.map((msg, i) => (

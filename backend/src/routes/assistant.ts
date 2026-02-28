@@ -32,14 +32,43 @@ router.post('/message', async (req: Request, res: Response) => {
   // Call AI
   const result = await callAIWithJSON<{
     response: string;
-    action: { type: string; params: Record<string, any> } | null;
+    action?: { type: string; params: Record<string, any> } | null;
+    actions?: { type: string; params: Record<string, any> }[];
   }>(systemPrompt, message, 'fast', conversationHistory);
 
+  // Normalize: support both "action" (single) and "actions" (array) from AI
+  const ACTION_ALIASES: Record<string, string> = {
+    'add_audience': 'create_audience',
+    'new_audience': 'create_audience',
+    'add_offering': 'create_offering',
+    'new_offering': 'create_offering',
+    'create_priorities': 'add_priorities',
+    'new_priorities': 'add_priorities',
+    'create_capabilities': 'add_capabilities',
+    'new_capabilities': 'add_capabilities',
+    'update_params': 'update_story_params',
+    'change_params': 'update_story_params',
+    'edit_story_params': 'update_story_params',
+    'generate_story': 'create_story',
+    'new_story': 'create_story',
+  };
+
+  let rawActions: { type: string; params: Record<string, any> }[] = [];
+  if (result.actions && Array.isArray(result.actions) && result.actions.length > 0) {
+    rawActions = result.actions;
+  } else if (result.action && result.action.type) {
+    rawActions = [result.action];
+  }
+  const actions = rawActions.map(a => ({
+    ...a,
+    type: ACTION_ALIASES[a.type] || a.type,
+  }));
+
   // Check if AI wants to read the page
-  if (result.action?.type === 'read_page') {
+  if (actions.length === 1 && actions[0].type === 'read_page') {
     res.json({
       response: result.response,
-      action: result.action,
+      action: actions[0],
       actionResult: null,
       refreshNeeded: false,
       needsPageContent: true,
@@ -47,13 +76,13 @@ router.post('/message', async (req: Request, res: Response) => {
     return;
   }
 
-  let actionResult: string | null = null;
+  const actionResults: string[] = [];
   let refreshNeeded = false;
 
-  // Dispatch action if present
-  if (result.action) {
+  // Dispatch all actions in sequence
+  for (const a of actions) {
+    let actionResult: string | null = null;
     try {
-      const a = result.action;
 
       if (a.type === 'add_priorities' && ctx.audienceId && a.params.texts) {
         const audience = await prisma.audience.findFirst({
@@ -185,7 +214,25 @@ router.post('/message', async (req: Request, res: Response) => {
             description: a.params.description || '',
           },
         });
-        actionResult = `Created audience "${audience.name}"`;
+        // Optionally add priorities if provided
+        if (a.params.priorities && Array.isArray(a.params.priorities)) {
+          for (let i = 0; i < a.params.priorities.length; i++) {
+            const pText = typeof a.params.priorities[i] === 'string'
+              ? a.params.priorities[i]
+              : a.params.priorities[i].text || a.params.priorities[i];
+            await prisma.priority.create({
+              data: {
+                audienceId: audience.id,
+                text: String(pText),
+                rank: i + 1,
+                sortOrder: i,
+              },
+            });
+          }
+          actionResult = `Created audience "${audience.name}" with ${a.params.priorities.length} priorities`;
+        } else {
+          actionResult = `Created audience "${audience.name}"`;
+        }
         refreshNeeded = true;
       }
 
@@ -212,7 +259,20 @@ router.post('/message', async (req: Request, res: Response) => {
             description: a.params.description || '',
           },
         });
-        actionResult = `Created offering "${offering.name}"`;
+        if (a.params.capabilities && Array.isArray(a.params.capabilities)) {
+          for (let i = 0; i < a.params.capabilities.length; i++) {
+            await prisma.offeringElement.create({
+              data: {
+                offeringId: offering.id,
+                text: String(a.params.capabilities[i]),
+                sortOrder: i,
+              },
+            });
+          }
+          actionResult = `Created offering "${offering.name}" with ${a.params.capabilities.length} capabilities`;
+        } else {
+          actionResult = `Created offering "${offering.name}"`;
+        }
         refreshNeeded = true;
       }
 
@@ -596,8 +656,8 @@ Write Chapter ${chNum}: "${ch.name}"`;
         refreshNeeded = true;
       }
 
-      // Catch silent failures: Maria dispatched an action but no handler ran
-      if (!actionResult && !refreshNeeded) {
+      // Catch silent failures: action dispatched but no handler ran
+      if (!actionResult) {
         const missing: string[] = [];
         if (['edit_priorities', 'delete_priorities', 'reorder_priorities', 'add_priorities', 'edit_audience'].includes(a.type) && !ctx.audienceId) {
           missing.push('audienceId');
@@ -618,12 +678,13 @@ Write Chapter ${chNum}: "${ch.name}"`;
     } catch (err: any) {
       actionResult = `Action failed: ${err.message}`;
     }
+    if (actionResult) actionResults.push(actionResult);
   }
 
   res.json({
     response: result.response,
-    action: result.action,
-    actionResult,
+    action: actions[0] || null,
+    actionResult: actionResults.length > 0 ? actionResults.join(' · ') : null,
     refreshNeeded,
     needsPageContent: false,
   });

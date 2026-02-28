@@ -5,3 +5,9 @@ dist/
 *.log
 backend/public/*
 !backend/public/.gitkeep
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
