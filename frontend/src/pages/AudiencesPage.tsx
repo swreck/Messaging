@@ -30,8 +30,8 @@ export function AudiencesPage() {
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const { setPageContext } = useMaria();
-  useEffect(() => { setPageContext({ page: 'audiences' }); }, []);
+  const { setPageContext, registerRefresh } = useMaria();
+  useEffect(() => { setPageContext({ page: 'audiences' }); registerRefresh(loadData); }, []);
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -70,8 +70,13 @@ export function AudiencesPage() {
   function toggleExpand(id: string) {
     setExpanded(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+        setPageContext({ page: 'audiences' });
+      } else {
+        next.add(id);
+        setPageContext({ page: 'audiences', audienceId: id });
+      }
       return next;
     });
   }

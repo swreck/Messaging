@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
 import { DifferentiatorList } from '../shared/DifferentiatorList';
 import { Spinner } from '../shared/Spinner';
+import { useMaria } from '../shared/MariaContext';
 import type { Offering } from '../types';
 
 export function OfferingDetailPage() {
@@ -18,6 +19,11 @@ export function OfferingDetailPage() {
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const { setPageContext, registerRefresh } = useMaria();
+  useEffect(() => {
+    if (id) setPageContext({ page: 'offerings', offeringId: id });
+    registerRefresh(loadData);
+  }, [id]);
   useEffect(() => { loadData(); }, [id]);
 
   async function loadData() {

@@ -17,8 +17,8 @@ export function OfferingsPage() {
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const { setPageContext } = useMaria();
-  useEffect(() => { setPageContext({ page: 'offerings' }); }, []);
+  const { setPageContext, registerRefresh } = useMaria();
+  useEffect(() => { setPageContext({ page: 'offerings' }); registerRefresh(loadData); }, []);
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {

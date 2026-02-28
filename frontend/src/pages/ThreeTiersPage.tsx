@@ -27,8 +27,8 @@ export function ThreeTiersPage() {
   const [selectedOfferingId, setSelectedOfferingId] = useState('');
   const [selectedAudienceId, setSelectedAudienceId] = useState('');
 
-  const { setPageContext } = useMaria();
-  useEffect(() => { setPageContext({ page: 'three-tiers' }); }, []);
+  const { setPageContext, registerRefresh } = useMaria();
+  useEffect(() => { setPageContext({ page: 'three-tiers' }); registerRefresh(loadData); }, []);
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {

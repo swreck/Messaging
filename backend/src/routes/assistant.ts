@@ -595,6 +595,26 @@ Write Chapter ${chNum}: "${ch.name}"`;
         actionResult = 'Direction applied — check your Three Tier table';
         refreshNeeded = true;
       }
+
+      // Catch silent failures: Maria dispatched an action but no handler ran
+      if (!actionResult && !refreshNeeded) {
+        const missing: string[] = [];
+        if (['edit_priorities', 'delete_priorities', 'reorder_priorities', 'add_priorities', 'edit_audience'].includes(a.type) && !ctx.audienceId) {
+          missing.push('audienceId');
+        }
+        if (['edit_offering', 'add_capabilities', 'edit_capabilities', 'delete_capabilities'].includes(a.type) && !ctx.offeringId) {
+          missing.push('offeringId');
+        }
+        if (['refine_chapter', 'blend_story', 'copy_edit', 'update_story_params', 'regenerate_story'].includes(a.type) && !ctx.storyId) {
+          missing.push('storyId');
+        }
+        if (['create_story', 'edit_tier'].includes(a.type) && !ctx.draftId) {
+          missing.push('draftId');
+        }
+        actionResult = missing.length > 0
+          ? `Could not execute ${a.type} — missing context: ${missing.join(', ')}. Try navigating to the specific item first.`
+          : `Action ${a.type} was not recognized or could not execute.`;
+      }
     } catch (err: any) {
       actionResult = `Action failed: ${err.message}`;
     }

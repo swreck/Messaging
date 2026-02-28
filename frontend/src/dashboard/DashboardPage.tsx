@@ -33,8 +33,8 @@ export function DashboardPage() {
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const { setPageContext } = useMaria();
-  useEffect(() => { setPageContext({ page: 'dashboard' }); }, []);
+  const { setPageContext, registerRefresh } = useMaria();
+  useEffect(() => { setPageContext({ page: 'dashboard' }); registerRefresh(loadAll); }, []);
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll(retries = 2) {

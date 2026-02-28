@@ -21,8 +21,8 @@ export function FiveChaptersPage() {
   const [hierarchy, setHierarchy] = useState<HierarchyOffering[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const { setPageContext } = useMaria();
-  useEffect(() => { setPageContext({ page: 'five-chapters' }); }, []);
+  const { setPageContext, registerRefresh } = useMaria();
+  useEffect(() => { setPageContext({ page: 'five-chapters' }); registerRefresh(loadData); }, []);
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
