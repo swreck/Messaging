@@ -61,6 +61,16 @@ export function ThreeTierShell() {
     }
   }
 
+  // Silent refresh — updates draft data without unmounting step components
+  async function refreshDraft() {
+    try {
+      const { draft } = await api.get<{ draft: ThreeTierDraft }>(`/drafts/${draftId}`);
+      setDraft(draft);
+    } catch {
+      // silent — draft is already loaded, just couldn't refresh
+    }
+  }
+
   async function goToStep(step: number) {
     if (!draftId || navigating) return;
     setNavigating(true);
@@ -85,7 +95,7 @@ export function ThreeTierShell() {
 
   if (loading || !draft) return <div className="loading-screen"><Spinner size={32} /></div>;
 
-  const stepProps = { draft, loadDraft, nextStep, prevStep, goToStep };
+  const stepProps = { draft, loadDraft, refreshDraft, nextStep, prevStep, goToStep };
 
   return (
     <div className="three-tier-shell">

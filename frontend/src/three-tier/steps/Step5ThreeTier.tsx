@@ -6,7 +6,7 @@ import { ThreeTierTable } from '../components/ThreeTierTable';
 import { Spinner } from '../../shared/Spinner';
 import type { TableVersion, ReviewResponse, DirectionResponse, TableSnapshot } from '../../types';
 
-export function Step5ThreeTier({ draft, loadDraft, prevStep }: StepProps) {
+export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep }: StepProps) {
   const navigate = useNavigate();
   const [suggestions, setSuggestions] = useState<Map<string, string>>(new Map());
   const [reviewing, setReviewing] = useState(false);
@@ -120,7 +120,7 @@ export function Step5ThreeTier({ draft, loadDraft, prevStep }: StepProps) {
         if (next.size === 0) previousStateRef.current = null;
         return next;
       });
-      await loadDraft();
+      await refreshDraft();
     } catch (err: any) {
       alert(`Failed to apply: ${err.message}`);
     }
@@ -143,7 +143,7 @@ export function Step5ThreeTier({ draft, loadDraft, prevStep }: StepProps) {
   async function createSnapshot() {
     await api.post(`/versions/table/${draft.id}`, { label: snapshotLabel || undefined });
     setSnapshotLabel('');
-    await loadDraft();
+    await refreshDraft();
   }
 
   async function restoreSnapshot(versionId: string) {
@@ -213,7 +213,7 @@ export function Step5ThreeTier({ draft, loadDraft, prevStep }: StepProps) {
 
       <ThreeTierTable
         draft={draft}
-        onUpdate={() => { previousStateRef.current = null; loadDraft(); }}
+        onUpdate={() => { previousStateRef.current = null; refreshDraft(); }}
         suggestions={suggestions}
         onAcceptSuggestion={handleAcceptSuggestion}
         onDismissSuggestion={handleDismissSuggestion}
