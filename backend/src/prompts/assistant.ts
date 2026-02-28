@@ -123,6 +123,9 @@ export function buildAssistantPrompt(context: {
 
   if (context.audienceId) {
     actions.push('- add_priorities: Add new priorities to the current audience. Params: { texts: string[] }');
+    actions.push('- edit_priorities: Rename, rewrite, or update the text of existing priorities. Params: { edits: [{ position: number, text: string }] } — position is 1-based (1 = first priority on the page)');
+    actions.push('- delete_priorities: Remove priorities by their position on the page. Params: { positions: number[] } — 1-based positions');
+    actions.push('- reorder_priorities: Set the full ranked order of priorities. Params: { order: number[] } — array of current positions in the desired new order, e.g. [4, 1, 3, 2] means current #4 becomes #1');
   }
   if (context.storyId) {
     actions.push('- update_story_params: Change story parameters. Params: { medium?, cta?, emphasis? }');

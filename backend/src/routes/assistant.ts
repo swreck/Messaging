@@ -77,6 +77,88 @@ router.post('/message', async (req: Request, res: Response) => {
         }
       }
 
+      if (a.type === 'edit_priorities' && ctx.audienceId && a.params.edits) {
+        const audience = await prisma.audience.findFirst({
+          where: { id: ctx.audienceId, userId },
+          include: { priorities: { orderBy: { sortOrder: 'asc' } } },
+        });
+        if (audience) {
+          let editCount = 0;
+          for (const edit of a.params.edits) {
+            const idx = edit.position - 1; // 1-based → 0-based
+            if (idx >= 0 && idx < audience.priorities.length) {
+              await prisma.priority.update({
+                where: { id: audience.priorities[idx].id },
+                data: { text: edit.text },
+              });
+              editCount++;
+            }
+          }
+          actionResult = `Updated ${editCount} priorit${editCount === 1 ? 'y' : 'ies'}`;
+          refreshNeeded = true;
+        }
+      }
+
+      if (a.type === 'delete_priorities' && ctx.audienceId && a.params.positions) {
+        const audience = await prisma.audience.findFirst({
+          where: { id: ctx.audienceId, userId },
+          include: { priorities: { orderBy: { sortOrder: 'asc' } } },
+        });
+        if (audience) {
+          // Collect IDs to delete (positions are 1-based)
+          const idsToDelete: string[] = [];
+          for (const pos of a.params.positions) {
+            const idx = pos - 1;
+            if (idx >= 0 && idx < audience.priorities.length) {
+              idsToDelete.push(audience.priorities[idx].id);
+            }
+          }
+          if (idsToDelete.length > 0) {
+            await prisma.priority.deleteMany({
+              where: { id: { in: idsToDelete } },
+            });
+            // Re-normalize sortOrder and rank for remaining priorities
+            const remaining = await prisma.priority.findMany({
+              where: { audienceId: ctx.audienceId },
+              orderBy: { sortOrder: 'asc' },
+            });
+            for (let i = 0; i < remaining.length; i++) {
+              await prisma.priority.update({
+                where: { id: remaining[i].id },
+                data: { sortOrder: i, rank: i + 1 },
+              });
+            }
+          }
+          actionResult = `Deleted ${idsToDelete.length} priorit${idsToDelete.length === 1 ? 'y' : 'ies'}`;
+          refreshNeeded = true;
+        }
+      }
+
+      if (a.type === 'reorder_priorities' && ctx.audienceId && a.params.order) {
+        const audience = await prisma.audience.findFirst({
+          where: { id: ctx.audienceId, userId },
+          include: { priorities: { orderBy: { sortOrder: 'asc' } } },
+        });
+        if (audience) {
+          const order: number[] = a.params.order; // [4, 1, 3, 2] means current #4 becomes new #1
+          // Validate: every position should be valid
+          const valid = order.every((pos: number) => pos >= 1 && pos <= audience.priorities.length);
+          if (valid && order.length === audience.priorities.length) {
+            for (let newIdx = 0; newIdx < order.length; newIdx++) {
+              const oldIdx = order[newIdx] - 1; // 1-based → 0-based
+              await prisma.priority.update({
+                where: { id: audience.priorities[oldIdx].id },
+                data: { sortOrder: newIdx, rank: newIdx + 1 },
+              });
+            }
+            actionResult = `Reordered ${order.length} priorities`;
+            refreshNeeded = true;
+          } else {
+            actionResult = 'Could not reorder — positions don\'t match the number of priorities';
+          }
+        }
+      }
+
       if (a.type === 'update_story_params' && ctx.storyId) {
         const updateData: Record<string, string> = {};
         if (a.params.medium) updateData.medium = a.params.medium;
