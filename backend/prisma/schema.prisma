@@ -94,7 +94,7 @@ model ThreeTierDraft {
   offering    Offering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
   audienceId  String
   audience    Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
-  currentStep Int      @default(1) // 1-8
+  currentStep Int      @default(1) // 1-5
   status      String   @default("in_progress") // in_progress | completed
   version     Int      @default(1)
   createdAt   DateTime @default(now())
@@ -135,13 +135,14 @@ model Tier1Statement {
 }
 
 model Tier2Statement {
-  id         String         @id @default(cuid())
-  draftId    String
-  draft      ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  text       String
-  sortOrder  Int            @default(0)
-  priorityId String?
-  priority   Priority?      @relation(fields: [priorityId], references: [id], onDelete: SetNull)
+  id            String         @id @default(cuid())
+  draftId       String
+  draft         ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  text          String
+  sortOrder     Int            @default(0)
+  priorityId    String?
+  priority      Priority?      @relation(fields: [priorityId], references: [id], onDelete: SetNull)
+  categoryLabel String         @default("")
 
   tier3Bullets Tier3Bullet[]
   cellVersions CellVersion[]
@@ -163,15 +164,18 @@ model FiveChapterStory {
   id          String         @id @default(cuid())
   draftId     String
   draft       ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  medium      String         // "15s" | "1m" | "5m"
+  medium      String         // "email" | "blog" | "social" | "landing_page" | "in_person" | "press_release" | "newsletter" | "report"
   cta         String
   emphasis    String         @default("")
+  stage       String         @default("chapters") // "chapters" | "joined" | "blended"
+  joinedText  String         @default("")
   blendedText String         @default("")
   version     Int            @default(1)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  chapters ChapterContent[]
+  chapters      ChapterContent[]
+  storyVersions StoryVersion[]
 }
 
 model ChapterContent {
@@ -209,6 +213,16 @@ model TableVersion {
   label      String
   versionNum Int
   createdAt  DateTime       @default(now())
+}
+
+model StoryVersion {
+  id         String           @id @default(cuid())
+  storyId    String
+  story      FiveChapterStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  snapshot   Json
+  label      String
+  versionNum Int
+  createdAt  DateTime         @default(now())
 }
 
 // ─── Conversation History ───────────────────────────────

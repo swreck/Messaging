@@ -81,13 +81,15 @@ router.put('/:id', async (req: Request, res: Response) => {
     return;
   }
 
-  const { medium, cta, emphasis, blendedText } = req.body;
+  const { medium, cta, emphasis, stage, joinedText, blendedText } = req.body;
   const updated = await prisma.fiveChapterStory.update({
     where: { id: param(req.params.id) },
     data: {
       medium: medium ?? story.medium,
       cta: cta ?? story.cta,
       emphasis: emphasis ?? story.emphasis,
+      stage: stage ?? story.stage,
+      joinedText: joinedText ?? story.joinedText,
       blendedText: blendedText ?? story.blendedText,
     },
     include: { chapters: { orderBy: { chapterNum: 'asc' } } },

@@ -81,6 +81,7 @@ export interface Tier2Statement {
   text: string;
   sortOrder: number;
   priorityId: string | null;
+  categoryLabel: string;
   tier3Bullets: Tier3Bullet[];
 }
 
@@ -127,12 +128,28 @@ export interface ChapterContent {
   content: string;
 }
 
+export type StoryMedium = 'email' | 'blog' | 'social' | 'landing_page' | 'in_person' | 'press_release' | 'newsletter' | 'report';
+export type StoryStage = 'chapters' | 'joined' | 'blended';
+
+export const MEDIUM_OPTIONS: { id: StoryMedium; label: string; description: string }[] = [
+  { id: 'email', label: 'Email', description: 'Professional outreach email' },
+  { id: 'blog', label: 'Blog Post', description: 'Long-form educational content' },
+  { id: 'social', label: 'Social Post', description: 'LinkedIn or social media post' },
+  { id: 'landing_page', label: 'Landing Page', description: 'Web page with a single conversion goal' },
+  { id: 'in_person', label: 'In-Person / Verbal', description: 'Speaking notes for a conversation or presentation' },
+  { id: 'press_release', label: 'Press Release', description: 'Formal announcement for media' },
+  { id: 'newsletter', label: 'Newsletter', description: 'Regular audience update or feature' },
+  { id: 'report', label: 'Report / White Paper', description: 'Detailed analytical content' },
+];
+
 export interface FiveChapterStory {
   id: string;
   draftId: string;
-  medium: '15s' | '1m' | '5m';
+  medium: StoryMedium;
   cta: string;
   emphasis: string;
+  stage: StoryStage;
+  joinedText: string;
   blendedText: string;
   version: number;
   createdAt: string;
@@ -177,7 +194,12 @@ export interface MappingSuggestionsResponse {
 
 export interface ConvertLinesResponse {
   tier1: { text: string; priorityId: string };
-  tier2: { text: string; priorityId: string; tier3: string[] }[];
+  tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
+}
+
+export interface DirectionResponse {
+  suggestions: { cell: string; current: string; suggested: string; reason: string }[];
+  overallNote: string;
 }
 
 export interface AuditResponse {

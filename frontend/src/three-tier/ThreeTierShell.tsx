@@ -1,17 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { ProgressBar } from './ProgressBar';
 import { Spinner } from '../shared/Spinner';
 import { Step1Prep } from './steps/Step1Prep';
 import { Step2AllAboutYou } from './steps/Step2AllAboutYou';
-import { Step3PickAudience } from './steps/Step3PickAudience';
-import { Step4AllAboutAudience } from './steps/Step4AllAboutAudience';
-import { Step5DrawLines } from './steps/Step5DrawLines';
-import { Step6ConvertLines } from './steps/Step6ConvertLines';
-import { Step7ThreeTierTable } from './steps/Step7ThreeTierTable';
-import { Step8MagicHour } from './steps/Step8MagicHour';
+import { Step3YourAudience } from './steps/Step3YourAudience';
+import { Step4BuildMessage } from './steps/Step4BuildMessage';
+import { Step5ThreeTier } from './steps/Step5ThreeTier';
 import type { ThreeTierDraft } from '../types';
+
+const AUTO_SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 export function ThreeTierShell() {
   const { draftId } = useParams<{ draftId: string }>();
@@ -19,6 +18,31 @@ export function ThreeTierShell() {
   const [draft, setDraft] = useState<ThreeTierDraft | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeStep, setActiveStep] = useState(1);
+  const [navigating, setNavigating] = useState(false);
+  const lastInteraction = useRef(Date.now());
+
+  // Track user interaction for auto-save
+  useEffect(() => {
+    function onActivity() { lastInteraction.current = Date.now(); }
+    window.addEventListener('click', onActivity);
+    window.addEventListener('keydown', onActivity);
+    return () => { window.removeEventListener('click', onActivity); window.removeEventListener('keydown', onActivity); };
+  }, []);
+
+  // Auto-save snapshot every 5 minutes on Step 5
+  const autoSave = useCallback(async () => {
+    if (!draftId || activeStep !== 5) return;
+    // Only auto-save if user was active in the last 10 minutes
+    if (Date.now() - lastInteraction.current > 10 * 60 * 1000) return;
+    try {
+      await api.post(`/versions/table/${draftId}`, { label: 'Auto-save' });
+    } catch { /* silent */ }
+  }, [draftId, activeStep]);
+
+  useEffect(() => {
+    const timer = setInterval(autoSave, AUTO_SAVE_INTERVAL);
+    return () => clearInterval(timer);
+  }, [autoSave]);
 
   useEffect(() => {
     if (draftId) loadDraft();
@@ -38,16 +62,21 @@ export function ThreeTierShell() {
   }
 
   async function goToStep(step: number) {
-    if (!draftId) return;
-    setActiveStep(step);
-    if (step > (draft?.currentStep || 1)) {
-      await api.patch(`/drafts/${draftId}`, { currentStep: step });
-      setDraft(prev => prev ? { ...prev, currentStep: step } : prev);
+    if (!draftId || navigating) return;
+    setNavigating(true);
+    try {
+      setActiveStep(step);
+      if (step > (draft?.currentStep || 1)) {
+        await api.patch(`/drafts/${draftId}`, { currentStep: step });
+        setDraft(prev => prev ? { ...prev, currentStep: step } : prev);
+      }
+    } finally {
+      setNavigating(false);
     }
   }
 
   async function nextStep() {
-    goToStep(activeStep + 1);
+    await goToStep(activeStep + 1);
   }
 
   function prevStep() {
@@ -64,12 +93,9 @@ export function ThreeTierShell() {
       <div className="step-content">
         {activeStep === 1 && <Step1Prep {...stepProps} />}
         {activeStep === 2 && <Step2AllAboutYou {...stepProps} />}
-        {activeStep === 3 && <Step3PickAudience {...stepProps} />}
-        {activeStep === 4 && <Step4AllAboutAudience {...stepProps} />}
-        {activeStep === 5 && <Step5DrawLines {...stepProps} />}
-        {activeStep === 6 && <Step6ConvertLines {...stepProps} />}
-        {activeStep === 7 && <Step7ThreeTierTable {...stepProps} />}
-        {activeStep === 8 && <Step8MagicHour {...stepProps} />}
+        {activeStep === 3 && <Step3YourAudience {...stepProps} />}
+        {activeStep === 4 && <Step4BuildMessage {...stepProps} />}
+        {activeStep === 5 && <Step5ThreeTier {...stepProps} />}
       </div>
     </div>
   );

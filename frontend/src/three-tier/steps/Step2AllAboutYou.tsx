@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { StepProps } from './types';
 import { CoachingChat } from '../components/CoachingChat';
 import { api } from '../../api/client';
-import { InfoTooltip } from '../../shared/InfoTooltip';
 
 export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepProps) {
   const [elements, setElements] = useState(draft.offering.elements.map(e => e.text));
@@ -43,19 +42,16 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
 
   return (
     <div className="step-panel">
-      <h2>
-        Step 2: All About You
-        <InfoTooltip text="Forget your audience. List everything that makes your offering and company special — features, strengths, certifications, partnerships, your 'why'. Aim for 10-15 items." />
-      </h2>
+      <h2>Tell Me About Your Offering</h2>
       <p className="step-description">
-        Let's build a bullet list of everything that makes your offering special. Maria will coach you through it. Items she identifies will appear in the sidebar — you can also add your own.
+        Let's build a list of everything that makes {draft.offering.name} special. Maria will ask you questions — items she identifies will appear in the sidebar. You can also add your own.
       </p>
 
       <div className="coaching-layout">
         <CoachingChat
           draftId={draft.id}
           step={2}
-          initialPrompt={`I'd like to identify the key capabilities and differentiators of "${draft.offering.name}". Let's start.`}
+          initialPrompt={`I'd like to understand what makes "${draft.offering.name}" special. Let's start.`}
           onExtractItem={addElement}
         />
 
@@ -82,7 +78,7 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
       <div className="step-actions">
         <button className="btn btn-ghost" onClick={prevStep}>Back</button>
         <button className="btn btn-primary" onClick={nextStep} disabled={elements.length < 3}>
-          Next: Pick Audience ({elements.length} items)
+          Next: Your Audience ({elements.length} items)
         </button>
       </div>
     </div>

@@ -1,15 +1,11 @@
 import type { StepProps } from './types';
-import { InfoTooltip } from '../../shared/InfoTooltip';
 
 export function Step1Prep({ draft, nextStep }: StepProps) {
   return (
     <div className="step-panel">
-      <h2>
-        Step 1: Preparation
-        <InfoTooltip text="Gather any existing materials: product descriptions, emails, brochures, website copy, testimonials. Avoid the blank page." />
-      </h2>
+      <h2>Before We Begin</h2>
       <p className="step-description">
-        Before we start coaching, let's make sure you have what you need. Gather any existing materials about your offering — product descriptions, emails, brochures, website copy, customer testimonials, whatever you have. It's fine to have nothing — everything you need might be in your head.
+        Make sure these are right. Gather any existing materials about your offering if you have them — product descriptions, emails, brochures, testimonials. It's fine to have nothing; everything you need might be in your head.
       </p>
 
       <div className="entity-card" style={{ marginBottom: 16 }}>
@@ -21,7 +17,7 @@ export function Step1Prep({ draft, nextStep }: StepProps) {
         <div className="entity-card-count">
           {draft.offering.elements.length > 0
             ? `${draft.offering.elements.length} capability${draft.offering.elements.length !== 1 ? 'ies' : 'y'} already captured`
-            : 'No capabilities captured yet — we\'ll do that in the next step'}
+            : 'No capabilities captured yet'}
         </div>
       </div>
 
@@ -33,14 +29,14 @@ export function Step1Prep({ draft, nextStep }: StepProps) {
         <div className="entity-card-count">
           {draft.audience.priorities.length > 0
             ? `${draft.audience.priorities.length} priorit${draft.audience.priorities.length !== 1 ? 'ies' : 'y'} already captured`
-            : 'No priorities captured yet — we\'ll do that in Step 4'}
+            : 'No priorities captured yet'}
         </div>
       </div>
 
       <div className="step-actions">
         <div />
         <button className="btn btn-primary" onClick={nextStep}>
-          Ready — Let's Go
+          Looks Good — Let's Go
         </button>
       </div>
     </div>

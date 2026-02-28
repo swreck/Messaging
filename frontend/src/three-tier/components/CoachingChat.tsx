@@ -18,22 +18,38 @@ export function CoachingChat({ draftId, step, initialPrompt, onExtractItem }: Co
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  async function startChat() {
-    setStarted(true);
-    await sendMessage(initialPrompt);
-  }
+  // Load existing conversation on mount
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        const { messages: history } = await api.get<{ messages: Message[] }>(`/ai/conversation/${draftId}/${step}`);
+        if (history.length > 0) {
+          setMessages(history);
+        } else {
+          // Auto-start: send the initial prompt immediately
+          await sendMessageDirect(initialPrompt);
+        }
+      } catch {
+        // If endpoint fails, auto-start
+        await sendMessageDirect(initialPrompt);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadHistory();
+  }, [draftId, step]);
 
-  async function sendMessage(text: string) {
+  async function sendMessageDirect(text: string) {
     const userMsg: Message = { role: 'user', content: text };
     setMessages(prev => [...prev, userMsg]);
-    setInput('');
     setSending(true);
 
     try {
@@ -43,36 +59,51 @@ export function CoachingChat({ draftId, step, initialPrompt, onExtractItem }: Co
         message: text,
       });
       setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-
-      // Extract items prefixed with "• " from the response
-      if (onExtractItem) {
-        const lines = response.split('\n');
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) {
-            onExtractItem(trimmed.replace(/^[•\-]\s*/, ''));
-          }
-        }
-      }
+      extractItems(response);
     } catch (err: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: `Something went wrong: ${err.message}` }]);
     } finally {
       setSending(false);
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim() || sending) return;
-    sendMessage(input.trim());
+  function extractItems(response: string) {
+    if (!onExtractItem) return;
+    const lines = response.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+        onExtractItem(trimmed.replace(/^[*\-]\s*/, ''));
+      }
+    }
   }
 
-  if (!started) {
+  function handleSubmit(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!input.trim() || sending) return;
+    const text = input.trim();
+    setInput('');
+    sendMessageDirect(text);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  }
+
+  function autoResize() {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + 'px';
+    }
+  }
+
+  if (loading) {
     return (
       <div className="coaching-chat" style={{ justifyContent: 'center', alignItems: 'center' }}>
-        <button className="btn btn-primary" onClick={startChat}>
-          Start Coaching Session
-        </button>
+        <Spinner size={24} />
       </div>
     );
   }
@@ -93,14 +124,18 @@ export function CoachingChat({ draftId, step, initialPrompt, onExtractItem }: Co
         <div ref={bottomRef} />
       </div>
       <form className="chat-input-row" onSubmit={handleSubmit}>
-        <input
+        <textarea
+          ref={textareaRef}
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={e => { setInput(e.target.value); autoResize(); }}
+          onKeyDown={handleKeyDown}
           placeholder="Type your response..."
           disabled={sending}
           autoFocus
+          rows={1}
+          style={{ resize: 'none', minHeight: 38, maxHeight: 150 }}
         />
-        <button className="btn btn-primary" type="submit" disabled={sending || !input.trim()}>
+        <button className="btn btn-primary" type="submit" disabled={sending || !input.trim()} title="Send (Cmd+Enter)">
           Send
         </button>
       </form>

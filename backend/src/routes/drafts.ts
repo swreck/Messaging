@@ -19,6 +19,59 @@ router.get('/', async (req: Request, res: Response) => {
   res.json({ drafts });
 });
 
+// GET /api/drafts/hierarchy — full tree: offerings → audiences → three-tiers → deliverables
+router.get('/hierarchy', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+
+  const offerings = await prisma.offering.findMany({
+    where: { userId },
+    include: {
+      elements: { select: { id: true } },
+      drafts: {
+        include: {
+          audience: { select: { id: true, name: true } },
+          stories: {
+            select: { id: true, medium: true, stage: true, updatedAt: true },
+            orderBy: { updatedAt: 'desc' },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+      },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  // Get audiences that don't have drafts yet (for showing "available" audiences)
+  const audiences = await prisma.audience.findMany({
+    where: { userId },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+
+  const hierarchy = offerings.map(o => ({
+    id: o.id,
+    name: o.name,
+    elementCount: o.elements.length,
+    audiences: o.drafts.map(d => ({
+      id: d.audience.id,
+      name: d.audience.name,
+      threeTier: {
+        id: d.id,
+        status: d.status,
+        currentStep: d.currentStep,
+      },
+      deliverables: d.stories.map(s => ({
+        id: s.id,
+        medium: s.medium,
+        stage: s.stage,
+        updatedAt: s.updatedAt.toISOString(),
+      })),
+    })),
+  }));
+
+  res.json({ hierarchy, audiences });
+});
+
 // POST /api/drafts
 router.post('/', async (req: Request, res: Response) => {
   const { offeringId, audienceId } = req.body;

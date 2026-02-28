@@ -1,12 +1,9 @@
 const STEP_LABELS = [
-  'Prep',
-  'All About You',
-  'Pick Audience',
-  'All About Audience',
-  'Draw Lines',
-  'Convert Lines',
-  'Three Tier Table',
-  'Magic Hour',
+  'Confirm',
+  'Your Offering',
+  'Your Audience',
+  'Building',
+  'Your Three Tier',
 ];
 
 interface ProgressBarProps {

@@ -88,6 +88,9 @@ export function ThreeTierTable({ draft, onUpdate }: ThreeTierTableProps) {
         <div className="tier2-row">
           {draft.tier2Statements.map((t2) => (
             <div key={t2.id} className="tier2-col">
+              {t2.categoryLabel && (
+                <div className="tier2-category-label">{t2.categoryLabel}</div>
+              )}
               {editingCell === `tier2-${t2.id}` ? (
                 <div style={{ padding: 8 }}>
                   <CellEditor

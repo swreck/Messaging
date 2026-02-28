@@ -28,7 +28,7 @@ export function CellEditor({ text, maxWords, onSave, onCancel }: CellEditorProps
   }, []);
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       onSave(value.trim());
     }

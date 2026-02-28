@@ -2,10 +2,9 @@ import { useState } from 'react';
 import type { StepProps } from './types';
 import { CoachingChat } from '../components/CoachingChat';
 import { api } from '../../api/client';
-import { InfoTooltip } from '../../shared/InfoTooltip';
 import type { Priority } from '../../types';
 
-export function Step4AllAboutAudience({ draft, loadDraft, nextStep, prevStep }: StepProps) {
+export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: StepProps) {
   const [priorities, setPriorities] = useState<Priority[]>(draft.audience.priorities);
   const [newItem, setNewItem] = useState('');
 
@@ -41,19 +40,16 @@ export function Step4AllAboutAudience({ draft, loadDraft, nextStep, prevStep }: 
 
   return (
     <div className="step-panel">
-      <h2>
-        Step 4: All About Your Audience
-        <InfoTooltip text="List what your audience cares about — both spoken priorities (cost, quality, speed) and unspoken ones (job security, promotion, sanity). Unspoken priorities are more powerful for persuasion." />
-      </h2>
+      <h2>Tell Me About Your Audience</h2>
       <p className="step-description">
-        Now let's understand what your audience cares about. Maria will help you discover both the obvious priorities and the hidden ones. For each, we need to know WHY it matters to them.
+        Now let's understand what {draft.audience.name} cares about. Maria will help you discover the obvious priorities and the hidden ones. For each, we need to know why it matters to them.
       </p>
 
       <div className="coaching-layout">
         <CoachingChat
           draftId={draft.id}
-          step={4}
-          initialPrompt={`I'd like to understand the priorities of "${draft.audience.name}". What matters most to them when evaluating something like "${draft.offering.name}"?`}
+          step={3}
+          initialPrompt={`I'd like to understand the priorities of "${draft.audience.name}" when evaluating something like "${draft.offering.name}".`}
           onExtractItem={addPriority}
         />
 
@@ -89,7 +85,7 @@ export function Step4AllAboutAudience({ draft, loadDraft, nextStep, prevStep }: 
       <div className="step-actions">
         <button className="btn btn-ghost" onClick={prevStep}>Back</button>
         <button className="btn btn-primary" onClick={nextStep} disabled={priorities.length < 2}>
-          Next: Draw Lines ({priorities.length} priorities)
+          Next: Build My Message ({priorities.length} priorities)
         </button>
       </div>
     </div>

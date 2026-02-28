@@ -64,6 +64,25 @@ router.delete('/:id', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// POST /api/audiences/bulk — create multiple audiences at once (from discovery)
+router.post('/bulk', async (req: Request, res: Response) => {
+  const { audiences: audienceList } = req.body;
+  if (!Array.isArray(audienceList) || audienceList.length === 0) {
+    res.status(400).json({ error: 'audiences array is required' });
+    return;
+  }
+
+  const created = await Promise.all(
+    audienceList.map((a: { name: string; description?: string }) =>
+      prisma.audience.create({
+        data: { name: a.name, description: a.description || '', userId: req.user!.userId },
+        include: { priorities: true },
+      })
+    )
+  );
+  res.status(201).json({ audiences: created });
+});
+
 // ─── Priorities ───────────────────────────────────────
 
 // POST /api/audiences/:id/priorities

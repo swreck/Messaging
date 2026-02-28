@@ -107,6 +107,7 @@ router.post('/table/:draftId', async (req: Request, res: Response) => {
     tier2: draft.tier2Statements.map((t2) => ({
       text: t2.text,
       priorityId: t2.priorityId,
+      categoryLabel: t2.categoryLabel || '',
       tier3: t2.tier3Bullets.map((t3) => t3.text),
     })),
   };
@@ -163,6 +164,7 @@ router.post('/table/:draftId/restore/:versionId', async (req: Request, res: Resp
         text: t2.text,
         sortOrder: i,
         priorityId: t2.priorityId || null,
+        categoryLabel: t2.categoryLabel || '',
       },
     });
     for (let j = 0; j < (t2.tier3 || []).length; j++) {
@@ -173,6 +175,56 @@ router.post('/table/:draftId/restore/:versionId', async (req: Request, res: Resp
   }
 
   res.json({ success: true });
+});
+
+// ─── Story Versions ────────────────────────────────────
+
+// GET /api/versions/story/:storyId
+router.get('/story/:storyId', async (req: Request, res: Response) => {
+  const versions = await prisma.storyVersion.findMany({
+    where: { storyId: param(req.params.storyId) },
+    orderBy: { versionNum: 'desc' },
+  });
+  res.json({ versions });
+});
+
+// POST /api/versions/story/:storyId — create story snapshot
+router.post('/story/:storyId', async (req: Request, res: Response) => {
+  const story = await prisma.fiveChapterStory.findFirst({
+    where: { id: param(req.params.storyId), draft: { offering: { userId: req.user!.userId } } },
+    include: { chapters: { orderBy: { chapterNum: 'asc' } } },
+  });
+  if (!story) {
+    res.status(404).json({ error: 'Story not found' });
+    return;
+  }
+
+  const { label } = req.body;
+  const maxVersion = await prisma.storyVersion.aggregate({
+    where: { storyId: param(req.params.storyId) },
+    _max: { versionNum: true },
+  });
+
+  const snapshot = {
+    medium: story.medium,
+    cta: story.cta,
+    emphasis: story.emphasis,
+    stage: story.stage,
+    joinedText: story.joinedText,
+    blendedText: story.blendedText,
+    chapters: story.chapters.map(c => ({ chapterNum: c.chapterNum, title: c.title, content: c.content })),
+  };
+
+  const version = await prisma.storyVersion.create({
+    data: {
+      storyId: param(req.params.storyId),
+      snapshot,
+      label: label || `Snapshot ${(maxVersion._max?.versionNum ?? 0) + 1}`,
+      versionNum: (maxVersion._max?.versionNum ?? 0) + 1,
+    },
+  });
+
+  res.status(201).json({ version });
 });
 
 export default router;

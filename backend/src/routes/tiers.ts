@@ -65,7 +65,7 @@ router.post('/:draftId/tier2', async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.user!.userId);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
-  const { text, priorityId, changeSource } = req.body;
+  const { text, priorityId, categoryLabel, changeSource } = req.body;
   if (!text) { res.status(400).json({ error: 'Text is required' }); return; }
 
   const maxOrder = await prisma.tier2Statement.aggregate({
@@ -79,6 +79,7 @@ router.post('/:draftId/tier2', async (req: Request, res: Response) => {
       text,
       sortOrder: (maxOrder._max?.sortOrder ?? -1) + 1,
       priorityId: priorityId || null,
+      categoryLabel: categoryLabel || '',
     },
     include: { tier3Bullets: true },
   });
@@ -92,12 +93,15 @@ router.put('/:draftId/tier2/:tier2Id', async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.user!.userId);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
-  const { text, changeSource } = req.body;
+  const { text, categoryLabel, changeSource } = req.body;
   if (!text) { res.status(400).json({ error: 'Text is required' }); return; }
+
+  const updateData: any = { text };
+  if (categoryLabel !== undefined) updateData.categoryLabel = categoryLabel;
 
   const tier2 = await prisma.tier2Statement.update({
     where: { id: param(req.params.tier2Id) },
-    data: { text },
+    data: updateData,
     include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } },
   });
 
@@ -133,6 +137,7 @@ router.post('/:draftId/tier2/bulk', async (req: Request, res: Response) => {
           text: s.text,
           sortOrder: index,
           priorityId: s.priorityId || null,
+          categoryLabel: s.categoryLabel || '',
         },
         include: { tier3Bullets: true },
       });
