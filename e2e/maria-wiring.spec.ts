@@ -28,7 +28,7 @@ test.describe.serial('Maria Wiring Tests', () => {
       page.locator('.dashboard-welcome, .nav-tiles, .continue-card').first()
     ).toBeVisible({ timeout: 15_000 });
     // Maria input bar should be present at the bottom
-    await expect(page.locator('.maria-input-bar input')).toBeVisible();
+    await expect(page.locator('.maria-input-bar textarea')).toBeVisible();
   });
 
   // ────────────────────────────────────────────────────────

@@ -28,7 +28,7 @@ interface MariaHelper {
 
 export const maria: MariaHelper = {
   async send(page: Page, message: string): Promise<string> {
-    const input = page.locator('.maria-input-bar input');
+    const input = page.locator('.maria-input-bar textarea');
 
     // Count existing assistant messages before sending so we know when a new one appears
     const beforeCount = await page.locator('.maria-msg-assistant .maria-msg-text').count();

@@ -1696,7 +1696,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border-top: 1px solid var(--border-light);
   min-height: 44px;
 }
-.maria-input-bar input {
+.maria-input-bar textarea {
   flex: 1;
   border: none;
   outline: none;
@@ -1704,8 +1704,13 @@ p { line-height: 1.5; color: var(--text-secondary); }
   background: transparent;
   color: var(--text-primary);
   font-family: var(--font);
+  resize: none;
+  line-height: 1.4;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 4px 0;
 }
-.maria-input-bar input::placeholder { color: var(--text-tertiary); }
+.maria-input-bar textarea::placeholder { color: var(--text-tertiary); }
 .maria-send {
   background: none;
   border: none;

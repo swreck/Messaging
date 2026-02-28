@@ -9,7 +9,10 @@ export interface PageContext {
 }
 
 export function pageKey(ctx: PageContext): string {
-  return `${ctx.page}:${ctx.draftId || ''}:${ctx.storyId || ''}:${ctx.audienceId || ''}:${ctx.offeringId || ''}`;
+  // Key on page route only — NOT entity IDs. Expanding a different audience card
+  // or switching offerings shouldn't clear the conversation.
+  // For 3T and 5CS detail pages, include draftId/storyId since those are separate routes.
+  return `${ctx.page}:${ctx.draftId || ''}:${ctx.storyId || ''}`;
 }
 
 interface MariaContextType {

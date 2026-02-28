@@ -225,13 +225,24 @@ export function MariaAssistant() {
             {messages.length} message{messages.length !== 1 ? 's' : ''}
           </button>
         )}
-        <input
+        <textarea
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') send(); }}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
           onFocus={() => { if (messages.length > 0) setExpanded(true); }}
           placeholder="Ask Maria anything..."
           disabled={sending}
+          rows={1}
+          onInput={e => {
+            const el = e.currentTarget;
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+          }}
         />
         {sending ? (
           <Spinner size={14} />
