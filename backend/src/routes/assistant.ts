@@ -79,30 +79,47 @@ router.post('/message', async (req: Request, res: Response) => {
   const actionResults: string[] = [];
   let refreshNeeded = false;
 
+  // Helper: resolve audience by name (from params) or fall back to ctx.audienceId
+  async function resolveAudienceId(params: Record<string, any>): Promise<string | null> {
+    if (params.audienceName) {
+      const match = await prisma.audience.findFirst({
+        where: { userId, name: { contains: params.audienceName, mode: 'insensitive' } },
+      });
+      return match?.id || null;
+    }
+    return ctx.audienceId || null;
+  }
+
   // Dispatch all actions in sequence
   for (const a of actions) {
     let actionResult: string | null = null;
     try {
 
-      if (a.type === 'add_priorities' && ctx.audienceId && a.params.texts) {
-        const audience = await prisma.audience.findFirst({
-          where: { id: ctx.audienceId, userId },
-          include: { priorities: true },
-        });
-        if (audience) {
-          const maxSort = audience.priorities.reduce((max: number, p: any) => Math.max(max, p.sortOrder), 0);
-          for (let i = 0; i < a.params.texts.length; i++) {
-            await prisma.priority.create({
-              data: {
-                audienceId: ctx.audienceId,
-                text: a.params.texts[i],
-                rank: audience.priorities.length + i + 1,
-                sortOrder: maxSort + i + 1,
-              },
-            });
+      if (a.type === 'add_priorities' && a.params.texts) {
+        const targetAudienceId = await resolveAudienceId(a.params);
+        if (!targetAudienceId) {
+          actionResult = 'Could not add priorities — no audience specified or found. Try including the audience name.';
+        } else {
+          const audience = await prisma.audience.findFirst({
+            where: { id: targetAudienceId, userId },
+            include: { priorities: true },
+          });
+          if (audience) {
+            const maxSort = audience.priorities.reduce((max: number, p: any) => Math.max(max, p.sortOrder), 0);
+            for (let i = 0; i < a.params.texts.length; i++) {
+              await prisma.priority.create({
+                data: {
+                  audienceId: targetAudienceId,
+                  text: a.params.texts[i],
+                  rank: audience.priorities.length + i + 1,
+                  sortOrder: maxSort + i + 1,
+                },
+              });
+            }
+            const targetLabel = targetAudienceId !== ctx.audienceId ? ` to "${audience.name}"` : '';
+            actionResult = `Added ${a.params.texts.length} priorities${targetLabel}`;
+            refreshNeeded = true;
           }
-          actionResult = `Added ${a.params.texts.length} priorities`;
-          refreshNeeded = true;
         }
       }
 
@@ -698,8 +715,25 @@ router.post('/page-content', async (req: Request, res: Response) => {
   const lines: string[] = [];
 
   try {
-    // Audiences page or any page with an active audience
-    if (ctx.audienceId) {
+    // Audiences page — always include ALL audiences so Maria can compare across them
+    if (ctx.page === 'audiences') {
+      const audiences = await prisma.audience.findMany({
+        where: { userId },
+        include: { priorities: { orderBy: { sortOrder: 'asc' } } },
+      });
+      for (const a of audiences) {
+        const isActive = a.id === ctx.audienceId;
+        lines.push(`\nAudience: ${a.name}${isActive ? ' [SELECTED]' : ''}`);
+        if (a.description) lines.push(`  Description: ${a.description}`);
+        lines.push(`  Priorities (${a.priorities.length}):`);
+        for (const p of a.priorities) {
+          lines.push(`    ${p.sortOrder + 1}. "${p.text}" (rank ${p.rank})${p.motivatingFactor ? ` — Why: "${p.motivatingFactor}"` : ''}`);
+        }
+      }
+    }
+
+    // Active audience on non-audiences pages
+    if (ctx.audienceId && ctx.page !== 'audiences') {
       const audience = await prisma.audience.findFirst({
         where: { id: ctx.audienceId, userId },
         include: { priorities: { orderBy: { sortOrder: 'asc' } } },
@@ -710,22 +744,6 @@ router.post('/page-content', async (req: Request, res: Response) => {
         lines.push(`Priorities (${audience.priorities.length}):`);
         for (const p of audience.priorities) {
           lines.push(`  ${p.sortOrder + 1}. "${p.text}" (rank ${p.rank})${p.motivatingFactor ? ` — Why: "${p.motivatingFactor}"` : ''}`);
-        }
-      }
-    }
-
-    // Audiences listing page
-    if (ctx.page === 'audiences' && !ctx.audienceId) {
-      const audiences = await prisma.audience.findMany({
-        where: { userId },
-        include: { priorities: { orderBy: { sortOrder: 'asc' } } },
-      });
-      for (const a of audiences) {
-        lines.push(`\nAudience: ${a.name}`);
-        if (a.description) lines.push(`  Description: ${a.description}`);
-        lines.push(`  Priorities (${a.priorities.length}):`);
-        for (const p of a.priorities) {
-          lines.push(`    ${p.sortOrder + 1}. "${p.text}" (rank ${p.rank})${p.motivatingFactor ? ` — Why: "${p.motivatingFactor}"` : ''}`);
         }
       }
     }

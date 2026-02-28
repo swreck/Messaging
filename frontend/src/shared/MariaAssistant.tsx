@@ -50,6 +50,55 @@ export function MariaAssistant() {
     }
   }, [messages, expanded]);
 
+  // Clip text selection to conversation box on mouseup
+  useEffect(() => {
+    function clipSelection() {
+      const conv = conversationRef.current;
+      if (!conv) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      // Only clip if selection started inside the conversation
+      if (!conv.contains(range.startContainer)) return;
+      // If selection extends outside, re-scope to conversation contents
+      if (!conv.contains(range.endContainer)) {
+        const clipped = document.createRange();
+        clipped.setStart(range.startContainer, range.startOffset);
+        // Set end to end of conversation content
+        clipped.setEndAfter(conv.lastChild || conv);
+        sel.removeAllRanges();
+        sel.addRange(clipped);
+      }
+    }
+    document.addEventListener('mouseup', clipSelection);
+    return () => document.removeEventListener('mouseup', clipSelection);
+  }, []);
+
+  // Cmd-A: select conversation text when conversation is visible
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+        const conv = conversationRef.current;
+        if (!conv) return;
+        // Only intercept if mouse/focus is within the conversation area
+        const sel = window.getSelection();
+        const activeEl = document.activeElement;
+        const isInConv = conv.contains(activeEl) ||
+          (sel && sel.rangeCount > 0 && conv.contains(sel.getRangeAt(0).startContainer));
+        if (isInConv) {
+          e.preventDefault();
+          e.stopPropagation();
+          const range = document.createRange();
+          range.selectNodeContents(conv);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, []);
+
   const send = useCallback(async (overrideText?: string, pageContent?: string) => {
     const text = overrideText || input.trim();
     if (!text || sending) return;
@@ -134,19 +183,9 @@ export function MariaAssistant() {
         <div
           className="maria-conversation"
           ref={conversationRef}
-          onKeyDown={(e) => {
-            // Cmd-A inside conversation selects only conversation text
-            if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
-              e.preventDefault();
-              e.stopPropagation();
-              const sel = window.getSelection();
-              const range = document.createRange();
-              if (conversationRef.current) {
-                range.selectNodeContents(conversationRef.current);
-                sel?.removeAllRanges();
-                sel?.addRange(range);
-              }
-            }
+          onMouseDown={() => {
+            // Auto-focus conversation on click so Cmd-A works
+            conversationRef.current?.focus();
           }}
           tabIndex={0}
         >

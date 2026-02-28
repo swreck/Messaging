@@ -124,10 +124,16 @@ export function buildAssistantPrompt(context: {
   // Audience actions
   if (context.audienceId) {
     actions.push('- edit_audience: Update the current audience name or description. Params: { name?: string, description?: string }');
-    actions.push('- add_priorities: Add new priorities to the current audience. Params: { texts: string[] }');
     actions.push('- edit_priorities: Rename, rewrite, or update the text/motivatingFactor of existing priorities. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }] } — position is 1-based');
     actions.push('- delete_priorities: Remove priorities by their position on the page. Params: { positions: number[] } — 1-based positions');
     actions.push('- reorder_priorities: Set the full ranked order of priorities. Params: { order: number[] } — array of current positions in the desired new order, e.g. [4, 1, 3, 2] means current #4 becomes #1');
+  }
+
+  // add_priorities — available whenever on audiences page (can target ANY audience by name)
+  if (context.page === 'audiences') {
+    actions.push('- add_priorities: Add new priorities to an audience. Params: { texts: string[], audienceName?: string } — audienceName targets a specific audience by name (partial match OK). If omitted, adds to the currently selected audience.');
+  } else if (context.audienceId) {
+    actions.push('- add_priorities: Add new priorities to the current audience. Params: { texts: string[] }');
   }
 
   // Offering actions
@@ -143,8 +149,8 @@ export function buildAssistantPrompt(context: {
     actions.push('- create_offering: Create a new offering, optionally with initial capabilities. Params: { name: string, description?: string, capabilities?: string[] }');
   }
 
-  // Audiences listing page (no specific audience selected)
-  if (context.page === 'audiences' && !context.audienceId) {
+  // Audiences listing page — create is always available here
+  if (context.page === 'audiences') {
     actions.push('- create_audience: Create a new audience, optionally with initial priorities. Params: { name: string, description?: string, priorities?: string[] } — priorities is an ordered array of priority texts, rank follows array order');
   }
 
@@ -188,6 +194,7 @@ ${context.draftId ? '- A Three Tier draft is open' : ''}
 ${context.storyId ? '- A Five Chapter Story is open' : ''}
 ${context.audienceId ? '- An audience is selected' : ''}
 ${context.offeringId ? '- An offering is selected' : ''}
+${context.page === 'audiences' ? '- CROSS-AUDIENCE: On the audiences page, when you read_page you see ALL audiences and their priorities. You can add priorities to ANY audience by including audienceName in add_priorities. You can compare audiences and copy priorities between them.' : ''}
 ${actionList}
 RESPONSE FORMAT:
 Always respond with JSON:

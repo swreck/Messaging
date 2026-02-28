@@ -1738,6 +1738,8 @@ p { line-height: 1.5; color: var(--text-secondary); }
   overflow-x: hidden;
   contain: paint;
   isolation: isolate;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .maria-conversation-inner {
   padding: 10px 14px;
