@@ -422,11 +422,10 @@ async function main() {
     }
   });
 
-  await test('Quality: Concise responses (1-3 sentences)', async () => {
-    const r = await askMaria('What is the Three Tier methodology?', { page: 'dashboard' });
-    // Count sentences (rough heuristic)
+  await test('Quality: Simple question gets concise response', async () => {
+    const r = await askMaria('What page am I on?', { page: 'offerings' });
     const sentences = r.response.split(/[.!?]+/).filter((s: string) => s.trim().length > 5);
-    assert(sentences.length <= 6, `Response is concise (${sentences.length} sentences)`,
+    assert(sentences.length <= 4, `Simple question gets concise answer (${sentences.length} sentences)`,
       `Response: "${r.response.slice(0, 200)}"`);
   });
 

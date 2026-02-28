@@ -43,8 +43,10 @@ export async function callAIWithJSON<T>(
   tier: ModelTier = 'fast',
   conversationHistory?: { role: 'user' | 'assistant'; content: string }[]
 ): Promise<T> {
+  const jsonSuffix = '\n\nYou MUST respond with valid JSON only. No markdown, no code fences, no explanation — just the JSON object.';
+
   const response = await callAI(
-    systemPrompt + '\n\nYou MUST respond with valid JSON only. No markdown, no code fences, no explanation — just the JSON object.',
+    systemPrompt + jsonSuffix,
     userMessage,
     tier,
     conversationHistory
@@ -52,5 +54,27 @@ export async function callAIWithJSON<T>(
 
   // Strip any accidental markdown fences
   const cleaned = response.replace(/^```json?\n?/m, '').replace(/\n?```$/m, '').trim();
-  return JSON.parse(cleaned) as T;
+
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    // Try to extract JSON from the response (model may have added text around it)
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]) as T;
+      } catch {
+        // Fall through to retry
+      }
+    }
+
+    // Retry once with a stronger nudge
+    const retryResponse = await callAI(
+      systemPrompt + jsonSuffix,
+      `Your previous response was not valid JSON. Respond with ONLY a JSON object, nothing else.\n\nOriginal request: ${userMessage}`,
+      tier
+    );
+    const retryCleaned = retryResponse.replace(/^```json?\n?/m, '').replace(/\n?```$/m, '').trim();
+    return JSON.parse(retryCleaned) as T;
+  }
 }
