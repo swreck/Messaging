@@ -1716,18 +1716,25 @@ p { line-height: 1.5; color: var(--text-secondary); }
   line-height: 1;
 }
 .maria-send:disabled { color: var(--text-tertiary); cursor: default; }
+.maria-history-hint {
+  background: var(--bg-hover);
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.maria-history-hint:hover { background: var(--bg-active); color: var(--text-secondary); }
 
 .maria-conversation {
   position: relative;
   background: var(--bg-card);
   border-top: 1px solid var(--border-light);
-  max-height: 200px;
+  max-height: 280px;
   overflow-y: auto;
-  animation: maria-expand 0.2s ease;
-}
-@keyframes maria-expand {
-  from { max-height: 0; opacity: 0; }
-  to { max-height: 200px; opacity: 1; }
 }
 .maria-conversation-inner {
   padding: 10px 14px;
@@ -1747,6 +1754,12 @@ p { line-height: 1.5; color: var(--text-secondary); }
   color: var(--text-primary);
 }
 .maria-msg-text { display: block; }
+.maria-reading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+}
 .maria-action-badge {
   display: inline-block;
   margin-top: 4px;

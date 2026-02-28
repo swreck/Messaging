@@ -8,6 +8,10 @@ export interface PageContext {
   offeringId?: string;
 }
 
+export function pageKey(ctx: PageContext): string {
+  return `${ctx.page}:${ctx.draftId || ''}:${ctx.storyId || ''}:${ctx.audienceId || ''}:${ctx.offeringId || ''}`;
+}
+
 interface MariaContextType {
   pageContext: PageContext;
   setPageContext: (ctx: PageContext) => void;
