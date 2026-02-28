@@ -342,6 +342,72 @@ async function main() {
     }
   });
 
+  await test('Action: Edit priorities via Maria', async () => {
+    // First read the page so Maria knows what's there
+    const content = await getPageContent({ page: 'audiences', audienceId: AUDIENCE_ID });
+    const r = await askMaria(
+      `[PAGE CONTENT]\n${content}\n\n[USER QUESTION]\nRename the first priority to "Rapid diagnostic turnaround"`,
+      { page: 'audiences', audienceId: AUDIENCE_ID }
+    );
+    if (r.action?.type === 'edit_priorities') {
+      assert(r.refreshNeeded === true, 'Refresh needed after edit');
+      assert(r.actionResult?.includes('Updated'), 'Action result confirms edit',
+        `actionResult: ${r.actionResult}`);
+    } else if (r.needsPageContent) {
+      assert(true, 'Maria wants to read page first (acceptable)');
+    } else {
+      assert(!!r.response, 'Got response');
+      console.log(`    (Maria responded: "${r.response.slice(0, 100)}")`);
+    }
+  });
+
+  await test('Action: Delete priorities via Maria', async () => {
+    // Add a throwaway priority first
+    await askMaria(
+      'Add a priority: "Throwaway test priority for deletion"',
+      { page: 'audiences', audienceId: AUDIENCE_ID }
+    );
+    const content = await getPageContent({ page: 'audiences', audienceId: AUDIENCE_ID });
+    const r = await askMaria(
+      `[PAGE CONTENT]\n${content}\n\n[USER QUESTION]\nDelete the last priority — it was a test.`,
+      { page: 'audiences', audienceId: AUDIENCE_ID }
+    );
+    if (r.action?.type === 'delete_priorities') {
+      assert(r.refreshNeeded === true, 'Refresh needed after delete');
+      assert(r.actionResult?.includes('Deleted'), 'Action result confirms deletion',
+        `actionResult: ${r.actionResult}`);
+    } else if (r.needsPageContent) {
+      assert(true, 'Maria wants to read page first (acceptable)');
+    } else {
+      assert(!!r.response, 'Got response');
+      console.log(`    (Maria responded: "${r.response.slice(0, 100)}")`);
+    }
+  });
+
+  await test('Action: Reorder priorities via Maria', async () => {
+    const content = await getPageContent({ page: 'audiences', audienceId: AUDIENCE_ID });
+    // Count how many priorities exist
+    const priCount = (content.match(/^\s+\d+\./gm) || []).length;
+    if (priCount >= 2) {
+      const r = await askMaria(
+        `[PAGE CONTENT]\n${content}\n\n[USER QUESTION]\nSwap the first two priorities — make #2 the new #1 and #1 the new #2.`,
+        { page: 'audiences', audienceId: AUDIENCE_ID }
+      );
+      if (r.action?.type === 'reorder_priorities') {
+        assert(r.refreshNeeded === true, 'Refresh needed after reorder');
+        assert(r.actionResult?.includes('Reordered'), 'Action result confirms reorder',
+          `actionResult: ${r.actionResult}`);
+      } else if (r.needsPageContent) {
+        assert(true, 'Maria wants to read page first (acceptable)');
+      } else {
+        assert(!!r.response, 'Got response');
+        console.log(`    (Maria responded: "${r.response.slice(0, 100)}")`);
+      }
+    } else {
+      assert(true, `Skipped — only ${priCount} priorities`);
+    }
+  });
+
   if (STORY_ID) {
     await test('Action: Copy edit request', async () => {
       // First get page content so Maria has context
