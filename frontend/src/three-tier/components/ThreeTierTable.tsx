@@ -7,9 +7,12 @@ import type { ThreeTierDraft } from '../../types';
 interface ThreeTierTableProps {
   draft: ThreeTierDraft;
   onUpdate: () => void;
+  suggestions?: Map<string, string>;
+  onAcceptSuggestion?: (cell: string, text: string) => void;
+  onDismissSuggestion?: (cell: string) => void;
 }
 
-export function ThreeTierTable({ draft, onUpdate }: ThreeTierTableProps) {
+export function ThreeTierTable({ draft, onUpdate, suggestions, onAcceptSuggestion, onDismissSuggestion }: ThreeTierTableProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
 
   async function updateTier1(text: string) {
@@ -75,6 +78,12 @@ export function ThreeTierTable({ draft, onUpdate }: ThreeTierTableProps) {
               {draft.tier1Statement?.text || 'Click to add Tier 1 statement'}
             </div>
           )}
+          {suggestions?.has('tier1') && (
+            <div className="inline-suggestion" onClick={() => onAcceptSuggestion?.('tier1', suggestions.get('tier1')!)}>
+              <span className="inline-suggestion-text">{suggestions.get('tier1')}</span>
+              <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.('tier1'); }}>&times;</button>
+            </div>
+          )}
           {draft.tier1Statement && (
             <CellVersionNav
               cellId={draft.tier1Statement.id}
@@ -86,61 +95,79 @@ export function ThreeTierTable({ draft, onUpdate }: ThreeTierTableProps) {
 
         {/* Tier 2 + Tier 3 */}
         <div className="tier2-row">
-          {draft.tier2Statements.map((t2) => (
-            <div key={t2.id} className="tier2-col">
-              {t2.categoryLabel && (
-                <div className="tier2-category-label">{t2.categoryLabel}</div>
-              )}
-              {editingCell === `tier2-${t2.id}` ? (
-                <div style={{ padding: 8 }}>
-                  <CellEditor
-                    text={t2.text}
-                    maxWords={20}
-                    onSave={(text) => updateTier2(t2.id, text, t2.text)}
-                    onCancel={() => setEditingCell(null)}
-                  />
-                </div>
-              ) : (
-                <div className="tier2-text" onClick={() => setEditingCell(`tier2-${t2.id}`)}>
-                  {t2.text}
-                </div>
-              )}
-              <CellVersionNav cellId={t2.id} cellType="tier2" onRestore={() => onUpdate()} />
-
-              <div className="tier3-area">
-                {t2.tier3Bullets.map((t3) => (
-                  <div key={t3.id} style={{ position: 'relative' }}>
-                    {editingCell === `tier3-${t3.id}` ? (
-                      <CellEditor
-                        text={t3.text}
-                        maxWords={6}
-                        onSave={(text) => updateTier3(t3.id, text, t3.text)}
-                        onCancel={() => setEditingCell(null)}
-                      />
-                    ) : (
-                      <div className="tier3-bullet" onClick={() => setEditingCell(`tier3-${t3.id}`)}>
-                        <span>{t3.text}</span>
-                        <button
-                          className="btn btn-ghost btn-sm btn-danger"
-                          onClick={(e) => { e.stopPropagation(); deleteTier3(t3.id); }}
-                          style={{ padding: '0 4px', fontSize: 11, opacity: 0.4 }}
-                        >
-                          &times;
-                        </button>
-                      </div>
-                    )}
+          {draft.tier2Statements.map((t2, t2Index) => {
+            const t2Key = `tier2-${t2Index}`;
+            return (
+              <div key={t2.id} className="tier2-col">
+                {t2.categoryLabel && (
+                  <div className="tier2-category-label">{t2.categoryLabel}</div>
+                )}
+                {editingCell === `tier2-${t2.id}` ? (
+                  <div style={{ padding: 8 }}>
+                    <CellEditor
+                      text={t2.text}
+                      maxWords={20}
+                      onSave={(text) => updateTier2(t2.id, text, t2.text)}
+                      onCancel={() => setEditingCell(null)}
+                    />
                   </div>
-                ))}
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => addTier3(t2.id)}
-                  style={{ fontSize: 12, marginTop: 4, padding: '2px 8px' }}
-                >
-                  + Add proof
-                </button>
+                ) : (
+                  <div className="tier2-text" onClick={() => setEditingCell(`tier2-${t2.id}`)}>
+                    {t2.text}
+                  </div>
+                )}
+                {suggestions?.has(t2Key) && (
+                  <div className="inline-suggestion" onClick={() => onAcceptSuggestion?.(t2Key, suggestions.get(t2Key)!)}>
+                    <span className="inline-suggestion-text">{suggestions.get(t2Key)}</span>
+                    <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(t2Key); }}>&times;</button>
+                  </div>
+                )}
+                <CellVersionNav cellId={t2.id} cellType="tier2" onRestore={() => onUpdate()} />
+
+                <div className="tier3-area">
+                  {t2.tier3Bullets.map((t3, t3Index) => {
+                    const t3Key = `tier3-${t2Index}-${t3Index}`;
+                    return (
+                      <div key={t3.id} style={{ position: 'relative' }}>
+                        {editingCell === `tier3-${t3.id}` ? (
+                          <CellEditor
+                            text={t3.text}
+                            maxWords={6}
+                            onSave={(text) => updateTier3(t3.id, text, t3.text)}
+                            onCancel={() => setEditingCell(null)}
+                          />
+                        ) : (
+                          <div className="tier3-bullet" onClick={() => setEditingCell(`tier3-${t3.id}`)}>
+                            <span>{t3.text}</span>
+                            <button
+                              className="btn btn-ghost btn-sm btn-danger"
+                              onClick={(e) => { e.stopPropagation(); deleteTier3(t3.id); }}
+                              style={{ padding: '0 4px', fontSize: 11, opacity: 0.4 }}
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        )}
+                        {suggestions?.has(t3Key) && (
+                          <div className="inline-suggestion" onClick={() => onAcceptSuggestion?.(t3Key, suggestions.get(t3Key)!)}>
+                            <span className="inline-suggestion-text">{suggestions.get(t3Key)}</span>
+                            <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(t3Key); }}>&times;</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => addTier3(t2.id)}
+                    style={{ fontSize: 12, marginTop: 4, padding: '2px 8px' }}
+                  >
+                    + Add proof
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

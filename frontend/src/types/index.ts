@@ -197,21 +197,22 @@ export interface ConvertLinesResponse {
   tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
 }
 
+export interface InlineSuggestion {
+  cell: string;
+  suggested: string;
+}
+
+export interface ReviewResponse {
+  suggestions: InlineSuggestion[];
+}
+
 export interface DirectionResponse {
-  suggestions: { cell: string; current: string; suggested: string; reason: string }[];
-  overallNote: string;
+  suggestions: InlineSuggestion[];
 }
 
-export interface AuditResponse {
-  overallScore: number;
-  issues: { severity: string; cell: string; issue: string; suggestion: string }[];
-  strengths: string[];
-  summary: string;
-}
-
-export interface MagicHourResponse {
-  suggestions: { cell: string; current: string; suggested: string; reason: string }[];
-  overallNote: string;
+export interface TableSnapshot {
+  tier1: string;
+  tier2: { text: string; tier3: string[] }[];
 }
 
 // ─── Chapter Info ────────────────────────────────────

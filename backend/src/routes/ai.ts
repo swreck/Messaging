@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { callAI, callAIWithJSON } from '../services/ai.js';
 import { ALL_ABOUT_YOU_SYSTEM, ALL_ABOUT_AUDIENCE_SYSTEM, buildCoachingUserContext } from '../prompts/coaching.js';
 import { MAPPING_SYSTEM, LOW_CONFIDENCE_QUESTIONS_SYSTEM } from '../prompts/mapping.js';
-import { CONVERT_LINES_SYSTEM, AUDIT_SYSTEM, POETRY_PASS_SYSTEM, REFINE_LANGUAGE_SYSTEM, MAGIC_HOUR_SYSTEM, DIRECTION_SYSTEM } from '../prompts/generation.js';
+import { CONVERT_LINES_SYSTEM, REVIEW_SYSTEM, REVISE_FROM_EDITS_SYSTEM, DIRECTION_SYSTEM } from '../prompts/generation.js';
 import { buildChapterPrompt, BLEND_SYSTEM, JOIN_CHAPTERS_SYSTEM, REFINE_CHAPTER_SYSTEM, COPY_EDIT_SYSTEM, CHAPTER_CRITERIA } from '../prompts/fiveChapter.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import { AUDIENCE_DISCOVERY_SYSTEM } from '../prompts/audienceDiscovery.js';
@@ -357,9 +357,9 @@ AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
   res.json(result);
 });
 
-// ─── Audit ──────────────────────────────────────────────
+// ─── Review (inline suggestions) ────────────────────────
 
-router.post('/audit', async (req: Request, res: Response) => {
+router.post('/review', async (req: Request, res: Response) => {
   const { draftId } = req.body;
   if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
 
@@ -368,34 +368,30 @@ router.post('/audit', async (req: Request, res: Response) => {
     include: {
       tier1Statement: true,
       tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
-      mappings: { where: { status: 'confirmed' }, include: { priority: true, element: true } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
-      offering: { include: { elements: true } },
     },
   });
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
   const userMessage = `THREE TIER TABLE:
-Tier 1: "${draft.tier1Statement?.text || '(empty)'}"
+Tier 1 [cell: tier1]: "${draft.tier1Statement?.text || '(empty)'}"
 
 Tier 2 statements:
-${draft.tier2Statements.map((t2, i) => `${i + 1}. "${t2.text}"\n   Tier 3 bullets: ${t2.tier3Bullets.map((t3) => `"${t3.text}"`).join(', ') || '(none)'}`).join('\n')}
+${draft.tier2Statements.map((t2, i) => `[cell: tier2-${i}] "${t2.text}"
+  Tier 3 bullets: ${t2.tier3Bullets.map((t3, j) => `[cell: tier3-${i}-${j}] "${t3.text}"`).join(', ') || '(none)'}`).join('\n')}
 
 AUDIENCE PRIORITIES:
-${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n')}
+${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n')}`;
 
-OFFERING CAPABILITIES:
-${draft.offering.elements.map((e) => `"${e.text}"`).join('\n')}`;
-
-  const result = await callAIWithJSON(AUDIT_SYSTEM, userMessage, 'deep');
+  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(REVIEW_SYSTEM, userMessage, 'deep');
   res.json(result);
 });
 
-// ─── Poetry Pass ────────────────────────────────────────
+// ─── Revise from user edits ─────────────────────────────
 
-router.post('/poetry-pass', async (req: Request, res: Response) => {
-  const { draftId } = req.body;
-  if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
+router.post('/revise', async (req: Request, res: Response) => {
+  const { draftId, previousState } = req.body;
+  if (!draftId || !previousState) { res.status(400).json({ error: 'draftId and previousState are required' }); return; }
 
   const draft = await prisma.threeTierDraft.findFirst({
     where: { id: draftId, offering: { userId: req.user!.userId } },
@@ -406,63 +402,17 @@ router.post('/poetry-pass', async (req: Request, res: Response) => {
   });
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
-  const userMessage = `THREE TIER TABLE:
-{
-  "tier1": { "text": "${draft.tier1Statement?.text || ''}" },
-  "tier2": [${draft.tier2Statements.map((t2) => `
-    { "text": "${t2.text}", "tier3": [${t2.tier3Bullets.map((t3) => `"${t3.text}"`).join(', ')}] }`).join(',')}
-  ]
-}`;
+  const userMessage = `PREVIOUS TABLE STATE:
+Tier 1: "${previousState.tier1 || '(empty)'}"
+${(previousState.tier2 || []).map((t2: any, i: number) => `Tier 2 #${i}: "${t2.text}"
+  Tier 3: ${(t2.tier3 || []).map((t3: string, j: number) => `[${j}] "${t3}"`).join(', ') || '(none)'}`).join('\n')}
 
-  const result = await callAIWithJSON(POETRY_PASS_SYSTEM, userMessage, 'fast');
-  res.json(result);
-});
+CURRENT TABLE STATE:
+Tier 1 [cell: tier1]: "${draft.tier1Statement?.text || '(empty)'}"
+${draft.tier2Statements.map((t2, i) => `[cell: tier2-${i}] "${t2.text}"
+  Tier 3: ${t2.tier3Bullets.map((t3, j) => `[cell: tier3-${i}-${j}] "${t3.text}"`).join(', ') || '(none)'}`).join('\n')}`;
 
-// ─── Refine Language ────────────────────────────────────
-
-router.post('/refine-language', async (req: Request, res: Response) => {
-  const { draftId } = req.body;
-  if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
-
-  const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
-    include: {
-      tier2Statements: { orderBy: { sortOrder: 'asc' } },
-    },
-  });
-  if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
-
-  const userMessage = `TIER 2 STATEMENTS (to be refined as a set):
-${draft.tier2Statements.map((t2) => `{ "text": "${t2.text}", "priorityId": "${t2.priorityId || ''}" }`).join('\n')}`;
-
-  const result = await callAIWithJSON(REFINE_LANGUAGE_SYSTEM, userMessage, 'fast');
-  res.json(result);
-});
-
-// ─── Magic Hour ─────────────────────────────────────────
-
-router.post('/magic-hour', async (req: Request, res: Response) => {
-  const { draftId } = req.body;
-  if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
-
-  const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
-    include: {
-      tier1Statement: true,
-      tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
-      mappings: { where: { status: 'confirmed' }, include: { priority: true, element: true } },
-      audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
-    },
-  });
-  if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
-
-  const userMessage = `THREE TIER TABLE:
-Tier 1: "${draft.tier1Statement?.text || ''}"
-${draft.tier2Statements.map((t2, i) => `Tier 2 #${i + 1}: "${t2.text}" | Tier 3: ${t2.tier3Bullets.map((t3) => `"${t3.text}"`).join(', ')}`).join('\n')}
-
-PRIORITIES: ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join(', ')}`;
-
-  const result = await callAIWithJSON(MAGIC_HOUR_SYSTEM, userMessage, 'deep');
+  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(REVISE_FROM_EDITS_SYSTEM, userMessage, 'deep');
   res.json(result);
 });
 
@@ -498,7 +448,7 @@ ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n'
 OFFERING CAPABILITIES:
 ${draft.offering.elements.map((e) => `"${e.text}"`).join('\n')}`;
 
-  const result = await callAIWithJSON(DIRECTION_SYSTEM, userMessage, 'deep');
+  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, userMessage, 'deep');
   res.json(result);
 });
 

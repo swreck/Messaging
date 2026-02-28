@@ -1,60 +1,75 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { StepProps } from './types';
 import { api } from '../../api/client';
 import { ThreeTierTable } from '../components/ThreeTierTable';
 import { Spinner } from '../../shared/Spinner';
-import type { TableVersion } from '../../types';
-
-interface Suggestion {
-  cell: string;
-  current: string;
-  suggested: string;
-  reason: string;
-}
+import type { TableVersion, ReviewResponse, DirectionResponse, TableSnapshot } from '../../types';
 
 export function Step5ThreeTier({ draft, loadDraft, prevStep }: StepProps) {
   const navigate = useNavigate();
-  const [auditing, setAuditing] = useState(false);
-  const [auditResult, setAuditResult] = useState<any>(null);
-  const [refining, setRefining] = useState(false);
+  const [suggestions, setSuggestions] = useState<Map<string, string>>(new Map());
+  const [reviewing, setReviewing] = useState(false);
+  const [revising, setRevising] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [snapshotLabel, setSnapshotLabel] = useState('');
 
   // Direction
   const [directionText, setDirectionText] = useState('');
   const [sendingDirection, setSendingDirection] = useState(false);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [directionNote, setDirectionNote] = useState('');
-  const [expandedSuggestion, setExpandedSuggestion] = useState<number | null>(null);
 
-  async function runAudit() {
-    setAuditing(true);
+  // Snapshot of table state for "revise from edits"
+  const previousStateRef = useRef<TableSnapshot | null>(null);
+
+  // Capture current table state as a snapshot
+  const captureState = useCallback((): TableSnapshot => ({
+    tier1: draft.tier1Statement?.text || '',
+    tier2: draft.tier2Statements.map(t2 => ({
+      text: t2.text,
+      tier3: t2.tier3Bullets.map(t3 => t3.text),
+    })),
+  }), [draft]);
+
+  // Snapshot when there are no active suggestions (baseline for "revise from edits")
+  if (suggestions.size === 0 && !previousStateRef.current) {
+    previousStateRef.current = captureState();
+  }
+
+  async function askMaria() {
+    setReviewing(true);
     try {
-      const result = await api.post<any>('/ai/audit', { draftId: draft.id });
-      setAuditResult(result);
+      const result = await api.post<ReviewResponse>('/ai/review', { draftId: draft.id });
+      const map = new Map<string, string>();
+      for (const s of result.suggestions || []) {
+        map.set(s.cell, s.suggested);
+      }
+      setSuggestions(map);
+      previousStateRef.current = captureState();
     } catch (err: any) {
       alert(`Review failed: ${err.message}`);
     } finally {
-      setAuditing(false);
+      setReviewing(false);
     }
   }
 
-  async function runRefineLanguage() {
-    setRefining(true);
+  async function reviseFromEdits() {
+    if (!previousStateRef.current) return;
+    setRevising(true);
     try {
-      const result = await api.post<{ tier2: { text: string; priorityId: string }[] }>('/ai/refine-language', { draftId: draft.id });
-      if (result.tier2) {
-        await api.post(`/tiers/${draft.id}/tier2/bulk`, {
-          statements: result.tier2,
-          changeSource: 'refine',
-        });
+      const result = await api.post<ReviewResponse>('/ai/revise', {
+        draftId: draft.id,
+        previousState: previousStateRef.current,
+      });
+      const map = new Map<string, string>();
+      for (const s of result.suggestions || []) {
+        map.set(s.cell, s.suggested);
       }
-      await loadDraft();
+      setSuggestions(map);
+      previousStateRef.current = captureState();
     } catch (err: any) {
-      alert(`Refine failed: ${err.message}`);
+      alert(`Revise failed: ${err.message}`);
     } finally {
-      setRefining(false);
+      setRevising(false);
     }
   }
 
@@ -62,13 +77,17 @@ export function Step5ThreeTier({ draft, loadDraft, prevStep }: StepProps) {
     if (!directionText.trim()) return;
     setSendingDirection(true);
     try {
-      const result = await api.post<{ suggestions: Suggestion[]; overallNote: string }>('/ai/direction', {
+      const result = await api.post<DirectionResponse>('/ai/direction', {
         draftId: draft.id,
         direction: directionText.trim(),
       });
-      setSuggestions(result.suggestions || []);
-      setDirectionNote(result.overallNote || '');
+      const map = new Map<string, string>();
+      for (const s of result.suggestions || []) {
+        map.set(s.cell, s.suggested);
+      }
+      setSuggestions(map);
       setDirectionText('');
+      previousStateRef.current = captureState();
     } catch (err: any) {
       alert(`Failed: ${err.message}`);
     } finally {
@@ -76,32 +95,49 @@ export function Step5ThreeTier({ draft, loadDraft, prevStep }: StepProps) {
     }
   }
 
-  async function applySuggestion(suggestion: Suggestion) {
+  async function handleAcceptSuggestion(cell: string, text: string) {
     try {
-      // Parse the cell reference to determine what to update
-      if (suggestion.cell === 'tier1') {
-        await api.put(`/tiers/${draft.id}/tier1`, { text: suggestion.suggested, changeSource: 'direction' });
-      } else if (suggestion.cell.startsWith('tier2-')) {
-        const index = parseInt(suggestion.cell.split('-')[1]);
+      if (cell === 'tier1') {
+        await api.put(`/tiers/${draft.id}/tier1`, { text, changeSource: 'review' });
+      } else if (cell.startsWith('tier2-')) {
+        const index = parseInt(cell.split('-')[1]);
         const t2 = draft.tier2Statements[index];
         if (t2) {
-          await api.put(`/tiers/${draft.id}/tier2/${t2.id}`, { text: suggestion.suggested, changeSource: 'direction' });
+          await api.put(`/tiers/${draft.id}/tier2/${t2.id}`, { text, changeSource: 'review' });
         }
-      } else if (suggestion.cell.startsWith('tier3-')) {
-        const parts = suggestion.cell.split('-');
+      } else if (cell.startsWith('tier3-')) {
+        const parts = cell.split('-');
         const t2Index = parseInt(parts[1]);
         const t3Index = parseInt(parts[2]);
         const t2 = draft.tier2Statements[t2Index];
         if (t2 && t2.tier3Bullets[t3Index]) {
-          await api.put(`/tiers/${draft.id}/tier3/${t2.tier3Bullets[t3Index].id}`, { text: suggestion.suggested, changeSource: 'direction' });
+          await api.put(`/tiers/${draft.id}/tier3/${t2.tier3Bullets[t3Index].id}`, { text, changeSource: 'review' });
         }
       }
-      // Remove the applied suggestion
-      setSuggestions(prev => prev.filter(s => s !== suggestion));
+      setSuggestions(prev => {
+        const next = new Map(prev);
+        next.delete(cell);
+        if (next.size === 0) previousStateRef.current = null;
+        return next;
+      });
       await loadDraft();
     } catch (err: any) {
       alert(`Failed to apply: ${err.message}`);
     }
+  }
+
+  function handleDismissSuggestion(cell: string) {
+    setSuggestions(prev => {
+      const next = new Map(prev);
+      next.delete(cell);
+      if (next.size === 0) previousStateRef.current = null;
+      return next;
+    });
+  }
+
+  function clearSuggestions() {
+    setSuggestions(new Map());
+    previousStateRef.current = null;
   }
 
   async function createSnapshot() {
@@ -114,13 +150,14 @@ export function Step5ThreeTier({ draft, loadDraft, prevStep }: StepProps) {
     if (!confirm('Restore this snapshot? Current table will be replaced.')) return;
     await api.post(`/versions/table/${draft.id}/restore/${versionId}`);
     await loadDraft();
+    clearSuggestions();
   }
 
   return (
     <div className="step-panel" style={{ maxWidth: 1100 }}>
       <h2>Your Three Tier</h2>
       <p className="step-description">
-        Click any cell to edit. Use the tools below to have Maria review or refine the language.
+        Click any cell to edit. Use the tools below to have Maria suggest improvements.
       </p>
 
       {/* Direction input */}
@@ -129,7 +166,7 @@ export function Step5ThreeTier({ draft, loadDraft, prevStep }: StepProps) {
           <textarea
             value={directionText}
             onChange={e => setDirectionText(e.target.value)}
-            placeholder="Tell Maria what you'd like changed... e.g. 'Make the whole thing more focused on cost savings' or 'Reorder to lead with security'"
+            placeholder="Tell Maria what you'd like changed... e.g. 'Make the whole thing more focused on cost savings'"
             style={{
               flex: 1,
               padding: '10px 14px',
@@ -161,101 +198,26 @@ export function Step5ThreeTier({ draft, loadDraft, prevStep }: StepProps) {
 
       {/* Toolbar */}
       <div className="three-tier-toolbar">
-        <button className="btn btn-secondary btn-sm" onClick={runAudit} disabled={auditing}>
-          {auditing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria to Review'}
+        <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={reviewing || revising}>
+          {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria'}
         </button>
-        <button className="btn btn-secondary btn-sm" onClick={runRefineLanguage} disabled={refining}>
-          {refining ? <><Spinner size={12} /> Refining...</> : 'Refine Language'}
+        <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={revising || reviewing}>
+          {revising ? <><Spinner size={12} /> Revising...</> : 'Take my edits and revise'}
         </button>
+        {suggestions.size > 0 && (
+          <button className="btn btn-ghost btn-sm" onClick={clearSuggestions}>
+            Clear suggestions
+          </button>
+        )}
       </div>
 
-      {/* Maria's direction suggestions */}
-      {(suggestions.length > 0 || directionNote) && (
-        <div className="direction-suggestions" style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius)',
-          padding: 16,
-          marginBottom: 16,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 style={{ margin: 0, fontSize: 15 }}>Maria's Suggestions</h3>
-            <button className="btn btn-ghost btn-sm" onClick={() => { setSuggestions([]); setDirectionNote(''); }}>&times;</button>
-          </div>
-          {directionNote && (
-            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>{directionNote}</p>
-          )}
-          {suggestions.map((s, i) => (
-            <div key={i} className="suggestion-card" style={{
-              background: 'var(--bg)',
-              border: '1px solid var(--border-light)',
-              borderRadius: 'var(--radius-sm)',
-              padding: 12,
-              marginBottom: 8,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>{s.cell}</span>
-                  <div style={{ fontSize: 14, marginTop: 4 }}>
-                    <span style={{ textDecoration: 'line-through', color: 'var(--text-tertiary)' }}>{s.current}</span>
-                    <span style={{ margin: '0 6px', color: 'var(--text-tertiary)' }}>&rarr;</span>
-                    <span style={{ fontWeight: 500 }}>{s.suggested}</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setExpandedSuggestion(expandedSuggestion === i ? null : i)}
-                    title="Why?"
-                    style={{ padding: '2px 6px', fontSize: 12 }}
-                  >
-                    i
-                  </button>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => applySuggestion(s)}
-                    style={{ padding: '2px 8px', fontSize: 12 }}
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-              {expandedSuggestion === i && (
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-light)' }}>
-                  {s.reason}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <ThreeTierTable draft={draft} onUpdate={loadDraft} />
-
-      {/* Audit Results */}
-      {auditResult && (
-        <div className="audit-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3>Maria's Review</h3>
-            <button className="btn btn-ghost btn-sm" onClick={() => setAuditResult(null)}>&times;</button>
-          </div>
-          <div className="audit-score">{auditResult.overallScore}/100</div>
-          <p style={{ textAlign: 'center', marginBottom: 16 }}>{auditResult.summary}</p>
-          {auditResult.issues?.map((issue: any, i: number) => (
-            <div key={i} className={`audit-issue ${issue.severity}`}>
-              <strong>{issue.cell}</strong>: {issue.issue}
-              {issue.suggestion && <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>Suggestion: {issue.suggestion}</div>}
-            </div>
-          ))}
-          {auditResult.strengths?.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <strong>Strengths:</strong>
-              <ul style={{ paddingLeft: 20, marginTop: 4 }}>
-                {auditResult.strengths.map((s: string, i: number) => <li key={i} style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{s}</li>)}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+      <ThreeTierTable
+        draft={draft}
+        onUpdate={() => { previousStateRef.current = null; loadDraft(); }}
+        suggestions={suggestions}
+        onAcceptSuggestion={handleAcceptSuggestion}
+        onDismissSuggestion={handleDismissSuggestion}
+      />
 
       {/* Table Version Panel */}
       <div className="table-version-panel">
