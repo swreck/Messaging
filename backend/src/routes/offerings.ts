@@ -98,6 +98,34 @@ router.post('/:id/elements', async (req: Request, res: Response) => {
   res.status(201).json({ element });
 });
 
+// PUT /api/offerings/:id/elements/reorder — must be before :elementId param route
+router.put('/:id/elements/reorder', async (req: Request, res: Response) => {
+  const { elementIds } = req.body;
+  if (!Array.isArray(elementIds)) {
+    res.status(400).json({ error: 'elementIds array required' });
+    return;
+  }
+
+  const offering = await prisma.offering.findFirst({
+    where: { id: param(req.params.id), userId: req.user!.userId },
+  });
+  if (!offering) {
+    res.status(404).json({ error: 'Offering not found' });
+    return;
+  }
+
+  try {
+    await Promise.all(
+      elementIds.map((id: string, index: number) =>
+        prisma.offeringElement.update({ where: { id }, data: { sortOrder: index } })
+      )
+    );
+    res.json({ success: true });
+  } catch {
+    res.status(400).json({ error: 'One or more element IDs not found' });
+  }
+});
+
 // PUT /api/offerings/:offeringId/elements/:elementId
 router.put('/:offeringId/elements/:elementId', async (req: Request, res: Response) => {
   const { text } = req.body;
@@ -127,31 +155,6 @@ router.delete('/:offeringId/elements/:elementId', async (req: Request, res: Resp
   }
 
   await prisma.offeringElement.delete({ where: { id: param(req.params.elementId) } });
-  res.json({ success: true });
-});
-
-// PUT /api/offerings/:id/elements/reorder
-router.put('/:id/elements/reorder', async (req: Request, res: Response) => {
-  const { elementIds } = req.body;
-  if (!Array.isArray(elementIds)) {
-    res.status(400).json({ error: 'elementIds array required' });
-    return;
-  }
-
-  const offering = await prisma.offering.findFirst({
-    where: { id: param(req.params.id), userId: req.user!.userId },
-  });
-  if (!offering) {
-    res.status(404).json({ error: 'Offering not found' });
-    return;
-  }
-
-  await Promise.all(
-    elementIds.map((id: string, index: number) =>
-      prisma.offeringElement.update({ where: { id }, data: { sortOrder: index } })
-    )
-  );
-
   res.json({ success: true });
 });
 

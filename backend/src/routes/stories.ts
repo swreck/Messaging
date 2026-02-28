@@ -6,6 +6,27 @@ import { param } from '../lib/params.js';
 const router = Router();
 router.use(requireAuth);
 
+// GET /api/stories/all — all stories for the current user with offering/audience context
+router.get('/all', async (req: Request, res: Response) => {
+  const stories = await prisma.fiveChapterStory.findMany({
+    where: { draft: { offering: { userId: req.user!.userId } } },
+    include: {
+      chapters: { orderBy: { chapterNum: 'asc' } },
+      draft: {
+        select: {
+          id: true,
+          currentStep: true,
+          status: true,
+          offering: { select: { id: true, name: true } },
+          audience: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+  res.json({ stories });
+});
+
 // GET /api/stories?draftId=xxx
 router.get('/', async (req: Request, res: Response) => {
   const { draftId } = req.query;

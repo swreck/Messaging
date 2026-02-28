@@ -120,6 +120,34 @@ router.post('/:id/priorities', async (req: Request, res: Response) => {
   res.status(201).json({ priority });
 });
 
+// PUT /api/audiences/:id/priorities/reorder — must be before :priorityId param route
+router.put('/:id/priorities/reorder', async (req: Request, res: Response) => {
+  const { priorityIds } = req.body;
+  if (!Array.isArray(priorityIds)) {
+    res.status(400).json({ error: 'priorityIds array required' });
+    return;
+  }
+
+  const audience = await prisma.audience.findFirst({
+    where: { id: param(req.params.id), userId: req.user!.userId },
+  });
+  if (!audience) {
+    res.status(404).json({ error: 'Audience not found' });
+    return;
+  }
+
+  try {
+    await Promise.all(
+      priorityIds.map((id: string, index: number) =>
+        prisma.priority.update({ where: { id }, data: { sortOrder: index, rank: index + 1 } })
+      )
+    );
+    res.json({ success: true });
+  } catch {
+    res.status(400).json({ error: 'One or more priority IDs not found' });
+  }
+});
+
 // PUT /api/audiences/:audienceId/priorities/:priorityId
 router.put('/:audienceId/priorities/:priorityId', async (req: Request, res: Response) => {
   const priority = await prisma.priority.findFirst({
@@ -155,31 +183,6 @@ router.delete('/:audienceId/priorities/:priorityId', async (req: Request, res: R
   }
 
   await prisma.priority.delete({ where: { id: param(req.params.priorityId) } });
-  res.json({ success: true });
-});
-
-// PUT /api/audiences/:id/priorities/reorder
-router.put('/:id/priorities/reorder', async (req: Request, res: Response) => {
-  const { priorityIds } = req.body;
-  if (!Array.isArray(priorityIds)) {
-    res.status(400).json({ error: 'priorityIds array required' });
-    return;
-  }
-
-  const audience = await prisma.audience.findFirst({
-    where: { id: param(req.params.id), userId: req.user!.userId },
-  });
-  if (!audience) {
-    res.status(404).json({ error: 'Audience not found' });
-    return;
-  }
-
-  await Promise.all(
-    priorityIds.map((id: string, index: number) =>
-      prisma.priority.update({ where: { id }, data: { sortOrder: index, rank: index + 1 } })
-    )
-  );
-
   res.json({ success: true });
 });
 
