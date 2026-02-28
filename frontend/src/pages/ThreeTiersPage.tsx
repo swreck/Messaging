@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
 import { Spinner } from '../shared/Spinner';
+import { useMaria } from '../shared/MariaContext';
 import type { Offering, DraftSummary } from '../types';
 
 interface HierarchyOffering {
@@ -26,6 +27,8 @@ export function ThreeTiersPage() {
   const [selectedOfferingId, setSelectedOfferingId] = useState('');
   const [selectedAudienceId, setSelectedAudienceId] = useState('');
 
+  const { setPageContext } = useMaria();
+  useEffect(() => { setPageContext({ page: 'three-tiers' }); }, []);
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -78,12 +81,13 @@ export function ThreeTiersPage() {
     const isComplete = status === 'complete' || step === 5;
     return (
       <div className="progress-dots">
-        {[1, 2, 3, 4, 5].map(i => (
-          <span
-            key={i}
-            className={`progress-dot-mini ${i <= step ? (isComplete && i === 5 ? 'dot-complete' : 'dot-filled') : 'dot-empty'}`}
-          />
-        ))}
+        {[1, 2, 3, 4, 5].map(i => {
+          let cls = 'dot-empty';
+          if (isComplete && i <= step) cls = 'dot-complete';
+          else if (i < step) cls = 'dot-complete';
+          else if (i === step) cls = 'dot-current';
+          return <span key={i} className={`progress-dot-mini ${cls}`} />;
+        })}
       </div>
     );
   }
@@ -99,6 +103,7 @@ export function ThreeTiersPage() {
       <div className="page-container">
         <header className="page-header">
           <h1>Three Tier Messages</h1>
+          <p className="page-description">Value hierarchies built from your offerings and audiences</p>
         </header>
         <div className="empty-state">
           <h2 style={{ marginBottom: 8 }}>No offerings yet</h2>
@@ -112,7 +117,10 @@ export function ThreeTiersPage() {
   return (
     <div className="page-container">
       <header className="page-header">
-        <h1>Three Tier Messages</h1>
+        <div>
+          <h1>Three Tier Messages</h1>
+          <p className="page-description">Value hierarchies built from your offerings and audiences</p>
+        </div>
         <button className="btn btn-primary" onClick={() => openNewModal()}>New Three Tier</button>
       </header>
 

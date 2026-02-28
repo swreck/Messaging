@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Spinner } from '../shared/Spinner';
+import { useMaria } from '../shared/MariaContext';
 import { MEDIUM_OPTIONS } from '../types';
 
 interface HierarchyOffering {
@@ -20,6 +21,8 @@ export function FiveChaptersPage() {
   const [hierarchy, setHierarchy] = useState<HierarchyOffering[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const { setPageContext } = useMaria();
+  useEffect(() => { setPageContext({ page: 'five-chapters' }); }, []);
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -93,6 +96,7 @@ export function FiveChaptersPage() {
     <div className="page-container">
       <header className="page-header">
         <h1>Five Chapter Stories</h1>
+        <p className="page-description">Narrative stories generated from completed Three Tier messages</p>
       </header>
 
       {!hasAnyContent && (

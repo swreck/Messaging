@@ -24,6 +24,7 @@ export function PriorityList({
   allowRemove = true,
 }: PriorityListProps) {
   const [newItem, setNewItem] = useState('');
+  const [expandedMF, setExpandedMF] = useState<Set<string>>(new Set());
   const [confirmReorder, setConfirmReorder] = useState<{
     items: Priority[];
     oldIndex: number;
@@ -31,7 +32,6 @@ export function PriorityList({
   } | null>(null);
 
   async function handleReorder(newItems: Priority[], oldIndex: number, newIndex: number) {
-    // If something is being moved to position #1, confirm first
     if (newIndex === 0 && oldIndex !== 0) {
       setConfirmReorder({ items: newItems, oldIndex, newIndex });
       return;
@@ -71,8 +71,18 @@ export function PriorityList({
     await api.put(`/audiences/${audienceId}/priorities/${id}`, { motivatingFactor: value });
   }
 
+  function toggleMF(id: string) {
+    setExpandedMF(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   function renderPriority(item: Priority, index: number, { listeners, attributes }: DragHandleProps) {
     const isFirst = index === 0;
+    const showMF = isFirst || expandedMF.has(item.id) || !!item.motivatingFactor;
     return (
       <div className={`priority-item ${isFirst ? 'priority-top' : ''}`}>
         <div className="priority-item-row">
@@ -88,13 +98,32 @@ export function PriorityList({
             >&times;</button>
           )}
         </div>
-        {showMotivatingFactor && (
+        {showMotivatingFactor && isFirst && (
+          <div className="priority-mf-wrapper">
+            <input
+              className="priority-mf-input priority-mf-top"
+              placeholder="Why is this most important to them?"
+              defaultValue={item.motivatingFactor}
+              onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
+            />
+            <span className="priority-mf-label">Drives Chapter 1 of your stories</span>
+          </div>
+        )}
+        {showMotivatingFactor && !isFirst && showMF && (
           <input
             className="priority-mf-input"
             placeholder="Why is this important to them?"
             defaultValue={item.motivatingFactor}
             onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
           />
+        )}
+        {showMotivatingFactor && !isFirst && !showMF && (
+          <button
+            className="priority-mf-expand"
+            onClick={() => toggleMF(item.id)}
+          >
+            + Add motivating factor
+          </button>
         )}
       </div>
     );
@@ -114,6 +143,11 @@ export function PriorityList({
 
   return (
     <div className="priority-list">
+      {priorities.length > 1 && (
+        <div className="priority-list-hint">
+          Ranked by importance — drag to reorder
+        </div>
+      )}
       <ReorderableList
         items={priorities}
         getId={p => p.id}

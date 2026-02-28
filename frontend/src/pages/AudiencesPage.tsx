@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
 import { PriorityList } from '../shared/PriorityList';
 import { Spinner } from '../shared/Spinner';
+import { useMaria } from '../shared/MariaContext';
 import type { Audience } from '../types';
 
 interface AudienceDraftRef {
@@ -29,6 +30,8 @@ export function AudiencesPage() {
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const { setPageContext } = useMaria();
+  useEffect(() => { setPageContext({ page: 'audiences' }); }, []);
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -121,7 +124,10 @@ export function AudiencesPage() {
   return (
     <div className="page-container">
       <header className="page-header">
-        <h1>Audiences</h1>
+        <div>
+          <h1>Audiences</h1>
+          <p className="page-description">Your target audiences and what they care about most</p>
+        </div>
         <button className="btn btn-primary" onClick={openNew}>Add Audience</button>
       </header>
 

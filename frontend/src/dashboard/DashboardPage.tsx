@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Spinner } from '../shared/Spinner';
+import { useMaria } from '../shared/MariaContext';
 import type { Offering, Audience } from '../types';
 
 interface HierarchyOffering {
@@ -32,9 +33,11 @@ export function DashboardPage() {
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const { setPageContext } = useMaria();
+  useEffect(() => { setPageContext({ page: 'dashboard' }); }, []);
   useEffect(() => { loadAll(); }, []);
 
-  async function loadAll() {
+  async function loadAll(retries = 2) {
     setLoading(true);
     try {
       const [h, o, a] = await Promise.all([
@@ -45,6 +48,11 @@ export function DashboardPage() {
       setHierarchy(h.hierarchy);
       setOfferings(o.offerings);
       setAudiences(a.audiences);
+    } catch {
+      if (retries > 0) {
+        await new Promise(r => setTimeout(r, 1500));
+        return loadAll(retries - 1);
+      }
     } finally {
       setLoading(false);
     }
@@ -166,36 +174,47 @@ export function DashboardPage() {
       {/* Navigation tiles */}
       {!isNew && (
         <div className="nav-tiles">
-          <div className="nav-tile" onClick={() => navigate('/audiences')}>
+          <div className="nav-tile nav-tile-audiences" onClick={() => navigate('/audiences')}>
+            <div className="nav-tile-icon">👥</div>
             <div className="nav-tile-title">Audiences</div>
             <div className="nav-tile-stat">
-              {audStats.count} audience{audStats.count !== 1 ? 's' : ''}
-              {audStats.totalPriorities > 0 && ` \u00B7 ${audStats.totalPriorities} priorities`}
+              {audStats.count > 0
+                ? `${audStats.count} audience${audStats.count !== 1 ? 's' : ''}${audStats.totalPriorities > 0 ? ` · ${audStats.totalPriorities} priorities` : ''}`
+                : 'Define who you\u2019re talking to'}
             </div>
           </div>
 
-          <div className="nav-tile" onClick={() => navigate('/offerings')}>
+          <div className="nav-tile nav-tile-offerings" onClick={() => navigate('/offerings')}>
+            <div className="nav-tile-icon">✨</div>
             <div className="nav-tile-title">Offerings</div>
             <div className="nav-tile-stat">
-              {offStats.count} offering{offStats.count !== 1 ? 's' : ''}
-              {offStats.totalCapabilities > 0 && ` \u00B7 ${offStats.totalCapabilities} capabilities`}
+              {offStats.count > 0
+                ? `${offStats.count} offering${offStats.count !== 1 ? 's' : ''}${offStats.totalCapabilities > 0 ? ` · ${offStats.totalCapabilities} capabilities` : ''}`
+                : 'Add your products and services'}
             </div>
           </div>
 
-          <div className="nav-tile" onClick={() => navigate('/three-tiers')}>
+          <div className="nav-tile nav-tile-three-tiers" onClick={() => navigate('/three-tiers')}>
+            <div className="nav-tile-icon">💬</div>
             <div className="nav-tile-title">Three Tier Messages</div>
             <div className="nav-tile-stat">
-              {ttStats.active > 0 && `${ttStats.active} active`}
-              {ttStats.active > 0 && ttStats.complete > 0 && ' \u00B7 '}
-              {ttStats.complete > 0 && `${ttStats.complete} complete`}
-              {ttStats.active === 0 && ttStats.complete === 0 && 'No messages yet'}
+              {ttStats.active > 0 || ttStats.complete > 0
+                ? <>
+                    {ttStats.active > 0 && `${ttStats.active} active`}
+                    {ttStats.active > 0 && ttStats.complete > 0 && ' · '}
+                    {ttStats.complete > 0 && `${ttStats.complete} complete`}
+                  </>
+                : 'Build your first value hierarchy'}
             </div>
           </div>
 
-          <div className="nav-tile" onClick={() => navigate('/five-chapters')}>
+          <div className="nav-tile nav-tile-five-chapters" onClick={() => navigate('/five-chapters')}>
+            <div className="nav-tile-icon">📖</div>
             <div className="nav-tile-title">Five Chapter Stories</div>
             <div className="nav-tile-stat">
-              {fcsCount > 0 ? `${fcsCount} deliverable${fcsCount !== 1 ? 's' : ''}` : 'No deliverables yet'}
+              {fcsCount > 0
+                ? `${fcsCount} deliverable${fcsCount !== 1 ? 's' : ''}`
+                : 'Generate stories from completed tiers'}
             </div>
           </div>
         </div>

@@ -1,22 +1,24 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
-import { DifferentiatorList } from '../shared/DifferentiatorList';
 import { Spinner } from '../shared/Spinner';
+import { useMaria } from '../shared/MariaContext';
 import type { Offering } from '../types';
 
 export function OfferingsPage() {
+  const navigate = useNavigate();
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const [showModal, setShowModal] = useState(false);
-  const [editingOffering, setEditingOffering] = useState<Offering | null>(null);
   const [name, setName] = useState('');
   const [smeRole, setSmeRole] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const { setPageContext } = useMaria();
+  useEffect(() => { setPageContext({ page: 'offerings' }); }, []);
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -29,28 +31,10 @@ export function OfferingsPage() {
     }
   }
 
-  function toggleExpand(id: string) {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   function openNew() {
-    setEditingOffering(null);
     setName('');
     setSmeRole('');
     setDescription('');
-    setShowModal(true);
-  }
-
-  function openEdit(o: Offering) {
-    setEditingOffering(o);
-    setName(o.name);
-    setSmeRole(o.smeRole);
-    setDescription(o.description);
     setShowModal(true);
   }
 
@@ -59,22 +43,12 @@ export function OfferingsPage() {
     if (saving) return;
     setSaving(true);
     try {
-      if (editingOffering) {
-        await api.put(`/offerings/${editingOffering.id}`, { name, smeRole, description });
-      } else {
-        await api.post('/offerings', { name, smeRole, description });
-      }
+      const { offering } = await api.post<{ offering: Offering }>('/offerings', { name, smeRole, description });
       setShowModal(false);
-      loadData();
+      navigate(`/offerings/${offering.id}`);
     } finally {
       setSaving(false);
     }
-  }
-
-  async function deleteOffering(id: string) {
-    if (!confirm('Delete this offering and all its Three Tier drafts?')) return;
-    await api.delete(`/offerings/${id}`);
-    loadData();
   }
 
   if (loading) return <div className="loading-screen"><Spinner size={32} /></div>;
@@ -82,50 +56,36 @@ export function OfferingsPage() {
   return (
     <div className="page-container">
       <header className="page-header">
-        <h1>Offerings</h1>
+        <div>
+          <h1>Offerings</h1>
+          <p className="page-description">Your products and services, and what makes them different</p>
+        </div>
         <button className="btn btn-primary" onClick={openNew}>Add Offering</button>
       </header>
 
-      {offerings.length === 0 && (
-        <div className="empty-state">
-          <h2 style={{ marginBottom: 8 }}>No offerings yet</h2>
+      {offerings.length === 0 ? (
+        <div className="empty-state-card">
+          <h2>No offerings yet</h2>
           <p>Create your first offering to start building messages.</p>
-          <button className="btn btn-secondary" onClick={openNew} style={{ marginTop: 16 }}>Add an Offering</button>
+          <button className="btn btn-primary" onClick={openNew} style={{ marginTop: 16 }}>Add an Offering</button>
+        </div>
+      ) : (
+        <div className="list-cards">
+          {offerings.map(o => (
+            <div key={o.id} className="list-card" onClick={() => navigate(`/offerings/${o.id}`)}>
+              <div className="list-card-content">
+                <strong className="list-card-title">{o.name}</strong>
+                <span className="list-card-meta">
+                  {o.elements.length} capabilit{o.elements.length === 1 ? 'y' : 'ies'}
+                </span>
+              </div>
+              <span className="list-card-arrow">&rsaquo;</span>
+            </div>
+          ))}
         </div>
       )}
 
-      <div className="offering-cards">
-        {offerings.map(o => (
-          <div key={o.id} className="expandable-card">
-            <div className="expandable-card-header" onClick={() => toggleExpand(o.id)}>
-              <span className="expand-icon">{expanded.has(o.id) ? '\u25BC' : '\u25B6'}</span>
-              <div className="expandable-card-title">
-                <strong>{o.name}</strong>
-                <span className="badge">{o.elements.length} capabilit{o.elements.length === 1 ? 'y' : 'ies'}</span>
-                {o.smeRole && <span className="badge badge-muted">{o.smeRole}</span>}
-              </div>
-              <div className="expandable-card-actions" onClick={e => e.stopPropagation()}>
-                <button className="btn btn-ghost btn-sm" onClick={() => openEdit(o)}>Edit</button>
-                <button className="btn btn-ghost btn-sm btn-danger" onClick={() => deleteOffering(o.id)}>Delete</button>
-              </div>
-            </div>
-
-            {expanded.has(o.id) && (
-              <div className="expandable-card-body">
-                <DifferentiatorList
-                  offeringId={o.id}
-                  elements={o.elements}
-                  onUpdate={loadData}
-                  allowAdd={true}
-                  allowRemove={true}
-                />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingOffering ? 'Edit Offering' : 'New Offering'}>
+      <Modal open={showModal} onClose={() => setShowModal(false)} title="New Offering">
         <form onSubmit={save}>
           <div className="form-group">
             <label>Name</label>
@@ -141,7 +101,7 @@ export function OfferingsPage() {
           </div>
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : editingOffering ? 'Save' : 'Create'}</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Create'}</button>
           </div>
         </form>
       </Modal>
