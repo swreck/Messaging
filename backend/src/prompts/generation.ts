@@ -21,7 +21,7 @@ STATEMENT RULES:
 5. The causal connection (priority BECAUSE capability) must be clear.
 6. Do NOT add transitions between statements (no "also," "in addition," etc.).
 7. Do NOT invent capabilities or benefits not in the mappings.
-8. For each Tier 2, also suggest 2-4 proof bullets (Tier 3) -- specific, factual, 1-6 words each. Proof only, no value claims.
+8. For each Tier 2, also suggest 2-4 proof bullets (Tier 3) -- 1-6 words each. PROOF ONLY. Proof means specific, verifiable hard data: numbers, names, certifications, measurable before/after outcomes. A skeptic must be able to verify it independently. NEVER use comparative adjectives (faster, better, easier) or narrative shorthand (e.g. "one week → seconds") -- those are value claims and belong in Tier 2, not Tier 3. Good: "$4,000 cost reduced to under $1". Bad: "Faster time-to-treatment".
 
 TIER 2 COUNT: Generate exactly 3 to 6 Tier 2 statements. Strong preference for 4 or 5. If there are more than 6 mapped priorities, combine related ones into compound statements. NEVER produce 7 or more Tier 2 statements.
 
@@ -57,7 +57,7 @@ YOUR TASK: Review the message and suggest improved text for any cells that need 
 WHAT TO CHECK:
 1. TIER 1: Is it the #1 ranked priority as a value statement? Under 20 words?
 2. TIER 2: Each under 20 words? Clear priority->capability causal connection? Varied phrasing (not "You get X because Y" repeated)? No transitions?
-3. TIER 3: Each 1-6 words? Proof only — specific and factual?
+3. TIER 3: Each 1-6 words? PROOF ONLY — specific, verifiable hard data (numbers, names, certifications, measurable outcomes). Flag and replace any comparative adjectives (faster, better, easier) or narrative shorthand — those are value claims, not proof.
 4. TONE: Sounds like a person talking, not a brochure?
 5. AUDIENCE LANGUAGE: Uses words the audience would use?
 
@@ -86,6 +86,7 @@ YOUR TASK:
 2. Infer the user's intent from those changes (e.g. "shortened to a fragment," "shifted emphasis to cost," "made it more casual").
 3. Suggest updates to OTHER cells (the ones the user did NOT edit) so they match the new tone, style, or emphasis.
 4. Do NOT suggest changes to cells the user already edited — they chose those words deliberately.
+5. Maintain doctrinal rules: Tier 1/2 under 20 words, Tier 3 under 6 words PROOF ONLY (verifiable hard data — numbers, names, certifications, measurable outcomes; never comparative adjectives or narrative shorthand).
 
 ONLY include cells that should change. If a cell already fits, leave it out.
 
@@ -110,7 +111,7 @@ This might mean:
 - Moving proof points between columns
 - Changing the category labels
 
-Maintain doctrinal correctness: priorities pull, Tier 1 and Tier 2 under 20 words, Tier 3 under 6 words proof only.
+Maintain doctrinal correctness: priorities pull, Tier 1 and Tier 2 under 20 words, Tier 3 under 6 words PROOF ONLY (verifiable hard data — numbers, names, certifications, measurable outcomes; never comparative adjectives or narrative shorthand).
 
 ONLY include cells that should change. If a cell is fine, leave it out.
 
