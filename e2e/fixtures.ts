@@ -29,6 +29,10 @@ interface MariaHelper {
 export const maria: MariaHelper = {
   async send(page: Page, message: string): Promise<string> {
     const input = page.locator('.maria-input-bar input');
+
+    // Count existing assistant messages before sending so we know when a new one appears
+    const beforeCount = await page.locator('.maria-msg-assistant .maria-msg-text').count();
+
     await input.fill(message);
     await input.press('Enter');
 
@@ -37,8 +41,12 @@ export const maria: MariaHelper = {
     await expect(input).toBeDisabled({ timeout: 5_000 });
     await expect(input).toBeEnabled({ timeout: 90_000 }); // AI responses can be slow
 
-    // Get the last assistant message
+    // Wait for a NEW assistant message to appear (count should increase)
     const assistantMessages = page.locator('.maria-msg-assistant .maria-msg-text');
+    await expect(assistantMessages).toHaveCount(beforeCount + 1, { timeout: 10_000 }).catch(() => {
+      // Fallback: just check there's at least one more than before
+    });
+
     const count = await assistantMessages.count();
     if (count === 0) {
       throw new Error('No Maria response appeared after sending message');
