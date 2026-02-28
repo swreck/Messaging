@@ -176,6 +176,25 @@ export interface TableVersion {
   createdAt: string;
 }
 
+export interface ChapterVersion {
+  id: string;
+  chapterContentId: string;
+  title: string;
+  content: string;
+  versionNum: number;
+  changeSource: string;
+  createdAt: string;
+}
+
+export interface StoryVersion {
+  id: string;
+  storyId: string;
+  snapshot: any;
+  label: string;
+  versionNum: number;
+  createdAt: string;
+}
+
 // ─── AI Responses ────────────────────────────────────
 
 export interface MappingSuggestion {

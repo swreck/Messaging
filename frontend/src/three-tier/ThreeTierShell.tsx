@@ -8,6 +8,7 @@ import { Step2AllAboutYou } from './steps/Step2AllAboutYou';
 import { Step3YourAudience } from './steps/Step3YourAudience';
 import { Step4BuildMessage } from './steps/Step4BuildMessage';
 import { Step5ThreeTier } from './steps/Step5ThreeTier';
+import { useMaria } from '../shared/MariaContext';
 import type { ThreeTierDraft } from '../types';
 
 const AUTO_SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -44,9 +45,22 @@ export function ThreeTierShell() {
     return () => clearInterval(timer);
   }, [autoSave]);
 
+  const { setPageContext, registerRefresh } = useMaria();
+
   useEffect(() => {
     if (draftId) loadDraft();
   }, [draftId]);
+
+  // Register page context for Maria assistant
+  useEffect(() => {
+    setPageContext({
+      page: 'three-tier',
+      draftId: draftId || undefined,
+      audienceId: draft?.audienceId,
+      offeringId: draft?.offeringId,
+    });
+    registerRefresh(loadDraft);
+  }, [draftId, draft?.audienceId]);
 
   async function loadDraft() {
     setLoading(true);

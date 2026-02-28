@@ -16,9 +16,10 @@ model User {
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  inviteCodeUsed InviteCode?
-  offerings      Offering[]
-  audiences      Audience[]
+  inviteCodeUsed    InviteCode?
+  offerings         Offering[]
+  audiences         Audience[]
+  assistantMessages AssistantMessage[]
 }
 
 model InviteCode {
@@ -186,6 +187,8 @@ model ChapterContent {
   title      String
   content    String
 
+  chapterVersions ChapterVersion[]
+
   @@unique([storyId, chapterNum])
 }
 
@@ -235,4 +238,30 @@ model ConversationMessage {
   role      String         // "user" | "assistant"
   content   String
   createdAt DateTime       @default(now())
+}
+
+// ─── Assistant Messages ────────────────────────────────
+
+model AssistantMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "assistant"
+  content   String
+  context   Json     @default("{}")
+  action    String?
+  createdAt DateTime @default(now())
+}
+
+// ─── Chapter Versions ──────────────────────────────────
+
+model ChapterVersion {
+  id               String         @id @default(cuid())
+  chapterContentId String
+  chapter          ChapterContent @relation(fields: [chapterContentId], references: [id], onDelete: Cascade)
+  title            String
+  content          String
+  versionNum       Int
+  changeSource     String         @default("manual")
+  createdAt        DateTime       @default(now())
 }

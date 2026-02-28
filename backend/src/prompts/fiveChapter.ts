@@ -58,18 +58,17 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
   const ch = CHAPTER_CRITERIA[chapterNum - 1];
   const spec = medium ? getMediumSpec(medium) : null;
 
-  // Word budget: if this chapter is emphasized, give it ~40% more words; reduce others proportionally
+  // Word budget: use per-chapter budgets from the medium spec
   let wordGuidance = '';
   if (spec) {
     const totalWords = Math.round((spec.wordRange[0] + spec.wordRange[1]) / 2);
-    const basePerChapter = Math.round(totalWords / 5);
-    let thisChapterWords = basePerChapter;
+    let thisChapterWords = spec.chapterBudgets[chapterNum - 1];
     if (emphasisChapter && emphasisChapter === chapterNum) {
-      thisChapterWords = Math.round(basePerChapter * 1.4);
+      thisChapterWords = Math.round(thisChapterWords * 1.4);
     } else if (emphasisChapter && emphasisChapter !== chapterNum) {
-      thisChapterWords = Math.round(basePerChapter * 0.85);
+      thisChapterWords = Math.round(thisChapterWords * 0.85);
     }
-    wordGuidance = `TARGET LENGTH: ~${thisChapterWords} words (this chapter's share of ~${totalWords} total for ${spec.label} format)`;
+    wordGuidance = `TARGET LENGTH: ~${thisChapterWords} words (this chapter's budget of ~${totalWords} total for ${spec.label} format)`;
   }
 
   const chapterRules: Record<number, string> = {
@@ -86,7 +85,10 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
 - Order and emphasis of differentiators follows the audience's priority ranking.
 - Derive from the Three Tier message: Tier 2 statements become the backbone of this chapter.
 - Only include capabilities that map to confirmed priorities — no orphans.
-- Transitions between points ARE appropriate here (unlike Tier 2 statements).`,
+- Transitions between points ARE appropriate here (unlike Tier 2 statements).
+- NEVER include proof, credentials, institutional names, or social validation. Those belong in Ch3 (trust) and Ch4 (proof).
+- The audience doesn't care WHO made it until they understand WHY it has value. Ch2 establishes value. Ch4 proves it.
+- If you're tempted to write "built by [experts]" or "[institution] is evaluating" — STOP. That's Ch3/Ch4 material.`,
 
     3: `CHAPTER 3 RULES:
 - Help people feel comfortable making the adoption decision.
@@ -107,13 +109,15 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
 - Steps must be easy, low-cost, non-intimidating.
 - Avoid vague follow-ups like "think about it."
 - Build momentum — once people take a first action, they're more likely to continue.
-- Keep this chapter SHORT.
+- Keep this chapter SHORT. Every sentence must contain action or information — no filler.
+- NEVER write empty closers like "That's it for now," "Simple as that," "That's all there is to it," or any variation. These add zero content. End with the last concrete step or a single direct sentence about what happens next.
 - Align the steps with the specified medium and CTA.`,
   };
 
   const formatGuidance = spec ? `
 CONTENT FORMAT: ${spec.label}
 FORMAT RULES: ${spec.format}
+FORMAT NOTES: ${spec.formatRules}
 TONE: ${spec.tone}
 ${wordGuidance}` : '';
 
@@ -135,6 +139,7 @@ HARD RULES (ALL CHAPTERS):
 3. Transitions between sentences/paragraphs should flow naturally.
 4. The tone should be confident but not pushy — like a trusted advisor.
 5. If the format is "In-Person / Verbal," write speaker note bullets — brief triggers, not a verbatim script.
+6. RESPECT CHAPTER BOUNDARIES. Each chapter has a specific job. Do NOT bleed content between chapters — no proof in Ch2, no value claims in Ch4, no credentials in Ch1. If content doesn't match this chapter's goal, leave it out.
 
 Respond with the chapter content as plain text. No JSON, no markdown headers.`;
 }

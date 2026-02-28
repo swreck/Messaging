@@ -452,6 +452,62 @@ ${draft.offering.elements.map((e) => `"${e.text}"`).join('\n')}`;
   res.json(result);
 });
 
+// ─── Derive Motivating Factor ───────────────────────────
+
+router.post('/derive-motivation', async (req: Request, res: Response) => {
+  const { priorityId, audienceId, offeringId } = req.body;
+  if (!priorityId || !audienceId) {
+    res.status(400).json({ error: 'priorityId and audienceId are required' });
+    return;
+  }
+
+  const priority = await prisma.priority.findFirst({
+    where: { id: priorityId, audience: { id: audienceId, userId: req.user!.userId } },
+    include: { audience: true },
+  });
+  if (!priority) {
+    res.status(404).json({ error: 'Priority not found' });
+    return;
+  }
+
+  // Optionally include offering context
+  let offeringContext = '';
+  if (offeringId) {
+    const offering = await prisma.offering.findFirst({
+      where: { id: offeringId, userId: req.user!.userId },
+      include: { elements: true },
+    });
+    if (offering) {
+      offeringContext = `\nOFFERING: ${offering.name}\nCAPABILITIES: ${offering.elements.map(e => e.text).join(', ')}`;
+    }
+  }
+
+  const systemPrompt = `You are a messaging strategist. Given an audience and their top priority, derive WHY this priority matters so deeply to them. Go beyond the surface — understand the domain, the stakes, the human impact. Write one clear, specific sentence that captures the real motivation.
+
+Do NOT write "Because you want X" or narrate. Write from the perspective of understanding the business reality.
+
+GOOD: "Reliable pathology results in minutes means clinicians can begin targeted treatment during the same visit, dramatically improving outcomes."
+BAD: "Because you want faster results."
+BAD: "Getting results quickly is important to clinical leads."
+
+Return ONLY the motivating factor sentence, nothing else.`;
+
+  const userMessage = `AUDIENCE: ${priority.audience.name}
+TOP PRIORITY: "${priority.text}"${offeringContext}
+
+Derive the motivating factor for this priority.`;
+
+  const motivation = await callAI(systemPrompt, userMessage, 'fast');
+
+  // Save it to the priority
+  await prisma.priority.update({
+    where: { id: priorityId },
+    data: { motivatingFactor: motivation.trim() },
+  });
+
+  res.json({ motivatingFactor: motivation.trim() });
+});
+
 // ─── Five Chapter Story ─────────────────────────────────
 
 router.post('/generate-chapter', async (req: Request, res: Response) => {
@@ -480,12 +536,12 @@ router.post('/generate-chapter', async (req: Request, res: Response) => {
     return;
   }
 
-  // Check motivating factors
-  const missingMF = story.draft.audience.priorities.filter((p) => !p.motivatingFactor);
-  if (missingMF.length > 0) {
+  // Check motivating factor for top priority (#1) only
+  const topPriority = story.draft.audience.priorities[0];
+  if (topPriority && !topPriority.motivatingFactor) {
     res.status(400).json({
-      error: 'Motivating factors are required for all priorities before generating a Five Chapter Story',
-      missingPriorities: missingMF.map((p) => ({ id: p.id, text: p.text })),
+      error: 'A motivating factor is required for the top priority before generating a Five Chapter Story',
+      missingTopPriority: { id: topPriority.id, text: topPriority.text },
     });
     return;
   }
@@ -524,6 +580,21 @@ Write Chapter ${chapterNum}: "${ch.name}"`;
     create: { storyId, chapterNum, title: ch.name, content },
   });
 
+  // Create chapter version
+  const maxVer = await prisma.chapterVersion.aggregate({
+    where: { chapterContentId: chapter.id },
+    _max: { versionNum: true },
+  });
+  await prisma.chapterVersion.create({
+    data: {
+      chapterContentId: chapter.id,
+      title: ch.name,
+      content,
+      versionNum: (maxVer._max?.versionNum ?? 0) + 1,
+      changeSource: 'ai_generate',
+    },
+  });
+
   res.json({ chapter });
 });
 
@@ -559,6 +630,21 @@ Please revise this chapter based on the feedback.`;
   const updated = await prisma.chapterContent.update({
     where: { id: chapter.id },
     data: { content },
+  });
+
+  // Create chapter version
+  const maxVer = await prisma.chapterVersion.aggregate({
+    where: { chapterContentId: chapter.id },
+    _max: { versionNum: true },
+  });
+  await prisma.chapterVersion.create({
+    data: {
+      chapterContentId: chapter.id,
+      title: chapter.title,
+      content,
+      versionNum: (maxVer._max?.versionNum ?? 0) + 1,
+      changeSource: 'ai_refine',
+    },
   });
 
   res.json({ chapter: updated });
@@ -611,6 +697,24 @@ router.post('/blend-story', async (req: Request, res: Response) => {
     include: { chapters: { orderBy: { chapterNum: 'asc' } } },
   });
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+
+  // Snapshot before blend
+  const maxSnapVer = await prisma.storyVersion.aggregate({
+    where: { storyId },
+    _max: { versionNum: true },
+  });
+  await prisma.storyVersion.create({
+    data: {
+      storyId,
+      snapshot: {
+        medium: story.medium, cta: story.cta, emphasis: story.emphasis,
+        stage: story.stage, joinedText: story.joinedText, blendedText: story.blendedText,
+        chapters: story.chapters.map(c => ({ chapterNum: c.chapterNum, title: c.title, content: c.content })),
+      },
+      label: 'Before blend',
+      versionNum: (maxSnapVer._max?.versionNum ?? 0) + 1,
+    },
+  });
 
   // Blend can work from joined text or directly from chapters
   const sourceText = story.joinedText || story.chapters.map((ch) => `${ch.title}\n${ch.content}`).join('\n\n');

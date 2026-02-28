@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Spinner } from '../shared/Spinner';
 import { InfoTooltip } from '../shared/InfoTooltip';
+import { ChapterVersionNav } from '../shared/ChapterVersionNav';
+import { BlendedVersionNav } from '../shared/BlendedVersionNav';
+import { useMaria } from '../shared/MariaContext';
 import type { ThreeTierDraft, FiveChapterStory, ChapterContent, StoryMedium } from '../types';
 import { CHAPTER_CRITERIA, MEDIUM_OPTIONS } from '../types';
 
@@ -13,9 +16,8 @@ export function FiveChapterShell() {
   const [stories, setStories] = useState<FiveChapterStory[]>([]);
   const [story, setStory] = useState<FiveChapterStory | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeChapter, setActiveChapter] = useState(1);
 
-  // Input form
+  // Create form
   const [medium, setMedium] = useState<StoryMedium>('email');
   const [cta, setCta] = useState('');
   const [emphasis, setEmphasis] = useState('');
@@ -23,28 +25,47 @@ export function FiveChapterShell() {
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Generation
+  const [generatingChapter, setGeneratingChapter] = useState<number | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [joining, setJoining] = useState(false);
+
+  // Blending
   const [blending, setBlending] = useState(false);
 
-  // Refinement
-  const [refineInput, setRefineInput] = useState('');
-  const [refining, setRefining] = useState(false);
+  // Inline editing
+  const [editingChapter, setEditingChapter] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
+  const [editingBlended, setEditingBlended] = useState(false);
+  const [editContent, setEditContent] = useState('');
 
   // Copy edit
   const [copyEditInput, setCopyEditInput] = useState('');
   const [copyEditing, setCopyEditing] = useState(false);
 
-  // Edit mode
-  const [editingChapter, setEditingChapter] = useState<number | null>(null);
-  const [editText, setEditText] = useState('');
-  const [editingJoined, setEditingJoined] = useState(false);
-  const [editingBlended, setEditingBlended] = useState(false);
-  const [editContent, setEditContent] = useState('');
+  // Missing MF panel
+  const [showMFPanel, setShowMFPanel] = useState(false);
+  const [derivingMF, setDerivingMF] = useState(false);
+
+  // Editable params
+  const [editingParam, setEditingParam] = useState<'medium' | 'cta' | 'emphasis' | null>(null);
+  const [editCta, setEditCta] = useState('');
+  const [paramsChanged, setParamsChanged] = useState(false);
+
+  const chapterRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const { setPageContext, registerRefresh } = useMaria();
 
   useEffect(() => {
     if (draftId) loadData();
   }, [draftId]);
+
+  // Register page context for Maria assistant
+  useEffect(() => {
+    setPageContext({
+      page: 'five-chapter',
+      draftId: draftId || undefined,
+      storyId: story?.id,
+    });
+    registerRefresh(loadData);
+  }, [draftId, story?.id]);
 
   async function loadData() {
     setLoading(true);
@@ -59,6 +80,12 @@ export function FiveChapterShell() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function topPriorityHasMF(): boolean {
+    if (!draft) return false;
+    const top = draft.audience.priorities[0];
+    return !!top?.motivatingFactor;
   }
 
   async function createStory(e: React.FormEvent) {
@@ -84,33 +111,19 @@ export function FiveChapterShell() {
     }
   }
 
-  async function generateChapter(chapterNum: number) {
+  async function generateAllChapters(skipMFCheck = false) {
     if (!story) return;
-    setGenerating(true);
-    try {
-      const { chapter } = await api.post<{ chapter: ChapterContent }>('/ai/generate-chapter', {
-        storyId: story.id,
-        chapterNum,
-      });
-      setStory(prev => {
-        if (!prev) return prev;
-        const chapters = prev.chapters.filter(c => c.chapterNum !== chapterNum);
-        chapters.push(chapter);
-        chapters.sort((a, b) => a.chapterNum - b.chapterNum);
-        return { ...prev, chapters };
-      });
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setGenerating(false);
-    }
-  }
 
-  async function generateAllChapters() {
-    if (!story) return;
+    // Check MF first (skip if we just derived it)
+    if (!skipMFCheck && !topPriorityHasMF()) {
+      setShowMFPanel(true);
+      return;
+    }
+
     setGenerating(true);
     try {
       for (let i = 1; i <= 5; i++) {
+        setGeneratingChapter(i);
         const { chapter } = await api.post<{ chapter: ChapterContent }>('/ai/generate-chapter', {
           storyId: story.id,
           chapterNum: i,
@@ -122,26 +135,36 @@ export function FiveChapterShell() {
           chapters.sort((a, b) => a.chapterNum - b.chapterNum);
           return { ...prev, chapters };
         });
+        // Scroll to the chapter that just generated
+        setTimeout(() => {
+          chapterRefs.current[i - 1]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
       }
     } catch (err: any) {
       alert(err.message);
     } finally {
       setGenerating(false);
+      setGeneratingChapter(null);
     }
   }
 
-  async function joinChapters() {
+  async function regenerateChapter(num: number) {
     if (!story) return;
-    setJoining(true);
+    setGeneratingChapter(num);
     try {
-      const { story: updated } = await api.post<{ story: FiveChapterStory }>('/ai/join-chapters', {
+      const { chapter } = await api.post<{ chapter: ChapterContent }>('/ai/generate-chapter', {
         storyId: story.id,
+        chapterNum: num,
       });
-      setStory(updated);
+      setStory(prev => {
+        if (!prev) return prev;
+        const chapters = prev.chapters.map(c => c.chapterNum === num ? chapter : c);
+        return { ...prev, chapters };
+      });
     } catch (err: any) {
       alert(err.message);
     } finally {
-      setJoining(false);
+      setGeneratingChapter(null);
     }
   }
 
@@ -160,46 +183,23 @@ export function FiveChapterShell() {
     }
   }
 
-  async function refineChapter() {
-    if (!story || !refineInput.trim()) return;
-    setRefining(true);
-    try {
-      const { chapter } = await api.post<{ chapter: ChapterContent }>('/ai/refine-chapter', {
-        storyId: story.id,
-        chapterNum: activeChapter,
-        feedback: refineInput.trim(),
-      });
-      setStory(prev => {
-        if (!prev) return prev;
-        const chapters = prev.chapters.map(c => c.chapterNum === activeChapter ? chapter : c);
-        return { ...prev, chapters };
-      });
-      setRefineInput('');
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setRefining(false);
-    }
-  }
-
-  async function saveChapterEdit() {
-    if (!story || editingChapter === null) return;
-    await api.put(`/stories/${story.id}/chapters/${editingChapter}`, { content: editText });
+  async function saveChapterEdit(chapterNum: number) {
+    if (!story) return;
+    await api.put(`/stories/${story.id}/chapters/${chapterNum}`, { content: editText });
     setStory(prev => {
       if (!prev) return prev;
       const chapters = prev.chapters.map(c =>
-        c.chapterNum === editingChapter ? { ...c, content: editText } : c
+        c.chapterNum === chapterNum ? { ...c, content: editText } : c
       );
       return { ...prev, chapters };
     });
     setEditingChapter(null);
   }
 
-  async function saveTextEdit(field: 'joinedText' | 'blendedText') {
+  async function saveBlendedEdit() {
     if (!story) return;
-    await api.put(`/stories/${story.id}`, { [field]: editContent });
-    setStory(prev => prev ? { ...prev, [field]: editContent } : prev);
-    setEditingJoined(false);
+    await api.put(`/stories/${story.id}`, { blendedText: editContent });
+    setStory(prev => prev ? { ...prev, blendedText: editContent } : prev);
     setEditingBlended(false);
   }
 
@@ -207,39 +207,15 @@ export function FiveChapterShell() {
     if (!story || !copyEditInput.trim()) return;
     setCopyEditing(true);
     try {
-      // Determine which content to send based on current view
-      let currentContent = '';
-      if (story.stage === 'blended' && story.blendedText) {
-        currentContent = story.blendedText;
-      } else if (story.stage === 'joined' && story.joinedText) {
-        currentContent = story.joinedText;
-      } else {
-        const ch = story.chapters.find(c => c.chapterNum === activeChapter);
-        currentContent = ch?.content || '';
-      }
-
+      const content = story.blendedText || story.chapters.map(c => c.content).join('\n\n');
       const { content: revised } = await api.post<{ content: string }>('/ai/copy-edit', {
         storyId: story.id,
-        content: currentContent,
+        content,
         request: copyEditInput.trim(),
       });
-
-      // Apply the revised content to the right place
-      if (story.stage === 'blended' && story.blendedText) {
+      if (story.blendedText) {
         await api.put(`/stories/${story.id}`, { blendedText: revised });
         setStory(prev => prev ? { ...prev, blendedText: revised } : prev);
-      } else if (story.stage === 'joined' && story.joinedText) {
-        await api.put(`/stories/${story.id}`, { joinedText: revised });
-        setStory(prev => prev ? { ...prev, joinedText: revised } : prev);
-      } else {
-        await api.put(`/stories/${story.id}/chapters/${activeChapter}`, { content: revised });
-        setStory(prev => {
-          if (!prev) return prev;
-          const chapters = prev.chapters.map(c =>
-            c.chapterNum === activeChapter ? { ...c, content: revised } : c
-          );
-          return { ...prev, chapters };
-        });
       }
       setCopyEditInput('');
     } catch (err: any) {
@@ -249,42 +225,74 @@ export function FiveChapterShell() {
     }
   }
 
-  function copyToClipboard(text: string) {
-    navigator.clipboard.writeText(text);
+  async function deriveMotivation() {
+    if (!draft) return;
+    const top = draft.audience.priorities[0];
+    if (!top) return;
+    setDerivingMF(true);
+    try {
+      await api.post('/ai/derive-motivation', {
+        priorityId: top.id,
+        audienceId: draft.audience.id,
+        offeringId: draft.offering.id,
+      });
+      // Reload draft to get updated MF
+      const { draft: d } = await api.get<{ draft: ThreeTierDraft }>(`/drafts/${draftId}`);
+      setDraft(d);
+      setShowMFPanel(false);
+      // Now generate — skip MF check since we just derived it
+      generateAllChapters(true);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setDerivingMF(false);
+    }
   }
 
-  function goBackStage() {
+  async function updateStoryParam(field: string, value: string) {
     if (!story) return;
-    if (story.stage === 'blended') {
-      setStory(prev => prev ? { ...prev, stage: 'joined' } : prev);
-    } else if (story.stage === 'joined') {
-      setStory(prev => prev ? { ...prev, stage: 'chapters' } : prev);
-    }
+    const { story: updated } = await api.put<{ story: FiveChapterStory }>(`/stories/${story.id}`, { [field]: value });
+    setStory(updated);
+    // Update in stories list too
+    setStories(prev => prev.map(s => s.id === updated.id ? updated : s));
+    setEditingParam(null);
+    setParamsChanged(true);
+  }
+
+  async function regenerateAfterParamChange() {
+    if (!story) return;
+    // Snapshot first
+    await api.post(`/versions/story/${story.id}`, { label: 'Before param change' });
+    setParamsChanged(false);
+    generateAllChapters();
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text);
   }
 
   if (loading) return <div className="loading-screen"><Spinner size={32} /></div>;
   if (!draft) return null;
 
-  const currentChapter = story?.chapters.find(c => c.chapterNum === activeChapter);
   const allChaptersGenerated = story ? story.chapters.length === 5 : false;
   const mediumLabel = MEDIUM_OPTIONS.find(m => m.id === story?.medium)?.label || story?.medium;
 
   return (
     <div className="five-chapter-shell">
-      <h1 style={{ marginBottom: 8 }}>Five Chapter Story</h1>
-      <p style={{ marginBottom: 16 }}>
+      <h1 style={{ marginBottom: 4 }}>Five Chapter Story</h1>
+      <p className="page-description" style={{ marginBottom: 20 }}>
         {draft.offering.name} &rarr; {draft.audience.name}
       </p>
 
-      {/* Story selector + create */}
-      {stories.length > 0 && !showCreateForm && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* Story selector — only if multiple stories */}
+      {stories.length > 1 && !showCreateForm && (
+        <div className="fcs-story-selector">
           {stories.map(s => {
             const label = MEDIUM_OPTIONS.find(m => m.id === s.medium)?.label || s.medium;
             return (
               <button
                 key={s.id}
-                className={`btn btn-sm ${story?.id === s.id ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm ${story?.id === s.id ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setStory(s)}
               >
                 {label}
@@ -297,27 +305,111 @@ export function FiveChapterShell() {
         </div>
       )}
 
-      {/* Story creation form */}
+      {/* Parameters bar — editable controls */}
+      {story && !showCreateForm && (
+        <div className="fcs-params-bar">
+          {/* Medium — clickable dropdown */}
+          <div className="fcs-param-editable" style={{ position: 'relative' }}>
+            {editingParam === 'medium' ? (
+              <div className="fcs-param-dropdown">
+                {MEDIUM_OPTIONS.map(opt => (
+                  <button
+                    key={opt.id}
+                    className={`fcs-param-dropdown-item ${story.medium === opt.id ? 'active' : ''}`}
+                    onClick={() => updateStoryParam('medium', opt.id)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <button className="fcs-param-dropdown-item dismiss" onClick={() => setEditingParam(null)}>Cancel</button>
+              </div>
+            ) : (
+              <span className="fcs-param-clickable" onClick={() => setEditingParam('medium')}>
+                <strong>{mediumLabel}</strong>
+              </span>
+            )}
+          </div>
+
+          <span className="fcs-param-sep">&middot;</span>
+
+          {/* CTA — inline edit */}
+          <div className="fcs-param-editable">
+            {editingParam === 'cta' ? (
+              <input
+                className="fcs-param-input"
+                value={editCta}
+                onChange={e => setEditCta(e.target.value)}
+                onBlur={() => { if (editCta.trim()) updateStoryParam('cta', editCta.trim()); else setEditingParam(null); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && editCta.trim()) updateStoryParam('cta', editCta.trim());
+                  if (e.key === 'Escape') setEditingParam(null);
+                }}
+                autoFocus
+              />
+            ) : (
+              <span className="fcs-param-clickable" onClick={() => { setEditCta(story.cta); setEditingParam('cta'); }}>
+                CTA: {story.cta}
+              </span>
+            )}
+          </div>
+
+          <span className="fcs-param-sep">&middot;</span>
+
+          {/* Emphasis — clickable dropdown */}
+          <div className="fcs-param-editable" style={{ position: 'relative' }}>
+            {editingParam === 'emphasis' ? (
+              <div className="fcs-param-dropdown">
+                <button className={`fcs-param-dropdown-item ${!story.emphasis ? 'active' : ''}`} onClick={() => updateStoryParam('emphasis', '')}>None</button>
+                {[1, 2, 3, 4, 5].map(n => (
+                  <button key={n} className={`fcs-param-dropdown-item ${story.emphasis === `ch${n}` ? 'active' : ''}`} onClick={() => updateStoryParam('emphasis', `ch${n}`)}>
+                    Ch {n}
+                  </button>
+                ))}
+                <button className="fcs-param-dropdown-item dismiss" onClick={() => setEditingParam(null)}>Cancel</button>
+              </div>
+            ) : (
+              <span className="fcs-param-clickable" onClick={() => setEditingParam('emphasis')}>
+                Emphasis: {story.emphasis ? story.emphasis.replace('ch', 'Ch ') : 'None'}
+              </span>
+            )}
+          </div>
+
+          <div style={{ flex: 1 }} />
+          {stories.length <= 1 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowCreateForm(true)}>
+              + New Deliverable
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Regenerate prompt after param change */}
+      {paramsChanged && story && !showCreateForm && (
+        <div className="fcs-params-changed">
+          <span>Parameters changed</span>
+          <button className="btn btn-primary btn-sm" onClick={regenerateAfterParamChange}>Regenerate?</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setParamsChanged(false)}>&times;</button>
+        </div>
+      )}
+
+      {/* Create form — inline, not modal */}
       {(!story || showCreateForm) && (
         <div className="story-input-form">
           <h2>{stories.length > 0 ? 'New Deliverable' : 'Create a Deliverable'}</h2>
-          <p className="step-description">Select a content format and configure your Five Chapter Story. The Three Tier table provides the foundation.</p>
+          <p className="step-description">Select a content format and configure your Five Chapter Story.</p>
           <form onSubmit={createStory}>
             <div className="form-group">
               <label>Content Format</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+              <div className="medium-grid">
                 {MEDIUM_OPTIONS.map(opt => (
                   <button
                     key={opt.id}
                     type="button"
-                    className={`btn btn-sm ${medium === opt.id ? 'btn-primary' : 'btn-ghost'}`}
+                    className={`medium-option ${medium === opt.id ? 'medium-selected' : ''}`}
                     onClick={() => setMedium(opt.id)}
-                    style={{ textAlign: 'left', padding: '10px 14px' }}
                   >
                     <strong>{opt.label}</strong>
-                    <div style={{ fontSize: 12, color: medium === opt.id ? 'inherit' : 'var(--text-secondary)', marginTop: 2 }}>
-                      {opt.description}
-                    </div>
+                    <span className="medium-desc">{opt.description}</span>
                   </button>
                 ))}
               </div>
@@ -341,7 +433,9 @@ export function FiveChapterShell() {
               {stories.length > 0 && (
                 <button type="button" className="btn btn-ghost" onClick={() => setShowCreateForm(false)}>Cancel</button>
               )}
-              <button type="button" className="btn btn-ghost" onClick={() => navigate(`/three-tier/${draftId}`)}>Back to Three Tier</button>
+              {!stories.length && (
+                <button type="button" className="btn btn-ghost" onClick={() => navigate(`/three-tier/${draftId}`)}>Back to Three Tier</button>
+              )}
               <button type="submit" className="btn btn-primary" disabled={creating || !cta}>
                 {creating ? 'Creating...' : 'Create Deliverable'}
               </button>
@@ -350,222 +444,185 @@ export function FiveChapterShell() {
         </div>
       )}
 
-      {/* Story viewer */}
-      {story && !showCreateForm && (
-        <>
-          {/* Stage indicator and actions */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              {mediumLabel} &middot; Stage: {story.stage === 'chapters' ? 'Chapters' : story.stage === 'joined' ? 'Joined' : 'Blended'}
-            </span>
-            <div style={{ flex: 1 }} />
-            {story.stage === 'chapters' && (
-              <>
-                <button className="btn btn-primary btn-sm" onClick={generateAllChapters} disabled={generating}>
-                  {generating ? <><Spinner size={12} /> Generating...</> : allChaptersGenerated ? 'Regenerate All' : 'Generate All Chapters'}
-                </button>
-                {allChaptersGenerated && (
-                  <button className="btn btn-secondary btn-sm" onClick={joinChapters} disabled={joining}>
-                    {joining ? <><Spinner size={12} /> Joining...</> : 'Join Chapters'}
-                  </button>
-                )}
-              </>
-            )}
-            {story.stage === 'joined' && (
-              <>
-                <button className="btn btn-ghost btn-sm" onClick={goBackStage}>Back to Chapters</button>
-                <button className="btn btn-primary btn-sm" onClick={blendStory} disabled={blending}>
-                  {blending ? <><Spinner size={12} /> Blending...</> : 'Blend into Story'}
-                </button>
-              </>
-            )}
-            {story.stage === 'blended' && (
-              <>
-                <button className="btn btn-ghost btn-sm" onClick={goBackStage}>Back to Joined</button>
-                <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy Story</button>
-              </>
-            )}
+      {/* Missing motivating factor panel */}
+      {showMFPanel && (
+        <div className="mf-panel">
+          <h3>Motivating factor needed</h3>
+          <p>
+            Chapter 1 is built from your top priority's motivating factor.{' '}
+            <strong>{draft.audience.priorities[0]?.text}</strong> doesn't have one yet.
+          </p>
+          <div className="mf-panel-actions">
+            <button
+              className="btn btn-primary"
+              onClick={deriveMotivation}
+              disabled={derivingMF}
+            >
+              {derivingMF ? <><Spinner size={14} /> Generating...</> : 'Use AI-derived motivation'}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => { setShowMFPanel(false); navigate('/audiences'); }}
+            >
+              Add it yourself
+            </button>
           </div>
-
-          {/* STAGE: Chapters */}
-          {story.stage === 'chapters' && (
-            <>
-              {/* Chapter tabs */}
-              <div className="chapter-tabs">
-                {CHAPTER_CRITERIA.map((ch) => {
-                  const hasContent = story.chapters.some(c => c.chapterNum === ch.num);
-                  return (
-                    <button
-                      key={ch.num}
-                      className={`chapter-tab${activeChapter === ch.num ? ' active' : ''}${hasContent ? ' has-content' : ''}`}
-                      onClick={() => setActiveChapter(ch.num)}
-                    >
-                      {ch.num}. {ch.name}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Chapter panel */}
-              <div className="chapter-panel">
-                {(() => {
-                  const ch = CHAPTER_CRITERIA[activeChapter - 1];
-                  return (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <h3>{ch.name}</h3>
-                        <InfoTooltip text={`Goal: ${ch.goal} | Outcome: ${ch.outcome} | Success: "${ch.audienceThinks}"`} />
-                      </div>
-
-                      <div className="chapter-info">
-                        <div className="chapter-info-item">
-                          <div className="chapter-info-label">Goal</div>
-                          <div>{ch.goal}</div>
-                        </div>
-                        <div className="chapter-info-item">
-                          <div className="chapter-info-label">Outcome</div>
-                          <div>{ch.outcome}</div>
-                        </div>
-                        <div className="chapter-info-item">
-                          <div className="chapter-info-label">Audience should think</div>
-                          <div style={{ fontStyle: 'italic' }}>"{ch.audienceThinks}"</div>
-                        </div>
-                      </div>
-
-                      {currentChapter ? (
-                        <div className="chapter-content">
-                          {editingChapter === activeChapter ? (
-                            <>
-                              <textarea
-                                value={editText}
-                                onChange={e => setEditText(e.target.value)}
-                                style={{ minHeight: 300 }}
-                              />
-                              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                <button className="btn btn-ghost btn-sm" onClick={() => setEditingChapter(null)}>Cancel</button>
-                                <button className="btn btn-primary btn-sm" onClick={saveChapterEdit}>Save</button>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div
-                                style={{ whiteSpace: 'pre-wrap', cursor: 'text', minHeight: 100, padding: 16 }}
-                                onClick={() => { setEditingChapter(activeChapter); setEditText(currentChapter.content); }}
-                              >
-                                {currentChapter.content}
-                              </div>
-                              <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
-                                <input
-                                  value={refineInput}
-                                  onChange={e => setRefineInput(e.target.value)}
-                                  placeholder="Give feedback to refine this chapter..."
-                                  style={{ flex: 1, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14 }}
-                                  onKeyDown={e => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && refineChapter()}
-                                />
-                                <button className="btn btn-secondary btn-sm" onClick={refineChapter} disabled={refining || !refineInput.trim()}>
-                                  {refining ? <Spinner size={12} /> : 'Refine'}
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                          <p style={{ marginBottom: 16 }}>This chapter hasn't been generated yet.</p>
-                          <button className="btn btn-primary" onClick={() => generateChapter(activeChapter)} disabled={generating}>
-                            {generating ? <><Spinner size={14} /> Generating...</> : `Generate Chapter ${activeChapter}`}
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            </>
-          )}
-
-          {/* STAGE: Joined */}
-          {story.stage === 'joined' && story.joinedText && (
-            <div className="joined-text-view" style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', padding: 24 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h3>Joined Story ({mediumLabel})</h3>
-                <button className="copy-btn" onClick={() => copyToClipboard(story.joinedText)}>Copy</button>
-              </div>
-              {editingJoined ? (
-                <>
-                  <textarea
-                    value={editContent}
-                    onChange={e => setEditContent(e.target.value)}
-                    style={{ minHeight: 400, width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}
-                  />
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setEditingJoined(false)}>Cancel</button>
-                    <button className="btn btn-primary btn-sm" onClick={() => saveTextEdit('joinedText')}>Save</button>
-                  </div>
-                </>
-              ) : (
-                <div
-                  style={{ whiteSpace: 'pre-wrap', cursor: 'text', lineHeight: 1.7, fontSize: 15 }}
-                  onClick={() => { setEditingJoined(true); setEditContent(story.joinedText); }}
-                >
-                  {story.joinedText}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* STAGE: Blended */}
-          {story.stage === 'blended' && story.blendedText && (
-            <div className="blended-text-view" style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', padding: 24 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h3>Final Story ({mediumLabel})</h3>
-                <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
-              </div>
-              {editingBlended ? (
-                <>
-                  <textarea
-                    value={editContent}
-                    onChange={e => setEditContent(e.target.value)}
-                    style={{ minHeight: 400, width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}
-                  />
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setEditingBlended(false)}>Cancel</button>
-                    <button className="btn btn-primary btn-sm" onClick={() => saveTextEdit('blendedText')}>Save</button>
-                  </div>
-                </>
-              ) : (
-                <div
-                  style={{ whiteSpace: 'pre-wrap', cursor: 'text', lineHeight: 1.7, fontSize: 15 }}
-                  onClick={() => { setEditingBlended(true); setEditContent(story.blendedText); }}
-                >
-                  {story.blendedText}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Copy edit input — available at all stages */}
-          {story && (story.chapters.length > 0 || story.joinedText || story.blendedText) && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 16, alignItems: 'center' }}>
-              <input
-                value={copyEditInput}
-                onChange={e => setCopyEditInput(e.target.value)}
-                placeholder="Ask Maria to edit... e.g. 'Make it shorter' or 'More emphasis on security'"
-                style={{ flex: 1, padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14 }}
-                onKeyDown={e => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && copyEdit()}
-              />
-              <button className="btn btn-secondary btn-sm" onClick={copyEdit} disabled={copyEditing || !copyEditInput.trim()}>
-                {copyEditing ? <Spinner size={12} /> : 'Edit'}
-              </button>
-            </div>
-          )}
-        </>
+        </div>
       )}
 
-      <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
-        <button className="btn btn-ghost" onClick={() => navigate(`/three-tier/${draftId}`)}>Back to Three Tier</button>
-        <button className="btn btn-ghost" onClick={() => navigate('/')}>Dashboard</button>
-      </div>
+      {/* All 5 chapters */}
+      {story && !showCreateForm && (
+        <div className="fcs-chapters">
+          <div className="fcs-chapters-header">
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => generateAllChapters()}
+              disabled={generating}
+            >
+              {generating ? <><Spinner size={12} /> Generating...</> : allChaptersGenerated ? 'Regenerate All' : 'Generate All Chapters'}
+            </button>
+          </div>
+
+          {CHAPTER_CRITERIA.map((ch, idx) => {
+            const chapterContent = story.chapters.find(c => c.chapterNum === ch.num);
+            const isGenerating = generatingChapter === ch.num;
+            const isEditing = editingChapter === ch.num;
+
+            return (
+              <div
+                key={ch.num}
+                className={`fcs-chapter-card ${chapterContent ? 'has-content' : ''} ${isGenerating ? 'generating' : ''}`}
+                ref={el => { chapterRefs.current[idx] = el; }}
+              >
+                <div className="fcs-chapter-header">
+                  <span className="fcs-chapter-num">{ch.num}</span>
+                  <h3 className="fcs-chapter-name">{ch.name}</h3>
+                  <InfoTooltip text={`Audience should think: "${ch.audienceThinks}"`} />
+                  <div style={{ flex: 1 }} />
+                  {chapterContent && (
+                    <ChapterVersionNav
+                      chapterContentId={chapterContent.id}
+                      onRestore={(content) => {
+                        setStory(prev => {
+                          if (!prev) return prev;
+                          const chapters = prev.chapters.map(c =>
+                            c.chapterNum === ch.num ? { ...c, content } : c
+                          );
+                          return { ...prev, chapters };
+                        });
+                      }}
+                    />
+                  )}
+                  {chapterContent && !isEditing && !generating && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => regenerateChapter(ch.num)}
+                      disabled={!!generatingChapter}
+                    >
+                      Regenerate
+                    </button>
+                  )}
+                </div>
+
+                {isGenerating && !chapterContent && (
+                  <div className="fcs-chapter-loading">
+                    <Spinner size={16} />
+                    <span>Writing chapter {ch.num}...</span>
+                  </div>
+                )}
+
+                {chapterContent && isEditing ? (
+                  <div className="fcs-chapter-edit">
+                    <textarea
+                      value={editText}
+                      onChange={e => setEditText(e.target.value)}
+                      onBlur={() => saveChapterEdit(ch.num)}
+                    />
+                    <div className="fcs-chapter-edit-actions">
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEditingChapter(null)}>Cancel</button>
+                    </div>
+                  </div>
+                ) : chapterContent ? (
+                  <div
+                    className="fcs-chapter-content"
+                    onClick={() => { setEditingChapter(ch.num); setEditText(chapterContent.content); }}
+                  >
+                    {chapterContent.content}
+                  </div>
+                ) : !isGenerating ? (
+                  <div className="fcs-chapter-empty">
+                    Not yet generated
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+
+          {/* Blend section */}
+          {allChaptersGenerated && !generating && (
+            <div className="fcs-blend-section">
+              {!story.blendedText ? (
+                <button
+                  className="btn btn-primary"
+                  onClick={blendStory}
+                  disabled={blending}
+                  style={{ width: '100%' }}
+                >
+                  {blending ? <><Spinner size={14} /> Blending into story...</> : 'Blend into Story'}
+                </button>
+              ) : (
+                <div className="fcs-blended">
+                  <div className="fcs-blended-header">
+                    <h3>Final Story</h3>
+                    <BlendedVersionNav storyId={story.id} onRestore={loadData} />
+                    <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
+                  </div>
+                  {editingBlended ? (
+                    <div className="fcs-chapter-edit">
+                      <textarea
+                        value={editContent}
+                        onChange={e => setEditContent(e.target.value)}
+                        onBlur={saveBlendedEdit}
+                        style={{ minHeight: 300 }}
+                      />
+                      <div className="fcs-chapter-edit-actions">
+                        <button className="btn btn-ghost btn-sm" onClick={() => setEditingBlended(false)}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className="fcs-blended-content"
+                      onClick={() => { setEditingBlended(true); setEditContent(story.blendedText); }}
+                    >
+                      {story.blendedText}
+                    </div>
+                  )}
+
+                  {/* Copy edit */}
+                  <div className="fcs-copy-edit">
+                    <input
+                      value={copyEditInput}
+                      onChange={e => setCopyEditInput(e.target.value)}
+                      placeholder="Ask Maria to edit... e.g. 'Make it shorter' or 'More emphasis on security'"
+                      onKeyDown={e => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && copyEdit()}
+                    />
+                    <button className="btn btn-secondary btn-sm" onClick={copyEdit} disabled={copyEditing || !copyEditInput.trim()}>
+                      {copyEditing ? <Spinner size={12} /> : 'Edit'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {story && !showCreateForm && (
+        <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
+          <button className="btn btn-ghost" onClick={() => navigate(`/three-tier/${draftId}`)}>Back to Three Tier</button>
+          <button className="btn btn-ghost" onClick={() => navigate('/')}>Dashboard</button>
+        </div>
+      )}
     </div>
   );
 }

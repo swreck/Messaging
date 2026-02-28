@@ -40,12 +40,14 @@ export async function callAI(
 export async function callAIWithJSON<T>(
   systemPrompt: string,
   userMessage: string,
-  tier: ModelTier = 'fast'
+  tier: ModelTier = 'fast',
+  conversationHistory?: { role: 'user' | 'assistant'; content: string }[]
 ): Promise<T> {
   const response = await callAI(
     systemPrompt + '\n\nYou MUST respond with valid JSON only. No markdown, no code fences, no explanation — just the JSON object.',
     userMessage,
-    tier
+    tier,
+    conversationHistory
   );
 
   // Strip any accidental markdown fences

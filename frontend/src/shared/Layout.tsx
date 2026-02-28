@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { MariaAssistant } from './MariaAssistant';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Home' },
@@ -21,7 +22,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-layout">
       <nav className="nav-bar">
-        <Link to="/" className="nav-brand">Maria</Link>
+        <Link to="/" className="nav-brand">
+          <span className="nav-brand-name">Maria</span>
+          <span className="nav-brand-tagline">Your Messaging Partner</span>
+        </Link>
         <div className="nav-links">
           {NAV_ITEMS.map(item => (
             <Link
@@ -40,6 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </nav>
       <main className="main-content">
         {children}
+        <MariaAssistant />
       </main>
     </div>
   );

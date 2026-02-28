@@ -136,6 +136,24 @@ router.put('/:storyId/chapters/:chapterNum', async (req: Request, res: Response)
     update: { title: title ?? undefined, content: content ?? undefined },
     create: { storyId: param(req.params.storyId), chapterNum, title: title || '', content: content || '' },
   });
+
+  // Create chapter version for manual edits
+  if (content) {
+    const maxVer = await prisma.chapterVersion.aggregate({
+      where: { chapterContentId: chapter.id },
+      _max: { versionNum: true },
+    });
+    await prisma.chapterVersion.create({
+      data: {
+        chapterContentId: chapter.id,
+        title: chapter.title,
+        content: chapter.content,
+        versionNum: (maxVer._max?.versionNum ?? 0) + 1,
+        changeSource: 'manual',
+      },
+    });
+  }
+
   res.json({ chapter });
 });
 

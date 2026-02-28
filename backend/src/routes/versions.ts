@@ -177,6 +177,54 @@ router.post('/table/:draftId/restore/:versionId', async (req: Request, res: Resp
   res.json({ success: true });
 });
 
+// ─── Chapter Versions ──────────────────────────────────
+
+// GET /api/versions/chapter/:chapterContentId
+router.get('/chapter/:chapterContentId', async (req: Request, res: Response) => {
+  const versions = await prisma.chapterVersion.findMany({
+    where: { chapterContentId: param(req.params.chapterContentId) },
+    orderBy: { versionNum: 'asc' },
+  });
+  res.json({ versions });
+});
+
+// POST /api/versions/chapter/:chapterContentId/restore/:versionNum
+router.post('/chapter/:chapterContentId/restore/:versionNum', async (req: Request, res: Response) => {
+  const chapterContentId = param(req.params.chapterContentId);
+  const versionNum = parseInt(param(req.params.versionNum), 10);
+
+  const version = await prisma.chapterVersion.findFirst({
+    where: { chapterContentId, versionNum },
+  });
+  if (!version) {
+    res.status(404).json({ error: 'Version not found' });
+    return;
+  }
+
+  // Update the chapter content
+  await prisma.chapterContent.update({
+    where: { id: chapterContentId },
+    data: { title: version.title, content: version.content },
+  });
+
+  // Create a new version entry for the restore
+  const maxVer = await prisma.chapterVersion.aggregate({
+    where: { chapterContentId },
+    _max: { versionNum: true },
+  });
+  await prisma.chapterVersion.create({
+    data: {
+      chapterContentId,
+      title: version.title,
+      content: version.content,
+      versionNum: (maxVer._max?.versionNum ?? 0) + 1,
+      changeSource: 'manual',
+    },
+  });
+
+  res.json({ title: version.title, content: version.content });
+});
+
 // ─── Story Versions ────────────────────────────────────
 
 // GET /api/versions/story/:storyId
@@ -225,6 +273,54 @@ router.post('/story/:storyId', async (req: Request, res: Response) => {
   });
 
   res.status(201).json({ version });
+});
+
+// POST /api/versions/story/:storyId/restore/:versionId
+router.post('/story/:storyId/restore/:versionId', async (req: Request, res: Response) => {
+  const storyId = param(req.params.storyId);
+  const story = await prisma.fiveChapterStory.findFirst({
+    where: { id: storyId, draft: { offering: { userId: req.user!.userId } } },
+  });
+  if (!story) {
+    res.status(404).json({ error: 'Story not found' });
+    return;
+  }
+
+  const version = await prisma.storyVersion.findFirst({
+    where: { id: param(req.params.versionId), storyId },
+  });
+  if (!version) {
+    res.status(404).json({ error: 'Version not found' });
+    return;
+  }
+
+  const snapshot = version.snapshot as any;
+
+  // Restore story fields
+  await prisma.fiveChapterStory.update({
+    where: { id: storyId },
+    data: {
+      medium: snapshot.medium ?? story.medium,
+      cta: snapshot.cta ?? story.cta,
+      emphasis: snapshot.emphasis ?? story.emphasis,
+      stage: snapshot.stage ?? story.stage,
+      joinedText: snapshot.joinedText ?? '',
+      blendedText: snapshot.blendedText ?? '',
+    },
+  });
+
+  // Restore chapters
+  if (snapshot.chapters) {
+    for (const ch of snapshot.chapters) {
+      await prisma.chapterContent.upsert({
+        where: { storyId_chapterNum: { storyId, chapterNum: ch.chapterNum } },
+        update: { title: ch.title, content: ch.content },
+        create: { storyId, chapterNum: ch.chapterNum, title: ch.title, content: ch.content },
+      });
+    }
+  }
+
+  res.json({ success: true });
 });
 
 export default router;

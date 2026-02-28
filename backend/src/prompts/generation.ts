@@ -10,7 +10,9 @@ CRITICAL RULES:
 2. The RESULT is the subject, not the product. Write "Reliable pathology slide results" NOT "Slideflow achieves" or "Slideflow delivers." The audience cares about what they get, not about the product performing an action.
 3. State facts plainly. "At a cost of less than $1" — not "for under a buck" (too casual), not "at a fraction of the cost" (marketing), not "slashing costs by 99.97%" (dramatic). Specific. Factual. Plain.
 4. Conversational does NOT mean clever, punchy, or pithy. No alliteration, no parallel structure for effect, no dramatic reveals. If a sentence sounds like a copywriter wrote it, rewrite it. The goal is direct and honest, not well-crafted.
-5. If you wouldn't say it out loud to a smart professional acquaintance who doesn't know your field, don't write it.`;
+5. If you wouldn't say it out loud to a smart professional acquaintance who doesn't know your field, don't write it.
+6. NEVER use narrative causality phrases: "trace back to," "boil down to," "come down to," "rooted in," "stems from," "at its core." These narrate a logical chain instead of stating the fact. Just state the fact.
+7. NEVER use metaphorical verbs: "unlock," "fuel," "drive," "power," "transform," "bridge," "reshape," "elevate," "ignite," "amplify." Use literal language only. Say what actually happens.`;
 
 export { KENS_VOICE };
 

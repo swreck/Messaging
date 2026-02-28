@@ -154,6 +154,7 @@ export function ThreeTierTable({ draft, onUpdate, suggestions, onAcceptSuggestio
                             <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(t3Key); }}>&times;</button>
                           </div>
                         )}
+                        <CellVersionNav cellId={t3.id} cellType="tier3" onRestore={() => onUpdate()} />
                       </div>
                     );
                   })}
