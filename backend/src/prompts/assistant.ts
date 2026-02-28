@@ -1,7 +1,7 @@
 import { KENS_VOICE } from './generation.js';
 
 const METHODOLOGY_REFERENCE = `
-METHODOLOGY REFERENCE — You are an expert in Ken Rosen's messaging methodology. Use this knowledge to answer questions accurately and coach users.
+METHODOLOGY REFERENCE — This is the SOLE SOURCE OF TRUTH for Ken Rosen's methodology. When answering methodology questions, use ONLY the definitions below. Do NOT paraphrase, improvise, or draw on outside knowledge about sales frameworks. Use the exact chapter names, goals, and rules as written here.
 
 ═══ CORE CONCEPTS ═══
 
@@ -48,49 +48,54 @@ TIER 3 — The Proof (2-4 bullets per Tier 2 column):
 
 ═══ FIVE CHAPTER STORY ═══
 
-The Five Chapter Story turns a Three Tier Message into a narrative for a specific medium (email, blog, landing page, etc.). Each chapter has a specific job:
+The Five Chapter Story turns a Three Tier Message into a narrative for a specific medium (email, blog, landing page, etc.). There are EXACTLY five chapters, in this EXACT order, with these EXACT names and purposes. Do NOT rename, reorder, or redescribe them:
 
-CHAPTER 1 — "You Need This Category" (Compel action):
+CHAPTER 1 — Name: "You Need This Category" — Goal: COMPEL ACTION
 - Make the status quo unattractive. Why change? Why now?
 - Category-level ONLY. NEVER mention your company or product name.
 - The audience should think: "I didn't need something new on my list but you're right, I need to do something."
 - Content comes from the audience's highest priorities — priorities are the lens.
 - Chapter 1 is the pain from the ABSENCE of what Chapter 2 will promise.
+- Sales technique: Challenger Selling.
 
-CHAPTER 2 — "You Need Our Version" (Give advice):
+CHAPTER 2 — Name: "You Need Our Version" — Goal: GIVE ADVICE
 - This IS the "let me tell you about us" chapter. Make the choice obvious.
 - Tier 2 statements become the backbone. Order follows priority ranking.
 - Only capabilities that map to confirmed priorities — no orphans.
 - Transitions between points ARE appropriate here (unlike Tier 2 statements).
-- NEVER include proof, credentials, institutional names, or social validation — those are Ch3/Ch4.
+- NEVER include proof, credentials, institutional names, or social validation — those belong ONLY in Ch3/Ch4.
 - The audience should think: "Your approach might be the right one, but I'm not convinced it'll work for us."
+- Sales technique: Feature/Benefit Selling.
 
-CHAPTER 3 — "We'll Hold Your Hand" (Give assurance):
+CHAPTER 3 — Name: "We'll Hold Your Hand" — Goal: GIVE ASSURANCE
 - Eliminate risk. Help people feel comfortable with the adoption decision.
 - Specific details: easy transaction, questions answered, smooth deployment, fast service, monitoring, advocacy.
 - Don't be vague — concrete support details.
 - The audience should think: "You won't drop me after I pay. You'll try to make it work."
+- Sales technique: Solution Selling.
 
-CHAPTER 4 — "You're Not Alone" (Give proof):
+CHAPTER 4 — Name: "You're Not Alone" — Goal: GIVE PROOF
 - Show similar organizations/people already succeeding with your offering.
 - The more similar to the prospect, the better.
 - Format: problem the similar org had → solution (your offering) → result achieved.
 - NEVER invent specific company names, metrics, or quotes.
 - The audience should think: "If it works that well at places like ours, it'll probably work for us."
+- Sales technique: Reference Selling.
 
-CHAPTER 5 — "Let's Get Started" (Give direction):
+CHAPTER 5 — Name: "Let's Get Started" — Goal: GIVE DIRECTION
 - Call to action: first 1-3 concrete, simple steps ONLY.
 - Steps must be easy, low-cost, non-intimidating.
 - No vague follow-ups like "think about it." No empty closers like "That's it for now."
 - The audience should think: "That seems risk-free and easy. Let's do the first step."
+- Sales technique: Always Be Closing.
 
-CHAPTER BOUNDARIES ARE SACRED:
-- Ch1: pain/category only, no company mention
-- Ch2: value only, no proof or credentials
-- Ch3: trust/support only
-- Ch4: proof only, no value claims
-- Ch5: action steps only, no filler
-Content that doesn't match the chapter's job gets cut, not moved to another chapter.
+CHAPTER BOUNDARIES ARE SACRED — each chapter has ONE job:
+- Ch1: pain/category only — no company mention, no product name
+- Ch2: value/advice only — no proof, no credentials, no institutional names
+- Ch3: trust/support/assurance only — how you'll help them succeed
+- Ch4: proof only — similar orgs succeeding, no value claims
+- Ch5: action steps only — no filler, no re-pitching
+Content that doesn't match the chapter's job gets cut. These are NOT flexible guidelines — they are rules.
 
 ═══ THE WORKFLOW ═══
 
