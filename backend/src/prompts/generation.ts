@@ -26,12 +26,12 @@ STATEMENT RULES:
 TIER 2 COUNT: Generate exactly 3 to 6 Tier 2 statements. Strong preference for 4 or 5. If there are more than 6 mapped priorities, combine related ones into compound statements. NEVER produce 7 or more Tier 2 statements.
 
 TIER 2 ORDERING: Order Tier 2 statements left-to-right to follow a logical persuasion flow. The reader should feel a natural progression. Typical (but not rigid) order:
-- Customer Focus / Need recognition
+- FIRST COLUMN (strong default): Audience Focus — a concrete statement that the company's focus, products, and processes are built around THIS audience's specific needs. This is a commitment to the audience, NOT credentials or social proof. It should say "we exist for you," not "look at our pedigree." Example: "Our products and processes are focused exclusively on supporting oncologists in treatment decisions." NOT "Oncologist founders built this and top institutions trust it" (that's social proof, belongs later).
 - Product Value / Unique differentiation
 - ROI / Results / Measurable impact
 - Support / Deployment / Trust
-- Social Proof / Validation
-Each column flows to the next: "we understand your world" -> "here's what we built" -> "here's the return" -> "we'll make it work" -> "others like you agree."
+- Social Proof / Validation (credentials, institutional names, founder pedigree go HERE, not in column 1)
+Each column flows to the next: "we're built for you" -> "here's what we built" -> "here's the return" -> "we'll make it work" -> "others like you agree."
 
 CATEGORY LABELS: For each Tier 2, also generate a categoryLabel (1-3 words) that names what that column represents. Examples: "Customer focus," "Product value," "ROI," "Support," "Social proof," "Speed," "Accuracy," "Control."
 
@@ -57,9 +57,10 @@ YOUR TASK: Review the message and suggest improved text for any cells that need 
 WHAT TO CHECK:
 1. TIER 1: Is it the #1 ranked priority as a value statement? Under 20 words?
 2. TIER 2: Each under 20 words? Clear priority->capability causal connection? Varied phrasing (not "You get X because Y" repeated)? No transitions?
-3. TIER 3: Each 1-6 words? PROOF ONLY — specific, verifiable hard data (numbers, names, certifications, measurable outcomes). Flag and replace any comparative adjectives (faster, better, easier) or narrative shorthand — those are value claims, not proof.
-4. TONE: Sounds like a person talking, not a brochure?
-5. AUDIENCE LANGUAGE: Uses words the audience would use?
+3. FIRST COLUMN (tier2-0): Does it express audience focus — a concrete commitment that the company exists for THIS audience? It should NOT be credentials or social proof (founder pedigree, institutional names). Those belong in later columns. If tier2-0 reads like social proof, suggest a rewrite that says "we're built for you" instead.
+4. TIER 3: Each 1-6 words? PROOF ONLY — specific, verifiable hard data (numbers, names, certifications, measurable outcomes). Flag and replace any comparative adjectives (faster, better, easier) or narrative shorthand — those are value claims, not proof.
+5. TONE: Sounds like a person talking, not a brochure?
+6. AUDIENCE LANGUAGE: Uses words the audience would use?
 
 ONLY include cells that should change. If a cell is fine, leave it out.
 
