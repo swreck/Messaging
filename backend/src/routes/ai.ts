@@ -226,7 +226,7 @@ AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
     const tierResult = await callAIWithJSON<{
       tier1: { text: string; priorityId: string };
       tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
-    }>(CONVERT_LINES_SYSTEM, convertMessage, 'deep');
+    }>(CONVERT_LINES_SYSTEM, convertMessage, 'elite');
 
     res.json({ status: 'complete', result: tierResult, questions: [] });
     return;
@@ -295,7 +295,7 @@ AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
   const tierResult = await callAIWithJSON<{
     tier1: { text: string; priorityId: string };
     tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
-  }>(CONVERT_LINES_SYSTEM, convertMessage, 'deep');
+  }>(CONVERT_LINES_SYSTEM, convertMessage, 'elite');
 
   res.json({ status: 'complete', result: tierResult });
 });
@@ -352,7 +352,7 @@ AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
   const result = await callAIWithJSON<{
     tier1: { text: string; priorityId: string };
     tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
-  }>(CONVERT_LINES_SYSTEM, userMessage, 'deep');
+  }>(CONVERT_LINES_SYSTEM, userMessage, 'elite');
 
   res.json(result);
 });
@@ -383,7 +383,7 @@ ${draft.tier2Statements.map((t2, i) => `[cell: tier2-${i}] "${t2.text}"
 AUDIENCE PRIORITIES:
 ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n')}`;
 
-  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(REVIEW_SYSTEM, userMessage, 'deep');
+  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(REVIEW_SYSTEM, userMessage, 'elite');
   res.json(result);
 });
 
@@ -412,7 +412,7 @@ Tier 1 [cell: tier1]: "${draft.tier1Statement?.text || '(empty)'}"
 ${draft.tier2Statements.map((t2, i) => `[cell: tier2-${i}] "${t2.text}"
   Tier 3: ${t2.tier3Bullets.map((t3, j) => `[cell: tier3-${i}-${j}] "${t3.text}"`).join(', ') || '(none)'}`).join('\n')}`;
 
-  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(REVISE_FROM_EDITS_SYSTEM, userMessage, 'deep');
+  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(REVISE_FROM_EDITS_SYSTEM, userMessage, 'elite');
   res.json(result);
 });
 
@@ -448,7 +448,7 @@ ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n'
 OFFERING CAPABILITIES:
 ${draft.offering.elements.map((e) => `"${e.text}"`).join('\n')}`;
 
-  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, userMessage, 'deep');
+  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, userMessage, 'elite');
   res.json(result);
 });
 
@@ -571,7 +571,7 @@ ${story.chapters.filter((c) => c.chapterNum < chapterNum).map((c) => `CHAPTER ${
 
 Write Chapter ${chapterNum}: "${ch.name}"`;
 
-  const content = await callAI(systemPrompt, userMessage, 'deep');
+  const content = await callAI(systemPrompt, userMessage, 'elite');
 
   // Save the chapter
   const chapter = await prisma.chapterContent.upsert({
@@ -675,7 +675,7 @@ ${story.chapters.map((ch) => `CHAPTER ${ch.chapterNum}: "${ch.title}"\n${ch.cont
 
 Join these chapters into one flowing text.`;
 
-  const joinedText = await callAI(JOIN_CHAPTERS_SYSTEM, userMessage, 'deep');
+  const joinedText = await callAI(JOIN_CHAPTERS_SYSTEM, userMessage, 'elite');
 
   const updated = await prisma.fiveChapterStory.update({
     where: { id: storyId },
@@ -732,7 +732,7 @@ ${sourceText}
 
 Polish this into a final, cohesive ${spec.label.toLowerCase()}.`;
 
-  const blendedText = await callAI(BLEND_SYSTEM, userMessage, 'deep');
+  const blendedText = await callAI(BLEND_SYSTEM, userMessage, 'elite');
 
   const updated = await prisma.fiveChapterStory.update({
     where: { id: storyId },

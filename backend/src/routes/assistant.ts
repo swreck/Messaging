@@ -422,7 +422,7 @@ router.post('/message', async (req: Request, res: Response) => {
           const sourceText = story.joinedText || story.chapters.map((ch: any) => `${ch.title}\n${ch.content}`).join('\n\n');
           const spec = getMediumSpec(story.medium);
           const userMsg = `CONTENT FORMAT: ${spec.label} (${spec.wordRange[0]}-${spec.wordRange[1]} words)\nFORMAT RULES: ${spec.format}\nTONE: ${spec.tone}\n\n${sourceText}\n\nPolish this into a final, cohesive ${spec.label.toLowerCase()}.`;
-          const blendedText = await callAI(BLEND_SYSTEM, userMsg, 'deep');
+          const blendedText = await callAI(BLEND_SYSTEM, userMsg, 'elite');
 
           await prisma.fiveChapterStory.update({
             where: { id: ctx.storyId },
@@ -492,7 +492,7 @@ ${prevChapters.map((c: any) => `CHAPTER ${c.chapterNum} (already written): ${c.c
 
 Write Chapter ${chNum}: "${ch.name}"`;
 
-            const content = await callAI(systemPrompt, userMsg, 'deep');
+            const content = await callAI(systemPrompt, userMsg, 'elite');
             const chapter = await prisma.chapterContent.upsert({
               where: { storyId_chapterNum: { storyId: newStory.id, chapterNum: chNum } },
               update: { title: ch.name, content },
@@ -519,7 +519,7 @@ Write Chapter ${chNum}: "${ch.name}"`;
           if (fullStory) {
             const sourceText = fullStory.chapters.map((ch: any) => `${ch.title}\n${ch.content}`).join('\n\n');
             const blendMsg = `CONTENT FORMAT: ${spec.label} (${spec.wordRange[0]}-${spec.wordRange[1]} words)\nFORMAT RULES: ${spec.format}\nTONE: ${spec.tone}\n\n${sourceText}\n\nPolish this into a final, cohesive ${spec.label.toLowerCase()}.`;
-            const blendedText = await callAI(BLEND_SYSTEM, blendMsg, 'deep');
+            const blendedText = await callAI(BLEND_SYSTEM, blendMsg, 'elite');
             await prisma.fiveChapterStory.update({
               where: { id: newStory.id },
               data: { blendedText, stage: 'blended', version: { increment: 1 } },
@@ -610,7 +610,7 @@ ${prevChapters.map((c: any) => `CHAPTER ${c.chapterNum} (already written): ${c.c
 
 Write Chapter ${chNum}: "${ch.name}"`;
 
-            const content = await callAI(systemPrompt, userMsg, 'deep');
+            const content = await callAI(systemPrompt, userMsg, 'elite');
             const chapter = await prisma.chapterContent.upsert({
               where: { storyId_chapterNum: { storyId: ctx.storyId, chapterNum: chNum } },
               update: { title: ch.name, content },
@@ -639,7 +639,7 @@ Write Chapter ${chNum}: "${ch.name}"`;
           if (fullStory) {
             const sourceText = fullStory.chapters.map((ch: any) => `${ch.title}\n${ch.content}`).join('\n\n');
             const blendMsg = `CONTENT FORMAT: ${spec.label} (${spec.wordRange[0]}-${spec.wordRange[1]} words)\nFORMAT RULES: ${spec.format}\nTONE: ${spec.tone}\n\n${sourceText}\n\nPolish this into a final, cohesive ${spec.label.toLowerCase()}.`;
-            const blendedText = await callAI(BLEND_SYSTEM, blendMsg, 'deep');
+            const blendedText = await callAI(BLEND_SYSTEM, blendMsg, 'elite');
             await prisma.fiveChapterStory.update({
               where: { id: ctx.storyId },
               data: { blendedText, stage: 'blended', version: { increment: 1 } },
