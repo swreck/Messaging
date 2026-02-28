@@ -121,17 +121,53 @@ export function buildAssistantPrompt(context: {
   // read_page is always available
   actions.push('- read_page: Request to see the content currently visible on the page. Use this when the user references specific items on the page ("the 2nd priority," "chapter 3," "that first column") and you need to see what they see. Params: {}');
 
+  // Audience actions
   if (context.audienceId) {
+    actions.push('- edit_audience: Update the current audience name or description. Params: { name?: string, description?: string }');
     actions.push('- add_priorities: Add new priorities to the current audience. Params: { texts: string[] }');
-    actions.push('- edit_priorities: Rename, rewrite, or update the text of existing priorities. Params: { edits: [{ position: number, text: string }] } — position is 1-based (1 = first priority on the page)');
+    actions.push('- edit_priorities: Rename, rewrite, or update the text/motivatingFactor of existing priorities. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }] } — position is 1-based');
     actions.push('- delete_priorities: Remove priorities by their position on the page. Params: { positions: number[] } — 1-based positions');
     actions.push('- reorder_priorities: Set the full ranked order of priorities. Params: { order: number[] } — array of current positions in the desired new order, e.g. [4, 1, 3, 2] means current #4 becomes #1');
   }
+
+  // Offering actions
+  if (context.offeringId) {
+    actions.push('- edit_offering: Update the current offering name or description. Params: { name?: string, description?: string }');
+    actions.push('- add_capabilities: Add new capabilities to the current offering. Params: { texts: string[] }');
+    actions.push('- edit_capabilities: Rename/rewrite capabilities. Params: { edits: [{ position: number, text: string }] } — position is 1-based');
+    actions.push('- delete_capabilities: Remove capabilities by position. Params: { positions: number[] } — 1-based positions');
+  }
+
+  // Offerings listing page (no specific offering selected)
+  if (context.page === 'offerings' && !context.offeringId) {
+    actions.push('- create_offering: Create a new offering. Params: { name: string, description?: string }');
+  }
+
+  // Audiences listing page (no specific audience selected)
+  if (context.page === 'audiences' && !context.audienceId) {
+    actions.push('- create_audience: Create a new audience. Params: { name: string, description?: string }');
+  }
+
+  // Five Chapter Story actions
   if (context.storyId) {
     actions.push('- update_story_params: Change story parameters. Params: { medium?, cta?, emphasis? }');
-    actions.push('- regenerate_story: Regenerate all chapters. Params: {}');
+    actions.push('- regenerate_story: Regenerate all chapters from scratch. Params: {}');
+    actions.push('- refine_chapter: Give feedback on a specific chapter to improve it. Params: { chapterNum: number, feedback: string }');
+    actions.push('- blend_story: Blend all chapters into a single polished narrative. Params: {}');
     actions.push('- copy_edit: Apply an edit to the blended story. Params: { instruction: string }');
   }
+
+  // When on a draft but no story yet, allow creating one
+  if (context.draftId && !context.storyId) {
+    actions.push('- create_story: Generate a new Five Chapter Story from this Three Tier draft. Params: { medium: string, cta: string, emphasis?: string } — medium options: email, blog, social, landing_page, in_person, press_release, newsletter, report');
+  }
+
+  // When a story exists, allow creating a new version in a different medium
+  if (context.storyId && context.draftId) {
+    actions.push('- create_story: Generate a NEW Five Chapter Story in a different medium from the same Three Tier draft. Params: { medium: string, cta: string, emphasis?: string } — e.g. "that email is good, now give me a newsletter version"');
+  }
+
+  // Three Tier actions
   if (context.draftId) {
     actions.push('- edit_tier: Apply direction to the Three Tier table. Params: { instruction: string }');
   }
@@ -160,11 +196,26 @@ Always respond with JSON:
   "action": null OR { "type": "action_name", "params": { ... } }
 }
 
-WHEN TO USE read_page:
-- The user refers to something specific on the page: "the 2nd priority," "that column," "chapter 3 content," "make the first one shorter"
-- The user asks you to review, evaluate, or comment on what they're looking at
-- You need to see actual content to give a meaningful answer
-- Do NOT use read_page for general methodology questions, navigation help, or when the user tells you exactly what they want changed
+CRITICAL RULE — read_page vs. direct action:
+If the user tells you WHAT to change or do, TAKE THE ACTION IMMEDIATELY. Do NOT use read_page first. You do NOT need to see the current content to dispatch an action — the backend handles the data.
+
+ALWAYS take direct action for these patterns:
+- "Rename this audience/offering to X" → edit_audience / edit_offering
+- "Change the first/second capability to X" → edit_capabilities with position
+- "Remove the Nth capability/priority" → delete_capabilities / delete_priorities
+- "Set the motivating factor for priority N to X" → edit_priorities
+- "Make chapter N more urgent / shorter / punchier" → refine_chapter with chapterNum and feedback
+- "Make the subject line more compelling" → copy_edit with instruction
+- "Shorten the opening" → copy_edit with instruction
+- "Generate an email / newsletter / blog with CTA X" → create_story with medium and CTA
+- "Make the Tier 1/2 more audience-focused / shorter" → edit_tier with instruction
+- "The current opening is too soft — hit harder" → refine_chapter (feedback IS the instruction)
+- "Now give me a landing page version" → create_story
+
+ONLY use read_page when ALL of these are true:
+1. The user asks you to REVIEW, EVALUATE, or COMMENT on content
+2. The user is NOT asking you to change anything
+3. Examples: "How do my priorities look?" / "Review my Three Tier" / "What do you think?"
 
 When you use read_page, set response to a brief acknowledgment like "Let me take a look at what you have." The system will fetch the page content and re-ask your question with it included.
 
@@ -180,5 +231,4 @@ RULES:
 9. When evaluating user content against methodology rules, be direct about what's wrong and why. Don't soften bad news — but always explain how to fix it.
 10. If a user asks you to classify content (e.g., "is this Tier 2 or Tier 3?"), apply the specific tests from the methodology reference. For proof vs. value claims: could a skeptic verify it independently? Comparative adjectives (faster, better, easier) are ALWAYS value claims (Tier 2), never proof (Tier 3). State which test you're applying and why.
 11. METHODOLOGY GUARDRAIL: When a user asks you to make a change that conflicts with the methodology (e.g., putting proof in Chapter 2, using value claims as Tier 3, mentioning the company in Chapter 1, ranking priorities in a way that breaks the logic), gently push back ONCE. Explain what the methodology says and why the change might hurt their message. But if the user insists or repeats the request, DO IT. The user owns their content. Your job is to flag the risk, not block the action. Example: "That would put credentials in Chapter 2, which the methodology reserves for value statements — credentials belong in Chapter 3 or 4. Want me to go ahead anyway, or move it there instead?"`;
-}
 }
