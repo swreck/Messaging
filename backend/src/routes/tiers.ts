@@ -225,4 +225,46 @@ router.post('/:draftId/tier2/:tier2Id/tier3/bulk', async (req: Request, res: Res
   res.status(201).json({ tier3Bullets: created });
 });
 
+// POST /api/tiers/:draftId/reset — wipe tier statements and mappings for regeneration
+router.post('/:draftId/reset', async (req: Request, res: Response) => {
+  const draft = await prisma.threeTierDraft.findFirst({
+    where: { id: param(req.params.draftId), offering: { userId: req.user!.userId } },
+    include: {
+      tier1Statement: true,
+      tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
+    },
+  });
+  if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
+
+  // Auto-snapshot before wiping
+  if (draft.tier1Statement || draft.tier2Statements.length > 0) {
+    const maxVer = await prisma.tableVersion.aggregate({
+      where: { draftId: param(req.params.draftId) },
+      _max: { versionNum: true },
+    });
+    await prisma.tableVersion.create({
+      data: {
+        draftId: param(req.params.draftId),
+        snapshot: {
+          tier1: draft.tier1Statement?.text || '',
+          tier2: draft.tier2Statements.map(t2 => ({
+            text: t2.text,
+            categoryLabel: t2.categoryLabel,
+            tier3: t2.tier3Bullets.map(t3 => t3.text),
+          })),
+        },
+        label: 'Before regeneration',
+        versionNum: (maxVer._max?.versionNum ?? 0) + 1,
+      },
+    });
+  }
+
+  // Wipe tier statements (tier3 cascades from tier2) and mappings
+  await prisma.tier2Statement.deleteMany({ where: { draftId: param(req.params.draftId) } });
+  await prisma.tier1Statement.deleteMany({ where: { draftId: param(req.params.draftId) } });
+  await prisma.mapping.deleteMany({ where: { draftId: param(req.params.draftId) } });
+
+  res.json({ success: true });
+});
+
 export default router;

@@ -6,7 +6,7 @@ import { ThreeTierTable } from '../components/ThreeTierTable';
 import { Spinner } from '../../shared/Spinner';
 import type { TableVersion, ReviewResponse, DirectionResponse, TableSnapshot } from '../../types';
 
-export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep }: StepProps) {
+export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToStep }: StepProps) {
   const navigate = useNavigate();
   const [suggestions, setSuggestions] = useState<Map<string, string>>(new Map());
   const [reviewing, setReviewing] = useState(false);
@@ -17,6 +17,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep }: Ste
   // Direction
   const [directionText, setDirectionText] = useState('');
   const [sendingDirection, setSendingDirection] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   // Snapshot of table state for "revise from edits"
   const previousStateRef = useRef<TableSnapshot | null>(null);
@@ -140,6 +141,19 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep }: Ste
     previousStateRef.current = null;
   }
 
+  async function regenerate() {
+    if (!confirm('Start over? Maria will save a snapshot of your current table, then regenerate from scratch.')) return;
+    setRegenerating(true);
+    try {
+      await api.post(`/tiers/${draft.id}/reset`);
+      await loadDraft();
+      goToStep(4);
+    } catch (err: any) {
+      alert(`Regenerate failed: ${err.message}`);
+      setRegenerating(false);
+    }
+  }
+
   async function createSnapshot() {
     await api.post(`/versions/table/${draft.id}`, { label: snapshotLabel || undefined });
     setSnapshotLabel('');
@@ -209,6 +223,9 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep }: Ste
             Clear suggestions
           </button>
         )}
+        <button className="btn btn-ghost btn-sm btn-danger" onClick={regenerate} disabled={regenerating}>
+          {regenerating ? <><Spinner size={12} /> Regenerating...</> : 'Regenerate'}
+        </button>
       </div>
 
       <ThreeTierTable
