@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ReorderableList, type DragHandleProps } from './ReorderableList';
 import { ConfirmDialog } from './ConfirmDialog';
 import { api } from '../api/client';
@@ -23,6 +23,10 @@ export function PriorityList({
   allowAdd = true,
   allowRemove = true,
 }: PriorityListProps) {
+  // Local copy for optimistic UI updates (drag-and-drop updates instantly)
+  const [localPriorities, setLocalPriorities] = useState(priorities);
+  useEffect(() => { setLocalPriorities(priorities); }, [priorities]);
+
   const [newItem, setNewItem] = useState('');
   const [expandedMF, setExpandedMF] = useState<Set<string>>(new Set());
   const [confirmReorder, setConfirmReorder] = useState<{
@@ -40,6 +44,8 @@ export function PriorityList({
   }
 
   async function commitReorder(newItems: Priority[]) {
+    // Optimistic: update display immediately
+    setLocalPriorities(newItems);
     const ids = newItems.map(p => p.id);
     await api.put(`/audiences/${audienceId}/priorities/reorder`, { priorityIds: ids });
     onUpdate();
@@ -54,15 +60,30 @@ export function PriorityList({
   async function addPriority(e: React.FormEvent) {
     e.preventDefault();
     if (!newItem.trim()) return;
-    await api.post(`/audiences/${audienceId}/priorities`, {
-      text: newItem.trim(),
-      rank: priorities.length + 1,
-    });
+    const text = newItem.trim();
+    // Optimistic: show immediately with a temp ID
+    const tempPriority: Priority = {
+      id: `temp-${Date.now()}`,
+      audienceId,
+      text,
+      rank: localPriorities.length + 1,
+      sortOrder: localPriorities.length,
+      motivatingFactor: '',
+      whatAudienceThinks: '',
+      isSpoken: false,
+    };
+    setLocalPriorities(prev => [...prev, tempPriority]);
     setNewItem('');
+    await api.post(`/audiences/${audienceId}/priorities`, {
+      text,
+      rank: localPriorities.length + 1,
+    });
     onUpdate();
   }
 
   async function removePriority(id: string) {
+    // Optimistic: remove immediately
+    setLocalPriorities(prev => prev.filter(p => p.id !== id));
     await api.delete(`/audiences/${audienceId}/priorities/${id}`);
     onUpdate();
   }
@@ -134,7 +155,7 @@ export function PriorityList({
       <div className="priority-item drag-overlay">
         <div className="priority-item-row">
           <span className="drag-handle">⠿</span>
-          <span className="priority-rank">{priorities.indexOf(item) + 1}</span>
+          <span className="priority-rank">{localPriorities.indexOf(item) + 1}</span>
           <span className="priority-text">{item.text}</span>
         </div>
       </div>
@@ -143,13 +164,13 @@ export function PriorityList({
 
   return (
     <div className="priority-list">
-      {priorities.length > 1 && (
+      {localPriorities.length > 1 && (
         <div className="priority-list-hint">
           Ranked by importance — drag to reorder
         </div>
       )}
       <ReorderableList
-        items={priorities}
+        items={localPriorities}
         getId={p => p.id}
         renderItem={renderPriority}
         renderOverlay={renderOverlay}

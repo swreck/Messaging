@@ -123,9 +123,13 @@ router.post('/message', async (req: Request, res: Response) => {
         }
       }
 
-      if (a.type === 'edit_priorities' && ctx.audienceId && a.params.edits) {
+      if (a.type === 'edit_priorities' && a.params.edits) {
+        const targetAudienceId = await resolveAudienceId(a.params);
+        if (!targetAudienceId) {
+          actionResult = 'Could not edit priorities — no audience specified or found. Try including the audience name.';
+        } else {
         const audience = await prisma.audience.findFirst({
-          where: { id: ctx.audienceId, userId },
+          where: { id: targetAudienceId, userId },
           include: { priorities: { orderBy: { sortOrder: 'asc' } } },
         });
         if (audience) {
@@ -143,14 +147,20 @@ router.post('/message', async (req: Request, res: Response) => {
               editCount++;
             }
           }
-          actionResult = `Updated ${editCount} priorit${editCount === 1 ? 'y' : 'ies'}`;
+          const targetLabel = targetAudienceId !== ctx.audienceId ? ` in "${audience.name}"` : '';
+          actionResult = `Updated ${editCount} priorit${editCount === 1 ? 'y' : 'ies'}${targetLabel}`;
           refreshNeeded = true;
+        }
         }
       }
 
-      if (a.type === 'delete_priorities' && ctx.audienceId && a.params.positions) {
+      if (a.type === 'delete_priorities' && a.params.positions) {
+        const targetAudienceId = await resolveAudienceId(a.params);
+        if (!targetAudienceId) {
+          actionResult = 'Could not delete priorities — no audience specified or found. Try including the audience name.';
+        } else {
         const audience = await prisma.audience.findFirst({
-          where: { id: ctx.audienceId, userId },
+          where: { id: targetAudienceId, userId },
           include: { priorities: { orderBy: { sortOrder: 'asc' } } },
         });
         if (audience) {
@@ -168,7 +178,7 @@ router.post('/message', async (req: Request, res: Response) => {
             });
             // Re-normalize sortOrder and rank for remaining priorities
             const remaining = await prisma.priority.findMany({
-              where: { audienceId: ctx.audienceId },
+              where: { audienceId: targetAudienceId },
               orderBy: { sortOrder: 'asc' },
             });
             for (let i = 0; i < remaining.length; i++) {
@@ -178,33 +188,49 @@ router.post('/message', async (req: Request, res: Response) => {
               });
             }
           }
-          actionResult = `Deleted ${idsToDelete.length} priorit${idsToDelete.length === 1 ? 'y' : 'ies'}`;
+          const targetLabel = targetAudienceId !== ctx.audienceId ? ` from "${audience.name}"` : '';
+          actionResult = `Deleted ${idsToDelete.length} priorit${idsToDelete.length === 1 ? 'y' : 'ies'}${targetLabel}`;
           refreshNeeded = true;
+        }
         }
       }
 
-      if (a.type === 'reorder_priorities' && ctx.audienceId && a.params.order) {
+      if (a.type === 'reorder_priorities' && a.params.order) {
+        const targetAudienceId = await resolveAudienceId(a.params);
+        if (!targetAudienceId) {
+          actionResult = 'Could not reorder priorities — no audience specified or found. Try including the audience name.';
+        } else {
         const audience = await prisma.audience.findFirst({
-          where: { id: ctx.audienceId, userId },
+          where: { id: targetAudienceId, userId },
           include: { priorities: { orderBy: { sortOrder: 'asc' } } },
         });
         if (audience) {
           const order: number[] = a.params.order; // [4, 1, 3, 2] means current #4 becomes new #1
           // Validate: every position should be valid
           const valid = order.every((pos: number) => pos >= 1 && pos <= audience.priorities.length);
-          if (valid && order.length === audience.priorities.length) {
-            for (let newIdx = 0; newIdx < order.length; newIdx++) {
-              const oldIdx = order[newIdx] - 1; // 1-based → 0-based
+          if (valid) {
+            // Support partial reorder: specified positions go to the top in order,
+            // unmentioned positions follow in their original order
+            const mentionedSet = new Set(order);
+            const unmentioned = audience.priorities
+              .map((_: any, i: number) => i + 1) // 1-based positions
+              .filter((pos: number) => !mentionedSet.has(pos));
+            const fullOrder = [...order, ...unmentioned];
+
+            for (let newIdx = 0; newIdx < fullOrder.length; newIdx++) {
+              const oldIdx = fullOrder[newIdx] - 1; // 1-based → 0-based
               await prisma.priority.update({
                 where: { id: audience.priorities[oldIdx].id },
                 data: { sortOrder: newIdx, rank: newIdx + 1 },
               });
             }
-            actionResult = `Reordered ${order.length} priorities`;
+            const targetLabel = targetAudienceId !== ctx.audienceId ? ` in "${audience.name}"` : '';
+            actionResult = `Reordered priorities${targetLabel}`;
             refreshNeeded = true;
           } else {
-            actionResult = 'Could not reorder — positions don\'t match the number of priorities';
+            actionResult = 'Could not reorder — some positions are out of range';
           }
+        }
         }
       }
 
@@ -676,7 +702,7 @@ Write Chapter ${chNum}: "${ch.name}"`;
       // Catch silent failures: action dispatched but no handler ran
       if (!actionResult) {
         const missing: string[] = [];
-        if (['edit_priorities', 'delete_priorities', 'reorder_priorities', 'add_priorities', 'edit_audience'].includes(a.type) && !ctx.audienceId) {
+        if (['edit_audience'].includes(a.type) && !ctx.audienceId) {
           missing.push('audienceId');
         }
         if (['edit_offering', 'add_capabilities', 'edit_capabilities', 'delete_capabilities'].includes(a.type) && !ctx.offeringId) {
@@ -698,8 +724,17 @@ Write Chapter ${chNum}: "${ch.name}"`;
     if (actionResult) actionResults.push(actionResult);
   }
 
+  // If any action failed, override Maria's optimistic response with the failure details.
+  // Maria writes her response before the action executes, so she doesn't know it failed.
+  const failedResults = actionResults.filter(r =>
+    r.startsWith('Could not') || r.startsWith('Action failed') || r.includes('not recognized')
+  );
+  const finalResponse = failedResults.length > 0
+    ? `I tried, but it didn't work: ${failedResults.join('. ')}`
+    : result.response;
+
   res.json({
-    response: result.response,
+    response: finalResponse,
     action: actions[0] || null,
     actionResult: actionResults.length > 0 ? actionResults.join(' · ') : null,
     refreshNeeded,

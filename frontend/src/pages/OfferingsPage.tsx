@@ -12,6 +12,7 @@ export function OfferingsPage() {
   const [loading, setLoading] = useState(true);
 
   const [showModal, setShowModal] = useState(false);
+  const [editingOffering, setEditingOffering] = useState<Offering | null>(null);
   const [name, setName] = useState('');
   const [smeRole, setSmeRole] = useState('');
   const [description, setDescription] = useState('');
@@ -22,19 +23,28 @@ export function OfferingsPage() {
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
-    setLoading(true);
+    if (offerings.length === 0) setLoading(true);
     try {
-      const { offerings } = await api.get<{ offerings: Offering[] }>('/offerings');
-      setOfferings(offerings);
+      const { offerings: data } = await api.get<{ offerings: Offering[] }>('/offerings');
+      setOfferings(data);
     } finally {
       setLoading(false);
     }
   }
 
   function openNew() {
+    setEditingOffering(null);
     setName('');
     setSmeRole('');
     setDescription('');
+    setShowModal(true);
+  }
+
+  function openEdit(o: Offering) {
+    setEditingOffering(o);
+    setName(o.name);
+    setSmeRole(o.smeRole);
+    setDescription(o.description);
     setShowModal(true);
   }
 
@@ -43,12 +53,24 @@ export function OfferingsPage() {
     if (saving) return;
     setSaving(true);
     try {
-      const { offering } = await api.post<{ offering: Offering }>('/offerings', { name, smeRole, description });
-      setShowModal(false);
-      navigate(`/offerings/${offering.id}`);
+      if (editingOffering) {
+        await api.put(`/offerings/${editingOffering.id}`, { name, smeRole, description });
+        setShowModal(false);
+        loadData();
+      } else {
+        const { offering } = await api.post<{ offering: Offering }>('/offerings', { name, smeRole, description });
+        setShowModal(false);
+        navigate(`/offerings/${offering.id}`);
+      }
     } finally {
       setSaving(false);
     }
+  }
+
+  async function deleteOffering(id: string) {
+    if (!confirm('Delete this offering and all associated data?')) return;
+    await api.delete(`/offerings/${id}`);
+    loadData();
   }
 
   if (loading) return <div className="loading-screen"><Spinner size={32} /></div>;
@@ -79,13 +101,17 @@ export function OfferingsPage() {
                   {o.elements.length} capabilit{o.elements.length === 1 ? 'y' : 'ies'}
                 </span>
               </div>
+              <div className="list-card-actions" onClick={e => e.stopPropagation()}>
+                <button className="btn btn-ghost btn-sm" onClick={() => openEdit(o)}>Edit</button>
+                <button className="btn btn-ghost btn-sm btn-danger" onClick={() => deleteOffering(o.id)}>Delete</button>
+              </div>
               <span className="list-card-arrow">&rsaquo;</span>
             </div>
           ))}
         </div>
       )}
 
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="New Offering">
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingOffering ? 'Edit Offering' : 'New Offering'}>
         <form onSubmit={save}>
           <div className="form-group">
             <label>Name</label>
@@ -101,7 +127,7 @@ export function OfferingsPage() {
           </div>
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Create'}</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : editingOffering ? 'Save' : 'Create'}</button>
           </div>
         </form>
       </Modal>

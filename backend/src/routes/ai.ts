@@ -120,6 +120,70 @@ ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`
   res.json(result);
 });
 
+// ─── Preview Mapping (read-only) ────────────────────────
+
+router.post('/preview-mapping', async (req: Request, res: Response) => {
+  const { draftId } = req.body;
+  if (!draftId) {
+    res.status(400).json({ error: 'draftId is required' });
+    return;
+  }
+
+  const draft = await prisma.threeTierDraft.findFirst({
+    where: { id: draftId, offering: { userId: req.user!.userId } },
+    include: {
+      offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
+      audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+    },
+  });
+  if (!draft) {
+    res.status(404).json({ error: 'Draft not found' });
+    return;
+  }
+
+  const mappingMessage = `PRIORITIES (ranked by importance):
+${draft.audience.priorities.map((p) => `- [ID: ${p.id}] [Rank ${p.rank}] "${p.text}" (Motivating factor: ${p.motivatingFactor || 'not specified'})`).join('\n')}
+
+CAPABILITIES/DIFFERENTIATORS:
+${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`;
+
+  const mappingResult = await callAIWithJSON<{
+    mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string }[];
+    orphanElements: string[];
+    priorityGaps: string[];
+    clarifyingQuestions: string[];
+  }>(MAPPING_SYSTEM, mappingMessage, 'fast');
+
+  // Validate IDs — filter out AI hallucinations
+  const validPriorityIds = new Set(draft.audience.priorities.map(p => p.id));
+  const validElementIds = new Set(draft.offering.elements.map(e => e.id));
+
+  const validMappings = mappingResult.mappings.filter(m =>
+    validPriorityIds.has(m.priorityId) && validElementIds.has(m.elementId)
+  );
+  const validOrphans = (mappingResult.orphanElements || []).filter(id => validElementIds.has(id));
+  const validGaps = (mappingResult.priorityGaps || []).filter(id => validPriorityIds.has(id));
+
+  // Group by priority for human-readable output
+  const byPriority = new Map<string, { priorityText: string; rank: number; capabilities: string[]; confidence: number }>();
+  for (const m of validMappings) {
+    const priority = draft.audience.priorities.find(p => p.id === m.priorityId);
+    const element = draft.offering.elements.find(e => e.id === m.elementId);
+    if (!priority || !element) continue;
+
+    if (!byPriority.has(m.priorityId)) {
+      byPriority.set(m.priorityId, { priorityText: priority.text, rank: priority.rank, capabilities: [], confidence: m.confidence });
+    }
+    byPriority.get(m.priorityId)!.capabilities.push(element.text);
+  }
+
+  const mappings = Array.from(byPriority.values()).sort((a, b) => a.rank - b.rank);
+  const gaps = validGaps.map(id => draft.audience.priorities.find(p => p.id === id)?.text).filter(Boolean) as string[];
+  const orphans = validOrphans.map(id => draft.offering.elements.find(e => e.id === id)?.text).filter(Boolean) as string[];
+
+  res.json({ mappings, gaps, orphans });
+});
+
 // ─── Build Message (orchestrates mapping + convert) ─────
 
 router.post('/build-message', async (req: Request, res: Response) => {
@@ -155,9 +219,21 @@ ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`
     clarifyingQuestions: string[];
   }>(MAPPING_SYSTEM, mappingMessage, 'fast');
 
+  // Validate IDs — filter out AI hallucinations
+  const validPriorityIds = new Set(draft.audience.priorities.map(p => p.id));
+  const validElementIds = new Set(draft.offering.elements.map(e => e.id));
+
+  const allValidMappings = mappingResult.mappings.filter(m =>
+    validPriorityIds.has(m.priorityId) && validElementIds.has(m.elementId)
+  );
+
   // Step 2: Auto-confirm high-confidence, collect low-confidence
-  const highConfidence = mappingResult.mappings.filter(m => m.confidence >= 0.75);
-  const lowConfidence = mappingResult.mappings.filter(m => m.confidence < 0.75 && m.confidence >= 0.5);
+  const highConfidence = allValidMappings.filter(m => m.confidence >= 0.75);
+  const lowConfidence = allValidMappings.filter(m => m.confidence < 0.75 && m.confidence >= 0.5);
+
+  // Filter orphans and gaps too
+  const validOrphans = (mappingResult.orphanElements || []).filter(id => validElementIds.has(id));
+  const validGaps = (mappingResult.priorityGaps || []).filter(id => validPriorityIds.has(id));
 
   // Save all mappings
   await prisma.mapping.deleteMany({ where: { draftId, status: 'suggested' } });
@@ -174,7 +250,7 @@ ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`
 
   // Step 3: If low-confidence items exist, generate natural-language questions
   let questions: { question: string; priorityId: string; elementId: string }[] = [];
-  if (lowConfidence.length > 0 || mappingResult.priorityGaps.length > 0) {
+  if (lowConfidence.length > 0 || validGaps.length > 0) {
     const questionContext = `UNCERTAIN MAPPINGS:
 ${lowConfidence.map(m => {
   const priority = draft.audience.priorities.find(p => p.id === m.priorityId);
@@ -183,7 +259,7 @@ ${lowConfidence.map(m => {
 }).join('\n')}
 
 PRIORITY GAPS (no matching capability):
-${mappingResult.priorityGaps.map(id => {
+${validGaps.map(id => {
   const priority = draft.audience.priorities.find(p => p.id === id);
   return `- "${priority?.text}"`;
 }).join('\n')}`;

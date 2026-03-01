@@ -35,7 +35,8 @@ export function AudiencesPage() {
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
-    setLoading(true);
+    // Only show full-page spinner on initial load — refreshes happen silently
+    if (audiences.length === 0) setLoading(true);
     try {
       const [audRes, hierRes] = await Promise.all([
         api.get<{ audiences: Audience[] }>('/audiences'),

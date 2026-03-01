@@ -26,7 +26,7 @@ export function FiveChaptersPage() {
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
-    setLoading(true);
+    if (hierarchy.length === 0) setLoading(true);
     try {
       const { hierarchy } = await api.get<{ hierarchy: HierarchyOffering[] }>('/drafts/hierarchy');
       setHierarchy(hierarchy);

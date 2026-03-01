@@ -124,16 +124,19 @@ export function buildAssistantPrompt(context: {
   // Audience actions
   if (context.audienceId) {
     actions.push('- edit_audience: Update the current audience name or description. Params: { name?: string, description?: string }');
+  }
+
+  // Priority actions — on audiences page, all can target ANY audience by name
+  if (context.page === 'audiences') {
+    actions.push('- add_priorities: Add new priorities to an audience. Params: { texts: string[], audienceName?: string } — audienceName targets a specific audience by name (partial match OK). If omitted, adds to the currently selected audience.');
+    actions.push('- edit_priorities: Rename, rewrite, or update the text/motivatingFactor of existing priorities. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }], audienceName?: string } — position is 1-based. audienceName targets a specific audience by name. If omitted, edits the currently selected audience.');
+    actions.push('- delete_priorities: Remove priorities by their position. Params: { positions: number[], audienceName?: string } — 1-based positions. audienceName targets a specific audience.');
+    actions.push('- reorder_priorities: Set the full ranked order of priorities. Params: { order: number[], audienceName?: string } — array of current positions in the desired new order, e.g. [4, 1, 3, 2] means current #4 becomes #1. audienceName targets a specific audience.');
+  } else if (context.audienceId) {
+    actions.push('- add_priorities: Add new priorities to the current audience. Params: { texts: string[] }');
     actions.push('- edit_priorities: Rename, rewrite, or update the text/motivatingFactor of existing priorities. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }] } — position is 1-based');
     actions.push('- delete_priorities: Remove priorities by their position on the page. Params: { positions: number[] } — 1-based positions');
     actions.push('- reorder_priorities: Set the full ranked order of priorities. Params: { order: number[] } — array of current positions in the desired new order, e.g. [4, 1, 3, 2] means current #4 becomes #1');
-  }
-
-  // add_priorities — available whenever on audiences page (can target ANY audience by name)
-  if (context.page === 'audiences') {
-    actions.push('- add_priorities: Add new priorities to an audience. Params: { texts: string[], audienceName?: string } — audienceName targets a specific audience by name (partial match OK). If omitted, adds to the currently selected audience.');
-  } else if (context.audienceId) {
-    actions.push('- add_priorities: Add new priorities to the current audience. Params: { texts: string[] }');
   }
 
   // Offering actions

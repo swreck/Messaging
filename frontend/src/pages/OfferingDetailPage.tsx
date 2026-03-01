@@ -27,7 +27,7 @@ export function OfferingDetailPage() {
   useEffect(() => { loadData(); }, [id]);
 
   async function loadData() {
-    setLoading(true);
+    if (!offering) setLoading(true);
     try {
       const { offerings } = await api.get<{ offerings: Offering[] }>('/offerings');
       const found = offerings.find(o => o.id === id);

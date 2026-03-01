@@ -5,7 +5,7 @@ export function Step1Prep({ draft, nextStep }: StepProps) {
     <div className="step-panel">
       <h2>Before We Begin</h2>
       <p className="step-description">
-        Make sure these are right. Gather any existing materials about your offering if you have them — product descriptions, emails, brochures, testimonials. It's fine to have nothing; everything you need might be in your head.
+        Confirm your offering and audience before building.
       </p>
 
       <div className="entity-card" style={{ marginBottom: 16 }}>

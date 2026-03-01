@@ -32,7 +32,7 @@ export function ThreeTiersPage() {
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
-    setLoading(true);
+    if (hierarchy.length === 0) setLoading(true);
     try {
       const [hierRes, offRes] = await Promise.all([
         api.get<{ hierarchy: HierarchyOffering[]; audiences: { id: string; name: string }[] }>('/drafts/hierarchy'),
