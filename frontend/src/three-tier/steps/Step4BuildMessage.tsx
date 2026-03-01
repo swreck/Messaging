@@ -166,7 +166,7 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
                 className="btn btn-primary"
                 onClick={() => handleAnswer(currentQ, true)}
               >
-                Yes, that's right
+                You're right
               </button>
               <button
                 className="btn btn-ghost"
