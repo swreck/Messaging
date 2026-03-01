@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { callAI, callAIWithJSON } from '../services/ai.js';
 import { ALL_ABOUT_YOU_SYSTEM, ALL_ABOUT_AUDIENCE_SYSTEM, buildCoachingUserContext } from '../prompts/coaching.js';
 import { MAPPING_SYSTEM, LOW_CONFIDENCE_QUESTIONS_SYSTEM } from '../prompts/mapping.js';
-import { CONVERT_LINES_SYSTEM, REVIEW_SYSTEM, REVISE_FROM_EDITS_SYSTEM, DIRECTION_SYSTEM } from '../prompts/generation.js';
+import { CONVERT_LINES_SYSTEM, REVIEW_SYSTEM, REVISE_FROM_EDITS_SYSTEM, DIRECTION_SYSTEM, REFINE_LANGUAGE_SYSTEM } from '../prompts/generation.js';
 import { buildChapterPrompt, BLEND_SYSTEM, JOIN_CHAPTERS_SYSTEM, REFINE_CHAPTER_SYSTEM, COPY_EDIT_SYSTEM, CHAPTER_CRITERIA } from '../prompts/fiveChapter.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import { AUDIENCE_DISCOVERY_SYSTEM } from '../prompts/audienceDiscovery.js';
@@ -460,6 +460,34 @@ AUDIENCE PRIORITIES:
 ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n')}`;
 
   const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(REVIEW_SYSTEM, userMessage, 'elite');
+  res.json(result);
+});
+
+// ─── Refine Language ────────────────────────────────────
+
+router.post('/refine-language', async (req: Request, res: Response) => {
+  const { draftId } = req.body;
+  if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
+
+  const draft = await prisma.threeTierDraft.findFirst({
+    where: { id: draftId, offering: { userId: req.user!.userId } },
+    include: {
+      tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
+      audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+    },
+  });
+  if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
+
+  const userMessage = `TIER 2 STATEMENTS TO REFINE:
+${draft.tier2Statements.map((t2, i) => `[${i}] "${t2.text}"`).join('\n')}
+
+AUDIENCE PRIORITIES (for reference — the priority text must remain visible in each statement):
+${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n')}`;
+
+  const result = await callAIWithJSON<{
+    refinedTier2: { index: number; text: string }[];
+  }>(REFINE_LANGUAGE_SYSTEM, userMessage, 'elite');
+
   res.json(result);
 });
 

@@ -11,8 +11,10 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   const [suggestions, setSuggestions] = useState<Map<string, string>>(new Map());
   const [reviewing, setReviewing] = useState(false);
   const [revising, setRevising] = useState(false);
+  const [refining, setRefining] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [snapshotLabel, setSnapshotLabel] = useState('');
+  const [hasEdited, setHasEdited] = useState(false);
 
   // Direction
   const [directionText, setDirectionText] = useState('');
@@ -67,10 +69,30 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       }
       setSuggestions(map);
       previousStateRef.current = captureState();
+      setHasEdited(false);
     } catch (err: any) {
       alert(`Revise failed: ${err.message}`);
     } finally {
       setRevising(false);
+    }
+  }
+
+  async function refineLanguage() {
+    setRefining(true);
+    try {
+      const result = await api.post<{
+        refinedTier2: { index: number; text: string }[];
+      }>('/ai/refine-language', { draftId: draft.id });
+      const map = new Map<string, string>();
+      for (const item of result.refinedTier2 || []) {
+        map.set(`tier2-${item.index}`, item.text);
+      }
+      setSuggestions(map);
+      previousStateRef.current = captureState();
+    } catch (err: any) {
+      alert(`Refine failed: ${err.message}`);
+    } finally {
+      setRefining(false);
     }
   }
 
@@ -141,6 +163,12 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
     previousStateRef.current = null;
   }
 
+  function handleTableUpdate() {
+    previousStateRef.current = null;
+    setHasEdited(true);
+    refreshDraft();
+  }
+
   async function regenerate() {
     if (!confirm('Start over? Maria will save a snapshot of your current table, then regenerate from scratch.')) return;
     setRegenerating(true);
@@ -166,6 +194,8 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
     await loadDraft();
     clearSuggestions();
   }
+
+  const anyBusy = reviewing || revising || refining || sendingDirection || regenerating;
 
   return (
     <div className="step-panel" style={{ maxWidth: 1100 }}>
@@ -212,25 +242,30 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
       {/* Toolbar */}
       <div className="three-tier-toolbar">
-        <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={reviewing || revising}>
+        <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={anyBusy}>
           {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria'}
         </button>
-        <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={revising || reviewing}>
-          {revising ? <><Spinner size={12} /> Adjusting...</> : 'Match the rest to my edits'}
+        <button className="btn btn-secondary btn-sm" onClick={refineLanguage} disabled={anyBusy}>
+          {refining ? <><Spinner size={12} /> Refining...</> : 'Refine Language'}
         </button>
+        {hasEdited && (
+          <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={anyBusy}>
+            {revising ? <><Spinner size={12} /> Revising...</> : 'Learn from my edits & revise'}
+          </button>
+        )}
         {suggestions.size > 0 && (
           <button className="btn btn-ghost btn-sm" onClick={clearSuggestions}>
             Clear suggestions
           </button>
         )}
-        <button className="btn btn-ghost btn-sm btn-danger" onClick={regenerate} disabled={regenerating}>
+        <button className="btn btn-ghost btn-sm btn-danger" onClick={regenerate} disabled={anyBusy}>
           {regenerating ? <><Spinner size={12} /> Regenerating...</> : 'Regenerate'}
         </button>
       </div>
 
       <ThreeTierTable
         draft={draft}
-        onUpdate={() => { previousStateRef.current = null; refreshDraft(); }}
+        onUpdate={handleTableUpdate}
         suggestions={suggestions}
         onAcceptSuggestion={handleAcceptSuggestion}
         onDismissSuggestion={handleDismissSuggestion}
