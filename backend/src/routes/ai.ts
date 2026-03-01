@@ -268,6 +268,15 @@ ${validGaps.map(id => {
       questions: { question: string; priorityId: string; elementId: string }[];
     }>(LOW_CONFIDENCE_QUESTIONS_SYSTEM, questionContext, 'fast');
     questions = qResult.questions || [];
+
+    // Deduplicate questions by priorityId+elementId
+    const seen = new Set<string>();
+    questions = questions.filter(q => {
+      const key = `${q.priorityId}:${q.elementId || 'gap'}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   // If no questions needed, auto-generate the three tier

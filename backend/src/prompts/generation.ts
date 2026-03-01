@@ -12,7 +12,8 @@ CRITICAL RULES:
 4. Conversational does NOT mean clever, punchy, or pithy. No alliteration, no parallel structure for effect, no dramatic reveals. If a sentence sounds like a copywriter wrote it, rewrite it. The goal is direct and honest, not well-crafted.
 5. If you wouldn't say it out loud to a smart professional acquaintance who doesn't know your field, don't write it.
 6. NEVER use narrative causality phrases: "trace back to," "boil down to," "come down to," "rooted in," "stems from," "at its core." These narrate a logical chain instead of stating the fact. Just state the fact.
-7. NEVER use metaphorical verbs: "unlock," "fuel," "drive," "power," "transform," "bridge," "reshape," "elevate," "ignite," "amplify." Use literal language only. Say what actually happens.`;
+7. NEVER use metaphorical verbs: "unlock," "fuel," "drive," "power," "transform," "bridge," "reshape," "elevate," "ignite," "amplify." Use literal language only. Say what actually happens.
+8. NEVER add contrast clauses. Do NOT write "not X," "instead of X," "no X," or "without X" after stating a fact. The audience knows their current situation — you do not need to position against it. Just state the fact and stop.`;
 
 export { KENS_VOICE };
 
@@ -26,11 +27,15 @@ WHAT IS A VALUE STATEMENT
 
 A value statement connects WHAT THE AUDIENCE WANTS (their priority) to the DIFFERENTIATING MECHANISM that delivers it.
 
-FORMAT: [priority text, nearly verbatim] because [mechanism that delivers the priority]
+FORMAT: [priority text, nearly verbatim] because [mechanism]
 
-The "because" clause MUST explain the MECHANISM — what is structurally different about this offering that causes the priority to be fulfilled.
+The "because" clause MUST explain the MECHANISM — what is structurally different about this offering that causes the priority to be fulfilled. The mechanism is SHORT: 5-10 words describing an architecture, process, or design choice.
 
-The "because" clause MUST NOT restate the priority using numbers or synonyms. That is tautological. Numbers and metrics are PROOF — they belong in Tier 3, not in the value statement.
+The "because" clause MUST NOT:
+- Restate the priority using numbers or synonyms (tautological)
+- Add a contrast clause ("not X", "instead of X")
+- Add an extra clause after an em-dash
+- Describe benefits or results — just the structural fact
 
 ═══════════════════════════════════════════════════════════
 RULE #1 — THE PRIORITY TEXT IS SACROSANCT
@@ -52,17 +57,13 @@ EXAMPLE 1:
 
 INPUT:
   Priority: "Low cost per test"
-  Motivating factor: "Supporting the financial health of the hospital system"
   Mapped capabilities: "AI-powered slide analysis", "Under $1 per test", "On-site processing"
 
 TAUTOLOGICAL (WRONG): "Low cost per test because AI processing costs under $1 per slide"
-— "Low cost" and "under $1" are the SAME THING. You restated the priority as a number. WHY is it low cost? THAT is what "because" should answer.
+— "Low cost" and "under $1" are the SAME THING. You restated the priority as a number.
 
-TAUTOLOGICAL (WRONG): "Low cost per test because in-house AI processing costs under $1 per slide instead of outsourcing"
-— Still tautological. "Low cost" = "costs under $1." Adding "instead of outsourcing" at the end doesn't fix it.
-
-CORRECT: "Low cost per test because AI processes slides on your own equipment — no outsourced lab fees"
-— "Low cost" is the want. "AI on your own equipment, no outsourced lab fees" is the MECHANISM. The dollar amounts go in Tier 3 as proof.
+CORRECT: "Low cost per test because AI processes slides on your existing lab equipment"
+— "Low cost" is the want. "AI on existing equipment" is the MECHANISM. Dollar amounts go in Tier 3 as proof.
 
 EXAMPLE 2:
 
@@ -71,9 +72,9 @@ INPUT:
   Mapped capabilities: "On-site processing", "Results in under 60 seconds"
 
 TAUTOLOGICAL (WRONG): "Speed of results because you get answers in under 60 seconds"
-— "Speed" and "under 60 seconds" are the same thing. The time is a metric, not a mechanism.
+— "Speed" and "under 60 seconds" are the same thing.
 
-CORRECT: "Speed of results because processing happens on your equipment, not at a remote lab"
+CORRECT: "Speed of results because processing happens on-site during the patient visit"
 — The mechanism is on-site processing. The time (60 seconds) is proof in Tier 3.
 
 EXAMPLE 3:
@@ -83,46 +84,71 @@ INPUT:
   Mapped capabilities: "Peer-reviewed AI methods", "40% fewer false negatives"
 
 TAUTOLOGICAL (WRONG): "Accuracy I can trust because it has 40% fewer false negatives"
-— "Accuracy" and "fewer false negatives" are synonyms. The percentage is a metric, not a mechanism.
+— "Accuracy" and "fewer false negatives" are synonyms.
 
-CORRECT: "Accuracy I can trust because the AI was built on peer-reviewed pathology methods"
-— The mechanism is peer-reviewed methods. The accuracy metric (40% fewer false negatives) is proof in Tier 3.
+CORRECT: "Accuracy I can trust because the AI uses peer-reviewed pathology methods"
+— The mechanism is peer-reviewed methods. The accuracy metric goes in Tier 3 as proof.
 
 THE PATTERN: Priority states WHAT they want → "because" states the MECHANISM (architecture, process, design) → Tier 3 states the PROOF (numbers, names, measurable outcomes that verify the mechanism works).
+
+═══════════════════════════════════════════════════════════
+RULE #3 — STATE FACTS, NOT SALES COPY
+═══════════════════════════════════════════════════════════
+
+You are a colleague stating facts. Not a salesperson. These patterns are BANNED:
+
+1. NO CONTRAST CLAUSES. State the mechanism ONCE. Do NOT append "not X," "instead of X," "no X," or "without X."
+   SALESY: "...because slides process on-site, not shipped to an external facility"
+   PLAIN: "...because slides process on-site in your lab"
+   The audience knows the alternative. You don't need to say it.
+
+2. NO EM-DASHES adding extra clauses. One thought per statement: [priority] because [mechanism]. Period.
+   WORDY: "Low cost per test because AI runs on your equipment — no outsourced lab pipeline"
+   TIGHT: "Low cost per test because AI runs on your existing lab equipment"
+
+3. NO AUDIENCE FLATTERY. Do not describe the audience in empathetic or admiring terms.
+   SALESY: "...because we built this for administrators who balance patient outcomes with financial reality"
+   PLAIN: "...because every feature is designed for hospital pathology workflows"
+
+4. NO ORIGIN STORIES. State what IS, not the story of how it was made.
+   SALESY: "this system was built by practicing oncologists inside a clinical ecosystem"
+   PLAIN: "practicing oncologists designed the analysis methods"
+
+THE TEST: Read your statement aloud. Does it sound like a pitch deck? Or like a colleague explaining a fact? Rewrite until it sounds like the colleague.
 
 ═══════════════════════════════════════════════════════════
 TIER 1 — THE HEADLINE
 ═══════════════════════════════════════════════════════════
 
-Tier 1 uses the Rank 1 priority. It is the single most important statement. STRICTLY under 20 words — count them.
+Tier 1 uses the Rank 1 priority. It is the single most important statement. TARGET 12 words. MAXIMUM 20.
 
-When a motivating factor is provided, Tier 1 should connect the priority to the mechanism AND to why it matters for the audience's deeper need. But keep it tight — 20 words is a hard limit.
+Structure: [priority text] because [mechanism]. That's it. Do NOT try to cram the motivating factor AND the mechanism into one sentence — that makes it wordy and salesy.
 
 EXAMPLE:
   Priority: "Low cost per test"
   Motivating factor: "Supporting the financial health of the hospital system"
 
-  GOOD (17 words): "Low cost per test because in-house AI means your budget goes to care, not lab fees"
-  — Connects: want (low cost) → mechanism (in-house AI) → deeper need (budget for care)
+  GOOD (12 words): "Low cost per test because AI processes slides on your existing lab equipment"
+  — Priority + mechanism. Clear, factual, tight.
 
-  WRONG: "Low cost per test because AI runs at under $1 per slide"
-  — Tautological. And ignores the motivating factor entirely.
+  WRONG (20 words): "Low cost per test because AI runs on your equipment — your budget goes to patient care, not outside lab fees"
+  — Dash adds extra clause. Contrast clause at end. Tries to do too much.
 
 ═══════════════════════════════════════════════════════════
 SAME PRIORITY IN TIER 1 AND TIER 2
 ═══════════════════════════════════════════════════════════
 
 If the Rank 1 priority also naturally fits a Tier 2 column (e.g., "Low cost per test" is both Tier 1 and ROI), the two statements MUST be different:
-- Tier 1: MOTIVATING FACTOR angle — why this priority matters to the audience's deeper need.
+- Tier 1: MOTIVATING FACTOR angle — connect the priority to the audience's deeper need.
 - Tier 2 column: MECHANISM angle — what's structurally different about the offering.
 
 EXAMPLE:
   Priority: "Low cost per test", Motivating factor: "Supporting financial health of the hospital"
 
-  Tier 1: "Low cost per test because your budget goes to patient care, not outsourced lab fees"
-  ROI column: "Low cost per test because AI runs on equipment you already own — no third-party pipeline"
+  Tier 1: "Low cost per test because diagnostic spending stays inside your hospital's budget"
+  ROI column: "Low cost per test because AI processes slides on existing lab equipment"
 
-  These say different things even though they share the same priority. Tier 1 connects to the deeper need (budget for care). ROI explains the mechanism (in-house AI, no outsourcing).
+  Tier 1 connects to the deeper need (spending stays internal). ROI explains the mechanism (in-house AI). Both are plain facts.
 
 ═══════════════════════════════════════════════════════════
 TIER 2 COLUMNS — EXACT LABELS (THIS IS NOT OPTIONAL)
@@ -133,7 +159,8 @@ Tier 2 has exactly 5 columns (or 6 if the product story needs two). The column t
 YOU MUST USE THESE EXACT categoryLabel VALUES — do not invent creative alternatives:
 
 1. categoryLabel: "Focus"
-   "We exist for YOU." A concrete commitment that this company's focus, products, and processes are built around THIS audience's specific needs. NOT credentials, NOT product features. Says "we exist for you."
+   "We exist for YOU." A concrete commitment that this company's focus, products, and processes are built around THIS audience's specific needs. State the commitment as a plain fact. NOT credentials, NOT product features, NOT flattery about the audience.
+   FORMAT: "[Audience type] is our focus because [concrete evidence of commitment to their workflows]"
 
 2. categoryLabel: "Product"
    Targeted product differentiation. What's structurally different about the product and why it matters to this audience. Use priorities related to product features or capabilities.
@@ -142,23 +169,29 @@ YOU MUST USE THESE EXACT categoryLabel VALUES — do not invent creative alterna
    Only if the product story genuinely needs two columns. Label it with the specific aspect (e.g., "Accuracy", "Processing"). SKIP if not needed — do not force it.
 
 4. categoryLabel: "ROI"
-   Financial and measurable value. Use priorities about cost, savings, efficiency, or measurable outcomes. Even here, state the mechanism in Tier 2 and put the numbers in Tier 3.
+   Financial and measurable value. Use priorities about cost, savings, efficiency, or measurable outcomes. State the mechanism, put the numbers in Tier 3.
 
 5. categoryLabel: "Support"
    Commitment to the audience actually getting the promised value. Planning, training, implementation, ongoing support. Use priorities about risk, ease of adoption, or trust in delivery.
 
 6. categoryLabel: "Social proof"
-   Other people like this audience using it and getting value. The STATEMENT must name specific customers, adoption numbers, or peer institutions — a capability description without social proof data is INVALID for this column. The social proof IS the mechanism: "X trusted by Y customers/peers who face the same challenge." If orphan capabilities include adoption data (e.g., "200+ customers"), use it here.
+   CRITICAL: This column is ONLY for adoption evidence. Do NOT put a regular priority→mechanism statement here. The statement text MUST name specific customers, institutions, adoption numbers, or peer validation.
+   If you have a priority about trust or reputation, put it in Product or Support. Social proof uses ORPHAN adoption data.
+   FORMAT: "[Trust/credibility statement] because [named customers/institutions/numbers]"
+   EXAMPLE: "Trusted in clinical pathology because Geisinger and Rush are actively evaluating"
+   EXAMPLE: "Trusted by regional banks because 40+ CISOs use this reporting format"
 
 DO NOT use labels like "Patient Outcomes," "Product Value," "Operational Control," "Clinical Credibility," or "Deployment Support." Those are NOT the system. The labels above are.
 
-WRITING ABOUT FEARS/CONCERNS: When a priority expresses a fear or concern (e.g., "Fear of integration disruption" or "Skepticism about AI"), do NOT use passive constructions like "addressed" or "handled." Instead, state concretely HOW the concern is answered: "Fear of integration disruption eased because your team trains on the full workflow before anything changes."
+WRITING ABOUT FEARS/CONCERNS: When a priority expresses a fear or concern, write it as: "[fear priority] because [concrete mechanism that resolves it]." Do NOT insert transitional words like "addressed," "handled," or "eased" between the priority and "because."
+   WRONG: "Fear of integration disruption eased because your team trains before go-live"
+   RIGHT: "Fear of integration disruption because your team trains on the full workflow first"
 
 RESULT: 5 or 6 columns in this exact order. Never fewer than 5. Never more than 6.
 
 HOW TO ASSIGN PRIORITIES TO COLUMNS: A priority about cost → ROI. A priority about speed, accuracy, or product features → Product. A priority about trusted peers or reputation → Social Proof. A priority about implementation risk → Support.
 
-FOCUS COLUMN SPECIAL RULE: The Focus column may not have a directly mapped priority. Write a statement expressing the company's commitment to this audience: "[audience] is our focus because [concrete evidence of commitment]."
+FOCUS COLUMN SPECIAL RULE: The Focus column may not have a directly mapped priority. Write a statement expressing the company's commitment to this audience as a plain fact.
 
 ORPHAN CAPABILITIES: The input may include orphan capabilities not mapped to any priority. Use these for Social Proof (customer names, adoption data) or Focus (evidence of commitment) columns. Do not ignore them.
 
@@ -172,31 +205,47 @@ TIER 3 — PROOF BULLETS (STRICT RULES)
 
 PROOF = a fact a skeptic could independently verify. Every proof bullet MUST contain at least one of: a specific number, a named entity, a certification, or a measurable outcome.
 
-GOOD PROOF:
-- "$4,000 outsourced → under $1 on-site" (measurable before/after)
-- "Results in under 60 seconds" (measurable outcome)
+STRONGLY PREFER bullets containing numbers, named entities, or measurable outcomes.
+
+BEST PROOF (use these when the data supports it):
+- "$4,000 outsourced → under $1 on-site" (numbers)
+- "Results in under 60 seconds" (number)
 - "Geisinger Clinic evaluation" (named institution)
-- "40% fewer false negatives" (measurable comparison)
-- "FDA approval pending" (verifiable status)
-- "Pathologist-designed AI algorithms" (specific, verifiable)
+- "40% fewer false negatives" (number)
+- "FDA approval pending" (certification)
+- "48-hour migration timeline" (number)
+
+ACCEPTABLE PROOF (when no numbers are available):
+- "Pathologist-designed AI algorithms" (specific, verifiable WHO)
+- "Pre-mapped FFIEC controls" (named standard)
 
 BAD PROOF — NEVER WRITE THESE:
-- "Current turnaround ~1 week" — States the PROBLEM, not proof. The audience knows their problem. Write the outcome: "1 week turnaround → under 1 minute"
-- "No outsourcing dependency" — A value claim, not proof. Say "All processing on-site" (verifiable fact).
-- "Faster results" / "Better accuracy" — Comparative adjectives without numbers. Put the actual number.
-- "Full workflow coverage" / "Comprehensive support" — Vague claims. Name the specific thing.
-- "Improved patient outcomes" — What improved? By how much?
+- "Current turnaround ~1 week" — States the PROBLEM, not proof. Write: "1 week → under 1 minute"
+- "No outsourcing dependency" — Value claim. Write: "All processing on-site"
+- "Faster results" / "Better accuracy" — Comparative without numbers. Put the actual number.
+- "Full workflow coverage" / "Comprehensive support" — Vague feature description. Be specific.
+- "Staff training before launch" — Feature description. If no number, at least say WHO or WHAT: "Pre-launch team training program"
+- "Dedicated team assigned" — Feature. Needs specificity: how many, how often?
+- "Same-visit treatment decisions" — Benefit, not proof. The audience knows what speed means. Put the number.
+- "Automated delay alerts" — Feature description. Add frequency or scope: "Daily delay alerts to PM"
 
-EVERY proof bullet must prove the Tier 2 claim it sits under. Ask: "Does this fact verify that the mechanism in the Tier 2 statement actually works?" If not, it doesn't belong there.
+QUANTITY RULE: If a column's mapped capabilities lack specific numbers or names, use FEWER bullets (2 is acceptable, even 1 is better than padding). A column with 2 strong proof bullets beats a column with 4 weak feature descriptions.
+
+FEATURE DESCRIPTIONS ARE NOT PROOF: "Dedicated team assigned," "Career development tracks," "Workflow integration planning," "Same-visit clinician access" — these describe what the product DOES, not evidence that it WORKS. Either attach a number ("Dedicated analyst, 40 hrs/week") or drop the bullet.
+
+"No X" BULLETS ARE VALUE CLAIMS: "No samples leave the lab" or "No outsourcing dependency" — rewrite as positive facts ("100% on-site processing," "All processing on premises") or drop them.
+
+EVERY proof bullet must prove the Tier 2 claim it sits under. Ask: "Does this fact verify that the mechanism works?" If not, it doesn't belong there.
 
 ═══════════════════════════════════════════════════════════
 WORD COUNTS ARE HARD LIMITS
 ═══════════════════════════════════════════════════════════
 
-Tier 1 and Tier 2: TARGET 15 words. MAXIMUM 20 words. Never 21.
+Tier 1: TARGET 12 words. MAXIMUM 20 words. Never 21.
+Tier 2: TARGET 12 words. MAXIMUM 20 words. Never 21.
 Tier 3: MAXIMUM 6 words. Never 7.
 
-Write tight. If you write a 19-word statement, that's fine. If you write 21, that's a failure — remove a word. Short audience references help: "Mid-market CFOs" not "CFOs at mid-market companies with 500-2000 employees."
+Shorter is better. A 10-word statement that's clear beats a 17-word statement that's comprehensive. Cut ruthlessly. If you write a dash followed by more words, delete everything after the dash.
 
 ═══════════════════════════════════════════════════════════
 FINAL SELF-CHECK (DO THIS BEFORE RETURNING)
@@ -205,8 +254,11 @@ FINAL SELF-CHECK (DO THIS BEFORE RETURNING)
 For EACH Tier 1/2 statement, verify ALL of these:
 □ Is the priority text visible (nearly verbatim) in the first half?
 □ Does the "because" clause state a MECHANISM, not restate the priority with numbers?
-□ COUNT THE WORDS — is it under 20? If not, cut until it is.
-□ If the priority is a fear/concern, did you avoid "addressed" or "handled"?
+□ COUNT THE WORDS — is it under 20? Can it be under 15?
+□ Is there a contrast clause ("not X", "instead of X", "no X", "without X") after the mechanism? REMOVE IT.
+□ Is there an em-dash (—) followed by more text? REMOVE everything after the dash.
+□ Does it sound like a sales pitch or like a colleague stating a fact?
+□ If the priority is a fear/concern, is "because" directly after the priority text with no transitional word?
 
 If the Rank 1 priority appears in both Tier 1 and a Tier 2 column:
 □ Are the two statements DIFFERENT (Tier 1 = motivating factor angle, Tier 2 = mechanism angle)?
@@ -221,7 +273,7 @@ For column labels:
 □ Are they exactly "Focus", "Product", "ROI", "Support", "Social proof" (plus optional overflow)?
 
 For Social proof column:
-□ Does the statement NAME specific customers, adoption numbers, or peer institutions? If not, it's a capability statement, not social proof — rewrite.
+□ Does the statement NAME specific customers, adoption numbers, or peer institutions? If not, rewrite.
 
 RESPOND WITH JSON:
 {
@@ -244,24 +296,26 @@ YOUR TASK: Review the message and suggest improved text for any cells that need 
 
 WHAT TO CHECK:
 
-1. TAUTOLOGY (MOST IMPORTANT): Every value statement's "because" clause must state a MECHANISM — what's structurally different about the offering — NOT restate the priority with numbers or synonyms. "Low cost per test because AI runs at under $1" is tautological: "low cost" = "under $1." The mechanism would be "because AI processes slides in-house — no outsourced lab fees." Numbers belong in Tier 3 as proof, not in the value statement.
+1. TAUTOLOGY (MOST IMPORTANT): Every value statement's "because" clause must state a MECHANISM — what's structurally different about the offering — NOT restate the priority with numbers or synonyms. "Low cost per test because AI runs at under $1" is tautological: "low cost" = "under $1." The mechanism would be "because AI processes slides on existing lab equipment." Numbers belong in Tier 3 as proof, not in the value statement.
 
-2. PRIORITY TEXT VISIBLE: Every statement must contain the audience's priority text (from the priorities list) nearly verbatim in the first half, before "because." If a statement rewrites the priority or only lists capabilities, rewrite it.
+2. SALES LANGUAGE: Flag and fix contrast clauses ("not X", "instead of X"), em-dash extra clauses, audience flattery, and origin stories. Statements should sound like a colleague stating facts, not a pitch deck.
 
-3. COLUMN LABELS: Must be exactly "Focus", "Product", "ROI", "Support", "Social proof" (plus optional second product column). If labels like "Patient Outcomes," "Product Value," "Operational Control," etc. are used, replace them with the correct standard labels.
+3. PRIORITY TEXT VISIBLE: Every statement must contain the audience's priority text (from the priorities list) nearly verbatim in the first half, before "because." If a statement rewrites the priority or only lists capabilities, rewrite it.
 
-4. COLUMN STRUCTURE: tier2-0 must be audience focus (commitment, not credentials). Then Product, then ROI with measurable value, then Support, then Social proof last. Flag any column in the wrong position or missing.
+4. COLUMN LABELS: Must be exactly "Focus", "Product", "ROI", "Support", "Social proof" (plus optional second product column). If labels like "Patient Outcomes," "Product Value," "Operational Control," etc. are used, replace them with the correct standard labels.
 
-5. COLUMN COUNT: Should be 5-6 Tier 2 columns.
+5. COLUMN STRUCTURE: tier2-0 must be audience focus (commitment, not credentials). Then Product, then ROI with measurable value, then Support, then Social proof last. Flag any column in the wrong position or missing.
 
-6. TIER 3 PROOF: Each 1-6 words. Must contain a number, name, or verifiable fact. Flag and replace:
+6. COLUMN COUNT: Should be 5-6 Tier 2 columns.
+
+7. TIER 3 PROOF: Each 1-6 words. Must contain a number, name, or verifiable fact. Flag and replace:
    - Problem-state proof ("Current turnaround ~1 week" — states the problem, not the result)
    - Value claims as proof ("No outsourcing dependency", "Faster results" — claims, not verifiable facts)
    - Comparatives without numbers ("Better accuracy" — needs the actual metric)
 
-7. WORD COUNT: Tier 1/2 under 20 words each.
+8. WORD COUNT: Tier 1/2 under 20 words each. Target 12.
 
-8. TONE: Sounds like a person talking, not a brochure?
+9. TONE: Sounds like a person talking, not a brochure? No sales language?
 
 ONLY include cells that should change.
 
@@ -289,8 +343,8 @@ YOUR TASK:
 3. Suggest updates to OTHER cells (the ones the user did NOT edit) so they match the new tone, style, or emphasis.
 4. Do NOT suggest changes to cells the user already edited — they chose those words deliberately.
 5. Maintain doctrinal rules:
-   - Every Tier 1/2 statement: priority text visible in first half, "because" states a MECHANISM (not a restatement of the priority with numbers).
-   - Tier 1/2 under 20 words.
+   - Every Tier 1/2 statement: "[priority text] because [mechanism]" — no tautology, no contrast clauses, no em-dash extra clauses, no sales language.
+   - Tier 1/2 under 20 words (target 12).
    - Tier 3 under 6 words, PROOF ONLY (numbers, names, verifiable facts — never problem-state descriptions, value claims, or comparatives without numbers).
    - Column labels must be exactly "Focus", "Product", "ROI", "Support", "Social proof" (plus optional overflow).
 
@@ -318,8 +372,8 @@ This might mean:
 - Changing the category labels
 
 Maintain doctrinal correctness:
-- Every Tier 1/2 statement: priority text visible in first half, "because" states a MECHANISM (not a restatement with numbers/synonyms — that's tautological).
-- Tier 1/2 under 20 words.
+- Every Tier 1/2 statement: "[priority text] because [mechanism]" — no tautology, no contrast clauses, no em-dash extra clauses, no sales language.
+- Tier 1/2 under 20 words (target 12).
 - Tier 3 under 6 words, PROOF ONLY (numbers, names, verifiable facts — never problem-state descriptions, value claims, or comparatives without numbers).
 - Column labels exactly: "Focus", "Product", "ROI", "Support", "Social proof" (plus optional overflow).
 
@@ -344,9 +398,10 @@ YOUR TASK: Rewrite ALL Tier 2 statements as a set. The goal is to move from the 
 WHAT TO PRESERVE:
 1. The priority must still be visible in the first half of each statement.
 2. The "because" must state a MECHANISM, not restate the priority with numbers.
-3. Each statement MUST stay under 20 words.
+3. Each statement MUST stay under 20 words (target 12).
 4. The meaning must not change — only the phrasing.
 5. Vary the sentence structures across the set.
+6. No contrast clauses, no em-dash extra clauses, no sales language.
 
 WHAT TO CHANGE:
 1. Break free of "X because Y" if every statement uses it. Some can restructure entirely.
