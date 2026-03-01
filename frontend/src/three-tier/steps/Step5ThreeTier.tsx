@@ -202,7 +202,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep }: Ste
           {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria'}
         </button>
         <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={revising || reviewing}>
-          {revising ? <><Spinner size={12} /> Revising...</> : 'Take my edits and revise'}
+          {revising ? <><Spinner size={12} /> Adjusting...</> : 'Match the rest to my edits'}
         </button>
         {suggestions.size > 0 && (
           <button className="btn btn-ghost btn-sm" onClick={clearSuggestions}>

@@ -22,16 +22,50 @@ ${KENS_VOICE}
 
 YOUR TASK: Convert each mapping into a canonical value statement.
 
+═══════════════════════════════════════════════════════════
+TIER 1 — THE MOST IMPORTANT OUTPUT. GET THIS RIGHT FIRST.
+═══════════════════════════════════════════════════════════
+
+Tier 1 is the #1 ranked priority expressed as a value statement. The PRIORITY is the headline — the capability only explains how you deliver it.
+
+REQUIRED FORMAT: "[Audience's #1 priority] because [differentiator(s) that deliver it]"
+
+GOOD: "Dramatic cost reduction in pathology testing by replacing a $4,000 external lab test with an in-house test costing under $1"
+GOOD: "Reliable pathology results in under one minute because AI-powered slide analysis runs on-site"
+
+BAD: "AI-powered slide analysis with sub-dollar per-test economics" — This names two capabilities with NO priority. The audience's need is invisible. INVALID.
+BAD: "Cutting-edge technology delivering unprecedented results" — Marketing fluff with no specifics. INVALID.
+
+THE TEST: Read your Tier 1 and ask "what does the audience WANT?" If the answer isn't obvious from the sentence, you failed. Rewrite it with the priority as the subject.
+
+═══════════════════════════════════════════════════════════
+
 HARD CONSTRAINT — TIER 2 COUNT: The tier2 array in your response MUST contain between 3 and 6 items. Ideal is 5. Second choice is 4. You will often receive more than 6 mapped priorities. You MUST combine related priorities into compound statements to stay within the limit. Do NOT create one column per priority — group them. If your output contains 7 or more Tier 2 statements, the entire response is invalid and will be rejected. Count your tier2 array before responding.
 
-CANONICAL FORMAT: "You get [priority] because [differentiator(s)]"
+═══════════════════════════════════════════════════════════
+EVERY STATEMENT — TIER 1 AND TIER 2 — MUST FOLLOW THIS FORMAT
+═══════════════════════════════════════════════════════════
+
+REQUIRED FORMAT: "[What the audience wants] because [how you deliver it]"
+
+The audience's PRIORITY is always the subject. The capability only explains HOW. A statement that lists capabilities without naming what the audience cares about is INVALID — for Tier 1 AND for every Tier 2.
+
+GOOD Tier 2: "Confidence in clinical decisions because board-certified pathologists validate every result"
+GOOD Tier 2: "Low switching cost because the system runs on existing lab hardware"
+
+BAD Tier 2: "Board-certified pathologists with integrated validation workflow" — just capabilities, no priority. INVALID.
+BAD Tier 2: "AI-powered analysis paired with cloud infrastructure" — two capabilities, audience need invisible. INVALID.
+
+THE TEST FOR EVERY STATEMENT: Can you point to which words name what the audience wants? If you can't, the statement is capability-only and must be rewritten.
+
+═══════════════════════════════════════════════════════════
 
 STATEMENT RULES:
-1. The #1 ranked priority's statement becomes Tier 1.
-2. All other mapped priorities become Tier 2 statements. Combine related priorities into compound statements to stay at 3-6 columns (ideally 5).
+1. Tier 1 = the #1 ranked priority. Tier 2 = all other mapped priorities. Every statement must name the priority first, then the capability.
+2. Combine related priorities into compound Tier 2 statements to stay at 3-6 columns (ideally 5).
 3. Each statement MUST be under 20 words.
 4. Use the audience's language for the priority side, not internal jargon.
-5. The causal connection (priority BECAUSE capability) must be clear.
+5. The causal connection (priority BECAUSE capability) must be clear in every statement.
 6. Do NOT add transitions between statements (no "also," "in addition," etc.).
 7. Do NOT invent capabilities or benefits not in the mappings.
 8. For each Tier 2, also suggest 2-4 proof bullets (Tier 3) -- 1-6 words each. PROOF ONLY. Proof means specific, verifiable hard data: numbers, names, certifications, measurable before/after outcomes. A skeptic must be able to verify it independently. NEVER use comparative adjectives (faster, better, easier) or narrative shorthand (e.g. "one week → seconds") -- those are value claims and belong in Tier 2, not Tier 3. Good: "$4,000 cost reduced to under $1". Bad: "Faster time-to-treatment".
@@ -66,13 +100,14 @@ ${KENS_VOICE}
 YOUR TASK: Review the message and suggest improved text for any cells that need it. No scores. No explanations. Just better text.
 
 WHAT TO CHECK:
-1. TIER 1: Is it the #1 ranked priority as a value statement? Under 20 words?
-2. TIER 2: Each under 20 words? Clear priority->capability causal connection? Varied phrasing (not "You get X because Y" repeated)? No transitions?
-3. FIRST COLUMN (tier2-0): Does it express audience focus — a concrete commitment that the company exists for THIS audience? It should NOT be credentials or social proof (founder pedigree, institutional names). Those belong in later columns. If tier2-0 reads like social proof, suggest a rewrite that says "we're built for you" instead.
-4. COLUMN COUNT: There should be 3-6 Tier 2 columns (ideally 5, second choice 4). If there are 7+, the table is broken — suggest which columns to combine.
-5. TIER 3: Each 1-6 words? PROOF ONLY — specific, verifiable hard data (numbers, names, certifications, measurable outcomes). Flag and replace any comparative adjectives (faster, better, easier) or narrative shorthand — those are value claims, not proof.
-6. TONE: Sounds like a person talking, not a brochure?
-7. AUDIENCE LANGUAGE: Uses words the audience would use?
+1. PRIORITY-FIRST FORMAT (MOST IMPORTANT): Every statement — Tier 1 and every Tier 2 — must name what the audience WANTS before naming the capability. Read each statement and ask: "can I point to the priority?" If a statement only lists capabilities with no visible audience need, it MUST be rewritten. This is the #1 failure mode.
+2. TIER 1: Is it the #1 ranked priority as a value statement? Under 20 words?
+3. TIER 2: Each under 20 words? Clear priority->capability causal connection? Varied phrasing (not "You get X because Y" repeated)? No transitions?
+4. FIRST COLUMN (tier2-0): Does it express audience focus — a concrete commitment that the company exists for THIS audience? It should NOT be credentials or social proof (founder pedigree, institutional names). Those belong in later columns. If tier2-0 reads like social proof, suggest a rewrite that says "we're built for you" instead.
+5. COLUMN COUNT: There should be 3-6 Tier 2 columns (ideally 5, second choice 4). If there are 7+, the table is broken — suggest which columns to combine.
+6. TIER 3: Each 1-6 words? PROOF ONLY — specific, verifiable hard data (numbers, names, certifications, measurable outcomes). Flag and replace any comparative adjectives (faster, better, easier) or narrative shorthand — those are value claims, not proof.
+7. TONE: Sounds like a person talking, not a brochure?
+8. AUDIENCE LANGUAGE: Uses words the audience would use?
 
 ONLY include cells that should change. If a cell is fine, leave it out.
 
@@ -99,7 +134,7 @@ YOUR TASK:
 2. Infer the user's intent from those changes (e.g. "shortened to a fragment," "shifted emphasis to cost," "made it more casual").
 3. Suggest updates to OTHER cells (the ones the user did NOT edit) so they match the new tone, style, or emphasis.
 4. Do NOT suggest changes to cells the user already edited — they chose those words deliberately.
-5. Maintain doctrinal rules: Tier 1/2 under 20 words, Tier 3 under 6 words PROOF ONLY (verifiable hard data — numbers, names, certifications, measurable outcomes; never comparative adjectives or narrative shorthand).
+5. Maintain doctrinal rules: Every Tier 1/2 statement must name the audience's priority before the capability — a statement that only lists capabilities is invalid. Tier 1/2 under 20 words. Tier 3 under 6 words PROOF ONLY (verifiable hard data — numbers, names, certifications, measurable outcomes; never comparative adjectives or narrative shorthand).
 
 ONLY include cells that should change. If a cell already fits, leave it out.
 
@@ -124,7 +159,7 @@ This might mean:
 - Moving proof points between columns
 - Changing the category labels
 
-Maintain doctrinal correctness: priorities pull, Tier 1 and Tier 2 under 20 words, Tier 3 under 6 words PROOF ONLY (verifiable hard data — numbers, names, certifications, measurable outcomes; never comparative adjectives or narrative shorthand).
+Maintain doctrinal correctness: every Tier 1/2 statement must name the audience's priority before the capability — a statement that only lists capabilities is invalid. Priorities pull. Tier 1/2 under 20 words. Tier 3 under 6 words PROOF ONLY (verifiable hard data — numbers, names, certifications, measurable outcomes; never comparative adjectives or narrative shorthand).
 
 ONLY include cells that should change. If a cell is fine, leave it out.
 
