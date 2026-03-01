@@ -63,11 +63,38 @@ THE SELF-CHECK: For each statement, find the priority text from the input. Can y
 TIER STRUCTURE
 ═══════════════════════════════════════════════════════════
 
-- Tier 1 = the Rank 1 priority's statement. This is the headline of the entire message.
-- Tier 2 = all other priorities' statements (3-6 total, ideally 5).
-- Every statement — Tier 1 and each Tier 2 — follows the same format: priority text as subject, capability as explanation.
+- Tier 1 = the Rank 1 priority's statement. The headline of the entire message.
+- Tier 2 = columns that follow a FIXED structure (see below). Every statement uses priority text as subject, capability as explanation.
 
-HARD CONSTRAINT — TIER 2 COUNT: Your tier2 array MUST contain 3-6 items (ideal: 5, second choice: 4). Combine related priorities into compound statements if needed. 7+ is INVALID.
+═══════════════════════════════════════════════════════════
+TIER 2 COLUMNS — FIXED STRUCTURE (THIS IS NOT OPTIONAL)
+═══════════════════════════════════════════════════════════
+
+Tier 2 has exactly 5 columns (or 6 if the product story needs two). The column TYPES are fixed. Your job is to assign the right priorities and capabilities to each column, then write the statement.
+
+COLUMN 1 — FOCUS (categoryLabel: "Focus")
+"Our company and product focus is YOU." A concrete statement that this company's focus, products, and processes are built around THIS audience's specific needs. This is a commitment to the audience. NOT credentials, NOT social proof, NOT product features. It says "we exist for you."
+
+COLUMN 2 — PRODUCT (categoryLabel: "Product")
+Targeted product differentiation. A short value statement expanding on the capabilities best matched to the audience's priorities. This is where the core "what we built and why it matters to you" story lives. Use the mapped priorities that relate to product features or capabilities.
+
+COLUMN 3 — PRODUCT OVERFLOW (categoryLabel: varies — OPTIONAL)
+Only include this column if Column 2 would be too long or complex to tell the full product story in one statement. If the offering has two distinct product differentiators that each deserve their own column, use this. Otherwise, SKIP THIS COLUMN — do not force it.
+
+COLUMN 4 (or 3) — ROI (categoryLabel: "ROI")
+The financial and/or measurable value of using the product. Use mapped priorities that relate to cost, savings, efficiency, or measurable outcomes. Concrete numbers belong here.
+
+COLUMN 5 (or 4) — SUPPORT (categoryLabel: "Support")
+Commitment through processes to the audience actually getting the value promised. This covers planning, configuration, training, and ongoing support. Use mapped priorities that relate to implementation, risk, ease of adoption, or trust in delivery.
+
+COLUMN 6 (or 5) — SOCIAL PROOF (categoryLabel: "Social proof")
+Other people like the audience are using the product and getting value. Credible organizations are giving recognition. Customer references, institutional names, awards, certifications. Use mapped priorities or orphan capabilities that relate to validation or trust.
+
+RESULT: Either 5 columns (Focus, Product, ROI, Support, Social Proof) or 6 columns (Focus, Product, Product overflow, ROI, Support, Social Proof). Never fewer than 5. Never more than 6.
+
+HOW TO ASSIGN PRIORITIES TO COLUMNS: Look at each mapped priority and ask "which column type does this priority naturally belong to?" A priority about cost → ROI. A priority about speed or accuracy → Product. A priority about trusted peers → Social Proof. If a priority doesn't fit any column cleanly, use your judgment — but every column must have at least one priority driving it.
+
+FOCUS COLUMN SPECIAL RULE: The Focus column may not have a directly mapped priority. In that case, write a statement that expresses the company's commitment to this audience based on the overall context. It should still read as a value statement: "[audience] is our focus because [concrete evidence of commitment]."
 
 ═══════════════════════════════════════════════════════════
 ADDITIONAL RULES
@@ -78,15 +105,6 @@ ADDITIONAL RULES
 3. Do NOT add transitions between statements (no "also," "in addition," etc.).
 4. Do NOT invent capabilities or benefits not in the mappings.
 5. Tier 3 proof bullets: 2-4 per Tier 2, each 1-6 words. PROOF ONLY — specific, verifiable hard data (numbers, names, certifications, measurable outcomes). Never comparative adjectives (faster, better) or narrative shorthand. Good: "$4,000 cost reduced to under $1". Bad: "Faster time-to-treatment".
-
-TIER 2 ORDERING: Left-to-right persuasion flow. Typical order:
-1. Audience Focus — "we exist for you" (NOT credentials/social proof)
-2. Product Value / Unique differentiation
-3. ROI / Results / Measurable impact
-4. Support / Deployment / Trust
-5. Social Proof / Validation (credentials, institutional names go HERE)
-
-CATEGORY LABELS: For each Tier 2, a categoryLabel (1-3 words). Examples: "Customer focus," "Product value," "ROI," "Support," "Social proof."
 
 RESPOND WITH JSON:
 {
@@ -111,8 +129,8 @@ WHAT TO CHECK:
 1. PRIORITY TEXT VISIBLE (MOST IMPORTANT): Every statement — Tier 1 and every Tier 2 — must contain the audience's priority text (from the priorities list) nearly verbatim as the subject. The priority should appear in the first half of the statement, before "because." If a statement rewrites the priority into different words or only lists capabilities, it MUST be rewritten using the original priority text. This is the #1 failure mode.
 2. TIER 1: Is it the #1 ranked priority as a value statement? Under 20 words?
 3. TIER 2: Each under 20 words? Clear priority->capability causal connection? Varied phrasing (not "You get X because Y" repeated)? No transitions?
-4. FIRST COLUMN (tier2-0): Does it express audience focus — a concrete commitment that the company exists for THIS audience? It should NOT be credentials or social proof (founder pedigree, institutional names). Those belong in later columns. If tier2-0 reads like social proof, suggest a rewrite that says "we're built for you" instead.
-5. COLUMN COUNT: There should be 3-6 Tier 2 columns (ideally 5, second choice 4). If there are 7+, the table is broken — suggest which columns to combine.
+4. COLUMN STRUCTURE: Tier 2 should follow: Focus → Product → (optional Product overflow) → ROI → Support → Social Proof. Check that tier2-0 is audience focus (NOT credentials), that there's a clear product column, an ROI column with measurable value, a support/commitment column, and social proof last. Flag any column that's in the wrong position or missing.
+5. COLUMN COUNT: There should be 5-6 Tier 2 columns. If there are fewer than 5 or more than 6, the table needs restructuring.
 6. TIER 3: Each 1-6 words? PROOF ONLY — specific, verifiable hard data (numbers, names, certifications, measurable outcomes). Flag and replace any comparative adjectives (faster, better, easier) or narrative shorthand — those are value claims, not proof.
 7. TONE: Sounds like a person talking, not a brochure?
 8. AUDIENCE LANGUAGE: Uses words the audience would use?

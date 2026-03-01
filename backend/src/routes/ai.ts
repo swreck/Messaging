@@ -331,13 +331,19 @@ router.post('/resolve-questions', async (req: Request, res: Response) => {
     return;
   }
 
-  // Process answers: confirm or reject suggested mappings
-  for (const answer of answers as { priorityId: string; elementId: string; confirmed: boolean }[]) {
+  // Process answers: confirm or reject suggested mappings, collect user context
+  const userContext: string[] = [];
+  for (const answer of answers as { priorityId: string; elementId: string; confirmed: boolean; context?: string }[]) {
     if (answer.elementId) {
       await prisma.mapping.updateMany({
         where: { draftId, priorityId: answer.priorityId, elementId: answer.elementId, status: 'suggested' },
         data: { status: answer.confirmed ? 'confirmed' : 'rejected' },
       });
+    }
+    // Collect user explanations for the generation prompt
+    if (answer.context) {
+      const priority = draft.audience.priorities.find(p => p.id === answer.priorityId);
+      userContext.push(`Regarding "${priority?.text || answer.priorityId}": ${answer.context}`);
     }
   }
 
@@ -365,7 +371,7 @@ ${draft.audience.priorities
   Mapped capabilities: ${group.elements.map((e: any) => `"${e.text}"`).join(', ')}`;
   })
   .join('\n\n')}
-
+${userContext.length > 0 ? `\nUSER NOTES (the user provided these clarifications during review):\n${userContext.join('\n')}` : ''}
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
   const tierResult = await callAIWithJSON<{

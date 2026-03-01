@@ -7,6 +7,7 @@ interface Question {
   question: string;
   priorityId: string;
   elementId: string;
+  isGap?: boolean;
 }
 
 interface TierResult {
@@ -18,6 +19,9 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
   const [phase, setPhase] = useState<'building' | 'questions' | 'applying' | 'done'>('building');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<number, boolean>>({});
+  const [explanations, setExplanations] = useState<Record<number, string>>({});
+  const [explaining, setExplaining] = useState<number | null>(null);
+  const [explainText, setExplainText] = useState('');
   const [currentQ, setCurrentQ] = useState(0);
   const [error, setError] = useState('');
 
@@ -60,6 +64,7 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
         priorityId: q.priorityId,
         elementId: q.elementId,
         confirmed: answers[i] !== false, // default to confirmed if not explicitly rejected
+        context: explanations[i] || undefined,
       }));
 
       const res = await api.post<{
@@ -119,6 +124,19 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
 
   function handleAnswer(questionIndex: number, confirmed: boolean) {
     setAnswers(prev => ({ ...prev, [questionIndex]: confirmed }));
+    setExplaining(null);
+    setExplainText('');
+    if (questionIndex < questions.length - 1) {
+      setCurrentQ(questionIndex + 1);
+    }
+  }
+
+  function handleExplainSubmit(questionIndex: number) {
+    if (!explainText.trim()) return;
+    setExplanations(prev => ({ ...prev, [questionIndex]: explainText.trim() }));
+    setAnswers(prev => ({ ...prev, [questionIndex]: true })); // explanation = confirmed with context
+    setExplaining(null);
+    setExplainText('');
     if (questionIndex < questions.length - 1) {
       setCurrentQ(questionIndex + 1);
     }
@@ -161,20 +179,71 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
             <p style={{ fontSize: 16, lineHeight: 1.6, marginBottom: 20 }}>
               {questions[currentQ].question}
             </p>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button
-                className="btn btn-primary"
-                onClick={() => handleAnswer(currentQ, true)}
-              >
-                You're right
-              </button>
-              <button
-                className="btn btn-ghost"
-                onClick={() => handleAnswer(currentQ, false)}
-              >
-                No, skip that connection
-              </button>
-            </div>
+
+            {explaining === currentQ ? (
+              <div>
+                <textarea
+                  value={explainText}
+                  onChange={e => setExplainText(e.target.value)}
+                  placeholder="Tell Maria which capability addresses this, or why the connection works..."
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: 14,
+                    minHeight: 80,
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                    marginBottom: 12,
+                    boxSizing: 'border-box',
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      handleExplainSubmit(currentQ);
+                    }
+                  }}
+                />
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleExplainSubmit(currentQ)}
+                    disabled={!explainText.trim()}
+                  >
+                    Send
+                  </button>
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => { setExplaining(null); setExplainText(''); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => handleAnswer(currentQ, true)}
+                >
+                  You're right
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => { setExplaining(currentQ); setExplainText(''); }}
+                >
+                  Let me explain
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => handleAnswer(currentQ, false)}
+                >
+                  No, skip that connection
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
