@@ -286,6 +286,10 @@ ${validGaps.map(id => {
       byPriority.get(m.priorityId)!.elements.push(m.element);
     }
 
+    // Resolve orphan capabilities for Social Proof / Focus columns
+    const mappedElementIds = new Set(confirmedMappings.map(m => m.elementId));
+    const orphanElements = draft.offering.elements.filter(e => !mappedElementIds.has(e.id));
+
     const convertMessage = `CONFIRMED MAPPINGS (grouped by priority, in rank order):
 ${draft.audience.priorities
   .filter((p) => byPriority.has(p.id))
@@ -296,7 +300,7 @@ ${draft.audience.priorities
   Mapped capabilities: ${group.elements.map((e: any) => `"${e.text}"`).join(', ')}`;
   })
   .join('\n\n')}
-
+${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements.map(e => `- "${e.text}"`).join('\n')}` : ''}
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
     const tierResult = await callAIWithJSON<{
@@ -323,6 +327,7 @@ router.post('/resolve-questions', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
     where: { id: draftId, offering: { userId: req.user!.userId } },
     include: {
+      offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
     },
   });
@@ -361,6 +366,10 @@ router.post('/resolve-questions', async (req: Request, res: Response) => {
     byPriority.get(m.priorityId)!.elements.push(m.element);
   }
 
+  // Resolve orphan capabilities for Social Proof / Focus columns
+  const mappedElementIds = new Set(confirmedMappings.map(m => m.elementId));
+  const orphanElements = draft.offering.elements.filter(e => !mappedElementIds.has(e.id));
+
   const convertMessage = `CONFIRMED MAPPINGS (grouped by priority, in rank order):
 ${draft.audience.priorities
   .filter((p) => byPriority.has(p.id))
@@ -371,6 +380,7 @@ ${draft.audience.priorities
   Mapped capabilities: ${group.elements.map((e: any) => `"${e.text}"`).join(', ')}`;
   })
   .join('\n\n')}
+${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements.map(e => `- "${e.text}"`).join('\n')}` : ''}
 ${userContext.length > 0 ? `\nUSER NOTES (the user provided these clarifications during review):\n${userContext.join('\n')}` : ''}
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
@@ -401,6 +411,7 @@ router.post('/convert-lines', async (req: Request, res: Response) => {
           element: true,
         },
       },
+      offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
     },
   });
@@ -418,6 +429,10 @@ router.post('/convert-lines', async (req: Request, res: Response) => {
     byPriority.get(m.priorityId)!.elements.push(m.element);
   }
 
+  // Resolve orphan capabilities for Social Proof / Focus columns
+  const mappedElementIds = new Set(draft.mappings.map(m => m.elementId));
+  const orphanElements = draft.offering.elements.filter(e => !mappedElementIds.has(e.id));
+
   const userMessage = `CONFIRMED MAPPINGS (grouped by priority, in rank order):
 ${draft.audience.priorities
   .filter((p) => byPriority.has(p.id))
@@ -428,7 +443,7 @@ ${draft.audience.priorities
   Mapped capabilities: ${group.elements.map((e) => `"${e.text}"`).join(', ')}`;
   })
   .join('\n\n')}
-
+${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements.map(e => `- "${e.text}"`).join('\n')}` : ''}
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
   const result = await callAIWithJSON<{
