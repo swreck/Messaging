@@ -485,7 +485,9 @@ export function MappingDiagram({
                   borderLeftColor: c,
                   background: isDrop ? rgba(c, 0.08) : rgba(c, 0.04),
                   ...(isDrop ? { boxShadow: `0 0 0 2px ${c}` } : {}),
+                  ...(onChange ? { cursor: 'crosshair' } : {}),
                 }}
+                onMouseDown={onChange ? e => portDown(e, 'priority', p.id) : undefined}
               >
                 <span className="mapping-node-rank" style={{ color: c }}>#{p.rank}</span>
                 <span className="mapping-node-text">{p.text}</span>
@@ -504,7 +506,11 @@ export function MappingDiagram({
             return (
               <div key={el.id} ref={setR(el.id)}
                 className="mapping-node mapping-node-element"
-                style={isDrop ? { boxShadow: `0 0 0 2px ${highlight}`, background: rgba(highlight, 0.06) } : {}}
+                style={{
+                  ...(isDrop ? { boxShadow: `0 0 0 2px ${highlight}`, background: rgba(highlight, 0.06) } : {}),
+                  ...(onChange ? { cursor: 'crosshair' } : {}),
+                }}
+                onMouseDown={onChange ? e => portDown(e, 'element', el.id) : undefined}
               >
                 {connColors.length > 0 && (
                   <span className="mapping-dots" title="Connected priorities">
@@ -536,8 +542,8 @@ export function MappingDiagram({
           >
             Undo
           </button>
-          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 4 }}>
-            {selectedKey ? '⌫ to delete' : historyLen > 0 ? '⌘Z to undo' : 'Click a line to select it'}
+          <span style={{ fontSize: 14, color: 'var(--text-tertiary)', marginLeft: 4 }}>
+            {selectedKey ? '⌫ to delete selected line' : historyLen > 0 ? '⌘Z to undo' : 'Drag from any box to connect'}
           </span>
         </div>
       )}

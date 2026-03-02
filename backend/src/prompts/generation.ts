@@ -13,7 +13,8 @@ CRITICAL RULES:
 5. If you wouldn't say it out loud to a smart professional acquaintance who doesn't know your field, don't write it.
 6. NEVER use narrative causality phrases: "trace back to," "boil down to," "come down to," "rooted in," "stems from," "at its core." These narrate a logical chain instead of stating the fact. Just state the fact.
 7. NEVER use metaphorical verbs: "unlock," "fuel," "drive," "power," "transform," "bridge," "reshape," "elevate," "ignite," "amplify." Use literal language only. Say what actually happens.
-8. NEVER add contrast clauses. Do NOT write "not X," "instead of X," "no X," or "without X" after stating a fact. The audience knows their current situation — you do not need to position against it. Just state the fact and stop.`;
+8. NEVER add contrast clauses. Do NOT write "not X," "instead of X," "no X," or "without X" after stating a fact. The audience knows their current situation — you do not need to position against it. Just state the fact and stop.
+9. In the "because" clause, use AUDIENCE-FACING language — describe what the audience GETS or EXPERIENCES, not the deployment model, technical implementation, or internal product terminology. "In-house pathology" describes a deployment model — meaningless or negative to the audience. "Cancer pathology testing at under $1 per slide" describes what they get. "AI-powered analysis" describes a technology — the audience cares about "slide results in under 60 seconds." Always translate capability language into outcome language the audience would use.`;
 
 export { KENS_VOICE };
 
@@ -61,7 +62,7 @@ THIS IS THE MOST COMMON ERROR. Study these carefully:
   INPUT priority: "Protecting the financial health of our hospital"
   WRONG: "Low cost per test because AI runs on your existing lab equipment"
   WHY WRONG: "Low cost per test" is a PRODUCT METRIC. The audience said "financial health of our hospital" — that is their strategic concern. Use their words.
-  RIGHT: "Support your hospital's financial health because bringing cancer testing in-house can reduce costs by 99%"
+  RIGHT: "Support your hospital's financial health because cancer pathology testing can cost under $1 per slide"
 
   INPUT priority: "Better outcomes for my cancer patients"
   WRONG: "Fast test results because AI processes slides on-site"
@@ -92,7 +93,7 @@ TAUTOLOGICAL — same concept restated (WRONG):
   "Accurate testing because there are 40% fewer false negatives" — "accurate" = "fewer false negatives" (synonyms)
 
 NOT TAUTOLOGICAL — hook number supports broader priority (RIGHT):
-  "Support your hospital's financial health because bringing cancer testing in-house can reduce costs by 99%"
+  "Support your hospital's financial health because cancer pathology testing can cost under $1 per slide"
   — "financial health" is BROADER than "cost reduction." The 99% is a surprising, concrete hook.
   "Better outcomes for your cancer patients because on-site diagnosis delivers results in under 60 seconds"
   — "patient outcomes" is BROADER than "fast results." The 60 seconds is a dramatic hook supporting the broader concern.
@@ -138,13 +139,15 @@ Structure: [Rank 1 priority text, nearly verbatim] because [the single most comp
 
 The hook should be the most dramatic, curiosity-creating fact about this offering. If a strong number is available, include it — as long as it's not tautological (see Rule #2).
 
-HOOK SUBJECT: Make the hook about an ACTION or RESULT, not about the product or technology. "AI monitors 200+ risk signals" is product-centric — "AI" is the subject. "Bringing cancer testing in-house can reduce costs by 99%" is action-centric — the audience is doing something. Prefer the action. The product should be invisible in Tier 1.
+HOOK SUBJECT: Make the hook about an ACTION or RESULT, not about the product or technology. "AI monitors 200+ risk signals" is product-centric — "AI" is the subject. "Cancer pathology testing can cost under $1 per slide" is result-centric — the audience hears what they get. Prefer the result. The product should be invisible in Tier 1.
+
+HOOK LANGUAGE: Use words the AUDIENCE would use, not internal product terminology or deployment jargon. "In-house pathology" is deployment jargon — meaningless to a hospital administrator. "Cancer pathology testing" or "cancer sample testing" is what they'd say. "AI-powered slide analysis" is product language — "slide results in under 60 seconds" is what matters to them. Always translate capabilities into outcomes the audience recognizes.
 
 EXAMPLES:
   Rank 1 priority: "Protecting the financial health of our hospital"
   Motivating factor: "Every dollar saved goes directly to patient care"
-  GOOD: "Support your hospital's financial health because bringing cancer testing in-house can reduce costs by 99%"
-  — Priority is there (financial health). Hook is specific (in-house testing) + dramatic (99%). Audience thinks: "99%? How?"
+  GOOD: "Support your hospital's financial health because cancer pathology testing can cost under $1 per slide"
+  — Priority is there (financial health). Hook is specific (under $1 per slide) + dramatic. Audience thinks: "under $1? How?"
 
   Rank 1 priority: "Better outcomes for my cancer patients"
   Motivating factor: "Treatment delays from slow pathology cost lives"
@@ -169,7 +172,7 @@ If the Rank 1 priority also naturally fits a Tier 2 column, the two statements M
 EXAMPLE:
   Priority: "Protecting the financial health of our hospital"
 
-  Tier 1: "Support your hospital's financial health because bringing cancer testing in-house can reduce costs by 99%"
+  Tier 1: "Support your hospital's financial health because cancer pathology testing can cost under $1 per slide"
   ROI column: "Protect your hospital's financial health because diagnostics run on your existing lab equipment"
 
   Tier 1 uses the most dramatic hook (99% cost reduction). ROI explains a different angle (no new equipment needed).

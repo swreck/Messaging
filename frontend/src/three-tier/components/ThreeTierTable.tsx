@@ -142,7 +142,7 @@ export function ThreeTierTable({ draft, onUpdate, suggestions, onAcceptSuggestio
                             <button
                               className="btn btn-ghost btn-sm btn-danger"
                               onClick={(e) => { e.stopPropagation(); deleteTier3(t3.id); }}
-                              style={{ padding: '0 4px', fontSize: 11, opacity: 0.4 }}
+                              style={{ padding: '0 4px', fontSize: 12, opacity: 0.4 }}
                             >
                               &times;
                             </button>
@@ -161,7 +161,7 @@ export function ThreeTierTable({ draft, onUpdate, suggestions, onAcceptSuggestio
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={() => addTier3(t2.id)}
-                    style={{ fontSize: 12, marginTop: 4, padding: '2px 8px' }}
+                    style={{ fontSize: 13, marginTop: 4, padding: '2px 8px' }}
                   >
                     + Add proof
                   </button>

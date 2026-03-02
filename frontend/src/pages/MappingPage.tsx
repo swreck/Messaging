@@ -71,8 +71,8 @@ export function MappingPage() {
           <p>{draft.audience.name} × {draft.offering.name}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span className="mapping-page-hint">
-            Drag between boxes to connect. Click a line to remove it.
+          <span className="mapping-page-hint" style={{ fontSize: 16, maxWidth: 400 }}>
+            Drag from any priority or capability box to draw a connection. Select a line, then press Delete to remove it.
           </span>
           <button className="btn btn-ghost btn-sm" onClick={() => window.close()}>
             Done

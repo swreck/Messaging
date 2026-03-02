@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { StepProps } from './types';
 import { CoachingChat } from '../components/CoachingChat';
 import { PriorityList } from '../../shared/PriorityList';
@@ -32,10 +33,34 @@ function buildMappingsFromPreview(
 
 export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: StepProps) {
   const hasEnough = draft.audience.priorities.length >= 2;
-  const [mode, setMode] = useState<'confirm' | 'edit'>(hasEnough ? 'confirm' : 'edit');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlMode = searchParams.get('mode');
+  const mode = !hasEnough ? 'edit' : (urlMode === 'edit' ? 'edit' : 'confirm');
   const [preview, setPreview] = useState<MappingPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [showMappingModal, setShowMappingModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+
+  function switchToEdit() {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('mode', 'edit');
+      return next;
+    });
+  }
+
+  async function saveConfirmEdit(id: string) {
+    const trimmed = editText.trim();
+    const original = draft.audience.priorities.find(p => p.id === id);
+    if (!trimmed || trimmed === original?.text) {
+      setEditingId(null);
+      return;
+    }
+    setEditingId(null);
+    await api.put(`/audiences/${draft.audienceId}/priorities/${id}`, { text: trimmed });
+    await loadDraft();
+  }
 
   async function addPriority(text: string) {
     if (!text.trim()) return;
@@ -66,9 +91,23 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
           <h2>{draft.audience.name}'s Priorities</h2>
           <ol className="confirm-list">
             {draft.audience.priorities.map(p => (
-              <li key={p.id} className="confirm-list-item confirm-list-item-clickable" onClick={() => setMode('edit')}>
-                <span>{p.text}</span>
-                {p.motivatingFactor && (
+              <li key={p.id} className="confirm-list-item confirm-list-item-clickable">
+                {editingId === p.id ? (
+                  <input
+                    className="priority-text-input"
+                    value={editText}
+                    onChange={e => setEditText(e.target.value)}
+                    onBlur={() => saveConfirmEdit(p.id)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') saveConfirmEdit(p.id);
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
+                    autoFocus
+                  />
+                ) : (
+                  <span onClick={() => { setEditingId(p.id); setEditText(p.text); }}>{p.text}</span>
+                )}
+                {p.motivatingFactor && editingId !== p.id && (
                   <span className="confirm-list-mf">{p.motivatingFactor}</span>
                 )}
               </li>
@@ -78,7 +117,7 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
 
           <div className="confirm-actions">
             <button className="btn btn-primary" onClick={nextStep}>Use this list</button>
-            <button className="btn btn-secondary" onClick={() => setMode('edit')}>Let me revise first</button>
+            <button className="btn btn-secondary" onClick={switchToEdit}>Let me revise first</button>
             <button className="btn btn-ghost" onClick={loadPreview} disabled={loadingPreview}>
               {loadingPreview ? 'Analyzing...' : 'Preview the mapping'}
             </button>
@@ -106,7 +145,7 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
               offeringName={draft.offering.name}
             />
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => { setShowMappingModal(false); setMode('edit'); }}>Revise list</button>
+              <button className="btn btn-secondary" onClick={() => { setShowMappingModal(false); switchToEdit(); }}>Revise list</button>
               <button className="btn btn-primary" onClick={() => { setShowMappingModal(false); nextStep(); }}>Use this list</button>
             </div>
           </Modal>

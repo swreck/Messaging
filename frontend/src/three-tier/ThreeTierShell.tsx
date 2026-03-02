@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { ProgressBar } from './ProgressBar';
 import { Spinner } from '../shared/Spinner';
@@ -16,11 +16,35 @@ const AUTO_SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
 export function ThreeTierShell() {
   const { draftId } = useParams<{ draftId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [draft, setDraft] = useState<ThreeTierDraft | null>(null);
   const [, setLoading] = useState(true);
-  const [activeStep, setActiveStep] = useState(1);
+  const [activeStep, setActiveStepInternal] = useState(1);
   const [navigating, setNavigating] = useState(false);
   const lastInteraction = useRef(Date.now());
+  const initialLoadDone = useRef(false);
+
+  // Sync activeStep from URL when back/forward is pressed
+  useEffect(() => {
+    const urlStep = searchParams.get('step');
+    if (urlStep) {
+      const parsed = parseInt(urlStep, 10);
+      if (parsed >= 1 && parsed <= 5 && parsed !== activeStep) {
+        setActiveStepInternal(parsed);
+      }
+    }
+  }, [searchParams]);
+
+  // Navigate to step — pushes browser history entry
+  function navigateToStep(step: number) {
+    setActiveStepInternal(step);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('step', String(step));
+      next.delete('mode');
+      return next;
+    });
+  }
 
   // Track user interaction for auto-save
   useEffect(() => {
@@ -67,7 +91,15 @@ export function ThreeTierShell() {
     try {
       const { draft } = await api.get<{ draft: ThreeTierDraft }>(`/drafts/${draftId}`);
       setDraft(draft);
-      setActiveStep(draft.currentStep);
+      if (!initialLoadDone.current) {
+        initialLoadDone.current = true;
+        const urlStep = searchParams.get('step');
+        const step = urlStep ? parseInt(urlStep, 10) : draft.currentStep;
+        setActiveStepInternal(step);
+        if (!urlStep) {
+          setSearchParams({ step: String(step) }, { replace: true });
+        }
+      }
     } catch {
       navigate('/');
     } finally {
@@ -89,7 +121,7 @@ export function ThreeTierShell() {
     if (!draftId || navigating) return;
     setNavigating(true);
     try {
-      setActiveStep(step);
+      navigateToStep(step);
       if (step > (draft?.currentStep || 1)) {
         await api.patch(`/drafts/${draftId}`, { currentStep: step });
         setDraft(prev => prev ? { ...prev, currentStep: step } : prev);
@@ -104,7 +136,7 @@ export function ThreeTierShell() {
   }
 
   function prevStep() {
-    if (activeStep > 1) setActiveStep(activeStep - 1);
+    if (activeStep > 1) navigateToStep(activeStep - 1);
   }
 
   if (!draft) return <div className="loading-screen"><Spinner size={32} /></div>;
@@ -113,7 +145,7 @@ export function ThreeTierShell() {
 
   return (
     <div className="three-tier-shell">
-      <ProgressBar activeStep={activeStep} maxStep={draft.currentStep} onStepClick={setActiveStep} />
+      <ProgressBar activeStep={activeStep} maxStep={draft.currentStep} onStepClick={navigateToStep} />
       <div className="step-content">
         {activeStep === 1 && <Step1Prep {...stepProps} />}
         {activeStep === 2 && <Step2AllAboutYou {...stepProps} />}

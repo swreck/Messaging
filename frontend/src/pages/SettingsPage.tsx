@@ -85,7 +85,7 @@ export function SettingsPage() {
                 borderRadius: 'var(--radius)',
               }}>
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>Question calibration</div>
-                <div className="text-secondary" style={{ fontSize: 14, lineHeight: 1.5 }}>
+                <div className="text-secondary" style={{ fontSize: 15, lineHeight: 1.5 }}>
                   Maria has asked {learning!.questionsSeen} question{learning!.questionsSeen !== 1 ? 's' : ''} about
                   uncertain mappings. You confirmed {confirmRate}% of them.
                   {learning!.questionThreshold !== 0.75 && (
@@ -107,7 +107,7 @@ export function SettingsPage() {
                 borderRadius: 'var(--radius)',
               }}>
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>Column editing patterns</div>
-                <div className="text-secondary" style={{ fontSize: 14, lineHeight: 1.5 }}>
+                <div className="text-secondary" style={{ fontSize: 15, lineHeight: 1.5 }}>
                   You've manually edited {totalColumnEdits} statement{totalColumnEdits !== 1 ? 's' : ''} after generation.
                   {topColumns.length > 0 && (
                     <> Maria pays extra attention to the {topColumns.map(([col]) => col).join(', ')} column{topColumns.length > 1 ? 's' : ''} because you refine {topColumns.length > 1 ? 'them' : 'it'} most often.</>
@@ -124,7 +124,7 @@ export function SettingsPage() {
                 borderRadius: 'var(--radius)',
               }}>
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>Correction history</div>
-                <div className="text-secondary" style={{ fontSize: 14 }}>
+                <div className="text-secondary" style={{ fontSize: 15 }}>
                   {learning!.corrections.length} edit{learning!.corrections.length !== 1 ? 's' : ''} recorded for future vocabulary learning.
                 </div>
               </div>

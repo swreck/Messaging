@@ -190,7 +190,7 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
           </p>
 
           <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', padding: 24, marginBottom: 24 }}>
-            <p style={{ fontSize: 16, lineHeight: 1.6, marginBottom: 20 }}>
+            <p style={{ fontSize: 17, lineHeight: 1.6, marginBottom: 20 }}>
               {questions[currentQ].question}
             </p>
 
@@ -206,7 +206,7 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
                     padding: '10px 14px',
                     border: '1px solid var(--border)',
                     borderRadius: 'var(--radius-sm)',
-                    fontSize: 14,
+                    fontSize: 15,
                     minHeight: 80,
                     resize: 'vertical',
                     fontFamily: 'inherit',
@@ -261,7 +261,7 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
+            <span style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
               Question {currentQ + 1} of {questions.length}
             </span>
             {currentQ === questions.length - 1 ? (

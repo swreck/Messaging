@@ -216,7 +216,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
               padding: '10px 14px',
               border: '1px solid var(--border)',
               borderRadius: 'var(--radius-sm)',
-              fontSize: 14,
+              fontSize: 15,
               minHeight: 44,
               maxHeight: 120,
               resize: 'vertical',
@@ -289,7 +289,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
                 value={snapshotLabel}
                 onChange={e => setSnapshotLabel(e.target.value)}
                 placeholder="Snapshot label (optional)"
-                style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13 }}
+                style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14 }}
               />
               <button className="btn btn-secondary btn-sm" onClick={createSnapshot}>Save Snapshot</button>
             </div>
@@ -297,7 +297,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
               <div key={v.id} className="table-version-item">
                 <div>
                   <strong>{v.label}</strong>
-                  <span style={{ color: 'var(--text-tertiary)', fontSize: 12, marginLeft: 8 }}>
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: 13, marginLeft: 8 }}>
                     {new Date(v.createdAt).toLocaleString()}
                   </span>
                 </div>
