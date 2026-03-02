@@ -8,6 +8,7 @@ import { CONVERT_LINES_SYSTEM, REVIEW_SYSTEM, REVISE_FROM_EDITS_SYSTEM, DIRECTIO
 import { buildChapterPrompt, BLEND_SYSTEM, JOIN_CHAPTERS_SYSTEM, REFINE_CHAPTER_SYSTEM, COPY_EDIT_SYSTEM, CHAPTER_CRITERIA } from '../prompts/fiveChapter.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import { AUDIENCE_DISCOVERY_SYSTEM } from '../prompts/audienceDiscovery.js';
+import { getLearning, updateLearning, buildLearningPromptBlock } from '../lib/learning.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -263,9 +264,11 @@ ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`
     validPriorityIds.has(m.priorityId) && validElementIds.has(m.elementId)
   );
 
-  // Step 2: Auto-confirm high-confidence, collect low-confidence
-  const highConfidence = allValidMappings.filter(m => m.confidence >= 0.75);
-  const lowConfidence = allValidMappings.filter(m => m.confidence < 0.75 && m.confidence >= 0.5);
+  // Step 2: Auto-confirm high-confidence, collect low-confidence (dynamic threshold)
+  const learning = await getLearning(req.user!.userId);
+  const threshold = learning.questionThreshold;
+  const highConfidence = allValidMappings.filter(m => m.confidence >= threshold);
+  const lowConfidence = allValidMappings.filter(m => m.confidence < threshold && m.confidence >= 0.5);
 
   // Filter orphans and gaps too
   const validOrphans = (mappingResult.orphanElements || []).filter(id => validElementIds.has(id));
@@ -335,6 +338,7 @@ ${validGaps.map(id => {
     const mappedElementIds = new Set(confirmedMappings.map(m => m.elementId));
     const orphanElements = draft.offering.elements.filter(e => !mappedElementIds.has(e.id));
 
+    const learningBlock = buildLearningPromptBlock(learning);
     const convertMessage = `CONFIRMED MAPPINGS (grouped by priority, in rank order):
 ${draft.audience.priorities
   .filter((p) => byPriority.has(p.id))
@@ -345,7 +349,7 @@ ${draft.audience.priorities
   Mapped capabilities: ${group.elements.map((e: any) => `"${e.text}"`).join(', ')}`;
   })
   .join('\n\n')}
-${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements.map(e => `- "${e.text}"`).join('\n')}` : ''}
+${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements.map(e => `- "${e.text}"`).join('\n')}` : ''}${learningBlock}
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
     const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
@@ -381,7 +385,8 @@ router.post('/resolve-questions', async (req: Request, res: Response) => {
 
   // Process answers: confirm or reject suggested mappings, collect user context
   const userContext: string[] = [];
-  for (const answer of answers as { priorityId: string; elementId: string; confirmed: boolean; context?: string }[]) {
+  const typedAnswers = answers as { priorityId: string; elementId: string; confirmed: boolean; context?: string }[];
+  for (const answer of typedAnswers) {
     if (answer.elementId) {
       await prisma.mapping.updateMany({
         where: { draftId, priorityId: answer.priorityId, elementId: answer.elementId, status: 'suggested' },
@@ -394,6 +399,24 @@ router.post('/resolve-questions', async (req: Request, res: Response) => {
       userContext.push(`Regarding "${priority?.text || answer.priorityId}": ${answer.context}`);
     }
   }
+
+  // Track question answers for learning
+  const learning = await getLearning(req.user!.userId);
+  const confirmedCount = typedAnswers.filter(a => a.confirmed).length;
+  const newSeen = learning.questionsSeen + typedAnswers.length;
+  const newConfirmed = learning.questionsConfirmed + confirmedCount;
+  // Adjust threshold: high confirmation rate → raise (fewer questions), low → lower (more questions)
+  let newThreshold = learning.questionThreshold;
+  if (newSeen >= 10) {
+    const rate = newConfirmed / newSeen;
+    if (rate > 0.85 && newThreshold < 0.85) newThreshold = Math.min(newThreshold + 0.05, 0.85);
+    else if (rate < 0.5 && newThreshold > 0.5) newThreshold = Math.max(newThreshold - 0.05, 0.5);
+  }
+  await updateLearning(req.user!.userId, {
+    questionsSeen: newSeen,
+    questionsConfirmed: newConfirmed,
+    questionThreshold: newThreshold,
+  });
 
   // Now convert all confirmed mappings to tier statements
   const confirmedMappings = await prisma.mapping.findMany({
@@ -413,6 +436,7 @@ router.post('/resolve-questions', async (req: Request, res: Response) => {
   const mappedElementIds = new Set(confirmedMappings.map(m => m.elementId));
   const orphanElements = draft.offering.elements.filter(e => !mappedElementIds.has(e.id));
 
+  const learningBlock = buildLearningPromptBlock(learning);
   const convertMessage = `CONFIRMED MAPPINGS (grouped by priority, in rank order):
 ${draft.audience.priorities
   .filter((p) => byPriority.has(p.id))
@@ -424,7 +448,7 @@ ${draft.audience.priorities
   })
   .join('\n\n')}
 ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements.map(e => `- "${e.text}"`).join('\n')}` : ''}
-${userContext.length > 0 ? `\nUSER NOTES (the user provided these clarifications during review):\n${userContext.join('\n')}` : ''}
+${userContext.length > 0 ? `\nUSER NOTES (the user provided these clarifications during review):\n${userContext.join('\n')}` : ''}${learningBlock}
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
   const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
@@ -474,6 +498,8 @@ router.post('/convert-lines', async (req: Request, res: Response) => {
   const mappedElementIds = new Set(draft.mappings.map(m => m.elementId));
   const orphanElements = draft.offering.elements.filter(e => !mappedElementIds.has(e.id));
 
+  const convertLearning = await getLearning(req.user!.userId);
+  const convertLearningBlock = buildLearningPromptBlock(convertLearning);
   const userMessage = `CONFIRMED MAPPINGS (grouped by priority, in rank order):
 ${draft.audience.priorities
   .filter((p) => byPriority.has(p.id))
@@ -484,7 +510,7 @@ ${draft.audience.priorities
   Mapped capabilities: ${group.elements.map((e) => `"${e.text}"`).join(', ')}`;
   })
   .join('\n\n')}
-${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements.map(e => `- "${e.text}"`).join('\n')}` : ''}
+${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements.map(e => `- "${e.text}"`).join('\n')}` : ''}${convertLearningBlock}
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
   const rank1 = draft.audience.priorities.find((p) => p.rank === 1);

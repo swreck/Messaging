@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { param } from '../lib/params.js';
+import { getLearning, updateLearning } from '../lib/learning.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -105,7 +106,30 @@ router.put('/:draftId/tier2/:tier2Id', async (req: Request, res: Response) => {
     include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } },
   });
 
-  await createCellVersion(tier2.id, 'tier2', text, changeSource || 'manual');
+  const source = changeSource || 'manual';
+  await createCellVersion(tier2.id, 'tier2', text, source);
+
+  // Track manual edits for Maria's learning
+  if (source === 'manual') {
+    const prevVersion = await prisma.cellVersion.findFirst({
+      where: { tier2Id: tier2.id, changeSource: { not: 'manual' } },
+      orderBy: { versionNum: 'desc' },
+    });
+    if (prevVersion) {
+      const learning = await getLearning(req.user!.userId);
+      const column = tier2.categoryLabel || 'unknown';
+      const columnEdits = { ...learning.columnEdits };
+      columnEdits[column] = (columnEdits[column] || 0) + 1;
+      const corrections = [...learning.corrections, {
+        aiText: prevVersion.text,
+        userText: text,
+        column,
+        createdAt: new Date().toISOString(),
+      }];
+      await updateLearning(req.user!.userId, { columnEdits, corrections });
+    }
+  }
+
   res.json({ tier2 });
 });
 

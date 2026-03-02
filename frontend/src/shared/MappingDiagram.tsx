@@ -65,11 +65,16 @@ export function MappingDiagram({
   const [drag, setDrag] = useState<DragInfo | null>(null);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [dropId, setDropId] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const historyRef = useRef<{ priorityId: string; elementId: string }[][]>([]);
+  const [historyLen, setHistoryLen] = useState(0);
 
   const dragRef = useRef(drag);
   dragRef.current = drag;
   const localRef = useRef(local);
   localRef.current = local;
+  const selectedKeyRef = useRef(selectedKey);
+  selectedKeyRef.current = selectedKey;
 
   const sorted = [...priorities].sort((a, b) => a.rank - b.rank);
 
@@ -131,17 +136,38 @@ export function MappingDiagram({
     return () => obs.disconnect();
   }, [measure]);
 
-  // ─── Update + notify parent ───
+  // ─── Update + notify parent (with undo history) ───
   function update(next: typeof local) {
+    historyRef.current = [...historyRef.current, localRef.current];
+    setHistoryLen(historyRef.current.length);
     setLocal(next);
+    setSelectedKey(null);
     onChange?.(next);
   }
 
-  // ─── Delete a line ───
-  function deleteLine(key: string) {
+  // ─── Select / deselect a line ───
+  function toggleSelect(key: string) {
+    setSelectedKey(prev => prev === key ? null : key);
+  }
+
+  // ─── Delete selected line ───
+  function deleteSelected() {
+    const key = selectedKeyRef.current;
+    if (!key) return;
     const [pid, eid] = key.split(':');
-    update(local.filter(m => !(m.priorityId === pid && m.elementId === eid)));
+    update(localRef.current.filter(m => !(m.priorityId === pid && m.elementId === eid)));
     setHoveredKey(null);
+  }
+
+  // ─── Undo last action ───
+  function undo() {
+    if (historyRef.current.length === 0) return;
+    const prev = historyRef.current[historyRef.current.length - 1];
+    historyRef.current = historyRef.current.slice(0, -1);
+    setHistoryLen(historyRef.current.length);
+    setLocal(prev);
+    setSelectedKey(null);
+    onChange?.(prev);
   }
 
   // ─── Drag from existing endpoint ───
@@ -286,6 +312,23 @@ export function MappingDiagram({
     };
   }, [!!drag]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Keyboard shortcuts (Delete, Ctrl+Z) ───
+  useEffect(() => {
+    if (!onChange) return;
+    function onKey(e: KeyboardEvent) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedKeyRef.current) {
+        e.preventDefault();
+        deleteSelected();
+      }
+      if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onChange]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Ref helpers ───
   const setL = (id: string) => (el: HTMLDivElement | null) => {
     if (el) leftRefs.current.set(id, el); else leftRefs.current.delete(id);
@@ -317,12 +360,16 @@ export function MappingDiagram({
 
   return (
     <div>
-      <div className="mapping-diagram" ref={containerRef} style={{ cursor: drag ? 'grabbing' : undefined }}>
+      <div className="mapping-diagram" ref={containerRef}
+        style={{ cursor: drag ? 'grabbing' : undefined }}
+        onClick={() => setSelectedKey(null)}
+      >
         <svg className="mapping-svg">
           {/* Connection lines */}
           {visible.map(l => {
             const key = `${l.priorityId}:${l.elementId}`;
             const hovered = hoveredKey === key;
+            const selected = selectedKey === key;
             const d = curve(l.x1, l.y1, l.x2, l.y2);
             return (
               <g key={key}>
@@ -331,33 +378,33 @@ export function MappingDiagram({
                   style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
                   onMouseEnter={() => setHoveredKey(key)}
                   onMouseLeave={() => setHoveredKey(null)}
-                  onClick={() => deleteLine(key)}
+                  onClick={e => { e.stopPropagation(); toggleSelect(key); }}
                 />
                 {/* Visible line */}
                 <path d={d} fill="none" stroke={l.color}
-                  strokeWidth={hovered ? 2.5 : 1.5}
-                  strokeOpacity={hovered ? 0.85 : 0.45}
+                  strokeWidth={selected ? 3 : hovered ? 2.5 : 1.5}
+                  strokeOpacity={selected ? 0.9 : hovered ? 0.85 : 0.45}
                   strokeLinecap="round"
                   style={{ pointerEvents: 'none', transition: 'stroke-width .15s, stroke-opacity .15s' }}
                 />
                 {/* Left endpoint */}
-                <circle cx={l.x1} cy={l.y1} r={hovered ? 6 : 4.5}
+                <circle cx={l.x1} cy={l.y1} r={selected || hovered ? 6 : 4.5}
                   fill={l.color} stroke="white" strokeWidth={1.5}
                   style={{ pointerEvents: 'auto', cursor: 'grab', transition: 'r .15s' }}
                   onMouseDown={e => endpointDown(e, l, 'left')}
                 />
                 {/* Right endpoint */}
-                <circle cx={l.x2} cy={l.y2} r={hovered ? 6 : 4.5}
+                <circle cx={l.x2} cy={l.y2} r={selected || hovered ? 6 : 4.5}
                   fill={l.color} stroke="white" strokeWidth={1.5}
                   style={{ pointerEvents: 'auto', cursor: 'grab', transition: 'r .15s' }}
                   onMouseDown={e => endpointDown(e, l, 'right')}
                 />
-                {/* Hover hint */}
-                {hovered && (
+                {/* Hover hint (only when not selected) */}
+                {hovered && !selected && (
                   <text x={(l.x1 + l.x2) / 2} y={(l.y1 + l.y2) / 2 - 10}
                     textAnchor="middle" fill={l.color} fontSize={11} fontWeight={500}
                     style={{ pointerEvents: 'none', userSelect: 'none' }}
-                  >click to remove</text>
+                  >click to select</text>
                 )}
               </g>
             );
@@ -472,6 +519,28 @@ export function MappingDiagram({
           })}
         </div>
       </div>
+
+      {onChange && (
+        <div style={{ display: 'flex', gap: 8, padding: '8px 0', alignItems: 'center' }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={!selectedKey}
+            onClick={deleteSelected}
+          >
+            Delete
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={historyLen === 0}
+            onClick={undo}
+          >
+            Undo
+          </button>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 4 }}>
+            {selectedKey ? '⌫ to delete' : historyLen > 0 ? '⌘Z to undo' : 'Click a line to select it'}
+          </span>
+        </div>
+      )}
 
       {(gaps.length > 0 || orphans.length > 0) && (
         <div className="mapping-footer">

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { resetLearning } from '../lib/learning.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -41,6 +42,12 @@ router.put('/', async (req: Request, res: Response) => {
   });
 
   res.json({ settings: merged });
+});
+
+// DELETE /api/settings/learning — reset Maria's memory
+router.delete('/learning', async (req: Request, res: Response) => {
+  await resetLearning(req.user!.userId);
+  res.json({ success: true });
 });
 
 export default router;
