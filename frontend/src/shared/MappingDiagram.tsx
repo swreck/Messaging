@@ -460,7 +460,7 @@ export function MappingDiagram({
                 style={isDrop ? { boxShadow: `0 0 0 2px ${highlight}`, background: rgba(highlight, 0.06) } : {}}
               >
                 {connColors.length > 0 && (
-                  <span className="mapping-dots">
+                  <span className="mapping-dots" title="Connected priorities">
                     {connColors.map((c, i) => (
                       <span key={i} className="mapping-dot" style={{ background: c }} />
                     ))}

@@ -354,10 +354,12 @@ p { line-height: 1.5; color: var(--text-secondary); }
   background: white;
 }
 .mapping-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
+  border: 1.5px solid white;
+  box-shadow: 0 0 0 0.5px rgba(0,0,0,0.1);
 }
 .mapping-dots {
   display: flex;
@@ -402,6 +404,41 @@ p { line-height: 1.5; color: var(--text-secondary); }
   align-items: center;
   gap: 8px;
   font-size: 13px;
+}
+
+/* ─── Mapping Page (standalone full-width) ─────────── */
+.mapping-page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 20px 40px 40px;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+.mapping-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.mapping-page-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.mapping-page-header p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.mapping-page-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.mapping-page .mapping-diagram {
+  gap: clamp(80px, 10vw, 200px);
+}
+.mapping-page .mapping-node-text {
+  font-size: 14px;
 }
 
 /* ─── Info Tooltip ────────────────────────────────── */
