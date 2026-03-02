@@ -309,7 +309,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .mapping-diagram {
   position: relative;
   display: flex;
-  gap: 80px;
+  justify-content: space-between;
   padding: 16px 0;
   user-select: none;
 }
@@ -323,7 +323,8 @@ p { line-height: 1.5; color: var(--text-secondary); }
   overflow: visible;
 }
 .mapping-col {
-  flex: 1;
+  flex: 0 0 auto;
+  max-width: 320px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -434,8 +435,8 @@ p { line-height: 1.5; color: var(--text-secondary); }
   font-size: 12px;
   color: var(--text-tertiary);
 }
-.mapping-page .mapping-diagram {
-  gap: clamp(80px, 10vw, 200px);
+.mapping-page .mapping-col {
+  max-width: 360px;
 }
 .mapping-page .mapping-node-text {
   font-size: 14px;
