@@ -28,6 +28,8 @@ export function PriorityList({
   useEffect(() => { setLocalPriorities(priorities); }, [priorities]);
 
   const [newItem, setNewItem] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
   const [expandedMF, setExpandedMF] = useState<Set<string>>(new Set());
   const [confirmReorder, setConfirmReorder] = useState<{
     items: Priority[];
@@ -92,6 +94,23 @@ export function PriorityList({
     await api.put(`/audiences/${audienceId}/priorities/${id}`, { motivatingFactor: value });
   }
 
+  function startEditing(item: Priority) {
+    setEditingId(item.id);
+    setEditText(item.text);
+  }
+
+  async function saveEdit(id: string) {
+    const trimmed = editText.trim();
+    if (!trimmed || trimmed === localPriorities.find(p => p.id === id)?.text) {
+      setEditingId(null);
+      return;
+    }
+    setLocalPriorities(prev => prev.map(p => p.id === id ? { ...p, text: trimmed } : p));
+    setEditingId(null);
+    await api.put(`/audiences/${audienceId}/priorities/${id}`, { text: trimmed });
+    onUpdate();
+  }
+
   function toggleMF(id: string) {
     setExpandedMF(prev => {
       const next = new Set(prev);
@@ -109,7 +128,21 @@ export function PriorityList({
         <div className="priority-item-row">
           <span className="drag-handle" {...listeners} {...attributes}>⠿</span>
           <span className={`priority-rank ${isFirst ? 'rank-top' : ''}`}>{index + 1}</span>
-          <span className="priority-text">{item.text}</span>
+          {editingId === item.id ? (
+            <input
+              className="priority-text-input"
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              onBlur={() => saveEdit(item.id)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') saveEdit(item.id);
+                if (e.key === 'Escape') setEditingId(null);
+              }}
+              autoFocus
+            />
+          ) : (
+            <span className="priority-text" onClick={() => startEditing(item)}>{item.text}</span>
+          )}
           {isFirst && <span className="priority-top-label">Top Priority</span>}
           {allowRemove && (
             <button

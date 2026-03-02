@@ -7,24 +7,26 @@ const STEP_LABELS = [
 ];
 
 interface ProgressBarProps {
-  currentStep: number;
+  activeStep: number;
+  maxStep: number;
   onStepClick: (step: number) => void;
 }
 
-export function ProgressBar({ currentStep, onStepClick }: ProgressBarProps) {
+export function ProgressBar({ activeStep, maxStep, onStepClick }: ProgressBarProps) {
   return (
     <div className="progress-bar">
       {STEP_LABELS.map((label, i) => {
         const step = i + 1;
-        const isCompleted = step < currentStep;
-        const isCurrent = step === currentStep;
+        const isReachable = step <= maxStep;
+        const isCompleted = step < activeStep;
+        const isCurrent = step === activeStep;
 
         return (
           <div key={step} className="progress-step">
             {i > 0 && <div className={`progress-connector${isCompleted ? ' completed' : ''}`} />}
             <div
-              className={`progress-dot${isCompleted ? ' completed' : ''}${isCurrent ? ' current' : ''}`}
-              onClick={() => step <= currentStep && onStepClick(step)}
+              className={`progress-dot${isCompleted ? ' completed' : ''}${isCurrent ? ' current' : ''}${!isReachable ? ' disabled' : ''}`}
+              onClick={() => isReachable && onStepClick(step)}
               title={label}
             >
               {isCompleted ? '\u2713' : step}

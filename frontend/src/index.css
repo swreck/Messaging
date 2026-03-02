@@ -505,8 +505,8 @@ p { line-height: 1.5; color: var(--text-secondary); }
   flex-shrink: 0;
 }
 .progress-dot {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -529,18 +529,16 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border-color: var(--accent);
   color: white;
 }
-.progress-dot:hover:not(.current) { border-color: var(--accent); }
+.progress-dot.disabled { cursor: default; opacity: 0.4; }
+.progress-dot:hover:not(.current):not(.disabled) { border-color: var(--accent); }
 .progress-label {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-tertiary);
-  max-width: 80px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .progress-label.current { color: var(--accent); font-weight: 500; }
 .progress-connector {
-  width: 24px;
+  width: 16px;
   height: 2px;
   background: var(--border-light);
   flex-shrink: 0;
@@ -1627,7 +1625,18 @@ p { line-height: 1.5; color: var(--text-secondary); }
   text-align: center;
 }
 .rank-top { color: var(--accent); }
-.priority-text { flex: 1; font-size: 14px; font-weight: 500; }
+.priority-text { flex: 1; font-size: 14px; font-weight: 500; cursor: text; border-radius: var(--radius-sm); padding: 2px 4px; }
+.priority-text:hover { background: var(--bg-hover); }
+.priority-text-input {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 2px 4px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+  font-family: var(--font);
+}
 .priority-top-label {
   font-size: 11px;
   font-weight: 600;
@@ -1964,6 +1973,9 @@ p { line-height: 1.5; color: var(--text-secondary); }
   font-size: 15px;
 }
 .confirm-list-item:last-child { border-bottom: none; }
+.confirm-list-item-clickable { cursor: pointer; border-radius: var(--radius-sm); }
+.confirm-list-item-clickable:hover { background: var(--bg-hover); }
+.confirm-hint { font-size: 13px; color: var(--text-tertiary); margin-top: -16px; margin-bottom: 16px; }
 .confirm-list-item::before {
   content: counter(confirm-counter);
   position: absolute;

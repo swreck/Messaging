@@ -66,7 +66,7 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
           <h2>{draft.audience.name}'s Priorities</h2>
           <ol className="confirm-list">
             {draft.audience.priorities.map(p => (
-              <li key={p.id} className="confirm-list-item">
+              <li key={p.id} className="confirm-list-item confirm-list-item-clickable" onClick={() => setMode('edit')}>
                 <span>{p.text}</span>
                 {p.motivatingFactor && (
                   <span className="confirm-list-mf">{p.motivatingFactor}</span>
@@ -74,6 +74,7 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
               </li>
             ))}
           </ol>
+          <p className="confirm-hint">Click any priority to edit</p>
 
           <div className="confirm-actions">
             <button className="btn btn-primary" onClick={nextStep}>Use this list</button>

@@ -113,7 +113,7 @@ export function ThreeTierShell() {
 
   return (
     <div className="three-tier-shell">
-      <ProgressBar currentStep={activeStep} onStepClick={setActiveStep} />
+      <ProgressBar activeStep={activeStep} maxStep={draft.currentStep} onStepClick={setActiveStep} />
       <div className="step-content">
         {activeStep === 1 && <Step1Prep {...stepProps} />}
         {activeStep === 2 && <Step2AllAboutYou {...stepProps} />}
