@@ -250,11 +250,16 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
             <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
               Question {currentQ + 1} of {questions.length}
             </span>
-            {Object.keys(answers).length === questions.length && (
-              <button className="btn btn-primary" onClick={submitAnswers}>
-                Build My Message
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost btn-sm" onClick={submitAnswers}>
+                Skip remaining — build now
               </button>
-            )}
+              {Object.keys(answers).length === questions.length && (
+                <button className="btn btn-primary" onClick={submitAnswers}>
+                  Build My Message
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

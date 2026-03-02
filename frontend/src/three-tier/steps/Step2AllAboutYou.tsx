@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { StepProps } from './types';
 import { CoachingChat } from '../components/CoachingChat';
 import { DifferentiatorList } from '../../shared/DifferentiatorList';
+import { Modal } from '../../shared/Modal';
+import { MappingDiagram } from '../../shared/MappingDiagram';
 import { api } from '../../api/client';
 
 interface MappingPreview {
@@ -10,11 +12,30 @@ interface MappingPreview {
   orphans: string[];
 }
 
+function buildMappingsFromPreview(
+  preview: MappingPreview,
+  draft: StepProps['draft'],
+): { priorityId: string; elementId: string }[] {
+  const result: { priorityId: string; elementId: string }[] = [];
+  for (const m of preview.mappings) {
+    const priority = draft.audience.priorities.find(p => p.text === m.priorityText || p.rank === m.rank);
+    if (!priority) continue;
+    for (const capText of m.capabilities) {
+      const element = draft.offering.elements.find(e => e.text === capText);
+      if (element) {
+        result.push({ priorityId: priority.id, elementId: element.id });
+      }
+    }
+  }
+  return result;
+}
+
 export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepProps) {
   const hasEnough = draft.offering.elements.length >= 3;
   const [mode, setMode] = useState<'confirm' | 'edit'>(hasEnough ? 'confirm' : 'edit');
   const [preview, setPreview] = useState<MappingPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [showMappingModal, setShowMappingModal] = useState(false);
   const [elements, setElements] = useState(draft.offering.elements.map(e => e.text));
 
   async function addElement(text: string) {
@@ -34,6 +55,7 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
     try {
       const result = await api.post<MappingPreview>('/ai/preview-mapping', { draftId: draft.id });
       setPreview(result);
+      setShowMappingModal(true);
     } finally {
       setLoadingPreview(false);
     }
@@ -60,52 +82,33 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
             </button>
           </div>
 
-          {loadingPreview && (
-            <div className="mapping-preview">
-              <p className="mapping-preview-loading">Maria is analyzing the connections...</p>
-            </div>
-          )}
-
-          {preview && !loadingPreview && (
-            <div className="mapping-preview">
-              <h3>Mapping Preview</h3>
-              {preview.mappings.map((m, i) => (
-                <div key={i} className="mapping-preview-group">
-                  <div className="mapping-preview-priority">
-                    #{m.rank} {m.priorityText}
-                  </div>
-                  <ul className="mapping-preview-caps">
-                    {m.capabilities.map((c, j) => (
-                      <li key={j}>{c}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-              {preview.gaps.length > 0 && (
-                <div className="mapping-preview-section">
-                  <strong>Gaps</strong> (priorities without matching capabilities)
-                  <ul>{preview.gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
-                </div>
-              )}
-              {preview.orphans.length > 0 && (
-                <div className="mapping-preview-section">
-                  <strong>Unmatched capabilities</strong>
-                  <ul>{preview.orphans.map((o, i) => <li key={i}>{o}</li>)}</ul>
-                </div>
-              )}
-
-              <div className="confirm-actions" style={{ marginTop: 16 }}>
-                <button className="btn btn-primary" onClick={nextStep}>Use this list</button>
-                <button className="btn btn-secondary" onClick={() => setMode('edit')}>Let me revise first</button>
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="step-actions">
           <button className="btn btn-ghost" onClick={prevStep}>Back</button>
           <div />
         </div>
+
+        {preview && (
+          <Modal
+            open={showMappingModal}
+            onClose={() => setShowMappingModal(false)}
+            title="Priority → Capability Mapping"
+            className="modal-wide"
+          >
+            <MappingDiagram
+              priorities={draft.audience.priorities.map(p => ({ id: p.id, text: p.text, rank: p.rank }))}
+              elements={draft.offering.elements.map(e => ({ id: e.id, text: e.text }))}
+              mappings={buildMappingsFromPreview(preview, draft)}
+              audienceName={draft.audience.name}
+              offeringName={draft.offering.name}
+            />
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => { setShowMappingModal(false); setMode('edit'); }}>Revise list</button>
+              <button className="btn btn-primary" onClick={() => { setShowMappingModal(false); nextStep(); }}>Use this list</button>
+            </div>
+          </Modal>
+        )}
       </div>
     );
   }

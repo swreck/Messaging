@@ -4,6 +4,8 @@ import type { StepProps } from './types';
 import { api } from '../../api/client';
 import { ThreeTierTable } from '../components/ThreeTierTable';
 import { Spinner } from '../../shared/Spinner';
+import { Modal } from '../../shared/Modal';
+import { MappingDiagram } from '../../shared/MappingDiagram';
 import type { TableVersion, ReviewResponse, DirectionResponse, TableSnapshot } from '../../types';
 
 export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToStep }: StepProps) {
@@ -15,6 +17,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [snapshotLabel, setSnapshotLabel] = useState('');
   const [hasEdited, setHasEdited] = useState(false);
+  const [showMapping, setShowMapping] = useState(false);
 
   // Direction
   const [directionText, setDirectionText] = useState('');
@@ -248,6 +251,11 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         <button className="btn btn-secondary btn-sm" onClick={refineLanguage} disabled={anyBusy}>
           {refining ? <><Spinner size={12} /> Refining...</> : 'Refine Language'}
         </button>
+        {draft.mappings.length > 0 && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowMapping(true)}>
+            Show mapping
+          </button>
+        )}
         {hasEdited && (
           <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={anyBusy}>
             {revising ? <><Spinner size={12} /> Revising...</> : 'Learn from my edits & revise'}
@@ -312,6 +320,35 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           </button>
         </div>
       </div>
+
+      <Modal
+        open={showMapping}
+        onClose={() => setShowMapping(false)}
+        title="Priority → Capability Mapping"
+        className="modal-wide"
+      >
+        <MappingDiagram
+          priorities={draft.audience.priorities.map(p => ({ id: p.id, text: p.text, rank: p.rank }))}
+          elements={draft.offering.elements.map(e => ({ id: e.id, text: e.text }))}
+          mappings={draft.mappings.map(m => ({ priorityId: m.priorityId, elementId: m.elementId }))}
+          audienceName={draft.audience.name}
+          offeringName={draft.offering.name}
+          onChange={async (newMappings) => {
+            const old = draft.mappings;
+            for (const o of old) {
+              if (!newMappings.some(n => n.priorityId === o.priorityId && n.elementId === o.elementId)) {
+                await api.delete(`/mappings/${draft.id}/${o.id}`);
+              }
+            }
+            for (const n of newMappings) {
+              if (!old.some(o => o.priorityId === n.priorityId && o.elementId === n.elementId)) {
+                await api.post(`/mappings/${draft.id}`, { priorityId: n.priorityId, elementId: n.elementId });
+              }
+            }
+            await refreshDraft();
+          }}
+        />
+      </Modal>
     </div>
   );
 }

@@ -4,10 +4,11 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   title: string;
+  className?: string;
   children: React.ReactNode;
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps) {
+export function Modal({ open, onClose, title, className, children }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -22,7 +23,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" ref={overlayRef} onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}>
+    <div className={`modal-overlay${className ? ` ${className}` : ''}`} ref={overlayRef} onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}>
       <div className="modal-card">
         <div className="modal-header">
           <h2>{title}</h2>
