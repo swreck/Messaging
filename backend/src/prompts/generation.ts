@@ -183,8 +183,11 @@ Tier 2 has exactly 5 columns (or 6 if the product story needs two). The column t
 YOU MUST USE THESE EXACT categoryLabel VALUES — do not invent creative alternatives:
 
 1. categoryLabel: "Focus"
-   "We exist for YOU." A concrete commitment that this company's focus, products, and processes are built around THIS audience's specific needs. State the commitment as a plain fact. NOT credentials, NOT product features, NOT flattery about the audience.
+   "We exist for YOU." A concrete commitment that this company's focus, products, and processes are built around THIS audience's specific needs. State the commitment as a plain fact.
+   NOT credentials, NOT product features, NOT flattery about the audience. NEVER mention founders, team backgrounds, academic affiliations, or where people trained/practiced. The evidence is about the COMPANY AND PRODUCT scope, not the people behind them.
    FORMAT: "[Audience type] is our focus because [concrete evidence of commitment to their workflows]"
+   EXAMPLE: "Oncology diagnosis within a hospital setting is the entire focus of our company and products"
+   BAD: "Hospital pathology is our focus because our founders practice oncology at University of Chicago" — this is a credential/origin story, not a commitment
 
 2. categoryLabel: "Product"
    Targeted product differentiation. What's structurally different about the product and why it matters to this audience. Use priorities related to product features or capabilities.
@@ -201,13 +204,16 @@ YOU MUST USE THESE EXACT categoryLabel VALUES — do not invent creative alterna
 6. categoryLabel: "Social proof"
    CRITICAL: This column is ONLY for adoption evidence. Do NOT put a regular priority→mechanism statement here. The statement text MUST name specific customers, institutions, adoption numbers, or peer validation.
    If you have a priority about trust or reputation, put it in Product or Support. Social proof uses ORPHAN adoption data.
-   FORMAT: "[Trust/credibility statement] because [named customers/institutions/numbers]"
+   FORMAT: "[Confidence in success for their specific environment] because [named customers/institutions/numbers]"
+   GOOD: "You can trust the results in your environment because University of Chicago, Geisinger Clinic, and Rush are active research partners"
+   BAD: "Trusted by peers because Geisinger and Rush are evaluating" — "trusted by peers" is generic. Frame it as confidence in success for THIS audience's specific situation.
 
 DO NOT use labels like "Patient Outcomes," "Product Value," "Operational Control," "Clinical Credibility," or "Deployment Support." Those are NOT the system. The labels above are.
 
-WRITING ABOUT FEARS/CONCERNS: When a priority expresses a fear or concern, write it as: "[fear priority] because [concrete mechanism that resolves it]." Do NOT insert transitional words like "addressed," "handled," or "eased" between the priority and "because."
-   WRONG: "Fear of integration disruption eased because your team trains before go-live"
-   RIGHT: "Fear of integration disruption because your team trains on the full workflow first"
+WRITING ABOUT FEARS/CONCERNS: When a priority expresses a fear or concern, reframe it as the fear being ELIMINATED. The audience should feel the concern resolved, not restated. Prepend "No" or rephrase positively. Do NOT insert transitional words like "addressed," "handled," or "eased."
+   WRONG: "Fear of integration disruption because structured onboarding covers your workflow" — reads as if you are providing fear
+   RIGHT: "No fear of integration disruption because your team trains on the full workflow first"
+   ALSO RIGHT: "Integration without disruption because structured onboarding covers your entire workflow"
 
 RESULT: 5 or 6 columns in this exact order. Never fewer than 5. Never more than 6.
 
