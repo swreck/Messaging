@@ -57,14 +57,17 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
     }
   }
 
-  async function submitAnswers() {
+  async function doSubmit(
+    finalAnswers: Record<number, boolean>,
+    finalExplanations: Record<number, string>,
+  ) {
     setPhase('applying');
     try {
       const answerList = questions.map((q, i) => ({
         priorityId: q.priorityId,
         elementId: q.elementId,
-        confirmed: answers[i] !== false, // default to confirmed if not explicitly rejected
-        context: explanations[i] || undefined,
+        confirmed: finalAnswers[i] !== false,
+        context: finalExplanations[i] || undefined,
       }));
 
       const res = await api.post<{
@@ -79,6 +82,10 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
       setError(err.message || 'Something went wrong.');
       setPhase('questions');
     }
+  }
+
+  function submitAnswers() {
+    doSubmit(answers, explanations);
   }
 
   async function applyResult(tierResult: TierResult) {
@@ -123,22 +130,29 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
   }
 
   function handleAnswer(questionIndex: number, confirmed: boolean) {
-    setAnswers(prev => ({ ...prev, [questionIndex]: confirmed }));
+    const newAnswers = { ...answers, [questionIndex]: confirmed };
+    setAnswers(newAnswers);
     setExplaining(null);
     setExplainText('');
     if (questionIndex < questions.length - 1) {
       setCurrentQ(questionIndex + 1);
+    } else {
+      doSubmit(newAnswers, explanations);
     }
   }
 
   function handleExplainSubmit(questionIndex: number) {
     if (!explainText.trim()) return;
-    setExplanations(prev => ({ ...prev, [questionIndex]: explainText.trim() }));
-    setAnswers(prev => ({ ...prev, [questionIndex]: true })); // explanation = confirmed with context
+    const newAnswers = { ...answers, [questionIndex]: true };
+    const newExplanations = { ...explanations, [questionIndex]: explainText.trim() };
+    setAnswers(newAnswers);
+    setExplanations(newExplanations);
     setExplaining(null);
     setExplainText('');
     if (questionIndex < questions.length - 1) {
       setCurrentQ(questionIndex + 1);
+    } else {
+      doSubmit(newAnswers, newExplanations);
     }
   }
 
