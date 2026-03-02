@@ -12,6 +12,42 @@ import { AUDIENCE_DISCOVERY_SYSTEM } from '../prompts/audienceDiscovery.js';
 const router = Router();
 router.use(requireAuth);
 
+// ─── Generation helper: pin priority text + validate ─────
+
+interface TierGenResult {
+  tier1: { text: string; priorityId: string };
+  tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
+}
+
+function priorityPreserved(statement: string, priorityText: string): boolean {
+  const stop = new Set(['the', 'our', 'my', 'your', 'for', 'of', 'a', 'an', 'to', 'in', 'and', 'is', 'are', 'that', 'this', 'with', 'on', 'at', 'by', 'from', 'it']);
+  const words = priorityText.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !stop.has(w));
+  if (words.length === 0) return true;
+  const beforeBecause = (statement.toLowerCase().split(/\bbecause\b/)[0] || statement.toLowerCase());
+  const found = words.filter(w => beforeBecause.includes(w));
+  return found.length >= Math.ceil(words.length * 0.5);
+}
+
+async function generateTier(
+  convertMessage: string,
+  rank1Priority: { text: string } | undefined,
+): Promise<TierGenResult> {
+  // Pin the Rank 1 priority text at the end of the user message
+  const reminder = rank1Priority
+    ? `\n\n══ CRITICAL ══\nYour Tier 1 MUST begin with the Rank 1 priority text: "${rank1Priority.text}"\nDo NOT substitute a product metric. Use the audience's exact strategic concern.`
+    : '';
+
+  let result = await callAIWithJSON<TierGenResult>(CONVERT_LINES_SYSTEM, convertMessage + reminder, 'elite');
+
+  // Validate: does Tier 1 actually preserve the priority text?
+  if (rank1Priority && !priorityPreserved(result.tier1.text, rank1Priority.text)) {
+    const correction = `\n\n══ CORRECTION ══\nYour previous Tier 1 was: "${result.tier1.text}"\nThis substitutes a product metric for the audience's priority. The Rank 1 priority is: "${rank1Priority.text}"\nRewrite Tier 1 so it begins with the audience's strategic concern, then "because [specific hook]." Fix any other Tier 2 statements with the same problem.`;
+    result = await callAIWithJSON<TierGenResult>(CONVERT_LINES_SYSTEM, convertMessage + correction, 'elite');
+  }
+
+  return result;
+}
+
 // ─── Conversation History ────────────────────────────────
 
 router.get('/conversation/:draftId/:step', async (req: Request, res: Response) => {
@@ -312,10 +348,8 @@ ${draft.audience.priorities
 ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements.map(e => `- "${e.text}"`).join('\n')}` : ''}
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
-    const tierResult = await callAIWithJSON<{
-      tier1: { text: string; priorityId: string };
-      tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
-    }>(CONVERT_LINES_SYSTEM, convertMessage, 'elite');
+    const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
+    const tierResult = await generateTier(convertMessage, rank1 || undefined);
 
     res.json({ status: 'complete', result: tierResult, questions: [] });
     return;
@@ -393,10 +427,8 @@ ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority
 ${userContext.length > 0 ? `\nUSER NOTES (the user provided these clarifications during review):\n${userContext.join('\n')}` : ''}
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
-  const tierResult = await callAIWithJSON<{
-    tier1: { text: string; priorityId: string };
-    tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
-  }>(CONVERT_LINES_SYSTEM, convertMessage, 'elite');
+  const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
+  const tierResult = await generateTier(convertMessage, rank1 || undefined);
 
   res.json({ status: 'complete', result: tierResult });
 });
@@ -455,10 +487,8 @@ ${draft.audience.priorities
 ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements.map(e => `- "${e.text}"`).join('\n')}` : ''}
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
-  const result = await callAIWithJSON<{
-    tier1: { text: string; priorityId: string };
-    tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
-  }>(CONVERT_LINES_SYSTEM, userMessage, 'elite');
+  const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
+  const result = await generateTier(userMessage, rank1 || undefined);
 
   res.json(result);
 });

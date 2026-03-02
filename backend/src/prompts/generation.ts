@@ -296,6 +296,16 @@ For column labels:
 For Social proof column:
 □ Does the statement NAME specific customers, adoption numbers, or peer institutions? If not, rewrite.
 
+═══════════════════════════════════════════════════════════
+STOP — CHECK YOUR TIER 1 BEFORE OUTPUTTING
+═══════════════════════════════════════════════════════════
+
+Read the Rank 1 priority text from the INPUT one more time. Now read the Tier 1 you are about to write. Does the FIRST HALF (before "because") contain the audience's strategic concern in their own words?
+
+If your Tier 1 starts with a product metric — "Low cost per test," "Fast results," "Accurate testing," "Reliable diagnostics," "Compliance automation" — you have made the #1 error. The audience did NOT say that. They said something like "Protecting the financial health of our hospital" or "Better outcomes for my cancer patients." USE THEIR WORDS.
+
+Same check for every Tier 2 statement.
+
 RESPOND WITH JSON:
 {
   "tier1": { "text": "...", "priorityId": "..." },
