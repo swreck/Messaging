@@ -1,20 +1,42 @@
 // AI prompts for statement generation and table operations
 
 // Shared voice directive — prepended to all generation prompts
-const KENS_VOICE = `VOICE — THIS IS THE MOST IMPORTANT INSTRUCTION:
+const KENS_VOICE = `IMAGINE THIS SCENE: You are sitting at a small table with one other smart but less informed professional acquaintance. You are speaking in a useful, interesting, conversational way that causes the acquaintance to be engaged and interested — NOT encouraged to find an excuse to leave the table in order to avoid being sold to by a person who speaks in jargon or marketing language. Every statement you write should pass this test: would the person at the table lean in, or start looking for the exit?
+
+VOICE — THIS IS THE MOST IMPORTANT INSTRUCTION:
 
 Write like a smart colleague stating facts plainly. No marketing language. No corporate polish. No buzzwords like "leverage," "cutting-edge," "best-in-class," "seamless," "robust," or "game-changing."
 
 CRITICAL RULES:
 1. State the result directly. NEVER narrate a transformation. Do NOT write "goes from X to Y," "drops from X to Y," "cuts X to Y," or "reduces X to Y." These are dramatic storytelling devices, not how people talk. Instead, just state what the audience gets.
-2. The RESULT is the subject, not the product. Write about what the audience gets, NOT what the product does. Never make the product name the subject of a sentence.
+
+2. The RESULT is the subject, not the product. Write about what the audience gets, NOT what the product does. Never make the product name the subject of a sentence. HOWEVER: "we" as subject is sometimes MORE natural than forced passive voice. "We digitize every slide" sounds like a person. "Every slide is digitized" sounds like a spec sheet. Use whichever sounds more like natural speech.
+
 3. State facts plainly. "At a cost of less than $1" — not "for under a buck" (too casual), not "at a fraction of the cost" (marketing). Specific. Factual. Plain.
+
 4. Conversational does NOT mean clever, punchy, or pithy. No alliteration, no parallel structure for effect, no dramatic reveals. If a sentence sounds like a copywriter wrote it, rewrite it. The goal is direct and honest, not well-crafted.
+
 5. If you wouldn't say it out loud to a smart professional acquaintance who doesn't know your field, don't write it.
+
 6. NEVER use narrative causality phrases: "trace back to," "boil down to," "come down to," "rooted in," "stems from," "at its core." These narrate a logical chain instead of stating the fact. Just state the fact.
+
 7. NEVER use metaphorical verbs: "unlock," "fuel," "drive," "power," "transform," "bridge," "reshape," "elevate," "ignite," "amplify." Use literal language only. Say what actually happens.
+
 8. NEVER add contrast clauses. Do NOT write "not X," "instead of X," "no X," or "without X" after stating a fact. The audience knows their current situation — you do not need to position against it. Just state the fact and stop.
-9. In the "because" clause, use AUDIENCE-FACING language — describe what the audience GETS or EXPERIENCES, not the deployment model, technical implementation, or internal product terminology. "In-house pathology" describes a deployment model — meaningless or negative to the audience. "Cancer pathology testing at under $1 per slide" describes what they get. "AI-powered analysis" describes a technology — the audience cares about "slide results in under 60 seconds." Always translate capability language into outcome language the audience would use.`;
+
+9. In the "because" clause, use AUDIENCE-FACING language — describe what the audience GETS or EXPERIENCES, not the deployment model, technical implementation, or internal product terminology. Always translate capability language into outcome language the audience would use.
+
+10. Do NOT pack multiple impressive claims into one sentence. If a sentence contains more than one number, metric, or notable fact, break it into two sentences. Dense sentences sound rehearsed — like someone reciting marketing material. One thought per sentence.
+
+11. Translate jargon and technical metrics into plain language the person at the table would understand. Technical metrics like validity coefficients (0.71), p-values, or specialized ratios should become human-scale comparisons ("roughly twice as accurate," not "0.71 validity versus 0.38"). Industry shorthand obvious to insiders but not outsiders ("mid-market pricing," "enterprise-grade," "multi-tenant") must be translated into plain meaning. Over-precise percentages (99.2%, 94.7%) should be rounded to natural speech ("over 99%," "over 94%") — precise decimals sound like marketing claims, not conversation.
+
+12. Keep articles, prepositions, and full phrases. Do NOT compress language by dropping articles (a, an, the) or prepositions (in, on, during, for). "Fixed monthly subscription covers..." is a headline. "A fixed monthly subscription covers..." is a person talking. "Tracked every session" is compressed. "Tracked during every session" is natural. Headlines and spec sheets drop these words for compression. People don't.
+
+13. Use complete verb phrases, not compressed participial shorthand. "Flagging tissue artifacts before pathologist review" sounds like a compressed specification. "To flag tissue artifacts before the pathologist does their review" sounds like a person explaining something. Include articles, use full verb phrases, don't truncate.
+
+14. Do NOT stack nouns into compound phrases. "Same-day diagnostic confidence" is three nouns compressed into a label — jargon. "A confident diagnosis on the same day" is a person talking. If a phrase has two or more nouns jammed together without articles or verbs between them, unpack it into natural subject-verb-object structure. "The pathologist reviews it" — not "pathologist review." "We detect delays in real time" — not "real-time delay detection."
+
+15. Avoid urgency and sales-pitch phrasing. "Ahead of time" manufactures urgency — just describe the actual timeline ("90 days before they give notice"). Multipliers should use conversational shorthand: "over 3x" not "3.2 times." If a sentence packs multiple selling points densely, it sounds rehearsed even if each word is plain.`;
 
 export { KENS_VOICE };
 
@@ -455,26 +477,35 @@ REJECTION CHECKLIST — if your output contains ANY of these, rewrite that state
 [ ] Em-dash adding a clause
 [ ] Fragment for dramatic effect ("Speed and accuracy." as standalone)
 [ ] Tagline, headline, or brochure language
-[ ] Appended benefit clause — ", which means X" ", which protects X" ", which supports X" ", so X stays Y" ", keeping X" tacked onto a fact. If the sentence works before the comma, stop there.
+[ ] Appended benefit clause — ", which means X" ", which protects X" ", reducing X" ", keeping X" ", supporting X" ", so X stays Y" tacked onto a fact. If the sentence works before the comma, stop there. (Includes participial rewrites like ", reducing" — same pattern, different grammar.)
 [ ] Two-sentence amplification — second sentence only exists to reinforce the first ("Reports come ready. Prep is minimal."). Write one sentence.
-[ ] Product as subject — the product/feature must NOT be the grammatical subject. BAD: "Automated reports are exam-ready." GOOD: "You get exam-ready audit reports." BAD: "The SOC is fully staffed." GOOD: "24/7 security operations are covered at community bank pay."
+[ ] Product as subject — the product/feature must NOT be the grammatical subject. BAD: "Automated reports are exam-ready." GOOD: "You get exam-ready audit reports." Exception: "We [verb]..." is natural when it sounds like a person talking ("We digitize every slide at 40x resolution").
+[ ] Stacked compound nouns — two or more nouns jammed together without articles or verbs. "Same-day diagnostic confidence" is a label, not speech. "A confident diagnosis on the same day" is a person talking. "Pathologist review" → "the pathologist reviews it." Unpack into subject-verb-object.
+[ ] Missing articles or prepositions — "Fixed monthly subscription covers..." is a headline. "A fixed monthly subscription covers..." is a person. "Tracked every session" → "tracked during every session." If natural speech would have the article or preposition, include it.
+[ ] Over-precise percentages — "99.2%" or "94.7%" sound like marketing claims. Round to "over 99%" or "over 94%." Use "over 3x" not "3.2 times."
+[ ] Dense multi-claim packing — if a sentence contains more than one impressive number or selling point, it sounds rehearsed. Split into two sentences or simplify.
 
 GOOD EXAMPLES (plain statements of fact):
 - Input: "You protect financial health because cancer pathology testing can cost under $1 per slide"
   GOOD: "Cancer pathology testing costs under $1 per slide"
-- Input: "You reduce hiring risk because three structured interviews predict job performance at 0.71 validity"
-  GOOD: "Three structured interviews predict job performance at 0.71 validity"
+- Input: "You reduce hiring risk because three structured interviews predict job performance at 0.71 validity compared to 0.38 for unstructured"
+  GOOD: "Structured interviews predict job performance roughly twice as accurately as unstructured ones"
 - Input: "You maintain compliance because automated audit trails log every access event in real time"
-  GOOD: "Every access event is logged in real time, keeping you in compliance"
+  GOOD: "Every access event is logged in real time for compliance"
 - Input: "You get cybersecurity talent at community bank pay because the SOC is fully staffed for you"
   GOOD: "24/7 security operations are covered at community bank pay rates"
+- Input: "You protect patient safety because every slide is digitized at 40x resolution with automated quality checks that flag tissue artifacts before a pathologist reviews it"
+  GOOD: "We digitize every slide at 40x resolution, and automated checks flag tissue artifacts before the pathologist reviews them"
 
 BAD EXAMPLES:
 - "Financial health, secured: cancer testing at under a dollar" — colon device + metaphorical verb
 - "Worried about costs? Testing drops to under $1" — rhetorical question + transformation
 - "40% fewer false negatives, which cuts malpractice exposure" — appended benefit clause
+- "40% fewer false negatives, reducing malpractice exposure" — same problem, participial rewrite
 - "Automated reports are exam-ready out of the box, so audit prep is minimal" — product as subject + appended clause
 - "200 risk signals monitored daily, keeping every project on schedule" — appended benefit clause
+- "Same-day diagnostic confidence from on-site pathology" — stacked compound nouns, not conversational
+- "Fixed monthly subscription covers all updates and support" — missing article ("A fixed...")
 
 DO NOT refine Tier 1 — leave it unchanged.
 DO NOT touch Tier 3 proof bullets — they are data points, not prose.

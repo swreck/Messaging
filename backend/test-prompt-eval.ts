@@ -17,8 +17,8 @@ import { REFINE_LANGUAGE_SYSTEM } from './src/prompts/generation.js';
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const ITERATE = process.argv.includes('--iterate');
 const MAX_ROUNDS = 5;
-const GEN_MODEL = 'claude-sonnet-4-6';   // same as production refine
-const EVAL_MODEL = 'claude-sonnet-4-6';  // evaluator — same capability, different role
+const GEN_MODEL = 'claude-opus-4-6';    // matches production (elite tier)
+const EVAL_MODEL = 'claude-opus-4-6';   // evaluator — same capability, different role
 
 // ─── Test Scenarios ──────────────────────────────────────
 
@@ -91,6 +91,8 @@ const SCENARIOS: Scenario[] = [
 
 const EVALUATOR_SYSTEM = `You are a strict quality evaluator for business messaging text. You are NOT the writer — you are the independent reviewer. Your ONLY job is to check each statement against the rules below and report violations. Be harsh. If something is borderline, call it a violation.
 
+THE SMALL-TABLE TEST: Imagine the statement being said out loud at a small table to one smart but less informed professional acquaintance. Would the person lean in with interest? Or start looking for an excuse to leave because they feel sold to? Pass the first, fail the second.
+
 COLUMN CONTEXT — each statement belongs to a column type:
 - **Focus**: A simple declaration of company commitment ("X is the entire focus of our company"). These are SUPPOSED to be company-centric. Do NOT flag rule 9 on Focus statements. They're often the simplest statement in the table.
 - **Social proof**: Named customers, institutions, or adoption numbers. These are factual references. Apply rules lightly — the main concern is marketing language, not subject/structure.
@@ -114,13 +116,21 @@ RULES — each statement must pass ALL applicable rules:
 
 8. NO MARKETING BUZZWORDS. leverage, seamless, cutting-edge, best-in-class, robust, game-changing, end-to-end, comprehensive, holistic, enterprise-level.
 
-9. RESULT IS THE SUBJECT, NOT THE PRODUCT (except Focus and Social proof columns). The sentence should describe what the audience gets. "The platform monitors 200 signals" — product as subject, fail. "200 risk signals monitored per project daily" — result as subject, pass.
+9. RESULT IS THE SUBJECT, NOT THE PRODUCT (except Focus and Social proof columns). The sentence should describe what the audience gets. "The platform monitors 200 signals" — product as subject, fail. "We monitor 200 signals" — acceptable, sounds like a person. "200 risk signals are monitored per project daily" — forced passive, borderline.
 
 10. WORD COUNT ≤ 20.
 
-11. NO APPENDED BENEFIT CLAUSES. ", which protects..." or ", which directly improves..." or "so X stays Y" tacked onto the end of a fact. These read as persuasive linkage. State the fact. Let the connection speak for itself. HOWEVER: a natural "so" or "which" connecting two parts of the SAME fact is OK ("AI handles screening so pathologists focus on complex cases" — both halves describe the same operational reality).
+11. NO APPENDED BENEFIT CLAUSES. ", which protects..." or ", which directly improves..." or ", reducing X" or ", keeping X" or "so X stays Y" tacked onto the end of a fact. These read as persuasive linkage — including participial rewrites. State the fact. Let the connection speak for itself. HOWEVER: a natural "so" or "which" connecting two parts of the SAME fact is OK ("AI handles screening so pathologists focus on complex cases" — both halves describe the same operational reality).
 
-THE KEY TEST: Read it out loud. Does it sound like a person stating a fact at a table? Or does it sound like someone trying to be persuasive or clever? Pass the first, fail the second.
+12. NO STACKED COMPOUND NOUNS. Two or more nouns jammed together without articles or verbs. "Same-day diagnostic confidence" is a label, not speech. "Pathologist review" is compressed — "the pathologist reviews it" is how people talk. "Real-time delay detection" is a spec sheet — "we detect delays in real time" is a person talking.
+
+13. NO MISSING ARTICLES OR PREPOSITIONS. "Fixed monthly subscription covers..." is a headline. "A fixed monthly subscription covers..." is a person. "Tracked every session" is compressed — "tracked during every session" is natural. If natural speech would have the article or preposition, it must be there.
+
+14. NO OVER-PRECISE PERCENTAGES. "99.2%" or "94.7%" sound like marketing claims. Should be "over 99%" or "over 94%." Technical metrics (validity coefficients, p-values) should be translated to human-scale comparisons. "3.2 times" should be "over 3x."
+
+15. NO DENSE MULTI-CLAIM PACKING. If a sentence contains more than one impressive number or selling point, it sounds rehearsed. Should be split into two sentences or simplified.
+
+16. NO URGENCY PHRASES. "Ahead of time" manufactures urgency. Just describe the actual timeline plainly.
 
 RESPOND WITH JSON ONLY:
 {
