@@ -447,30 +447,34 @@ The main move is REORDERING. Lead with the concrete fact, then connect it to the
 - The Focus column is often the simplest statement — a plain declaration of commitment like "Oncology diagnosis is the entire focus of our company." Don't make it fancier than that.
 
 REJECTION CHECKLIST — if your output contains ANY of these, rewrite that statement before returning:
-[ ] Rhetorical question ("Worried about X?" "What if X?") — real people don't talk to colleagues in rhetorical questions
-[ ] Colon as stylistic device ("Your results: fast" "Accuracy you can trust: ...") — that's ad copy layout
-[ ] Narrated transformation ("from X to Y" "drops from X to Y" "one week to seconds") — just state the result
-[ ] Metaphorical verb ("fades" "unlocks" "fuels" "drives" "reshapes" "elevates" "secures" "stays protected")
+[ ] Rhetorical question ("Worried about X?") — nobody talks to colleagues like that
+[ ] Colon as stylistic device ("Your results: fast") — ad copy layout
+[ ] Narrated transformation ("from X to Y" "drops from X to Y" "one week to seconds" "used to be X")
+[ ] Metaphorical verb ("fades" "unlocks" "fuels" "drives" "reshapes" "elevates" "protects" "secures" "guards" "shields" — when applied to abstract nouns)
 [ ] Contrast clause ("not X" "instead of X" "without X" "no tradeoff")
 [ ] Em-dash adding a clause
-[ ] Fragment used for dramatic effect ("Speed and accuracy." as a standalone)
-[ ] Any phrase that sounds like a tagline, headline, or brochure line
+[ ] Fragment for dramatic effect ("Speed and accuracy." as standalone)
+[ ] Tagline, headline, or brochure language
+[ ] Appended benefit clause — ", which means X" ", which protects X" ", which supports X" ", so X stays Y" ", keeping X" tacked onto a fact. If the sentence works before the comma, stop there.
+[ ] Two-sentence amplification — second sentence only exists to reinforce the first ("Reports come ready. Prep is minimal."). Write one sentence.
+[ ] Product as subject — the product/feature must NOT be the grammatical subject. BAD: "Automated reports are exam-ready." GOOD: "You get exam-ready audit reports." BAD: "The SOC is fully staffed." GOOD: "24/7 security operations are covered at community bank pay."
 
-GOOD EXAMPLES (diverse industries — notice they're all just plain statements of fact):
+GOOD EXAMPLES (plain statements of fact):
 - Input: "You protect financial health because cancer pathology testing can cost under $1 per slide"
-  GOOD: "Cancer pathology testing at under $1 per slide protects the hospital's financial health"
+  GOOD: "Cancer pathology testing costs under $1 per slide"
 - Input: "You reduce hiring risk because three structured interviews predict job performance at 0.71 validity"
-  GOOD: "Three structured interviews predict job performance at 0.71 validity, which directly reduces hiring risk"
+  GOOD: "Three structured interviews predict job performance at 0.71 validity"
 - Input: "You maintain compliance because automated audit trails log every access event in real time"
-  GOOD: "Automated audit trails log every access event in real time and keep you in compliance"
-- Input: "You keep staff productive because the average employee onboards in two days"
-  GOOD: "Average employee onboards in two days. Staff stay productive through the transition"
+  GOOD: "Every access event is logged in real time, keeping you in compliance"
+- Input: "You get cybersecurity talent at community bank pay because the SOC is fully staffed for you"
+  GOOD: "24/7 security operations are covered at community bank pay rates"
 
-BAD EXAMPLES (these are what we're trying to avoid):
+BAD EXAMPLES:
 - "Financial health, secured: cancer testing at under a dollar" — colon device + metaphorical verb
-- "Worried about costs? Testing drops to under $1" — rhetorical question + narrated transformation
-- "Hiring risk fades when interviews hit 0.71 validity" — metaphorical verb + narrative structure
-- "Compliance you can count on: every access event logged" — tagline + colon device
+- "Worried about costs? Testing drops to under $1" — rhetorical question + transformation
+- "40% fewer false negatives, which cuts malpractice exposure" — appended benefit clause
+- "Automated reports are exam-ready out of the box, so audit prep is minimal" — product as subject + appended clause
+- "200 risk signals monitored daily, keeping every project on schedule" — appended benefit clause
 
 DO NOT refine Tier 1 — leave it unchanged.
 DO NOT touch Tier 3 proof bullets — they are data points, not prose.
