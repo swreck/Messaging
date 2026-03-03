@@ -9,6 +9,14 @@ import { buildChapterPrompt, BLEND_SYSTEM, JOIN_CHAPTERS_SYSTEM, REFINE_CHAPTER_
 import { getMediumSpec } from '../prompts/mediums.js';
 import { AUDIENCE_DISCOVERY_SYSTEM } from '../prompts/audienceDiscovery.js';
 import { getLearning, updateLearning, buildLearningPromptBlock } from '../lib/learning.js';
+import {
+  isVoiceCheckEnabled,
+  checkStatements,
+  checkProse,
+  buildViolationFeedback,
+  buildProseViolationFeedback,
+  type StatementInput,
+} from '../services/voiceCheck.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -47,6 +55,39 @@ async function generateTier(
   }
 
   return result;
+}
+
+async function generateTierWithVoiceCheck(
+  convertMessage: string,
+  rank1Priority: { text: string } | undefined,
+  userId: string,
+): Promise<TierGenResult> {
+  const result = await generateTier(convertMessage, rank1Priority);
+
+  if (!await isVoiceCheckEnabled(userId)) return result;
+
+  // Extract all statements for voice check
+  const statements: StatementInput[] = [];
+  statements.push({ text: result.tier1.text, column: 'Tier 1' });
+  for (const t2 of result.tier2) {
+    statements.push({ text: t2.text, column: t2.categoryLabel });
+  }
+
+  try {
+    const check = await checkStatements(statements);
+    if (check.passed) {
+      console.log('[VoiceCheck] All tier statements passed');
+      return result;
+    }
+
+    // Retry once with violation feedback
+    console.log(`[VoiceCheck] ${check.violations.length} statement violations, retrying generation`);
+    const feedback = buildViolationFeedback(check.violations);
+    return await generateTier(convertMessage + feedback, rank1Priority);
+  } catch (err) {
+    console.error('[VoiceCheck] Statement evaluation failed, returning original:', err);
+    return result;
+  }
 }
 
 // ─── Conversation History ────────────────────────────────
@@ -353,7 +394,7 @@ ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
     const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
-    const tierResult = await generateTier(convertMessage, rank1 || undefined);
+    const tierResult = await generateTierWithVoiceCheck(convertMessage, rank1 || undefined, req.user!.userId);
 
     res.json({ status: 'complete', result: tierResult, questions: [] });
     return;
@@ -452,7 +493,7 @@ ${userContext.length > 0 ? `\nUSER NOTES (the user provided these clarifications
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
   const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
-  const tierResult = await generateTier(convertMessage, rank1 || undefined);
+  const tierResult = await generateTierWithVoiceCheck(convertMessage, rank1 || undefined, req.user!.userId);
 
   res.json({ status: 'complete', result: tierResult });
 });
@@ -514,7 +555,7 @@ ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
   const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
-  const result = await generateTier(userMessage, rank1 || undefined);
+  const result = await generateTierWithVoiceCheck(userMessage, rank1 || undefined, req.user!.userId);
 
   res.json(result);
 });
@@ -570,9 +611,31 @@ ${draft.tier2Statements.map((t2, i) => `[${i}] "${t2.text}"`).join('\n')}
 AUDIENCE PRIORITIES (for reference — the priority text must remain visible in each statement):
 ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n')}`;
 
-  const result = await callAIWithJSON<{
+  let result = await callAIWithJSON<{
     refinedTier2: { index: number; text: string }[];
   }>(REFINE_LANGUAGE_SYSTEM, userMessage, 'elite');
+
+  // Voice check refined statements
+  if (await isVoiceCheckEnabled(req.user!.userId)) {
+    try {
+      const statements: StatementInput[] = result.refinedTier2.map(r => ({
+        text: r.text,
+        column: draft.tier2Statements[r.index]?.categoryLabel || 'Product',
+      }));
+      const check = await checkStatements(statements);
+      if (!check.passed) {
+        console.log(`[VoiceCheck] Refine language: ${check.violations.length} violations, retrying`);
+        const feedback = buildViolationFeedback(check.violations);
+        result = await callAIWithJSON<{
+          refinedTier2: { index: number; text: string }[];
+        }>(REFINE_LANGUAGE_SYSTEM, userMessage + feedback, 'elite');
+      } else {
+        console.log('[VoiceCheck] Refined statements all passed');
+      }
+    } catch (err) {
+      console.error('[VoiceCheck] Refine language evaluation failed, returning original:', err);
+    }
+  }
 
   res.json(result);
 });
@@ -761,7 +824,23 @@ ${story.chapters.filter((c) => c.chapterNum < chapterNum).map((c) => `CHAPTER ${
 
 Write Chapter ${chapterNum}: "${ch.name}"`;
 
-  const content = await callAI(systemPrompt, userMessage, 'elite');
+  let content = await callAI(systemPrompt, userMessage, 'elite');
+
+  // Voice check chapter prose
+  if (await isVoiceCheckEnabled(req.user!.userId)) {
+    try {
+      const check = await checkProse(content, `Chapter ${chapterNum}: ${ch.name}`);
+      if (!check.passed) {
+        console.log(`[VoiceCheck] Chapter ${chapterNum}: ${check.violations.length} violations, retrying`);
+        const feedback = buildProseViolationFeedback(check.violations);
+        content = await callAI(systemPrompt, userMessage + feedback, 'elite');
+      } else {
+        console.log(`[VoiceCheck] Chapter ${chapterNum} passed`);
+      }
+    } catch (err) {
+      console.error('[VoiceCheck] Chapter evaluation failed, returning original:', err);
+    }
+  }
 
   // Save the chapter
   const chapter = await prisma.chapterContent.upsert({
@@ -815,7 +894,23 @@ USER FEEDBACK: ${feedback}
 
 Please revise this chapter based on the feedback.`;
 
-  const content = await callAI(REFINE_CHAPTER_SYSTEM, userMessage, 'fast');
+  let content = await callAI(REFINE_CHAPTER_SYSTEM, userMessage, 'fast');
+
+  // Voice check refined chapter
+  if (await isVoiceCheckEnabled(req.user!.userId)) {
+    try {
+      const check = await checkProse(content, `Chapter ${chapterNum}: ${ch.name} (refinement)`);
+      if (!check.passed) {
+        console.log(`[VoiceCheck] Refine chapter ${chapterNum}: ${check.violations.length} violations, retrying`);
+        const feedback2 = buildProseViolationFeedback(check.violations);
+        content = await callAI(REFINE_CHAPTER_SYSTEM, userMessage + feedback2, 'fast');
+      } else {
+        console.log(`[VoiceCheck] Refined chapter ${chapterNum} passed`);
+      }
+    } catch (err) {
+      console.error('[VoiceCheck] Refine chapter evaluation failed, returning original:', err);
+    }
+  }
 
   const updated = await prisma.chapterContent.update({
     where: { id: chapter.id },
@@ -865,7 +960,23 @@ ${story.chapters.map((ch) => `CHAPTER ${ch.chapterNum}: "${ch.title}"\n${ch.cont
 
 Join these chapters into one flowing text.`;
 
-  const joinedText = await callAI(JOIN_CHAPTERS_SYSTEM, userMessage, 'elite');
+  let joinedText = await callAI(JOIN_CHAPTERS_SYSTEM, userMessage, 'elite');
+
+  // Voice check joined text
+  if (await isVoiceCheckEnabled(req.user!.userId)) {
+    try {
+      const check = await checkProse(joinedText, 'Joined Five Chapter Story');
+      if (!check.passed) {
+        console.log(`[VoiceCheck] Join: ${check.violations.length} violations, retrying`);
+        const feedback = buildProseViolationFeedback(check.violations);
+        joinedText = await callAI(JOIN_CHAPTERS_SYSTEM, userMessage + feedback, 'elite');
+      } else {
+        console.log('[VoiceCheck] Joined text passed');
+      }
+    } catch (err) {
+      console.error('[VoiceCheck] Join evaluation failed, returning original:', err);
+    }
+  }
 
   const updated = await prisma.fiveChapterStory.update({
     where: { id: storyId },
@@ -922,7 +1033,23 @@ ${sourceText}
 
 Polish this into a final, cohesive ${spec.label.toLowerCase()}.`;
 
-  const blendedText = await callAI(BLEND_SYSTEM, userMessage, 'elite');
+  let blendedText = await callAI(BLEND_SYSTEM, userMessage, 'elite');
+
+  // Voice check blended text
+  if (await isVoiceCheckEnabled(req.user!.userId)) {
+    try {
+      const check = await checkProse(blendedText, `Blended ${spec.label}`);
+      if (!check.passed) {
+        console.log(`[VoiceCheck] Blend: ${check.violations.length} violations, retrying`);
+        const feedback = buildProseViolationFeedback(check.violations);
+        blendedText = await callAI(BLEND_SYSTEM, userMessage + feedback, 'elite');
+      } else {
+        console.log('[VoiceCheck] Blended text passed');
+      }
+    } catch (err) {
+      console.error('[VoiceCheck] Blend evaluation failed, returning original:', err);
+    }
+  }
 
   const updated = await prisma.fiveChapterStory.update({
     where: { id: storyId },
@@ -956,7 +1083,24 @@ ${content}
 
 Apply the requested changes.`;
 
-  const revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'fast');
+  let revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'fast');
+
+  // Voice check copy-edited text
+  if (await isVoiceCheckEnabled(req.user!.userId)) {
+    try {
+      const check = await checkProse(revised, 'Copy edit');
+      if (!check.passed) {
+        console.log(`[VoiceCheck] Copy edit: ${check.violations.length} violations, retrying`);
+        const feedback = buildProseViolationFeedback(check.violations);
+        revised = await callAI(COPY_EDIT_SYSTEM, userMessage + feedback, 'fast');
+      } else {
+        console.log('[VoiceCheck] Copy edit passed');
+      }
+    } catch (err) {
+      console.error('[VoiceCheck] Copy edit evaluation failed, returning original:', err);
+    }
+  }
+
   res.json({ content: revised });
 });
 
