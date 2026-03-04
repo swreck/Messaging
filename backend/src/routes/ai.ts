@@ -61,16 +61,29 @@ async function generateTierWithVoiceCheck(
   convertMessage: string,
   rank1Priority: { text: string } | undefined,
   userId: string,
+  priorities?: { id: string; text: string; rank: number }[],
 ): Promise<TierGenResult> {
   const result = await generateTier(convertMessage, rank1Priority);
 
   if (!await isVoiceCheckEnabled(userId)) return result;
 
-  // Extract all statements for voice check
+  // Extract all statements for voice check, with priority context for P1/P2
+  const priorityById = new Map(priorities?.map(p => [p.id, p]) || []);
+
   const statements: StatementInput[] = [];
-  statements.push({ text: result.tier1.text, column: 'Tier 1' });
+  const tier1Priority = priorityById.get(result.tier1.priorityId);
+  statements.push({
+    text: result.tier1.text,
+    column: 'Tier 1',
+    priorityText: tier1Priority?.text,
+  });
   for (const t2 of result.tier2) {
-    statements.push({ text: t2.text, column: t2.categoryLabel });
+    const priority = priorityById.get(t2.priorityId);
+    statements.push({
+      text: t2.text,
+      column: t2.categoryLabel,
+      priorityText: priority?.text,
+    });
   }
 
   try {
@@ -394,7 +407,7 @@ ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
     const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
-    const tierResult = await generateTierWithVoiceCheck(convertMessage, rank1 || undefined, req.user!.userId);
+    const tierResult = await generateTierWithVoiceCheck(convertMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities);
 
     res.json({ status: 'complete', result: tierResult, questions: [] });
     return;
@@ -493,7 +506,7 @@ ${userContext.length > 0 ? `\nUSER NOTES (the user provided these clarifications
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
   const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
-  const tierResult = await generateTierWithVoiceCheck(convertMessage, rank1 || undefined, req.user!.userId);
+  const tierResult = await generateTierWithVoiceCheck(convertMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities);
 
   res.json({ status: 'complete', result: tierResult });
 });
@@ -555,7 +568,7 @@ ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
   const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
-  const result = await generateTierWithVoiceCheck(userMessage, rank1 || undefined, req.user!.userId);
+  const result = await generateTierWithVoiceCheck(userMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities);
 
   res.json(result);
 });
@@ -599,7 +612,7 @@ router.post('/refine-language', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
     where: { id: draftId, offering: { userId: req.user!.userId } },
     include: {
-      tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
+      tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } }, priority: true } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
     },
   });
@@ -615,12 +628,13 @@ ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n'
     refinedTier2: { index: number; text: string }[];
   }>(REFINE_LANGUAGE_SYSTEM, userMessage, 'elite');
 
-  // Voice check refined statements
+  // Voice check refined statements (with priority context for P1/P2)
   if (await isVoiceCheckEnabled(req.user!.userId)) {
     try {
       const statements: StatementInput[] = result.refinedTier2.map(r => ({
         text: r.text,
         column: draft.tier2Statements[r.index]?.categoryLabel || 'Product',
+        priorityText: (draft.tier2Statements[r.index] as any)?.priority?.text,
       }));
       const check = await checkStatements(statements);
       if (!check.passed) {

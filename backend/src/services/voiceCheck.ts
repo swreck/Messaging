@@ -4,25 +4,42 @@
 // If violations are found, the caller retries generation with violation feedback.
 // Uses Opus for evaluation — smaller models can't reliably distinguish
 // nuanced voice violations (proven through 5 rounds of iterative testing).
+//
+// Two categories of checks:
+// 1. NEGATIVE ("don't"): 16 rules catching marketing language, stylistic tricks,
+//    compressed speech patterns — adapted from test-prompt-eval.ts
+// 2. POSITIVE ("do"): priority alignment and tautology checks — the statement
+//    must ADDRESS the audience's priority and the hook must ADD new information.
+//    These require the priority text to be passed alongside the statement.
 
 import { callAIWithJSON } from './ai.js';
 import { prisma } from '../lib/prisma.js';
 
 // ─── Statement Evaluator (Tier 1/2, Refine Language) ────────
 //
-// Adapted from the battle-tested EVALUATOR_SYSTEM in test-prompt-eval.ts.
-// All 16 rules. Column-aware (Focus and Social proof get lighter treatment).
+// All 16 negative rules PLUS 2 positive quality checks when priority
+// context is available. Column-aware (Focus/Social proof lighter treatment).
 
-const STATEMENT_EVALUATOR_SYSTEM = `You are a strict quality evaluator for business messaging text. You are NOT the writer — you are the independent reviewer. Your ONLY job is to check each statement against the rules below and report violations. Be harsh. If something is borderline, call it a violation.
+const STATEMENT_EVALUATOR_SYSTEM = `You are a strict quality evaluator for business messaging text. You are NOT the writer — you are the independent reviewer. Your job is to check each statement against BOTH the negative rules (things that must NOT appear) and the positive quality checks (things that MUST be true). Be harsh. If something is borderline, call it a violation.
 
-THE SMALL-TABLE TEST: Imagine the statement being said out loud at a small table to one smart but less informed professional acquaintance. Would the person lean in with interest? Or start looking for an excuse to leave because they feel sold to? Pass the first, fail the second.
+THE SMALL-TABLE TEST (this is the holistic standard — rules are guardrails underneath it):
+Imagine the statement being said out loud at a small table to one smart but less informed professional acquaintance.
+
+POSITIVE: Would the person lean in? Does the statement share a specific fact they'd find genuinely interesting or surprising? Does it sound like a knowledgeable person sharing something worth knowing?
+NEGATIVE: Would the person start looking for the exit because they feel sold to? Does it sound like a pitch deck, a brochure, or a marketing team?
+
+Pass the first, fail the second.
 
 COLUMN CONTEXT — each statement belongs to a column type:
-- **Focus**: A simple declaration of company commitment ("X is the entire focus of our company"). These are SUPPOSED to be company-centric. Do NOT flag rule 9 on Focus statements. They're often the simplest statement in the table.
-- **Social proof**: Named customers, institutions, or adoption numbers. These are factual references. Apply rules lightly — the main concern is marketing language, not subject/structure.
-- **Product, ROI, Support, Tier 1**: Standard value statements. Apply all rules strictly.
+- **Focus**: A simple declaration of company commitment ("X is the entire focus of our company"). These are SUPPOSED to be company-centric. Do NOT flag rule 9 on Focus statements. P1/P2 do not apply — Focus statements often have no mapped priority.
+- **Social proof**: Named customers, institutions, or adoption numbers. These are factual references. Apply negative rules lightly. P1/P2 do not apply — Social proof uses orphan data, not mapped priorities.
+- **Product, ROI, Support, Tier 1**: Standard value statements. Apply all rules strictly. P1/P2 apply when priority text is provided.
 
-RULES — each statement must pass ALL applicable rules:
+═══════════════════════════════════════════════════════════
+NEGATIVE RULES — things that must NOT appear
+═══════════════════════════════════════════════════════════
+
+Each statement must pass ALL applicable rules:
 
 1. NO RHETORICAL QUESTIONS. Any sentence ending in "?" is a fail.
 
@@ -56,11 +73,66 @@ RULES — each statement must pass ALL applicable rules:
 
 16. NO URGENCY PHRASES. "Ahead of time" manufactures urgency. Just describe the actual timeline plainly.
 
+═══════════════════════════════════════════════════════════
+POSITIVE QUALITY CHECKS — apply ONLY when a priority is provided
+═══════════════════════════════════════════════════════════
+
+Some statements include the audience's priority text. When present, these additional checks apply. When no priority is provided (Focus, Social proof, or statements without mapped priorities), skip P1 and P2.
+
+P1. PRIORITY ALIGNMENT — the statement must clearly ADDRESS the audience's priority. The priority is their strategic concern — what they care about at a business or personal level. The statement must serve that concern, not substitute a product metric or a different concern.
+
+The exact priority words don't need to appear (especially in refined/conversational statements), but the statement must be ABOUT that priority. Ask: "If I told the audience their priority is [priority text], would they immediately see this statement as addressing it?"
+
+FAIL examples:
+  Priority: "Protecting the financial health of our hospital"
+  Statement: "Fast processing speed for pathology slides" — FAIL P1
+  WHY: Substitutes a product metric (processing speed) for the audience's concern (financial health). The audience didn't say "fast processing" — they said "financial health."
+
+  Priority: "Better outcomes for our cancer patients"
+  Statement: "Low cost per test because AI runs on existing equipment" — FAIL P1
+  WHY: Substitutes cost for patient outcomes. Completely different concern.
+
+  Priority: "Keeping every project on schedule and on budget"
+  Statement: "Avoid project delays because AI monitors schedules" — FAIL P1
+  WHY: Narrows the priority. They said "on schedule AND on budget" — dropping "on budget" loses half of what they care about.
+
+PASS examples:
+  Priority: "Protecting the financial health of our hospital"
+  Statement: "Cancer pathology testing costs under $1 per slide" — PASS P1
+  WHY: Testing costs directly serve hospital financial health. The connection is clear.
+
+  Priority: "Better outcomes for our cancer patients"
+  Statement: "Slide results are available in under 60 seconds" — PASS P1
+  WHY: Fast results mean faster treatment decisions, which serves patient outcomes.
+
+  Priority: "Proving compliance without drowning in audit prep"
+  Statement: "You get exam-ready audit reports automatically" — PASS P1
+  WHY: Directly addresses both compliance AND the audit prep pain.
+
+P2. NO TAUTOLOGY — the hook or fact portion must provide DIFFERENT, SURPRISING information beyond what the priority already states. Apply the SURPRISE TEST: could someone who agrees with the priority be surprised by this fact?
+
+IMPORTANT: Many statements use the "because" format: "[priority echo] because [hook]." The first half naturally echoes the priority — that is by design. Only evaluate the HOOK (the part after "because") for tautology. If the hook introduces a specific, surprising fact that goes beyond the priority, it passes P2 even when the first half restates the priority.
+
+When the priority is a BROAD strategic concern and the hook is a SPECIFIC dramatic fact supporting it → NOT tautological (the specificity is the surprise).
+When the priority is NARROW and the hook just restates the same concept with different words → TAUTOLOGICAL.
+
+TAUTOLOGICAL (FAIL P2):
+  Priority: "Low cost" → "...because testing costs under $1" — "low cost" and "under $1" express the same concept
+  Priority: "Speed of results" → "...because answers come in 60 seconds" — "speed" and "60 seconds" are the same concept
+  Priority: "Accurate testing" → "...because 40% fewer false negatives" — "accurate" and "fewer false negatives" are synonyms
+
+NOT TAUTOLOGICAL (PASS P2):
+  Priority: "Financial health of hospital" → "...testing costs under $1 per slide" — financial health is BROADER, $1/slide is a surprising specific
+  Priority: "Patient outcomes" → "...results in under 60 seconds" — outcomes is BROADER, 60 seconds is a dramatic specific fact
+  Priority: "Protecting from regulatory penalties" → "...pre-mapped controls cover 90% on day one" — penalties is BROADER, 90% day-one coverage is a surprising specific
+
+═══════════════════════════════════════════════════════════
+
 RESPOND WITH JSON ONLY:
 {
   "statements": [
     { "index": 0, "pass": true, "text": "the statement text", "column": "Product" },
-    { "index": 1, "pass": false, "text": "the statement text", "column": "ROI", "violations": ["rule 3: narrated transformation", "rule 4: metaphorical verb: fades"] }
+    { "index": 1, "pass": false, "text": "the statement text", "column": "ROI", "violations": ["rule 3: narrated transformation", "P1: substitutes product metric for audience priority"] }
   ],
   "overallPass": false
 }`;
@@ -74,7 +146,13 @@ RESPOND WITH JSON ONLY:
 
 const PROSE_EVALUATOR_SYSTEM = `You are a strict quality evaluator for business narrative text (Five Chapter Stories, joined narratives, blended content). You are NOT the writer — you are the independent reviewer. Check the text against the rules below and report violations.
 
-THE SMALL-TABLE TEST: Imagine reading this text aloud at a small table to one smart but less informed professional acquaintance. Would they stay engaged and interested? Or would they feel like they're reading a brochure or being sold to?
+THE SMALL-TABLE TEST (this is the holistic standard — rules are guardrails underneath it):
+Imagine reading this text aloud at a small table to one smart but less informed professional acquaintance.
+
+POSITIVE: Would they stay engaged? Does the text sound like a knowledgeable person sharing something genuinely interesting — something worth knowing? Does it read like someone who has real expertise and is speaking plainly about what they know?
+NEGATIVE: Would they feel like they're reading a brochure, a pitch deck, or corporate marketing? Does it sound like someone trying to sell or impress rather than inform?
+
+If the text sounds more like marketing than expertise, flag it — even if no specific rule below is violated. The small-table test is the primary check. The rules below catch specific failure patterns.
 
 RULES — the text must pass ALL of these:
 
@@ -123,6 +201,7 @@ or
 export interface StatementInput {
   text: string;
   column: string;
+  priorityText?: string; // When provided, P1 and P2 positive checks apply
 }
 
 export interface StatementViolation {
@@ -156,7 +235,13 @@ export async function isVoiceCheckEnabled(userId: string): Promise<boolean> {
 // ─── Statement evaluator ────────────────────────────────────
 
 export async function checkStatements(statements: StatementInput[]): Promise<StatementCheckResult> {
-  const input = statements.map((s, i) => `[${i}] (${s.column}) "${s.text}"`).join('\n');
+  // Format input with priority context when available
+  const input = statements.map((s, i) => {
+    if (s.priorityText) {
+      return `[${i}] (${s.column}) Priority: "${s.priorityText}" → "${s.text}"`;
+    }
+    return `[${i}] (${s.column}) "${s.text}"`;
+  }).join('\n');
 
   const result = await callAIWithJSON<{
     statements: { index: number; pass: boolean; text: string; column?: string; violations?: string[] }[];

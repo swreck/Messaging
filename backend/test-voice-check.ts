@@ -25,11 +25,11 @@ const GOOD_STATEMENTS: StatementInput[] = [
   // Focus column — company-centric is correct
   { text: 'Oncology diagnosis in a hospital setting is the entire focus of our company', column: 'Focus' },
   // Social proof — factual, named entities
-  { text: 'Geisinger Health and Cleveland Clinic are both in active evaluation', column: 'Social proof' },
+  { text: 'Geisinger Health and Cleveland Clinic are both evaluating the technology', column: 'Social proof' },
   // Clean value statement, audience as subject
   { text: 'You spend under $1 per slide for cancer pathology testing', column: 'Product' },
   // Natural conversational tone, under 20 words
-  { text: 'We automate the daily monitoring so your project managers focus on actual project work', column: 'Support' },
+  { text: 'Your project team gets automated monitoring reports every morning', column: 'Support' },
   // ROI with plain fact
   { text: 'Full onboarding takes 30 days, including training for your staff', column: 'Support' },
   // Clean "we" construction
@@ -48,7 +48,7 @@ const BAD_STATEMENTS: StatementInput[] = [
   // Rule 4: metaphorical verb
   { text: 'Our platform unlocks faster pathology results for your team', column: 'Product' },
   // Rule 5: contrast clause
-  { text: 'Testing happens in your lab, not shipped to an external facility', column: 'Product' },
+  { text: 'You get results in under a minute, not days or weeks of waiting', column: 'Product' },
   // Rule 8: marketing buzzword
   { text: 'Our seamless end-to-end solution handles all compliance requirements', column: 'Product' },
   // Rule 12: stacked compound nouns
@@ -171,10 +171,139 @@ async function testFeedbackBuilders() {
   assert('Empty violations returns empty string', emptyFeedback === '');
 }
 
+async function testPositiveChecksGood() {
+  console.log('\n── Positive checks: good statements with priority context (should pass) ──');
+
+  const goodWithPriority: StatementInput[] = [
+    // Priority is broad, hook is specific — not tautological, addresses the priority
+    {
+      text: 'Support your hospital\'s financial health because cancer pathology testing can cost under $1 per slide',
+      column: 'Tier 1',
+      priorityText: 'Protecting the financial health of our hospital',
+    },
+    // Refined statement — priority is conceptually present (testing cost → financial health)
+    {
+      text: 'Cancer pathology testing costs under $1 per slide',
+      column: 'Product',
+      priorityText: 'Protecting the financial health of our hospital',
+    },
+    // Fast results → patient outcomes (conceptual alignment)
+    {
+      text: 'Slide results are available in under 60 seconds',
+      column: 'Product',
+      priorityText: 'Better outcomes for our cancer patients',
+    },
+    // Addresses compliance AND audit prep pain
+    {
+      text: 'You get exam-ready audit reports automatically',
+      column: 'Product',
+      priorityText: 'Proving compliance without drowning in audit prep',
+    },
+    // Focus column — no priority, P1/P2 should not apply
+    {
+      text: 'Community bank and credit union security is the entire focus of our company',
+      column: 'Focus',
+    },
+  ];
+
+  const result = await checkStatements(goodWithPriority);
+  assert('Good statements with priority pass overall', result.passed,
+    result.passed ? undefined : `${result.violations.length} violations found`);
+
+  for (let i = 0; i < goodWithPriority.length; i++) {
+    const violation = result.violations.find(v => v.index === i);
+    assert(
+      `[${i}] "${goodWithPriority[i].text.substring(0, 55)}..."`,
+      !violation,
+      violation ? `False positive: ${violation.rules.join(', ')}` : undefined,
+    );
+  }
+}
+
+async function testPrioritySubstitution() {
+  console.log('\n── P1: Priority substitution (should FAIL) ──');
+
+  const substitutions: StatementInput[] = [
+    // Product metric substituted for audience priority
+    {
+      text: 'Low cost per test because AI runs on your existing lab equipment',
+      column: 'Product',
+      priorityText: 'Protecting the financial health of our hospital',
+    },
+    // Completely different concern
+    {
+      text: 'Fast processing speed for every pathology slide',
+      column: 'Product',
+      priorityText: 'Better outcomes for our cancer patients',
+    },
+    // Narrows the priority — drops "on budget"
+    {
+      text: 'Avoid project delays because AI monitors schedule variances',
+      column: 'Product',
+      priorityText: 'Keeping every project on schedule and on budget',
+    },
+  ];
+
+  const result = await checkStatements(substitutions);
+  assert('Priority substitutions fail overall', !result.passed);
+
+  for (let i = 0; i < substitutions.length; i++) {
+    const violation = result.violations.find(v => v.index === i);
+    const hasP1 = violation?.rules.some(r => r.toLowerCase().includes('p1') || r.toLowerCase().includes('priority'));
+    assert(
+      `[${i}] "${substitutions[i].text.substring(0, 55)}..."`,
+      !!violation,
+      violation
+        ? `Caught: ${violation.rules.join(', ')}${hasP1 ? '' : ' (but no P1 flag)'}`
+        : 'False negative — evaluator missed priority substitution',
+    );
+  }
+}
+
+async function testTautology() {
+  console.log('\n── P2: Tautology (should FAIL) ──');
+
+  const tautological: StatementInput[] = [
+    // Same concept: "low cost" and "under $1"
+    {
+      text: 'Low cost because testing costs under $1 per slide',
+      column: 'Product',
+      priorityText: 'Low cost',
+    },
+    // Same concept: "speed" and "60 seconds"
+    {
+      text: 'Speed of results because answers come in under 60 seconds',
+      column: 'Product',
+      priorityText: 'Speed of results',
+    },
+    // Same concept: "accurate" and "fewer false negatives"
+    {
+      text: 'Accurate testing because there are 40% fewer false negatives',
+      column: 'Product',
+      priorityText: 'Accurate testing',
+    },
+  ];
+
+  const result = await checkStatements(tautological);
+  assert('Tautological statements fail overall', !result.passed);
+
+  for (let i = 0; i < tautological.length; i++) {
+    const violation = result.violations.find(v => v.index === i);
+    const hasP2 = violation?.rules.some(r => r.toLowerCase().includes('p2') || r.toLowerCase().includes('tautolog'));
+    assert(
+      `[${i}] "${tautological[i].text.substring(0, 55)}..."`,
+      !!violation,
+      violation
+        ? `Caught: ${violation.rules.join(', ')}${hasP2 ? '' : ' (but no P2/tautology flag)'}`
+        : 'False negative — evaluator missed tautology',
+    );
+  }
+}
+
 async function testEdgeCases() {
   console.log('\n── Edge cases ──');
 
-  // Single statement
+  // Single Focus statement (no priority)
   const single = await checkStatements([
     { text: 'Community bank and credit union security is the entire focus of our company', column: 'Focus' },
   ]);
@@ -186,11 +315,15 @@ async function testEdgeCases() {
   ]);
   assert('Short clean statement passes', short.passed);
 
-  // Tier 1 label (not a standard column)
+  // Tier 1 with priority context (should pass — good alignment)
   const tier1 = await checkStatements([
-    { text: 'Support your hospital\'s financial health because cancer pathology testing can cost under $1 per slide', column: 'Tier 1' },
+    {
+      text: 'Support your hospital\'s financial health because cancer pathology testing can cost under $1 per slide',
+      column: 'Tier 1',
+      priorityText: 'Protecting the financial health of our hospital',
+    },
   ]);
-  assert('Tier 1 statement evaluated correctly', tier1.passed !== undefined);
+  assert('Tier 1 with aligned priority passes', tier1.passed);
 }
 
 // ─── Main ────────────────────────────────────────────────
@@ -207,6 +340,9 @@ async function main() {
     await testGoodProse();
     await testBadProse();
     await testFeedbackBuilders();
+    await testPositiveChecksGood();
+    await testPrioritySubstitution();
+    await testTautology();
     await testEdgeCases();
   } catch (err) {
     console.error('\nFATAL ERROR:', err);
