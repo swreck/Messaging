@@ -5,6 +5,7 @@ import { LoginPage } from './auth/LoginPage';
 import { RegisterPage } from './auth/RegisterPage';
 import { Layout } from './shared/Layout';
 import { MariaProvider } from './shared/MariaContext';
+import { WorkspaceProvider } from './shared/WorkspaceContext';
 import { MariaPartner } from './shared/MariaPartner';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { AudiencesPage } from './pages/AudiencesPage';
@@ -21,6 +22,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <WorkspaceProvider>
         <MariaProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -39,6 +41,7 @@ function App() {
         </Routes>
         <MariaPartner />
         </MariaProvider>
+        </WorkspaceProvider>
       </AuthProvider>
     </BrowserRouter>
   );

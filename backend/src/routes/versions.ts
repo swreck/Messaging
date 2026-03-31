@@ -1,10 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireWorkspace } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireWorkspace);
 
 // GET /api/versions/cell/:cellType/:cellId — cell version history
 router.get('/cell/:cellType/:cellId', async (req: Request, res: Response) => {
@@ -82,7 +84,7 @@ router.get('/table/:draftId', async (req: Request, res: Response) => {
 // POST /api/versions/table/:draftId — create snapshot
 router.post('/table/:draftId', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: param(req.params.draftId), offering: { userId: req.user!.userId } },
+    where: { id: param(req.params.draftId), offering: { workspaceId: req.workspaceId } },
     include: {
       tier1Statement: true,
       tier2Statements: {
@@ -127,7 +129,7 @@ router.post('/table/:draftId', async (req: Request, res: Response) => {
 // POST /api/versions/table/:draftId/restore/:versionId
 router.post('/table/:draftId/restore/:versionId', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: param(req.params.draftId), offering: { userId: req.user!.userId } },
+    where: { id: param(req.params.draftId), offering: { workspaceId: req.workspaceId } },
   });
   if (!draft) {
     res.status(404).json({ error: 'Draft not found' });
@@ -239,7 +241,7 @@ router.get('/story/:storyId', async (req: Request, res: Response) => {
 // POST /api/versions/story/:storyId — create story snapshot
 router.post('/story/:storyId', async (req: Request, res: Response) => {
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: param(req.params.storyId), draft: { offering: { userId: req.user!.userId } } },
+    where: { id: param(req.params.storyId), draft: { offering: { workspaceId: req.workspaceId } } },
     include: { chapters: { orderBy: { chapterNum: 'asc' } } },
   });
   if (!story) {
@@ -279,7 +281,7 @@ router.post('/story/:storyId', async (req: Request, res: Response) => {
 router.post('/story/:storyId/restore/:versionId', async (req: Request, res: Response) => {
   const storyId = param(req.params.storyId);
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: storyId, draft: { offering: { userId: req.user!.userId } } },
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
   });
   if (!story) {
     res.status(404).json({ error: 'Story not found' });

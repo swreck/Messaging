@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireWorkspace } from '../middleware/workspace.js';
 import { callAIWithJSON } from '../services/ai.js';
 import { buildPartnerPrompt } from '../prompts/partner.js';
 import { ACTION_ALIASES, dispatchActions, readPageContent, type ActionContext } from '../lib/actions.js';
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireWorkspace);
 
 // Channel marker to distinguish partner messages from the old page assistant
 const PARTNER_CHANNEL = { channel: 'partner' };
@@ -26,14 +28,14 @@ async function getPartnerSettings(userId: string) {
   };
 }
 
-async function buildWorkSummary(userId: string): Promise<string> {
+async function buildWorkSummary(workspaceId: string): Promise<string> {
   const [offerings, audiences, drafts] = await Promise.all([
     prisma.offering.findMany({
-      where: { userId },
+      where: { workspaceId },
       select: { name: true, description: true },
     }),
     prisma.audience.findMany({
-      where: { userId },
+      where: { workspaceId },
       include: {
         priorities: {
           select: { text: true, rank: true, motivatingFactor: true },
@@ -42,7 +44,7 @@ async function buildWorkSummary(userId: string): Promise<string> {
       },
     }),
     prisma.threeTierDraft.findMany({
-      where: { offering: { userId } },
+      where: { offering: { workspaceId } },
       include: {
         offering: { select: { name: true } },
         audience: { select: { name: true } },
@@ -113,9 +115,9 @@ function buildCurrentContext(context: Record<string, any>): string {
   return parts.join('. ');
 }
 
-async function buildSurfacingHint(userId: string): Promise<string | undefined> {
+async function buildSurfacingHint(workspaceId: string): Promise<string | undefined> {
   const drafts = await prisma.threeTierDraft.findMany({
-    where: { offering: { userId } },
+    where: { offering: { workspaceId } },
     include: {
       offering: { select: { name: true } },
       audience: { select: { name: true } },
@@ -132,7 +134,7 @@ async function buildSurfacingHint(userId: string): Promise<string | undefined> {
   }
 
   const emptyAudiences = await prisma.audience.findMany({
-    where: { userId, priorities: { none: {} } },
+    where: { workspaceId, priorities: { none: {} } },
     select: { name: true },
   });
   if (emptyAudiences.length > 0) {
@@ -219,9 +221,10 @@ router.post('/message', async (req: Request, res: Response) => {
   const { displayName } = await getPartnerSettings(userId);
 
   // Build work summary and context
+  const workspaceId = req.workspaceId!;
   const [workSummary, surfacingHint] = await Promise.all([
-    buildWorkSummary(userId),
-    history.length === 0 ? buildSurfacingHint(userId) : Promise.resolve(undefined),
+    buildWorkSummary(workspaceId),
+    history.length === 0 ? buildSurfacingHint(workspaceId) : Promise.resolve(undefined),
   ]);
 
   const currentContext = buildCurrentContext(ctx);
@@ -282,7 +285,7 @@ router.post('/message', async (req: Request, res: Response) => {
   let refreshNeeded = false;
 
   if (normalizedActions.length > 0) {
-    const dispatch = await dispatchActions(normalizedActions, userId, ctx);
+    const dispatch = await dispatchActions(normalizedActions, userId, ctx, workspaceId);
     refreshNeeded = dispatch.refreshNeeded;
 
     // Check for failures
@@ -322,7 +325,7 @@ router.post('/message', async (req: Request, res: Response) => {
 router.post('/page-content', async (req: Request, res: Response) => {
   const { context } = req.body;
   const userId = req.user!.userId;
-  const content = await readPageContent(userId, context || {});
+  const content = await readPageContent(req.workspaceId!, context || {});
   res.json({ content });
 });
 

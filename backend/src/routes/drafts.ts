@@ -1,15 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireWorkspace } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireWorkspace);
 
 // GET /api/drafts
 router.get('/', async (req: Request, res: Response) => {
   const drafts = await prisma.threeTierDraft.findMany({
-    where: { offering: { userId: req.user!.userId } },
+    where: { offering: { workspaceId: req.workspaceId } },
     include: {
       offering: { select: { id: true, name: true } },
       audience: { select: { id: true, name: true } },
@@ -21,10 +23,8 @@ router.get('/', async (req: Request, res: Response) => {
 
 // GET /api/drafts/hierarchy — full tree: offerings → audiences → three-tiers → deliverables
 router.get('/hierarchy', async (req: Request, res: Response) => {
-  const userId = req.user!.userId;
-
   const offerings = await prisma.offering.findMany({
-    where: { userId },
+    where: { workspaceId: req.workspaceId },
     include: {
       elements: { select: { id: true } },
       drafts: {
@@ -43,7 +43,7 @@ router.get('/hierarchy', async (req: Request, res: Response) => {
 
   // Get audiences that don't have drafts yet (for showing "available" audiences)
   const audiences = await prisma.audience.findMany({
-    where: { userId },
+    where: { workspaceId: req.workspaceId },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   });
@@ -81,8 +81,8 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   // Verify ownership
-  const offering = await prisma.offering.findFirst({ where: { id: offeringId, userId: req.user!.userId } });
-  const audience = await prisma.audience.findFirst({ where: { id: audienceId, userId: req.user!.userId } });
+  const offering = await prisma.offering.findFirst({ where: { id: offeringId, workspaceId: req.workspaceId } });
+  const audience = await prisma.audience.findFirst({ where: { id: audienceId, workspaceId: req.workspaceId } });
   if (!offering || !audience) {
     res.status(404).json({ error: 'Offering or audience not found' });
     return;
@@ -110,7 +110,7 @@ router.post('/', async (req: Request, res: Response) => {
 // GET /api/drafts/:id — full draft with all relations
 router.get('/:id', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: param(req.params.id), offering: { userId: req.user!.userId } },
+    where: { id: param(req.params.id), offering: { workspaceId: req.workspaceId } },
     include: {
       offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
@@ -140,7 +140,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // PATCH /api/drafts/:id — update step or status
 router.patch('/:id', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: param(req.params.id), offering: { userId: req.user!.userId } },
+    where: { id: param(req.params.id), offering: { workspaceId: req.workspaceId } },
   });
   if (!draft) {
     res.status(404).json({ error: 'Draft not found' });
@@ -161,7 +161,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 // DELETE /api/drafts/:id
 router.delete('/:id', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: param(req.params.id), offering: { userId: req.user!.userId } },
+    where: { id: param(req.params.id), offering: { workspaceId: req.workspaceId } },
   });
   if (!draft) {
     res.status(404).json({ error: 'Draft not found' });

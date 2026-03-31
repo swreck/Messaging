@@ -18,8 +18,11 @@ import {
   type StatementInput,
 } from '../services/voiceCheck.js';
 
+import { requireWorkspace } from '../middleware/workspace.js';
+
 const router = Router();
 router.use(requireAuth);
+router.use(requireWorkspace);
 
 // ─── Generation helper: pin priority text + validate ─────
 
@@ -126,7 +129,7 @@ router.post('/coach', async (req: Request, res: Response) => {
   }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
       offering: { include: { elements: true } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
@@ -184,7 +187,7 @@ router.post('/suggest-mappings', async (req: Request, res: Response) => {
   }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
       offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
@@ -221,7 +224,7 @@ router.post('/preview-mapping', async (req: Request, res: Response) => {
   }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
       offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
@@ -285,7 +288,7 @@ router.post('/build-message', async (req: Request, res: Response) => {
   }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
       offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
@@ -426,7 +429,7 @@ router.post('/resolve-questions', async (req: Request, res: Response) => {
   }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
       offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
@@ -521,7 +524,7 @@ router.post('/convert-lines', async (req: Request, res: Response) => {
   }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
       mappings: {
         where: { status: 'confirmed' },
@@ -580,7 +583,7 @@ router.post('/review', async (req: Request, res: Response) => {
   if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
       tier1Statement: true,
       tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
@@ -610,7 +613,7 @@ router.post('/refine-language', async (req: Request, res: Response) => {
   if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
       tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } }, priority: true } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
@@ -661,7 +664,7 @@ router.post('/revise', async (req: Request, res: Response) => {
   if (!draftId || !previousState) { res.status(400).json({ error: 'draftId and previousState are required' }); return; }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
       tier1Statement: true,
       tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
@@ -690,7 +693,7 @@ router.post('/direction', async (req: Request, res: Response) => {
   if (!draftId || !direction) { res.status(400).json({ error: 'draftId and direction are required' }); return; }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
       tier1Statement: true,
       tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
@@ -729,7 +732,7 @@ router.post('/derive-motivation', async (req: Request, res: Response) => {
   }
 
   const priority = await prisma.priority.findFirst({
-    where: { id: priorityId, audience: { id: audienceId, userId: req.user!.userId } },
+    where: { id: priorityId, audience: { id: audienceId, workspaceId: req.workspaceId } },
     include: { audience: true },
   });
   if (!priority) {
@@ -741,7 +744,7 @@ router.post('/derive-motivation', async (req: Request, res: Response) => {
   let offeringContext = '';
   if (offeringId) {
     const offering = await prisma.offering.findFirst({
-      where: { id: offeringId, userId: req.user!.userId },
+      where: { id: offeringId, workspaceId: req.workspaceId },
       include: { elements: true },
     });
     if (offering) {
@@ -785,7 +788,7 @@ router.post('/generate-chapter', async (req: Request, res: Response) => {
   }
 
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: storyId, draft: { offering: { userId: req.user!.userId } } },
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
     include: {
       draft: {
         include: {
@@ -891,7 +894,7 @@ router.post('/refine-chapter', async (req: Request, res: Response) => {
   }
 
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: storyId, draft: { offering: { userId: req.user!.userId } } },
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
     include: { chapters: true },
   });
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
@@ -969,7 +972,7 @@ router.post('/join-chapters', async (req: Request, res: Response) => {
   if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
 
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: storyId, draft: { offering: { userId: req.user!.userId } } },
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
     include: { chapters: { orderBy: { chapterNum: 'asc' } } },
   });
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
@@ -1021,7 +1024,7 @@ router.post('/blend-story', async (req: Request, res: Response) => {
   if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
 
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: storyId, draft: { offering: { userId: req.user!.userId } } },
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
     include: { chapters: { orderBy: { chapterNum: 'asc' } } },
   });
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
@@ -1097,7 +1100,7 @@ router.post('/copy-edit', async (req: Request, res: Response) => {
   }
 
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: storyId, draft: { offering: { userId: req.user!.userId } } },
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
   });
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
 

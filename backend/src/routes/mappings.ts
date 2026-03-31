@@ -1,15 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireWorkspace } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireWorkspace);
 
 // GET /api/mappings/:draftId
 router.get('/:draftId', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: param(req.params.draftId), offering: { userId: req.user!.userId } },
+    where: { id: param(req.params.draftId), offering: { workspaceId: req.workspaceId } },
   });
   if (!draft) {
     res.status(404).json({ error: 'Draft not found' });
@@ -29,7 +31,7 @@ router.get('/:draftId', async (req: Request, res: Response) => {
 // POST /api/mappings/:draftId
 router.post('/:draftId', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: param(req.params.draftId), offering: { userId: req.user!.userId } },
+    where: { id: param(req.params.draftId), offering: { workspaceId: req.workspaceId } },
   });
   if (!draft) {
     res.status(404).json({ error: 'Draft not found' });
@@ -61,7 +63,7 @@ router.post('/:draftId', async (req: Request, res: Response) => {
 // PATCH /api/mappings/:draftId/:mappingId
 router.patch('/:draftId/:mappingId', async (req: Request, res: Response) => {
   const mapping = await prisma.mapping.findFirst({
-    where: { id: param(req.params.mappingId), draft: { id: param(req.params.draftId), offering: { userId: req.user!.userId } } },
+    where: { id: param(req.params.mappingId), draft: { id: param(req.params.draftId), offering: { workspaceId: req.workspaceId } } },
   });
   if (!mapping) {
     res.status(404).json({ error: 'Mapping not found' });
@@ -86,7 +88,7 @@ router.patch('/:draftId/:mappingId', async (req: Request, res: Response) => {
 // DELETE /api/mappings/:draftId/:mappingId
 router.delete('/:draftId/:mappingId', async (req: Request, res: Response) => {
   const mapping = await prisma.mapping.findFirst({
-    where: { id: param(req.params.mappingId), draft: { id: param(req.params.draftId), offering: { userId: req.user!.userId } } },
+    where: { id: param(req.params.mappingId), draft: { id: param(req.params.draftId), offering: { workspaceId: req.workspaceId } } },
   });
   if (!mapping) {
     res.status(404).json({ error: 'Mapping not found' });
@@ -100,7 +102,7 @@ router.delete('/:draftId/:mappingId', async (req: Request, res: Response) => {
 // POST /api/mappings/:draftId/bulk — save multiple mappings at once
 router.post('/:draftId/bulk', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: param(req.params.draftId), offering: { userId: req.user!.userId } },
+    where: { id: param(req.params.draftId), offering: { workspaceId: req.workspaceId } },
   });
   if (!draft) {
     res.status(404).json({ error: 'Draft not found' });

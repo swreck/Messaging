@@ -1,15 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireWorkspace } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireWorkspace);
 
 // GET /api/audiences
 router.get('/', async (req: Request, res: Response) => {
   const audiences = await prisma.audience.findMany({
-    where: { userId: req.user!.userId },
+    where: { workspaceId: req.workspaceId },
     include: { priorities: { orderBy: { sortOrder: 'asc' } } },
     orderBy: { createdAt: 'desc' },
   });
@@ -25,7 +27,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const audience = await prisma.audience.create({
-    data: { name, description: description || '', userId: req.user!.userId },
+    data: { name, description: description || '', userId: req.user!.userId, workspaceId: req.workspaceId! },
     include: { priorities: true },
   });
   res.status(201).json({ audience });
@@ -35,7 +37,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   const { name, description } = req.body;
   const audience = await prisma.audience.findFirst({
-    where: { id: param(req.params.id), userId: req.user!.userId },
+    where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
   if (!audience) {
     res.status(404).json({ error: 'Audience not found' });
@@ -53,7 +55,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE /api/audiences/:id
 router.delete('/:id', async (req: Request, res: Response) => {
   const audience = await prisma.audience.findFirst({
-    where: { id: param(req.params.id), userId: req.user!.userId },
+    where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
   if (!audience) {
     res.status(404).json({ error: 'Audience not found' });
@@ -75,7 +77,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
   const created = await Promise.all(
     audienceList.map((a: { name: string; description?: string }) =>
       prisma.audience.create({
-        data: { name: a.name, description: a.description || '', userId: req.user!.userId },
+        data: { name: a.name, description: a.description || '', userId: req.user!.userId, workspaceId: req.workspaceId! },
         include: { priorities: true },
       })
     )
@@ -88,7 +90,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
 // POST /api/audiences/:id/priorities
 router.post('/:id/priorities', async (req: Request, res: Response) => {
   const audience = await prisma.audience.findFirst({
-    where: { id: param(req.params.id), userId: req.user!.userId },
+    where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
   if (!audience) {
     res.status(404).json({ error: 'Audience not found' });
@@ -129,7 +131,7 @@ router.put('/:id/priorities/reorder', async (req: Request, res: Response) => {
   }
 
   const audience = await prisma.audience.findFirst({
-    where: { id: param(req.params.id), userId: req.user!.userId },
+    where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
   if (!audience) {
     res.status(404).json({ error: 'Audience not found' });
@@ -151,7 +153,7 @@ router.put('/:id/priorities/reorder', async (req: Request, res: Response) => {
 // PUT /api/audiences/:audienceId/priorities/:priorityId
 router.put('/:audienceId/priorities/:priorityId', async (req: Request, res: Response) => {
   const priority = await prisma.priority.findFirst({
-    where: { id: param(req.params.priorityId), audience: { id: param(req.params.audienceId), userId: req.user!.userId } },
+    where: { id: param(req.params.priorityId), audience: { id: param(req.params.audienceId), workspaceId: req.workspaceId } },
   });
   if (!priority) {
     res.status(404).json({ error: 'Priority not found' });
@@ -175,7 +177,7 @@ router.put('/:audienceId/priorities/:priorityId', async (req: Request, res: Resp
 // DELETE /api/audiences/:audienceId/priorities/:priorityId
 router.delete('/:audienceId/priorities/:priorityId', async (req: Request, res: Response) => {
   const priority = await prisma.priority.findFirst({
-    where: { id: param(req.params.priorityId), audience: { id: param(req.params.audienceId), userId: req.user!.userId } },
+    where: { id: param(req.params.priorityId), audience: { id: param(req.params.audienceId), workspaceId: req.workspaceId } },
   });
   if (!priority) {
     res.status(404).json({ error: 'Priority not found' });

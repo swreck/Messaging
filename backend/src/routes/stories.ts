@@ -1,15 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireWorkspace } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireWorkspace);
 
 // GET /api/stories/all — all stories for the current user with offering/audience context
 router.get('/all', async (req: Request, res: Response) => {
   const stories = await prisma.fiveChapterStory.findMany({
-    where: { draft: { offering: { userId: req.user!.userId } } },
+    where: { draft: { offering: { workspaceId: req.workspaceId } } },
     include: {
       chapters: { orderBy: { chapterNum: 'asc' } },
       draft: {
@@ -36,7 +38,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId as string, offering: { userId: req.user!.userId } },
+    where: { id: draftId as string, offering: { workspaceId: req.workspaceId } },
   });
   if (!draft) {
     res.status(404).json({ error: 'Draft not found' });
@@ -60,7 +62,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const draft = await prisma.threeTierDraft.findFirst({
-    where: { id: draftId, offering: { userId: req.user!.userId } },
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
   });
   if (!draft) {
     res.status(404).json({ error: 'Draft not found' });
@@ -82,7 +84,7 @@ router.post('/', async (req: Request, res: Response) => {
 // GET /api/stories/:id
 router.get('/:id', async (req: Request, res: Response) => {
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: param(req.params.id), draft: { offering: { userId: req.user!.userId } } },
+    where: { id: param(req.params.id), draft: { offering: { workspaceId: req.workspaceId } } },
     include: { chapters: { orderBy: { chapterNum: 'asc' } } },
   });
   if (!story) {
@@ -95,7 +97,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // PUT /api/stories/:id
 router.put('/:id', async (req: Request, res: Response) => {
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: param(req.params.id), draft: { offering: { userId: req.user!.userId } } },
+    where: { id: param(req.params.id), draft: { offering: { workspaceId: req.workspaceId } } },
   });
   if (!story) {
     res.status(404).json({ error: 'Story not found' });
@@ -121,7 +123,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 // PUT /api/stories/:storyId/chapters/:chapterNum
 router.put('/:storyId/chapters/:chapterNum', async (req: Request, res: Response) => {
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: param(req.params.storyId), draft: { offering: { userId: req.user!.userId } } },
+    where: { id: param(req.params.storyId), draft: { offering: { workspaceId: req.workspaceId } } },
   });
   if (!story) {
     res.status(404).json({ error: 'Story not found' });
@@ -160,7 +162,7 @@ router.put('/:storyId/chapters/:chapterNum', async (req: Request, res: Response)
 // DELETE /api/stories/:id
 router.delete('/:id', async (req: Request, res: Response) => {
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: param(req.params.id), draft: { offering: { userId: req.user!.userId } } },
+    where: { id: param(req.params.id), draft: { offering: { workspaceId: req.workspaceId } } },
   });
   if (!story) {
     res.status(404).json({ error: 'Story not found' });

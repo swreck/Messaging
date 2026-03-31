@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { useWorkspace } from './WorkspaceContext';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Home' },
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const { workspaces, activeWorkspace, switchWorkspace } = useWorkspace();
 
   function isActive(path: string) {
     if (path === '/') return location.pathname === '/';
@@ -26,6 +28,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <span className="nav-brand-name">Maria</span>
           <span className="nav-brand-tagline">Your Messaging Partner</span>
         </Link>
+        {workspaces.length > 1 && activeWorkspace && (
+          <span className="nav-workspace-name">{activeWorkspace.name}</span>
+        )}
+        {workspaces.length > 1 && (
+          <div className="workspace-picker">
+            <select
+              value={activeWorkspace?.id || ''}
+              onChange={(e) => switchWorkspace(e.target.value)}
+            >
+              {workspaces.map(ws => (
+                <option key={ws.id} value={ws.id}>{ws.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="nav-links">
           {NAV_ITEMS.map(item => (
             <Link

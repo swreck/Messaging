@@ -2,6 +2,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 class ApiClient {
   private token: string | null = null;
+  private workspaceId: string | null = null;
 
   setToken(token: string | null) {
     this.token = token;
@@ -19,6 +20,22 @@ class ApiClient {
     return this.token;
   }
 
+  setWorkspaceId(id: string | null) {
+    this.workspaceId = id;
+    if (id) {
+      localStorage.setItem('maria-workspace-id', id);
+    } else {
+      localStorage.removeItem('maria-workspace-id');
+    }
+  }
+
+  getWorkspaceId(): string | null {
+    if (!this.workspaceId) {
+      this.workspaceId = localStorage.getItem('maria-workspace-id');
+    }
+    return this.workspaceId;
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -28,6 +45,11 @@ class ApiClient {
     const token = this.getToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const wsId = this.getWorkspaceId();
+    if (wsId) {
+      headers['x-workspace-id'] = wsId;
     }
 
     const res = await fetch(`${API_BASE}${path}`, {

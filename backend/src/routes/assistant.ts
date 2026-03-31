@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireWorkspace } from '../middleware/workspace.js';
 import { callAIWithJSON } from '../services/ai.js';
 import { buildAssistantPrompt } from '../prompts/assistant.js';
 import { ACTION_ALIASES, dispatchActions, readPageContent } from '../lib/actions.js';
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireWorkspace);
 
 // POST /api/assistant/message
 router.post('/message', async (req: Request, res: Response) => {
@@ -62,7 +64,7 @@ router.post('/message', async (req: Request, res: Response) => {
   }
 
   // Dispatch all actions
-  const { results: actionResults, refreshNeeded } = await dispatchActions(rawActions, userId, ctx);
+  const { results: actionResults, refreshNeeded } = await dispatchActions(rawActions, userId, ctx, req.workspaceId!);
 
   // If any action failed, override Maria's optimistic response with the failure details.
   // Maria writes her response before the action executes, so she doesn't know it failed.
@@ -88,7 +90,7 @@ router.post('/page-content', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const ctx = context || {};
 
-  const content = await readPageContent(userId, ctx);
+  const content = await readPageContent(req.workspaceId!, ctx);
   res.json({ content });
 });
 

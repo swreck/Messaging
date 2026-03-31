@@ -21,6 +21,32 @@ model User {
   offerings         Offering[]
   audiences         Audience[]
   assistantMessages AssistantMessage[]
+  workspaces        WorkspaceMember[]
+}
+
+// ─── Workspaces ──────────────────────────────────────────
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   WorkspaceMember[]
+  offerings Offering[]
+  audiences Audience[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String    @default("editor") // owner | editor | viewer
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, userId])
 }
 
 model InviteCode {
@@ -34,9 +60,11 @@ model InviteCode {
 // ─── Offerings ──────────────────────────────────────────
 
 model Offering {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   smeRole     String   @default("")
   description String   @default("")
@@ -61,9 +89,11 @@ model OfferingElement {
 // ─── Audiences ──────────────────────────────────────────
 
 model Audience {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   description String   @default("")
   createdAt   DateTime @default(now())

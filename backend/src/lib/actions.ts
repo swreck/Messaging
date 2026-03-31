@@ -31,17 +31,20 @@ export async function resolveAudienceId(
   params: Record<string, any>,
   userId: string,
   fallbackAudienceId?: string | null,
+  workspaceId?: string,
 ): Promise<string | null> {
+  // Use workspaceId for scoping if available, fall back to userId
+  const scopeFilter = workspaceId ? { workspaceId } : { userId };
   if (params.audienceName) {
     // Try exact match first (case insensitive)
     const exact = await prisma.audience.findFirst({
-      where: { userId, name: { equals: params.audienceName, mode: 'insensitive' } },
+      where: { ...scopeFilter, name: { equals: params.audienceName, mode: 'insensitive' as const } },
     });
     if (exact) return exact.id;
 
     // Fall back to contains match, shortest name first (most specific)
     const fuzzy = await prisma.audience.findFirst({
-      where: { userId, name: { contains: params.audienceName, mode: 'insensitive' } },
+      where: { ...scopeFilter, name: { contains: params.audienceName, mode: 'insensitive' as const } },
       orderBy: { name: 'asc' },
     });
     return fuzzy?.id || null;
@@ -63,6 +66,7 @@ export async function dispatchActions(
   rawActions: { type: string; params: Record<string, any> }[],
   userId: string,
   ctx: ActionContext,
+  workspaceId?: string,
 ): Promise<{ results: string[]; refreshNeeded: boolean }> {
   // Normalize aliases
   const actions = rawActions.map(a => ({
@@ -78,12 +82,12 @@ export async function dispatchActions(
     try {
 
       if (a.type === 'add_priorities' && a.params.texts) {
-        const targetAudienceId = await resolveAudienceId(a.params, userId, ctx.audienceId);
+        const targetAudienceId = await resolveAudienceId(a.params, userId, ctx.audienceId, workspaceId);
         if (!targetAudienceId) {
           actionResult = 'Could not add priorities — no audience specified or found. Try including the audience name.';
         } else {
           const audience = await prisma.audience.findFirst({
-            where: { id: targetAudienceId, userId },
+            where: { id: targetAudienceId, ...(workspaceId ? { workspaceId } : { userId }) },
             include: { priorities: true },
           });
           if (audience) {
@@ -106,12 +110,12 @@ export async function dispatchActions(
       }
 
       if (a.type === 'edit_priorities' && a.params.edits) {
-        const targetAudienceId = await resolveAudienceId(a.params, userId, ctx.audienceId);
+        const targetAudienceId = await resolveAudienceId(a.params, userId, ctx.audienceId, workspaceId);
         if (!targetAudienceId) {
           actionResult = 'Could not edit priorities — no audience specified or found. Try including the audience name.';
         } else {
           const audience = await prisma.audience.findFirst({
-            where: { id: targetAudienceId, userId },
+            where: { id: targetAudienceId, ...(workspaceId ? { workspaceId } : { userId }) },
             include: { priorities: { orderBy: { sortOrder: 'asc' } } },
           });
           if (audience) {
@@ -137,12 +141,12 @@ export async function dispatchActions(
       }
 
       if (a.type === 'delete_priorities' && a.params.positions) {
-        const targetAudienceId = await resolveAudienceId(a.params, userId, ctx.audienceId);
+        const targetAudienceId = await resolveAudienceId(a.params, userId, ctx.audienceId, workspaceId);
         if (!targetAudienceId) {
           actionResult = 'Could not delete priorities — no audience specified or found. Try including the audience name.';
         } else {
           const audience = await prisma.audience.findFirst({
-            where: { id: targetAudienceId, userId },
+            where: { id: targetAudienceId, ...(workspaceId ? { workspaceId } : { userId }) },
             include: { priorities: { orderBy: { sortOrder: 'asc' } } },
           });
           if (audience) {
@@ -176,12 +180,12 @@ export async function dispatchActions(
       }
 
       if (a.type === 'reorder_priorities' && a.params.order) {
-        const targetAudienceId = await resolveAudienceId(a.params, userId, ctx.audienceId);
+        const targetAudienceId = await resolveAudienceId(a.params, userId, ctx.audienceId, workspaceId);
         if (!targetAudienceId) {
           actionResult = 'Could not reorder priorities — no audience specified or found. Try including the audience name.';
         } else {
           const audience = await prisma.audience.findFirst({
-            where: { id: targetAudienceId, userId },
+            where: { id: targetAudienceId, ...(workspaceId ? { workspaceId } : { userId }) },
             include: { priorities: { orderBy: { sortOrder: 'asc' } } },
           });
           if (audience) {
@@ -232,6 +236,7 @@ export async function dispatchActions(
             userId,
             name: a.params.name,
             description: a.params.description || '',
+            ...(workspaceId ? { workspaceId } : {}),
           },
         });
         if (a.params.priorities && Array.isArray(a.params.priorities)) {
@@ -276,6 +281,7 @@ export async function dispatchActions(
             userId,
             name: a.params.name,
             description: a.params.description || '',
+            ...(workspaceId ? { workspaceId } : {}),
           },
         });
         if (a.params.capabilities && Array.isArray(a.params.capabilities)) {
@@ -297,7 +303,7 @@ export async function dispatchActions(
 
       if (a.type === 'add_capabilities' && ctx.offeringId && a.params.texts) {
         const offering = await prisma.offering.findFirst({
-          where: { id: ctx.offeringId, userId },
+          where: { id: ctx.offeringId, ...(workspaceId ? { workspaceId } : { userId }) },
           include: { elements: true },
         });
         if (offering) {
@@ -318,7 +324,7 @@ export async function dispatchActions(
 
       if (a.type === 'edit_capabilities' && ctx.offeringId && a.params.edits) {
         const offering = await prisma.offering.findFirst({
-          where: { id: ctx.offeringId, userId },
+          where: { id: ctx.offeringId, ...(workspaceId ? { workspaceId } : { userId }) },
           include: { elements: { orderBy: { sortOrder: 'asc' } } },
         });
         if (offering) {
@@ -340,7 +346,7 @@ export async function dispatchActions(
 
       if (a.type === 'delete_capabilities' && ctx.offeringId && a.params.positions) {
         const offering = await prisma.offering.findFirst({
-          where: { id: ctx.offeringId, userId },
+          where: { id: ctx.offeringId, ...(workspaceId ? { workspaceId } : { userId }) },
           include: { elements: { orderBy: { sortOrder: 'asc' } } },
         });
         if (offering) {
@@ -364,7 +370,7 @@ export async function dispatchActions(
       // ─── Five Chapter Story: refine, blend, create ──────
       if (a.type === 'refine_chapter' && ctx.storyId && a.params.chapterNum && a.params.feedback) {
         const story = await prisma.fiveChapterStory.findFirst({
-          where: { id: ctx.storyId, draft: { offering: { userId } } },
+          where: { id: ctx.storyId, draft: { offering: workspaceId ? { workspaceId } : { userId } } },
           include: { chapters: true },
         });
         if (story) {
@@ -398,7 +404,7 @@ export async function dispatchActions(
 
       if (a.type === 'blend_story' && ctx.storyId) {
         const story = await prisma.fiveChapterStory.findFirst({
-          where: { id: ctx.storyId, draft: { offering: { userId } } },
+          where: { id: ctx.storyId, draft: { offering: workspaceId ? { workspaceId } : { userId } } },
           include: { chapters: { orderBy: { chapterNum: 'asc' } } },
         });
         if (story && story.chapters.length >= 5) {
@@ -545,7 +551,7 @@ Write Chapter ${chNum}: "${ch.name}"`;
 
       if (a.type === 'regenerate_story' && ctx.storyId) {
         const story = await prisma.fiveChapterStory.findFirst({
-          where: { id: ctx.storyId, draft: { offering: { userId } } },
+          where: { id: ctx.storyId, draft: { offering: workspaceId ? { workspaceId } : { userId } } },
           include: {
             chapters: { orderBy: { chapterNum: 'asc' } },
             draft: {
@@ -699,16 +705,18 @@ Write Chapter ${chNum}: "${ch.name}"`;
 
 // ─── Read page content ─────────────────────────────────────────
 export async function readPageContent(
-  userId: string,
+  workspaceIdOrUserId: string,
   ctx: ActionContext,
 ): Promise<string> {
+  // This parameter now receives workspaceId for workspace-scoped queries
+  const workspaceId = workspaceIdOrUserId;
   const lines: string[] = [];
 
   try {
     // Audiences page — always include ALL audiences so Maria can compare across them
     if (ctx.page === 'audiences') {
       const audiences = await prisma.audience.findMany({
-        where: { userId },
+        where: { workspaceId },
         include: { priorities: { orderBy: { sortOrder: 'asc' } } },
       });
       for (const a of audiences) {
@@ -725,7 +733,7 @@ export async function readPageContent(
     // Active audience on non-audiences pages
     if (ctx.audienceId && ctx.page !== 'audiences') {
       const audience = await prisma.audience.findFirst({
-        where: { id: ctx.audienceId, userId },
+        where: { id: ctx.audienceId, workspaceId },
         include: { priorities: { orderBy: { sortOrder: 'asc' } } },
       });
       if (audience) {
@@ -741,7 +749,7 @@ export async function readPageContent(
     // Offerings page
     if (ctx.page === 'offerings' && !ctx.offeringId) {
       const offerings = await prisma.offering.findMany({
-        where: { userId },
+        where: { workspaceId },
         include: { elements: { orderBy: { sortOrder: 'asc' } } },
       });
       for (const o of offerings) {
@@ -757,7 +765,7 @@ export async function readPageContent(
     // Active offering
     if (ctx.offeringId) {
       const offering = await prisma.offering.findFirst({
-        where: { id: ctx.offeringId, userId },
+        where: { id: ctx.offeringId, workspaceId },
         include: { elements: { orderBy: { sortOrder: 'asc' } } },
       });
       if (offering) {
@@ -773,7 +781,7 @@ export async function readPageContent(
     // Three Tier detail
     if (ctx.draftId) {
       const draft = await prisma.threeTierDraft.findFirst({
-        where: { id: ctx.draftId, offering: { userId } },
+        where: { id: ctx.draftId, offering: { workspaceId } },
         include: {
           tier1Statement: true,
           tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
@@ -801,7 +809,7 @@ export async function readPageContent(
     // Five Chapter Story detail
     if (ctx.storyId) {
       const story = await prisma.fiveChapterStory.findFirst({
-        where: { id: ctx.storyId, draft: { offering: { userId } } },
+        where: { id: ctx.storyId, draft: { offering: { workspaceId } } },
         include: {
           chapters: { orderBy: { chapterNum: 'asc' } },
           draft: { include: { offering: true, audience: true } },
@@ -824,10 +832,10 @@ export async function readPageContent(
     // Dashboard
     if (ctx.page === 'dashboard') {
       const [audiences, offerings, drafts] = await Promise.all([
-        prisma.audience.findMany({ where: { userId }, include: { _count: { select: { priorities: true } } } }),
-        prisma.offering.findMany({ where: { userId }, include: { _count: { select: { elements: true } } } }),
+        prisma.audience.findMany({ where: { workspaceId }, include: { _count: { select: { priorities: true } } } }),
+        prisma.offering.findMany({ where: { workspaceId }, include: { _count: { select: { elements: true } } } }),
         prisma.threeTierDraft.findMany({
-          where: { offering: { userId } },
+          where: { offering: { workspaceId } },
           include: { offering: { select: { name: true } }, audience: { select: { name: true } } },
         }),
       ]);

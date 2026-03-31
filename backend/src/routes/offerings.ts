@@ -1,15 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireWorkspace } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireWorkspace);
 
 // GET /api/offerings
 router.get('/', async (req: Request, res: Response) => {
   const offerings = await prisma.offering.findMany({
-    where: { userId: req.user!.userId },
+    where: { workspaceId: req.workspaceId },
     include: { elements: { orderBy: { sortOrder: 'asc' } } },
     orderBy: { createdAt: 'desc' },
   });
@@ -25,7 +27,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const offering = await prisma.offering.create({
-    data: { name, smeRole: smeRole || '', description: description || '', userId: req.user!.userId },
+    data: { name, smeRole: smeRole || '', description: description || '', userId: req.user!.userId, workspaceId: req.workspaceId! },
     include: { elements: true },
   });
   res.status(201).json({ offering });
@@ -35,7 +37,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   const { name, smeRole, description } = req.body;
   const offering = await prisma.offering.findFirst({
-    where: { id: param(req.params.id), userId: req.user!.userId },
+    where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
   if (!offering) {
     res.status(404).json({ error: 'Offering not found' });
@@ -53,7 +55,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE /api/offerings/:id
 router.delete('/:id', async (req: Request, res: Response) => {
   const offering = await prisma.offering.findFirst({
-    where: { id: param(req.params.id), userId: req.user!.userId },
+    where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
   if (!offering) {
     res.status(404).json({ error: 'Offering not found' });
@@ -69,7 +71,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // POST /api/offerings/:id/elements
 router.post('/:id/elements', async (req: Request, res: Response) => {
   const offering = await prisma.offering.findFirst({
-    where: { id: param(req.params.id), userId: req.user!.userId },
+    where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
   if (!offering) {
     res.status(404).json({ error: 'Offering not found' });
@@ -107,7 +109,7 @@ router.put('/:id/elements/reorder', async (req: Request, res: Response) => {
   }
 
   const offering = await prisma.offering.findFirst({
-    where: { id: param(req.params.id), userId: req.user!.userId },
+    where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
   if (!offering) {
     res.status(404).json({ error: 'Offering not found' });
@@ -130,7 +132,7 @@ router.put('/:id/elements/reorder', async (req: Request, res: Response) => {
 router.put('/:offeringId/elements/:elementId', async (req: Request, res: Response) => {
   const { text } = req.body;
   const element = await prisma.offeringElement.findFirst({
-    where: { id: param(req.params.elementId), offering: { id: param(req.params.offeringId), userId: req.user!.userId } },
+    where: { id: param(req.params.elementId), offering: { id: param(req.params.offeringId), workspaceId: req.workspaceId } },
   });
   if (!element) {
     res.status(404).json({ error: 'Element not found' });
@@ -147,7 +149,7 @@ router.put('/:offeringId/elements/:elementId', async (req: Request, res: Respons
 // DELETE /api/offerings/:offeringId/elements/:elementId
 router.delete('/:offeringId/elements/:elementId', async (req: Request, res: Response) => {
   const element = await prisma.offeringElement.findFirst({
-    where: { id: param(req.params.elementId), offering: { id: param(req.params.offeringId), userId: req.user!.userId } },
+    where: { id: param(req.params.elementId), offering: { id: param(req.params.offeringId), workspaceId: req.workspaceId } },
   });
   if (!element) {
     res.status(404).json({ error: 'Element not found' });

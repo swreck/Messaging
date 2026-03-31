@@ -16,6 +16,7 @@ import aiRoutes from './routes/ai.js';
 import assistantRoutes from './routes/assistant.js';
 import partnerRoutes from './routes/partner.js';
 import settingsRoutes from './routes/settings.js';
+import workspaceRoutes from './routes/workspaces.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -37,6 +38,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/assistant', assistantRoutes);
 app.use('/api/partner', partnerRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/workspaces', workspaceRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
