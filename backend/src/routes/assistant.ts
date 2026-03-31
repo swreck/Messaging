@@ -891,7 +891,10 @@ router.post('/page-content', async (req: Request, res: Response) => {
 // DELETE /api/assistant/history
 router.delete('/history', async (req: Request, res: Response) => {
   await prisma.assistantMessage.deleteMany({
-    where: { userId: req.user!.userId },
+    where: {
+      userId: req.user!.userId,
+      NOT: { context: { path: ['channel'], equals: 'partner' } },
+    },
   });
   res.json({ success: true });
 });

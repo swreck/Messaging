@@ -5,6 +5,7 @@ import { LoginPage } from './auth/LoginPage';
 import { RegisterPage } from './auth/RegisterPage';
 import { Layout } from './shared/Layout';
 import { MariaProvider } from './shared/MariaContext';
+import { MariaPartner } from './shared/MariaPartner';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { AudiencesPage } from './pages/AudiencesPage';
 import { OfferingsPage } from './pages/OfferingsPage';
@@ -36,6 +37,7 @@ function App() {
           <Route path="/mapping/:draftId" element={<ProtectedRoute><MappingPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <MariaPartner />
         </MariaProvider>
       </AuthProvider>
     </BrowserRouter>

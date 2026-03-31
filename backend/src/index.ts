@@ -14,6 +14,7 @@ import storyRoutes from './routes/stories.js';
 import versionRoutes from './routes/versions.js';
 import aiRoutes from './routes/ai.js';
 import assistantRoutes from './routes/assistant.js';
+import partnerRoutes from './routes/partner.js';
 import settingsRoutes from './routes/settings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +35,7 @@ app.use('/api/stories', storyRoutes);
 app.use('/api/versions', versionRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/assistant', assistantRoutes);
+app.use('/api/partner', partnerRoutes);
 app.use('/api/settings', settingsRoutes);
 
 // Health check
