@@ -2647,6 +2647,8 @@ p { line-height: 1.5; color: var(--text-secondary); }
   .partner-send { min-width: 44px; min-height: 44px; }
   .partner-name-input input { font-size: 16px; }
   .partner-input-area textarea { font-size: 16px; }
+  .btn-copy-table { padding: 8px 12px; min-height: 44px; font-size: 14px; }
+  .copy-btn { padding: 8px 14px; min-height: 44px; font-size: 15px; }
 }
 
 /* ─── Empty State Enhanced ───────────────────────── */
@@ -3137,15 +3139,31 @@ p { line-height: 1.5; color: var(--text-secondary); }
   padding: 20px;
   color: #1d1d1f;
 }
+.shared-badge {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6e6e73;
+  margin-bottom: 4px;
+}
 .shared-header h1 {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
   margin-bottom: 4px;
 }
 .shared-meta {
-  font-size: 14px;
+  font-size: 15px;
   color: #6e6e73;
   margin-bottom: 24px;
+}
+.shared-footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e5ea;
+  font-size: 13px;
+  color: #aeaeb2;
+  text-align: center;
 }
 .shared-tier1 {
   font-size: 20px;

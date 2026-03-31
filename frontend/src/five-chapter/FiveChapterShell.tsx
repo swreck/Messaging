@@ -327,13 +327,17 @@ export function FiveChapterShell() {
     }
   }
 
+  function escHtml(s: string) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   function exportStory() {
     if (!story) return;
     const content = story.blendedText || story.chapters.map(c => c.content).join('\n\n');
     const title = `${draft?.offering.name || 'Story'} — ${mediumLabel}`;
 
     const html = `<!DOCTYPE html>
-<html><head><title>${title}</title>
+<html><head><title>${escHtml(title)}</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 700px; margin: 40px auto; padding: 20px; color: #1d1d1f; }
   h1 { font-size: 18px; color: #6e6e73; margin-bottom: 8px; }
@@ -341,13 +345,16 @@ export function FiveChapterShell() {
   .content { font-size: 16px; line-height: 1.7; white-space: pre-wrap; }
   @media print { body { margin: 0; } }
 </style></head><body>
-<h1>${title}</h1>
-<div class="meta">${draft?.audience.name || ''} &middot; CTA: ${story.cta}</div>
-<div class="content">${content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+<h1>${escHtml(title)}</h1>
+<div class="meta">${escHtml(draft?.audience.name || '')} &middot; CTA: ${escHtml(story.cta)}</div>
+<div style="font-size:13px;color:#aeaeb2;margin-bottom:16px;">Exported ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+<div class="content">${escHtml(content)}</div>
+<div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e5ea;font-size:13px;color:#aeaeb2;text-align:center;">Created with Maria, the Message Coach</div>
 </body></html>`;
 
     const win = window.open('', '_blank');
-    if (win) { win.document.write(html); win.document.close(); }
+    if (!win) { alert('Export blocked — please allow popups for this site.'); return; }
+    win.document.write(html); win.document.close();
   }
 
   if (loading) return <div className="loading-screen"><Spinner size={32} /></div>;
@@ -664,10 +671,10 @@ export function FiveChapterShell() {
                     <button className="copy-btn" onClick={shareStory} title="Create shareable read-only link">Share</button>
                   </div>
                   {shareUrl && (
-                    <div style={{ padding: '6px 12px', fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ padding: '6px 12px', fontSize: 14, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span>Link copied!</span>
-                      <code style={{ fontSize: 12, background: 'var(--bg-secondary, #f5f5f7)', padding: '2px 6px', borderRadius: 4 }}>{shareUrl}</code>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setShareUrl(null)} style={{ padding: '0 4px', fontSize: 12 }}>&times;</button>
+                      <code style={{ fontSize: 13, background: 'var(--bg-secondary, #f5f5f7)', padding: '4px 8px', borderRadius: 4 }}>{shareUrl}</code>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setShareUrl(null)} style={{ minWidth: 32, minHeight: 32 }}>&times;</button>
                     </div>
                   )}
                   {editingBlended ? (

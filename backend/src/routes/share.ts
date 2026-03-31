@@ -2,16 +2,37 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireWorkspace } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
 
-// POST /api/share — create a share link (requires auth)
-router.post('/', requireAuth, async (req: Request, res: Response) => {
+// POST /api/share — create a share link (requires auth + workspace)
+router.post('/', requireAuth, requireWorkspace, async (req: Request, res: Response) => {
   const { draftId, storyId } = req.body;
   if (!draftId && !storyId) {
     res.status(400).json({ error: 'draftId or storyId required' });
     return;
+  }
+
+  // Verify the user has access to the draft/story in their workspace
+  if (draftId) {
+    const draft = await prisma.threeTierDraft.findFirst({
+      where: { id: draftId, offering: { workspaceId: req.workspaceId } },
+    });
+    if (!draft) {
+      res.status(404).json({ error: 'Draft not found in your workspace' });
+      return;
+    }
+  }
+  if (storyId) {
+    const story = await prisma.fiveChapterStory.findFirst({
+      where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
+    });
+    if (!story) {
+      res.status(404).json({ error: 'Story not found in your workspace' });
+      return;
+    }
   }
 
   const token = crypto.randomBytes(16).toString('hex');

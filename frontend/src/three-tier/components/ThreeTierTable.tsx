@@ -139,6 +139,10 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
     navigator.clipboard.writeText(lines.join('\n'));
   }
 
+  function esc(s: string) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   function exportTable() {
     const t1 = draft.tier1Statement?.text || '';
     const t2s = draft.tier2Statements.map(t2 => ({
@@ -162,18 +166,21 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
   @media print { body { margin: 0; } }
 </style></head><body>
 <h1>Three Tier Message</h1>
-<div class="tier1">${t1}</div>
+<div style="font-size:13px;color:#aeaeb2;margin-bottom:16px;">Exported ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+<div class="tier1">${esc(t1)}</div>
 <div class="tier2-grid">
 ${t2s.map(t2 => `<div class="tier2-col">
-  ${t2.label ? `<div class="tier2-label">${t2.label}</div>` : ''}
-  <div class="tier2-text">${t2.text}</div>
-  <ul class="tier3-list">${t2.proofs.map(p => `<li>${p}</li>`).join('')}</ul>
+  ${t2.label ? `<div class="tier2-label">${esc(t2.label)}</div>` : ''}
+  <div class="tier2-text">${esc(t2.text)}</div>
+  <ul class="tier3-list">${t2.proofs.map(p => `<li>${esc(p)}</li>`).join('')}</ul>
 </div>`).join('')}
 </div>
+<div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e5ea;font-size:13px;color:#aeaeb2;text-align:center;">Created with Maria, the Message Coach</div>
 </body></html>`;
 
     const win = window.open('', '_blank');
-    if (win) { win.document.write(html); win.document.close(); }
+    if (!win) { alert('Export blocked — please allow popups for this site.'); return; }
+    win.document.write(html); win.document.close();
   }
 
   async function shareDraft() {
@@ -217,10 +224,10 @@ ${t2s.map(t2 => `<div class="tier2-col">
             </button>
           </div>
           {shareUrl && (
-            <div style={{ padding: '6px 12px', fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ padding: '6px 12px', fontSize: 14, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span>Link copied!</span>
-              <code style={{ fontSize: 12, background: 'var(--bg-secondary, #f5f5f7)', padding: '2px 6px', borderRadius: 4 }}>{shareUrl}</code>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShareUrl(null)} style={{ padding: '0 4px', fontSize: 12 }}>&times;</button>
+              <code style={{ fontSize: 13, background: 'var(--bg-secondary, #f5f5f7)', padding: '4px 8px', borderRadius: 4 }}>{shareUrl}</code>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShareUrl(null)} style={{ minWidth: 32, minHeight: 32 }}>&times;</button>
             </div>
           )}
           {editingCell === 'tier1' ? (

@@ -146,6 +146,41 @@ router.post('/table/:draftId/restore/:versionId', async (req: Request, res: Resp
 
   const snapshot = version.snapshot as any;
 
+  // Auto-snapshot current state before restoring so the user can undo
+  const currentDraft = await prisma.threeTierDraft.findFirst({
+    where: { id: param(req.params.draftId) },
+    include: {
+      tier1Statement: true,
+      tier2Statements: {
+        orderBy: { sortOrder: 'asc' },
+        include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } },
+      },
+    },
+  });
+  if (currentDraft) {
+    const maxVersion = await prisma.tableVersion.aggregate({
+      where: { draftId: param(req.params.draftId) },
+      _max: { versionNum: true },
+    });
+    const nextNum = (maxVersion._max?.versionNum ?? 0) + 1;
+    await prisma.tableVersion.create({
+      data: {
+        draftId: param(req.params.draftId),
+        snapshot: {
+          tier1: currentDraft.tier1Statement?.text || '',
+          tier2: currentDraft.tier2Statements.map((t2) => ({
+            text: t2.text,
+            priorityId: t2.priorityId,
+            categoryLabel: t2.categoryLabel || '',
+            tier3: t2.tier3Bullets.map((t3) => t3.text),
+          })),
+        },
+        label: `Before restore — ${new Date().toLocaleString()}`,
+        versionNum: nextNum,
+      },
+    });
+  }
+
   // Clear existing statements
   await prisma.tier2Statement.deleteMany({ where: { draftId: param(req.params.draftId) } });
   await prisma.tier1Statement.deleteMany({ where: { draftId: param(req.params.draftId) } });
@@ -297,6 +332,39 @@ router.post('/story/:storyId/restore/:versionId', async (req: Request, res: Resp
   }
 
   const snapshot = version.snapshot as any;
+
+  // Auto-snapshot current state before restoring so the user can undo
+  const currentStory = await prisma.fiveChapterStory.findFirst({
+    where: { id: storyId },
+    include: { chapters: { orderBy: { chapterNum: 'asc' } } },
+  });
+  if (currentStory) {
+    const maxVersion = await prisma.storyVersion.aggregate({
+      where: { storyId },
+      _max: { versionNum: true },
+    });
+    const nextNum = (maxVersion._max?.versionNum ?? 0) + 1;
+    await prisma.storyVersion.create({
+      data: {
+        storyId,
+        snapshot: {
+          medium: currentStory.medium,
+          cta: currentStory.cta,
+          emphasis: currentStory.emphasis,
+          stage: currentStory.stage,
+          joinedText: currentStory.joinedText || '',
+          blendedText: currentStory.blendedText || '',
+          chapters: currentStory.chapters.map(c => ({
+            chapterNum: c.chapterNum,
+            title: c.title,
+            content: c.content,
+          })),
+        },
+        label: `Before restore — ${new Date().toLocaleString()}`,
+        versionNum: nextNum,
+      },
+    });
+  }
 
   // Restore story fields
   await prisma.fiveChapterStory.update({

@@ -1,12 +1,13 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { StepProps } from './types';
 import { api } from '../../api/client';
 import { ThreeTierTable } from '../components/ThreeTierTable';
 import { Spinner } from '../../shared/Spinner';
 import { CompareModal } from '../components/CompareModal';
+import { Modal } from '../../shared/Modal';
 import type { TableVersion, ReviewResponse, DirectionResponse, TableSnapshot } from '../../types';
-import { useKeyboardShortcuts } from '../../shared/useKeyboardShortcuts';
+
 
 export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToStep }: StepProps) {
   const navigate = useNavigate();
@@ -27,6 +28,9 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
   // Compare modal
   const [compareSnapshot, setCompareSnapshot] = useState<{ snapshot: any; label: string } | null>(null);
+
+  // Restore confirmation
+  const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
 
   // Snapshot of table state for "revise from edits"
   const previousStateRef = useRef<TableSnapshot | null>(null);
@@ -212,19 +216,15 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   }
 
   async function restoreSnapshot(versionId: string) {
-    if (!confirm('Restore this snapshot? Current table will be replaced.')) return;
     await api.post(`/versions/table/${draft.id}/restore/${versionId}`);
     await loadDraft();
     clearSuggestions();
+    setRestoreTarget(null);
   }
 
   const anyBusy = reviewing || revising || refining || sendingDirection || regenerating;
 
-  const shortcuts = useMemo(() => ({
-    'cmd+shift+m': () => document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true } })),
-    'escape': () => document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: false } })),
-  }), []);
-  useKeyboardShortcuts(shortcuts);
+  // Keyboard shortcuts now handled globally in MariaPartner
 
   return (
     <div className="step-panel" style={{ maxWidth: 1100 }}>
@@ -351,6 +351,11 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         </div>
         {versionsOpen && (
           <div className="table-version-list">
+            {(draft.tableVersions?.length || 0) === 0 && (
+              <p style={{ padding: '8px 16px', fontSize: 13, color: 'var(--text-tertiary)', margin: 0 }}>
+                Save a snapshot to bookmark your current table. You can compare or restore it later.
+              </p>
+            )}
             <div style={{ padding: '8px 16px', display: 'flex', gap: 8 }}>
               <input
                 value={snapshotLabel}
@@ -370,7 +375,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button className="btn btn-ghost btn-sm" onClick={() => setCompareSnapshot({ snapshot: v.snapshot, label: v.label })}>Compare</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => restoreSnapshot(v.id)}>Restore</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setRestoreTarget(v.id)}>Restore</button>
                 </div>
               </div>
             ))}
@@ -399,6 +404,16 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           snapshotLabel={compareSnapshot.label}
         />
       )}
+
+      <Modal open={!!restoreTarget} onClose={() => setRestoreTarget(null)} title="Restore snapshot?">
+        <p style={{ fontSize: 15, color: 'var(--text-secondary)', marginBottom: 20 }}>
+          Your current table will be replaced with this snapshot. A backup of your current version will be saved automatically.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button className="btn btn-ghost" onClick={() => setRestoreTarget(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => restoreTarget && restoreSnapshot(restoreTarget)}>Restore</button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -88,7 +88,7 @@ export function MariaPartner() {
     }
   }, [open, introduced, introPhase]);
 
-  // Listen for keyboard shortcut events
+  // Listen for keyboard shortcut events (custom events from other components)
   useEffect(() => {
     function onToggle(e: Event) {
       const detail = (e as CustomEvent).detail;
@@ -102,6 +102,27 @@ export function MariaPartner() {
     document.addEventListener('maria-toggle', onToggle);
     return () => document.removeEventListener('maria-toggle', onToggle);
   }, []);
+
+  // Global keyboard shortcuts: Cmd+Shift+M to toggle, Escape to close
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setOpen(prev => {
+          if (!prev) setShowDot(false);
+          return !prev;
+        });
+      }
+      if (e.key === 'Escape' && open) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
 
   const handleOpen = useCallback(() => {
     setOpen(true);

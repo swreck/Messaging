@@ -31,7 +31,7 @@ export function ThreeTiersPage() {
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'three-tiers' }); registerRefresh(loadData); }, []);
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); loadArchivedData(); }, []);
 
   async function loadData() {
     if (hierarchy.length === 0) setLoading(true);
@@ -66,8 +66,13 @@ export function ThreeTiersPage() {
 
   async function duplicateDraft(draftId: string) {
     try {
-      await api.post(`/drafts/${draftId}/duplicate`, {});
+      const result = await api.post<{ draft: { archived?: boolean } }>(`/drafts/${draftId}/duplicate`, {});
       loadData();
+      if (result.draft?.archived) {
+        setShowArchived(true);
+        loadArchivedData();
+        alert('Duplicate created in the Archived section (an active draft already exists for this audience).');
+      }
     } catch (err: any) {
       alert(err.message || 'Failed to duplicate draft');
     }
@@ -236,15 +241,17 @@ export function ThreeTiersPage() {
         </section>
       ))}
 
-      {/* Archive toggle */}
-      <div style={{ marginTop: 24 }}>
-        <button className="btn btn-ghost btn-sm" onClick={toggleShowArchived}>
-          {showArchived ? 'Hide archived' : `Show archived${archivedHierarchy.length > 0 ? ` (${archivedHierarchy.reduce((n, o) => n + o.audiences.length, 0)})` : ''}`}
-        </button>
-      </div>
+      {/* Archive toggle — only show when there are archived items */}
+      {(showArchived || archivedHierarchy.length > 0) && (
+        <div style={{ marginTop: 24 }}>
+          <button className="btn btn-ghost btn-sm" onClick={toggleShowArchived}>
+            {showArchived ? 'Hide archived' : `Show archived (${archivedHierarchy.reduce((n, o) => n + o.audiences.length, 0)})`}
+          </button>
+        </div>
+      )}
 
       {showArchived && archivedHierarchy.length > 0 && (
-        <div style={{ marginTop: 16, opacity: 0.6 }}>
+        <div style={{ marginTop: 16 }}>
           <h3 style={{ fontSize: 15, color: 'var(--text-secondary)', marginBottom: 12 }}>Archived</h3>
           {archivedHierarchy.map(offering => (
             <section key={offering.id} className="tt-offering-section">
@@ -271,10 +278,6 @@ export function ThreeTiersPage() {
             </section>
           ))}
         </div>
-      )}
-
-      {showArchived && archivedHierarchy.length === 0 && (
-        <p style={{ marginTop: 8, color: 'var(--text-tertiary)', fontSize: 14 }}>No archived drafts.</p>
       )}
 
       <Modal open={showNewModal} onClose={() => setShowNewModal(false)} title="Start a Three Tier Message">

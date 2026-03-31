@@ -63,8 +63,9 @@ export function SharedView() {
     return (
       <div className="shared-view">
         <div className="shared-header">
-          <h1>Three Tier Message</h1>
-          <p className="shared-meta">{data.offering} &rarr; {data.audience}</p>
+          <p className="shared-badge">Three Tier Message</p>
+          <h1>{data.offering}</h1>
+          <p className="shared-meta">For {data.audience}</p>
         </div>
         <div className="shared-tier1">{data.tier1}</div>
         <div className="shared-tier2-grid" style={{ gridTemplateColumns: `repeat(${data.tier2.length}, 1fr)` }}>
@@ -82,6 +83,7 @@ export function SharedView() {
             </div>
           ))}
         </div>
+        <div className="shared-footer">Created with Maria, the Message Coach</div>
       </div>
     );
   }
@@ -91,10 +93,12 @@ export function SharedView() {
   return (
     <div className="shared-view">
       <div className="shared-header">
-        <h1>Five Chapter Story</h1>
-        <p className="shared-meta">{data.offering} &rarr; {data.audience} &middot; {data.medium}</p>
+        <p className="shared-badge">Five Chapter Story</p>
+        <h1>{data.offering}</h1>
+        <p className="shared-meta">For {data.audience} &middot; {data.medium}</p>
       </div>
       <div className="shared-story-content">{content}</div>
+      <div className="shared-footer">Created with Maria, the Message Coach</div>
     </div>
   );
 }

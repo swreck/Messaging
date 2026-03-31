@@ -183,6 +183,11 @@ router.post('/:id/duplicate', requireEditor, async (req: Request, res: Response)
     return;
   }
 
+  // If an active draft already exists for this pair, mark duplicate as archived
+  const existingActive = await prisma.threeTierDraft.findFirst({
+    where: { offeringId: draft.offeringId, audienceId: draft.audienceId, archived: false, id: { not: draft.id } },
+  });
+
   // Create the new draft at step 5 (content is already built)
   const newDraft = await prisma.threeTierDraft.create({
     data: {
@@ -190,6 +195,7 @@ router.post('/:id/duplicate', requireEditor, async (req: Request, res: Response)
       audienceId: draft.audienceId,
       currentStep: 5,
       status: draft.status,
+      archived: !!existingActive,
     },
   });
 
@@ -265,6 +271,15 @@ router.put('/:id/unarchive', requireEditor, async (req: Request, res: Response) 
   });
   if (!draft) {
     res.status(404).json({ error: 'Draft not found' });
+    return;
+  }
+
+  // Check if an active draft already exists for this offering×audience
+  const existing = await prisma.threeTierDraft.findFirst({
+    where: { offeringId: draft.offeringId, audienceId: draft.audienceId, archived: false },
+  });
+  if (existing) {
+    res.status(409).json({ error: 'An active draft already exists for this offering and audience. Archive or delete it first.' });
     return;
   }
 
