@@ -51,13 +51,17 @@ model WorkspaceMember {
 }
 
 model InviteCode {
-  id          String     @id @default(cuid())
-  code        String     @unique
-  usedById    String?    @unique
-  usedBy      User?      @relation(fields: [usedById], references: [id])
-  workspaceId String?
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  createdAt   DateTime   @default(now())
+  id           String     @id @default(cuid())
+  code         String     @unique
+  shortCode    String?    @unique
+  usedById     String?    @unique
+  usedBy       User?      @relation(fields: [usedById], references: [id])
+  workspaceId  String?
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  inviteeName  String     @default("")
+  inviteeEmail String     @default("")
+  role         String     @default("editor")
+  createdAt    DateTime   @default(now())
 }
 
 // ─── Offerings ──────────────────────────────────────────

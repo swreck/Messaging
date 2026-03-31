@@ -3,6 +3,7 @@ import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { LoginPage } from './auth/LoginPage';
 import { RegisterPage } from './auth/RegisterPage';
+import { JoinPage } from './auth/JoinPage';
 import { Layout } from './shared/Layout';
 import { MariaProvider } from './shared/MariaContext';
 import { WorkspaceProvider } from './shared/WorkspaceContext';
@@ -28,6 +29,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/join/:code" element={<JoinPage />} />
           <Route path="/" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
           <Route path="/audiences" element={<ProtectedRoute><Layout><AudiencesPage /></Layout></ProtectedRoute>} />
           <Route path="/offerings" element={<ProtectedRoute><Layout><OfferingsPage /></Layout></ProtectedRoute>} />

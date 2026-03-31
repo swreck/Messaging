@@ -94,6 +94,35 @@ router.post('/', async (req: Request, res: Response) => {
   });
 });
 
+// POST /api/workspaces/invite-standalone — invite someone who gets their own workspace
+router.post('/invite-standalone', async (req: Request, res: Response) => {
+  const { name, email } = req.body;
+  if (!name || !name.trim()) {
+    res.status(400).json({ error: 'Name is required' });
+    return;
+  }
+
+  const crypto = await import('crypto');
+  const fullCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+  const shortCode = generateShortCode(name);
+
+  await prisma.inviteCode.create({
+    data: {
+      code: fullCode,
+      shortCode,
+      inviteeName: name.trim(),
+      inviteeEmail: (email || '').trim(),
+      role: 'owner', // they own their own workspace
+    },
+  });
+
+  res.status(201).json({
+    code: shortCode,
+    link: `/join/${shortCode}`,
+    inviteeName: name.trim(),
+  });
+});
+
 // PUT /api/workspaces/:id — rename workspace (owner only)
 router.put('/:id', async (req: Request, res: Response) => {
   const { name } = req.body;
@@ -132,7 +161,20 @@ router.delete('/:id', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-// POST /api/workspaces/:id/invite — invite a user by username or generate invite code (owner only)
+// Helper: generate a short human-readable invite code from a name
+function generateShortCode(name: string): string {
+  const prefix = name.trim().split(/\s+/)[0].toUpperCase().slice(0, 8);
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 for clarity
+  let suffix = '';
+  const bytes = new Uint8Array(4);
+  globalThis.crypto.getRandomValues(bytes);
+  for (let i = 0; i < 4; i++) {
+    suffix += chars[bytes[i] % chars.length];
+  }
+  return `${prefix}-${suffix}`;
+}
+
+// POST /api/workspaces/:id/invite — invite someone to this workspace (owner only)
 router.post('/:id/invite', async (req: Request, res: Response) => {
   const membership = await prisma.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId: param(req.params.id), userId: req.user!.userId } },
@@ -142,49 +184,64 @@ router.post('/:id/invite', async (req: Request, res: Response) => {
     return;
   }
 
-  // Mode 1: Generate an invite code linked to this workspace
-  if (req.body.generateCode) {
-    const crypto = await import('crypto');
-    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
-    await prisma.inviteCode.create({
-      data: { code, workspaceId: param(req.params.id) },
+  // Mode 1: Add existing user by username (secondary flow)
+  if (req.body.username) {
+    const { username, role } = req.body;
+    const targetUser = await prisma.user.findUnique({ where: { username } });
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const existing = await prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: param(req.params.id), userId: targetUser.id } },
     });
-    res.status(201).json({ code });
+    if (existing) {
+      res.status(409).json({ error: 'User is already a member of this workspace' });
+      return;
+    }
+
+    const member = await prisma.workspaceMember.create({
+      data: {
+        workspaceId: param(req.params.id),
+        userId: targetUser.id,
+        role: role || 'editor',
+      },
+    });
+
+    res.status(201).json({ member: { id: member.id, userId: targetUser.id, username, role: member.role } });
     return;
   }
 
-  // Mode 2: Add existing user by username
-  const { username, role } = req.body;
-  if (!username) {
-    res.status(400).json({ error: 'username is required' });
+  // Mode 2: Generate a named invite code (primary flow)
+  const { name, email, role } = req.body;
+  if (!name || !name.trim()) {
+    res.status(400).json({ error: 'Name is required' });
     return;
   }
 
-  const targetUser = await prisma.user.findUnique({ where: { username } });
-  if (!targetUser) {
-    res.status(404).json({ error: 'User not found' });
-    return;
-  }
+  const crypto = await import('crypto');
+  const fullCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+  const shortCode = generateShortCode(name);
 
-  // Check if already a member
-  const existing = await prisma.workspaceMember.findUnique({
-    where: { workspaceId_userId: { workspaceId: param(req.params.id), userId: targetUser.id } },
-  });
-  if (existing) {
-    res.status(409).json({ error: 'User is already a member of this workspace' });
-    return;
-  }
-
-  const member = await prisma.workspaceMember.create({
+  await prisma.inviteCode.create({
     data: {
+      code: fullCode,
+      shortCode,
       workspaceId: param(req.params.id),
-      userId: targetUser.id,
+      inviteeName: name.trim(),
+      inviteeEmail: (email || '').trim(),
       role: role || 'editor',
     },
   });
 
-  res.status(201).json({ member: { id: member.id, userId: targetUser.id, username, role: member.role } });
+  res.status(201).json({
+    code: shortCode,
+    link: `/join/${shortCode}`,
+    inviteeName: name.trim(),
+  });
 });
+
 
 // GET /api/workspaces/:id/invite-codes — list active (unused) invite codes for a workspace
 router.get('/:id/invite-codes', async (req: Request, res: Response) => {
@@ -204,7 +261,14 @@ router.get('/:id/invite-codes', async (req: Request, res: Response) => {
     orderBy: { createdAt: 'desc' },
   });
 
-  res.json({ codes: codes.map(c => ({ id: c.id, code: c.code, createdAt: c.createdAt.toISOString() })) });
+  res.json({ codes: codes.map(c => ({
+    id: c.id,
+    code: c.shortCode || c.code,
+    inviteeName: c.inviteeName,
+    inviteeEmail: c.inviteeEmail,
+    role: c.role,
+    createdAt: c.createdAt.toISOString(),
+  })) });
 });
 
 // DELETE /api/workspaces/:id/members/:userId — remove a member (owner only)

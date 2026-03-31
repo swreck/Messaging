@@ -24,7 +24,16 @@ interface Member {
 interface InviteCodeData {
   id: string;
   code: string;
+  inviteeName: string;
+  inviteeEmail: string;
+  role: string;
   createdAt: string;
+}
+
+interface InviteResult {
+  code: string;
+  link: string;
+  inviteeName: string;
 }
 
 const INITIAL_COLORS = [
@@ -38,6 +47,10 @@ function getInitialColor(name: string): string {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
   return INITIAL_COLORS[Math.abs(hash) % INITIAL_COLORS.length];
+}
+
+function getBaseUrl(): string {
+  return window.location.origin;
 }
 
 export function WorkspacesPage() {
@@ -63,15 +76,32 @@ export function WorkspacesPage() {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState('');
 
-  // Invite by username
-  const [inviteUsername, setInviteUsername] = useState<Record<string, string>>({});
-  const [inviteRole, setInviteRole] = useState<Record<string, string>>({});
-  const [inviteError, setInviteError] = useState<Record<string, string>>({});
-  const [inviting, setInviting] = useState<Set<string>>(new Set());
+  // Per-workspace inline invite form
+  const [wsInviteName, setWsInviteName] = useState<Record<string, string>>({});
+  const [wsInviteEmail, setWsInviteEmail] = useState<Record<string, string>>({});
+  const [wsInviteRole, setWsInviteRole] = useState<Record<string, string>>({});
+  const [wsInviteResult, setWsInviteResult] = useState<Record<string, InviteResult | null>>({});
+  const [wsInviteError, setWsInviteError] = useState<Record<string, string>>({});
+  const [wsInviting, setWsInviting] = useState<Set<string>>(new Set());
 
-  // Generated code display
-  const [generatedCode, setGeneratedCode] = useState<Record<string, string>>({});
-  const [generating, setGenerating] = useState<Set<string>>(new Set());
+  // Per-workspace "add existing user" expand
+  const [showAddExisting, setShowAddExisting] = useState<Set<string>>(new Set());
+  const [addUsername, setAddUsername] = useState<Record<string, string>>({});
+  const [addRole, setAddRole] = useState<Record<string, string>>({});
+  const [addError, setAddError] = useState<Record<string, string>>({});
+  const [adding, setAdding] = useState<Set<string>>(new Set());
+
+  // Global invite modal
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [globalInviteName, setGlobalInviteName] = useState('');
+  const [globalInviteEmail, setGlobalInviteEmail] = useState('');
+  const [globalInviteWsId, setGlobalInviteWsId] = useState<string>('standalone');
+  const [globalInviteRole, setGlobalInviteRole] = useState('editor');
+  const [globalInviteResult, setGlobalInviteResult] = useState<InviteResult | null>(null);
+  const [globalInviteError, setGlobalInviteError] = useState('');
+  const [globalInviting, setGlobalInviting] = useState(false);
+
+  // Copied feedback
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => { loadWorkspaces(); }, []);
@@ -92,7 +122,6 @@ export function WorkspacesPage() {
       next.delete(wsId);
     } else {
       next.add(wsId);
-      // Load members and invite codes if not already loaded
       if (!members[wsId]) {
         await loadWorkspaceDetails(wsId);
       }
@@ -142,25 +171,57 @@ export function WorkspacesPage() {
     await loadWorkspaces();
   }
 
-  async function handleInviteUser(wsId: string) {
-    const username = inviteUsername[wsId]?.trim();
+  // Per-workspace invite (primary flow: name + email)
+  async function handleWsInvite(wsId: string) {
+    const name = wsInviteName[wsId]?.trim();
+    if (!name) return;
+    setWsInviting(prev => new Set(prev).add(wsId));
+    setWsInviteError(prev => ({ ...prev, [wsId]: '' }));
+    setWsInviteResult(prev => ({ ...prev, [wsId]: null }));
+    try {
+      const result = await api.post<InviteResult>(`/workspaces/${wsId}/invite`, {
+        name,
+        email: wsInviteEmail[wsId]?.trim() || undefined,
+        role: wsInviteRole[wsId] || 'editor',
+      });
+      setWsInviteResult(prev => ({ ...prev, [wsId]: result }));
+      setWsInviteName(prev => ({ ...prev, [wsId]: '' }));
+      setWsInviteEmail(prev => ({ ...prev, [wsId]: '' }));
+      // Refresh pending invites
+      const codesRes = await api.get<{ codes: InviteCodeData[] }>(`/workspaces/${wsId}/invite-codes`).catch(() => ({ codes: [] as InviteCodeData[] }));
+      setInviteCodes(prev => ({ ...prev, [wsId]: codesRes.codes }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create invite';
+      setWsInviteError(prev => ({ ...prev, [wsId]: msg }));
+    } finally {
+      setWsInviting(prev => {
+        const next = new Set(prev);
+        next.delete(wsId);
+        return next;
+      });
+    }
+  }
+
+  // Add existing user by username (secondary flow)
+  async function handleAddExisting(wsId: string) {
+    const username = addUsername[wsId]?.trim();
     if (!username) return;
-    setInviting(prev => new Set(prev).add(wsId));
-    setInviteError(prev => ({ ...prev, [wsId]: '' }));
+    setAdding(prev => new Set(prev).add(wsId));
+    setAddError(prev => ({ ...prev, [wsId]: '' }));
     try {
       await api.post(`/workspaces/${wsId}/invite`, {
         username,
-        role: inviteRole[wsId] || 'editor',
+        role: addRole[wsId] || 'editor',
       });
-      setInviteUsername(prev => ({ ...prev, [wsId]: '' }));
+      setAddUsername(prev => ({ ...prev, [wsId]: '' }));
       await loadWorkspaceDetails(wsId);
       await reload();
       await loadWorkspaces();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to invite user';
-      setInviteError(prev => ({ ...prev, [wsId]: msg }));
+      const msg = err instanceof Error ? err.message : 'Failed to add user';
+      setAddError(prev => ({ ...prev, [wsId]: msg }));
     } finally {
-      setInviting(prev => {
+      setAdding(prev => {
         const next = new Set(prev);
         next.delete(wsId);
         return next;
@@ -168,28 +229,50 @@ export function WorkspacesPage() {
     }
   }
 
-  async function handleGenerateCode(wsId: string) {
-    setGenerating(prev => new Set(prev).add(wsId));
+  // Global invite modal
+  async function handleGlobalInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!globalInviteName.trim()) return;
+    setGlobalInviting(true);
+    setGlobalInviteError('');
+    setGlobalInviteResult(null);
     try {
-      const { code } = await api.post<{ code: string }>(`/workspaces/${wsId}/invite`, {
-        generateCode: true,
-      });
-      setGeneratedCode(prev => ({ ...prev, [wsId]: code }));
-      // Refresh invite codes list
-      const codesRes = await api.get<{ codes: InviteCodeData[] }>(`/workspaces/${wsId}/invite-codes`).catch(() => ({ codes: [] as InviteCodeData[] }));
-      setInviteCodes(prev => ({ ...prev, [wsId]: codesRes.codes }));
+      let result: InviteResult;
+      if (globalInviteWsId === 'standalone') {
+        result = await api.post<InviteResult>('/workspaces/invite-standalone', {
+          name: globalInviteName.trim(),
+          email: globalInviteEmail.trim() || undefined,
+        });
+      } else {
+        result = await api.post<InviteResult>(`/workspaces/${globalInviteWsId}/invite`, {
+          name: globalInviteName.trim(),
+          email: globalInviteEmail.trim() || undefined,
+          role: globalInviteRole,
+        });
+      }
+      setGlobalInviteResult(result);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create invite';
+      setGlobalInviteError(msg);
     } finally {
-      setGenerating(prev => {
-        const next = new Set(prev);
-        next.delete(wsId);
-        return next;
-      });
+      setGlobalInviting(false);
     }
   }
 
-  async function handleCopyCode(code: string) {
-    await navigator.clipboard.writeText(code);
-    setCopied(code);
+  function resetGlobalInvite() {
+    setGlobalInviteName('');
+    setGlobalInviteEmail('');
+    setGlobalInviteWsId('standalone');
+    setGlobalInviteRole('editor');
+    setGlobalInviteResult(null);
+    setGlobalInviteError('');
+    setShowInviteModal(false);
+  }
+
+  async function handleCopyLink(link: string) {
+    const fullLink = `${getBaseUrl()}${link}`;
+    await navigator.clipboard.writeText(fullLink);
+    setCopied(link);
     setTimeout(() => setCopied(null), 2000);
   }
 
@@ -209,6 +292,7 @@ export function WorkspacesPage() {
   }
 
   const isOwner = (ws: WorkspaceData) => ws.role === 'owner' || ws.role === 'admin';
+  const ownedWorkspaces = workspaces.filter(isOwner);
 
   if (loading) {
     return <div className="loading-screen"><div className="spinner" /></div>;
@@ -221,7 +305,10 @@ export function WorkspacesPage() {
           <h1>Your Workspaces</h1>
           <p className="page-description">Manage your workspaces and team members</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowNewModal(true)}>New Workspace</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-ghost" onClick={() => setShowInviteModal(true)}>Invite Someone</button>
+          <button className="btn btn-primary" onClick={() => setShowNewModal(true)}>New Workspace</button>
+        </div>
       </header>
 
       {workspaces.length === 0 && (
@@ -319,23 +406,32 @@ export function WorkspacesPage() {
                     {/* Invite section (owner only) */}
                     {isOwner(ws) && (
                       <div className="workspace-invite">
-                        <h4>Invite</h4>
+                        <h4>Invite Someone</h4>
 
-                        {/* Add existing user */}
-                        <div className="workspace-invite-section">
-                          <label className="workspace-invite-label">Add existing user</label>
-                          <div className="workspace-invite-row">
-                            <input
-                              type="text"
-                              placeholder="Username"
-                              value={inviteUsername[ws.id] || ''}
-                              onChange={e => setInviteUsername(prev => ({ ...prev, [ws.id]: e.target.value }))}
-                              onKeyDown={e => { if (e.key === 'Enter') handleInviteUser(ws.id); }}
-                              className="workspace-invite-input"
-                            />
+                        {/* Primary invite form: name + email */}
+                        <div className="invite-form">
+                          <div className="invite-form-row">
+                            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                              <input
+                                type="text"
+                                placeholder="Name (e.g., Ryan)"
+                                value={wsInviteName[ws.id] || ''}
+                                onChange={e => setWsInviteName(prev => ({ ...prev, [ws.id]: e.target.value }))}
+                              />
+                            </div>
+                            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                              <input
+                                type="email"
+                                placeholder="Email (optional)"
+                                value={wsInviteEmail[ws.id] || ''}
+                                onChange={e => setWsInviteEmail(prev => ({ ...prev, [ws.id]: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+                          <div className="invite-form-row" style={{ marginTop: 8 }}>
                             <select
-                              value={inviteRole[ws.id] || 'editor'}
-                              onChange={e => setInviteRole(prev => ({ ...prev, [ws.id]: e.target.value }))}
+                              value={wsInviteRole[ws.id] || 'editor'}
+                              onChange={e => setWsInviteRole(prev => ({ ...prev, [ws.id]: e.target.value }))}
                               className="workspace-role-select"
                             >
                               <option value="editor">Editor</option>
@@ -343,63 +439,97 @@ export function WorkspacesPage() {
                             </select>
                             <button
                               className="btn btn-primary btn-sm"
-                              onClick={() => handleInviteUser(ws.id)}
-                              disabled={inviting.has(ws.id) || !inviteUsername[ws.id]?.trim()}
+                              onClick={() => handleWsInvite(ws.id)}
+                              disabled={wsInviting.has(ws.id) || !(wsInviteName[ws.id] || '').trim()}
                             >
-                              {inviting.has(ws.id) ? 'Adding...' : 'Add'}
+                              {wsInviting.has(ws.id) ? 'Creating...' : 'Send Invite'}
                             </button>
                           </div>
-                          {inviteError[ws.id] && (
-                            <div className="form-error" style={{ marginTop: 4 }}>{inviteError[ws.id]}</div>
-                          )}
                         </div>
 
-                        {/* Generate invite link */}
-                        <div className="workspace-invite-section">
-                          <label className="workspace-invite-label">Generate invite code</label>
-                          <p className="text-secondary" style={{ fontSize: 13, margin: '0 0 8px' }}>
-                            New users who register with this code will automatically join this workspace.
-                          </p>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => handleGenerateCode(ws.id)}
-                            disabled={generating.has(ws.id)}
-                          >
-                            {generating.has(ws.id) ? 'Generating...' : 'Generate Code'}
-                          </button>
+                        {wsInviteError[ws.id] && (
+                          <div className="form-error" style={{ marginTop: 8 }}>{wsInviteError[ws.id]}</div>
+                        )}
 
-                          {generatedCode[ws.id] && (
-                            <div className="invite-code-display">
-                              <code className="invite-code-value">{generatedCode[ws.id]}</code>
+                        {/* Invite success */}
+                        {wsInviteResult[ws.id] && (
+                          <div className="invite-success">
+                            <div className="invite-success-header">Invite created for {wsInviteResult[ws.id]!.inviteeName}</div>
+                            <div className="invite-link-row">
+                              <code className="invite-link">{getBaseUrl()}{wsInviteResult[ws.id]!.link}</code>
                               <button
                                 className="btn btn-ghost btn-sm"
-                                onClick={() => handleCopyCode(generatedCode[ws.id])}
+                                onClick={() => handleCopyLink(wsInviteResult[ws.id]!.link)}
                               >
-                                {copied === generatedCode[ws.id] ? 'Copied' : 'Copy'}
+                                {copied === wsInviteResult[ws.id]!.link ? 'Copied!' : 'Copy'}
                               </button>
                             </div>
-                          )}
+                          </div>
+                        )}
 
-                          {/* List active codes */}
-                          {(inviteCodes[ws.id] || []).length > 0 && (
-                            <div className="workspace-active-codes">
-                              <span className="workspace-invite-label" style={{ fontSize: 13 }}>
-                                Active codes ({inviteCodes[ws.id].length})
-                              </span>
-                              {inviteCodes[ws.id].map(c => (
-                                <div key={c.id} className="invite-code-display invite-code-small">
-                                  <code className="invite-code-value">{c.code}</code>
-                                  <button
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={() => handleCopyCode(c.code)}
-                                  >
-                                    {copied === c.code ? 'Copied' : 'Copy'}
-                                  </button>
-                                </div>
-                              ))}
+                        {/* Pending invites */}
+                        {(inviteCodes[ws.id] || []).length > 0 && (
+                          <div className="invite-pending">
+                            <span className="workspace-invite-label" style={{ fontSize: 13 }}>
+                              Pending invites ({inviteCodes[ws.id].length})
+                            </span>
+                            {inviteCodes[ws.id].map(c => (
+                              <div key={c.id} className="invite-pending-row">
+                                <span className="invite-pending-name">{c.inviteeName || 'Unnamed'}</span>
+                                <code className="invite-pending-code">{c.code}</code>
+                                <span className="invite-pending-role">{c.role}</span>
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => handleCopyLink(`/join/${c.code}`)}
+                                >
+                                  {copied === `/join/${c.code}` ? 'Copied!' : 'Copy Link'}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Secondary: add existing user */}
+                        {!showAddExisting.has(ws.id) ? (
+                          <button
+                            className="btn-text-link"
+                            onClick={() => setShowAddExisting(prev => new Set(prev).add(ws.id))}
+                            style={{ marginTop: 12 }}
+                          >
+                            Already have an account? Add by username
+                          </button>
+                        ) : (
+                          <div className="workspace-invite-section" style={{ marginTop: 12 }}>
+                            <div className="workspace-invite-row">
+                              <input
+                                type="text"
+                                placeholder="Username"
+                                value={addUsername[ws.id] || ''}
+                                onChange={e => setAddUsername(prev => ({ ...prev, [ws.id]: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') handleAddExisting(ws.id); }}
+                                className="workspace-invite-input"
+                              />
+                              <select
+                                value={addRole[ws.id] || 'editor'}
+                                onChange={e => setAddRole(prev => ({ ...prev, [ws.id]: e.target.value }))}
+                                className="workspace-role-select"
+                              >
+                                <option value="editor">Editor</option>
+                                <option value="viewer">Viewer</option>
+                              </select>
+                              <button
+                                className="btn btn-primary btn-sm"
+                                onClick={() => handleAddExisting(ws.id)}
+                                disabled={adding.has(ws.id) || !(addUsername[ws.id] || '').trim()}
+                              >
+                                {adding.has(ws.id) ? 'Adding...' : 'Add'}
+                              </button>
                             </div>
-                          )}
-                        </div>
+                            {addError[ws.id] && (
+                              <div className="form-error" style={{ marginTop: 4 }}>{addError[ws.id]}</div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </>
@@ -441,6 +571,102 @@ export function WorkspacesPage() {
           <button className="btn btn-ghost" onClick={() => setJustCreated(null)}>Stay Here</button>
           <button className="btn btn-primary" onClick={handleSwitchToNew}>Switch Now</button>
         </div>
+      </Modal>
+
+      {/* Global Invite Modal */}
+      <Modal open={showInviteModal} onClose={resetGlobalInvite} title="Invite Someone to Maria">
+        {globalInviteResult ? (
+          <div>
+            <div className="invite-success">
+              <div className="invite-success-header">Invite created for {globalInviteResult.inviteeName}</div>
+              <div className="invite-link-row">
+                <code className="invite-link">{getBaseUrl()}{globalInviteResult.link}</code>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => handleCopyLink(globalInviteResult.link)}
+                >
+                  {copied === globalInviteResult.link ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={resetGlobalInvite}>Done</button>
+              <button className="btn btn-primary" onClick={() => {
+                setGlobalInviteResult(null);
+                setGlobalInviteName('');
+                setGlobalInviteEmail('');
+              }}>Invite Another</button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleGlobalInvite}>
+            <div className="form-group">
+              <label>Name</label>
+              <input
+                value={globalInviteName}
+                onChange={e => setGlobalInviteName(e.target.value)}
+                placeholder="e.g., Ryan"
+                required
+                autoFocus
+              />
+            </div>
+            <div className="form-group">
+              <label>Email <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>(optional)</span></label>
+              <input
+                type="email"
+                value={globalInviteEmail}
+                onChange={e => setGlobalInviteEmail(e.target.value)}
+                placeholder="ryan@example.com"
+              />
+            </div>
+            <div className="form-group">
+              <label>Add them to</label>
+              <div className="invite-workspace-picker">
+                {ownedWorkspaces.map(ws => (
+                  <label key={ws.id} className="invite-radio-option">
+                    <input
+                      type="radio"
+                      name="invite-workspace"
+                      value={ws.id}
+                      checked={globalInviteWsId === ws.id}
+                      onChange={() => setGlobalInviteWsId(ws.id)}
+                    />
+                    <span>{ws.name}</span>
+                  </label>
+                ))}
+                <label className="invite-radio-option">
+                  <input
+                    type="radio"
+                    name="invite-workspace"
+                    value="standalone"
+                    checked={globalInviteWsId === 'standalone'}
+                    onChange={() => setGlobalInviteWsId('standalone')}
+                  />
+                  <span>Their own fresh workspace</span>
+                </label>
+              </div>
+            </div>
+            {globalInviteWsId !== 'standalone' && (
+              <div className="form-group">
+                <label>Role</label>
+                <select
+                  value={globalInviteRole}
+                  onChange={e => setGlobalInviteRole(e.target.value)}
+                >
+                  <option value="editor">Editor</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </div>
+            )}
+            {globalInviteError && <div className="form-error">{globalInviteError}</div>}
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={resetGlobalInvite}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={globalInviting}>
+                {globalInviting ? 'Creating...' : 'Create Invite'}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

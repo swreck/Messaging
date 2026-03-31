@@ -2,8 +2,37 @@ import { Router, Request, Response } from 'express';
 import bcryptjs from 'bcryptjs';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth, requireAdmin, signToken, AuthPayload } from '../middleware/auth.js';
+import { param } from '../lib/params.js';
 
 const router = Router();
+
+// GET /api/auth/invite/:code — look up an invite by shortCode or full code
+router.get('/invite/:code', async (req: Request, res: Response) => {
+  const lookupCode = param(req.params.code);
+
+  // Try shortCode first, then full code
+  let invite = await prisma.inviteCode.findFirst({
+    where: {
+      OR: [
+        { shortCode: lookupCode },
+        { code: lookupCode },
+      ],
+    },
+    include: { workspace: { select: { name: true } } },
+  });
+
+  if (!invite || invite.usedById) {
+    res.json({ valid: false });
+    return;
+  }
+
+  res.json({
+    valid: true,
+    inviteeName: invite.inviteeName,
+    workspaceName: invite.workspace?.name || null,
+    role: invite.role,
+  });
+});
 
 // POST /api/auth/register
 router.post('/register', async (req: Request, res: Response) => {
@@ -19,8 +48,11 @@ router.post('/register', async (req: Request, res: Response) => {
     return;
   }
 
-  // Validate invite code
-  const code = await prisma.inviteCode.findUnique({ where: { code: inviteCode } });
+  // Validate invite code — try shortCode first, then full code
+  let code = await prisma.inviteCode.findUnique({ where: { shortCode: inviteCode } });
+  if (!code) {
+    code = await prisma.inviteCode.findUnique({ where: { code: inviteCode } });
+  }
   if (!code) {
     res.status(400).json({ error: 'Invalid invite code' });
     return;
@@ -56,7 +88,7 @@ router.post('/register', async (req: Request, res: Response) => {
       data: {
         workspaceId: code.workspaceId,
         userId: user.id,
-        role: 'editor',
+        role: code.role || 'editor',
       },
     });
   } else {
