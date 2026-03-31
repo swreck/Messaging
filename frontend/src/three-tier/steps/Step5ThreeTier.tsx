@@ -310,7 +310,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         )}
         {hasEdited && (
           <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={anyBusy} title="Maria analyzes your changes and suggests revisions to match">
-            {revising ? <><Spinner size={12} /> Revising...</> : 'Learn from my edits & revise'}
+            {revising ? <><Spinner size={12} /> Revising...</> : 'Match the rest to my edits'}
           </button>
         )}
         {suggestions.size > 0 && (
