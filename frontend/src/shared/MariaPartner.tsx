@@ -278,9 +278,46 @@ export function MariaPartner() {
     return null;
   }
 
-  // Format message text with paragraph and line breaks
+  // Format message text with paragraph breaks, line breaks, and basic markdown
+  function formatLine(line: string, key: number) {
+    // Process bold (**text**) and italic (*text*)
+    const parts: React.ReactNode[] = [];
+    let remaining = line;
+    let partKey = 0;
+    while (remaining.length > 0) {
+      // Bold: **text**
+      const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
+      // Italic: *text* (but not **)
+      const italicMatch = remaining.match(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/);
+
+      const match = boldMatch && italicMatch
+        ? (boldMatch.index! <= italicMatch.index! ? boldMatch : italicMatch)
+        : boldMatch || italicMatch;
+
+      if (!match || match.index === undefined) {
+        parts.push(<span key={partKey++}>{remaining}</span>);
+        break;
+      }
+
+      if (match.index > 0) {
+        parts.push(<span key={partKey++}>{remaining.slice(0, match.index)}</span>);
+      }
+
+      if (match[0].startsWith('**')) {
+        parts.push(<strong key={partKey++}>{match[1]}</strong>);
+      } else {
+        parts.push(<em key={partKey++}>{match[1]}</em>);
+      }
+
+      remaining = remaining.slice(match.index + match[0].length);
+    }
+    return <span key={key}>{parts}</span>;
+  }
+
   function formatContent(text: string) {
-    const paragraphs = text.split(/\n\n+/);
+    // Strip action result brackets from stored messages
+    const cleaned = text.replace(/\n\n\[.+\]$/, '');
+    const paragraphs = cleaned.split(/\n\n+/);
     return paragraphs.map((p, i) => {
       const lines = p.split(/\n/);
       return (
@@ -289,7 +326,7 @@ export function MariaPartner() {
           {lines.map((line, j) => (
             <span key={j}>
               {j > 0 && <br />}
-              {line}
+              {formatLine(line, j)}
             </span>
           ))}
         </span>
