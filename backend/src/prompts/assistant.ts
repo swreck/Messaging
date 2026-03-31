@@ -1,4 +1,5 @@
 import { KENS_VOICE } from './generation.js';
+import { buildActionList } from '../lib/actions.js';
 
 const METHODOLOGY_REFERENCE = `
 METHODOLOGY REFERENCE — This is the SOLE SOURCE OF TRUTH for Ken Rosen's methodology. When answering methodology questions, use ONLY the definitions below. Do NOT paraphrase, improvise, or draw on outside knowledge about sales frameworks. Use the exact chapter names, goals, and rules as written here.
@@ -116,72 +117,7 @@ export function buildAssistantPrompt(context: {
   audienceId?: string;
   offeringId?: string;
 }): string {
-  const actions: string[] = [];
-
-  // read_page is always available
-  actions.push('- read_page: Request to see the content currently visible on the page. Use this when the user references specific items on the page ("the 2nd priority," "chapter 3," "that first column") and you need to see what they see. Params: {}');
-
-  // Audience actions
-  if (context.audienceId) {
-    actions.push('- edit_audience: Update the current audience name or description. Params: { name?: string, description?: string }');
-  }
-
-  // Priority actions — on audiences page, all can target ANY audience by name
-  if (context.page === 'audiences') {
-    actions.push('- add_priorities: Add new priorities to an audience. Params: { texts: string[], audienceName?: string } — audienceName targets a specific audience by name (partial match OK). If omitted, adds to the currently selected audience.');
-    actions.push('- edit_priorities: Rename, rewrite, or update the text/motivatingFactor of existing priorities. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }], audienceName?: string } — position is 1-based. audienceName targets a specific audience by name. If omitted, edits the currently selected audience.');
-    actions.push('- delete_priorities: Remove priorities by their position. Params: { positions: number[], audienceName?: string } — 1-based positions. audienceName targets a specific audience.');
-    actions.push('- reorder_priorities: Set the full ranked order of priorities. Params: { order: number[], audienceName?: string } — array of current positions in the desired new order, e.g. [4, 1, 3, 2] means current #4 becomes #1. audienceName targets a specific audience.');
-  } else if (context.audienceId) {
-    actions.push('- add_priorities: Add new priorities to the current audience. Params: { texts: string[] }');
-    actions.push('- edit_priorities: Rename, rewrite, or update the text/motivatingFactor of existing priorities. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }] } — position is 1-based');
-    actions.push('- delete_priorities: Remove priorities by their position on the page. Params: { positions: number[] } — 1-based positions');
-    actions.push('- reorder_priorities: Set the full ranked order of priorities. Params: { order: number[] } — array of current positions in the desired new order, e.g. [4, 1, 3, 2] means current #4 becomes #1');
-  }
-
-  // Offering actions
-  if (context.offeringId) {
-    actions.push('- edit_offering: Update the current offering name or description. Params: { name?: string, description?: string }');
-    actions.push('- add_capabilities: Add new capabilities to the current offering. Params: { texts: string[] }');
-    actions.push('- edit_capabilities: Rename/rewrite capabilities. Params: { edits: [{ position: number, text: string }] } — position is 1-based');
-    actions.push('- delete_capabilities: Remove capabilities by position. Params: { positions: number[] } — 1-based positions');
-  }
-
-  // Offerings listing page (no specific offering selected)
-  if (context.page === 'offerings' && !context.offeringId) {
-    actions.push('- create_offering: Create a new offering, optionally with initial capabilities. Params: { name: string, description?: string, capabilities?: string[] }');
-  }
-
-  // Audiences listing page — create is always available here
-  if (context.page === 'audiences') {
-    actions.push('- create_audience: Create a new audience, optionally with initial priorities. Params: { name: string, description?: string, priorities?: string[] } — priorities is an ordered array of priority texts, rank follows array order');
-  }
-
-  // Five Chapter Story actions
-  if (context.storyId) {
-    actions.push('- update_story_params: Change story parameters. Params: { medium?, cta?, emphasis? }');
-    actions.push('- regenerate_story: Regenerate all chapters from scratch. Params: {}');
-    actions.push('- refine_chapter: Give feedback on a specific chapter to improve it. Params: { chapterNum: number, feedback: string }');
-    actions.push('- blend_story: Blend all chapters into a single polished narrative. Params: {}');
-    actions.push('- copy_edit: Apply an edit to the blended story. Params: { instruction: string }');
-  }
-
-  // When on a draft but no story yet, allow creating one
-  if (context.draftId && !context.storyId) {
-    actions.push('- create_story: Generate a new Five Chapter Story from this Three Tier draft. Params: { medium: string, cta: string, emphasis?: string } — medium options: email, blog, social, landing_page, in_person, press_release, newsletter, report');
-  }
-
-  // When a story exists, allow creating a new version in a different medium
-  if (context.storyId && context.draftId) {
-    actions.push('- create_story: Generate a NEW Five Chapter Story in a different medium from the same Three Tier draft. Params: { medium: string, cta: string, emphasis?: string } — e.g. "that email is good, now give me a newsletter version"');
-  }
-
-  // Three Tier actions
-  if (context.draftId) {
-    actions.push('- edit_tier: Apply direction to the Three Tier table. Params: { instruction: string }');
-  }
-
-  const actionList = `\nACTIONS YOU CAN TAKE (only if the user's request clearly calls for one):\n${actions.join('\n')}\n`;
+  const actionList = buildActionList(context);
 
   return `You are Maria, a friendly and expert messaging coach. You are deeply knowledgeable about Ken Rosen's Three Tier and Five Chapter Story methodologies. You can answer detailed questions about the methodology, coach users through the process, and help them evaluate their work.
 

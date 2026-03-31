@@ -8,6 +8,7 @@ import type { TableVersion, ReviewResponse, DirectionResponse, TableSnapshot } f
 
 export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToStep }: StepProps) {
   const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Map<string, string>>(new Map());
   const [reviewing, setReviewing] = useState(false);
   const [revising, setRevising] = useState(false);
@@ -39,6 +40,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   }
 
   async function askMaria() {
+    setError(null);
     setReviewing(true);
     try {
       const result = await api.post<ReviewResponse>('/ai/review', { draftId: draft.id });
@@ -49,7 +51,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       setSuggestions(map);
       previousStateRef.current = captureState();
     } catch (err: any) {
-      alert(`Review failed: ${err.message}`);
+      setError('Something went wrong. Please try again.');
     } finally {
       setReviewing(false);
     }
@@ -57,6 +59,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
   async function reviseFromEdits() {
     if (!previousStateRef.current) return;
+    setError(null);
     setRevising(true);
     try {
       const result = await api.post<ReviewResponse>('/ai/revise', {
@@ -71,13 +74,14 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       previousStateRef.current = captureState();
       setHasEdited(false);
     } catch (err: any) {
-      alert(`Revise failed: ${err.message}`);
+      setError('Something went wrong. Please try again.');
     } finally {
       setRevising(false);
     }
   }
 
   async function refineLanguage() {
+    setError(null);
     setRefining(true);
     try {
       const result = await api.post<{
@@ -90,7 +94,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       setSuggestions(map);
       previousStateRef.current = captureState();
     } catch (err: any) {
-      alert(`Refine failed: ${err.message}`);
+      setError('Something went wrong. Please try again.');
     } finally {
       setRefining(false);
     }
@@ -98,6 +102,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
   async function sendDirection() {
     if (!directionText.trim()) return;
+    setError(null);
     setSendingDirection(true);
     try {
       const result = await api.post<DirectionResponse>('/ai/direction', {
@@ -112,7 +117,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       setDirectionText('');
       previousStateRef.current = captureState();
     } catch (err: any) {
-      alert(`Failed: ${err.message}`);
+      setError('Something went wrong. Please try again.');
     } finally {
       setSendingDirection(false);
     }
@@ -145,7 +150,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       });
       await refreshDraft();
     } catch (err: any) {
-      alert(`Failed to apply: ${err.message}`);
+      setError('Something went wrong. Please try again.');
     }
   }
 
@@ -177,7 +182,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       await loadDraft();
       goToStep(4);
     } catch (err: any) {
-      alert(`Regenerate failed: ${err.message}`);
+      setError('Something went wrong. Please try again.');
       setRegenerating(false);
     }
   }
@@ -199,6 +204,35 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
   return (
     <div className="step-panel" style={{ maxWidth: 1100 }}>
+      {error && (
+        <div style={{
+          padding: '10px 16px',
+          marginBottom: 12,
+          background: 'var(--error-bg, #fef2f2)',
+          color: 'var(--error-text, #991b1b)',
+          border: '1px solid var(--error-border, #fecaca)',
+          borderRadius: 'var(--radius-sm, 6px)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: 14,
+        }}>
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 18,
+              color: 'var(--error-text, #991b1b)',
+              padding: '0 4px',
+            }}
+          >
+            &times;
+          </button>
+        </div>
+      )}
       <h2>Your Three Tier</h2>
       <p className="step-description">
         Click any cell to edit. Use the tools below to have Maria suggest improvements.
@@ -223,7 +257,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
               fontFamily: 'inherit',
             }}
             onKeyDown={e => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !anyBusy) {
                 e.preventDefault();
                 sendDirection();
               }
@@ -232,7 +266,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           <button
             className="btn btn-primary btn-sm"
             onClick={sendDirection}
-            disabled={sendingDirection || !directionText.trim()}
+            disabled={anyBusy || !directionText.trim()}
             style={{ minWidth: 80, height: 44 }}
           >
             {sendingDirection ? <Spinner size={14} /> : 'Send'}

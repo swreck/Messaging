@@ -81,6 +81,7 @@ export function CoachingChat({ draftId, step, initialPrompt, onExtractItem }: Co
   function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
     if (!input.trim() || sending) return;
+    setSending(true);
     const text = input.trim();
     setInput('');
     sendMessageDirect(text);

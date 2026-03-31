@@ -1,13 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
-import { callAI } from '../services/ai.js';
-import { buildPartnerPrompt, buildIntroMessage } from '../prompts/partner.js';
+import { callAIWithJSON } from '../services/ai.js';
+import { buildPartnerPrompt } from '../prompts/partner.js';
+import { ACTION_ALIASES, dispatchActions, readPageContent, type ActionContext } from '../lib/actions.js';
 
 const router = Router();
 router.use(requireAuth);
 
-// Channel marker to distinguish partner messages from the page assistant
+// Channel marker to distinguish partner messages from the old page assistant
 const PARTNER_CHANNEL = { channel: 'partner' };
 
 // ─── Helpers ─────────────────────────────────────────────
@@ -113,7 +114,6 @@ function buildCurrentContext(context: Record<string, any>): string {
 }
 
 async function buildSurfacingHint(userId: string): Promise<string | undefined> {
-  // Look for things worth gently mentioning
   const drafts = await prisma.threeTierDraft.findMany({
     where: { offering: { userId } },
     include: {
@@ -123,7 +123,6 @@ async function buildSurfacingHint(userId: string): Promise<string | undefined> {
     },
   });
 
-  // Stories at chapters stage (never joined/blended)
   for (const d of drafts) {
     for (const s of d.stories) {
       if (s.stage === 'chapters') {
@@ -132,7 +131,6 @@ async function buildSurfacingHint(userId: string): Promise<string | undefined> {
     }
   }
 
-  // Audiences with no priorities
   const emptyAudiences = await prisma.audience.findMany({
     where: { userId, priorities: { none: {} } },
     select: { name: true },
@@ -187,8 +185,10 @@ router.get('/history', async (req: Request, res: Response) => {
       context: { path: ['channel'], equals: 'partner' },
     },
     select: { role: true, content: true, createdAt: true },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
+    take: 200,
   });
+  messages.reverse();
   res.json({ messages });
 });
 
@@ -201,6 +201,7 @@ router.post('/message', async (req: Request, res: Response) => {
   }
 
   const userId = req.user!.userId;
+  const ctx: ActionContext = context || {};
 
   // Load conversation history (last 40 messages)
   const history = await prisma.assistantMessage.findMany({
@@ -209,9 +210,10 @@ router.post('/message', async (req: Request, res: Response) => {
       context: { path: ['channel'], equals: 'partner' },
     },
     select: { role: true, content: true, createdAt: true },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     take: 40,
   });
+  history.reverse();
 
   // Get user's display name
   const { displayName } = await getPartnerSettings(userId);
@@ -222,12 +224,13 @@ router.post('/message', async (req: Request, res: Response) => {
     history.length === 0 ? buildSurfacingHint(userId) : Promise.resolve(undefined),
   ]);
 
-  const currentContext = buildCurrentContext(context || {});
+  const currentContext = buildCurrentContext(ctx);
 
   const systemPrompt = buildPartnerPrompt({
     displayName,
     workSummary,
     currentContext,
+    pageContext: ctx,
     isFirstMessage: history.length === 0,
     surfacingHint: history.length === 0 ? surfacingHint : undefined,
   });
@@ -238,18 +241,89 @@ router.post('/message', async (req: Request, res: Response) => {
     content: m.content,
   }));
 
-  // Call Opus
-  const response = await callAI(systemPrompt, message, 'elite', conversationHistory);
+  // Call Opus with JSON response format
+  const result = await callAIWithJSON<{
+    response: string;
+    action?: { type: string; params: Record<string, any> } | null;
+    actions?: { type: string; params: Record<string, any> }[];
+  }>(systemPrompt, message, 'elite', conversationHistory);
 
-  // Store both messages
+  // Normalize actions
+  let rawActions: { type: string; params: Record<string, any> }[] = [];
+  if (result.actions && Array.isArray(result.actions) && result.actions.length > 0) {
+    rawActions = result.actions;
+  } else if (result.action && result.action.type) {
+    rawActions = [result.action];
+  }
+
+  // Check if Maria wants to read the page
+  const normalizedActions = rawActions.map(a => ({
+    ...a,
+    type: ACTION_ALIASES[a.type] || a.type,
+  }));
+
+  if (normalizedActions.length === 1 && normalizedActions[0].type === 'read_page') {
+    // Store the user message but not the response yet (will retry with page content)
+    await prisma.assistantMessage.create({
+      data: { userId, role: 'user', content: message, context: PARTNER_CHANNEL },
+    });
+
+    res.json({
+      response: result.response,
+      actionResult: null,
+      refreshNeeded: false,
+      needsPageContent: true,
+    });
+    return;
+  }
+
+  // Dispatch any actions
+  let actionResult: string | null = null;
+  let refreshNeeded = false;
+
+  if (normalizedActions.length > 0) {
+    const dispatch = await dispatchActions(normalizedActions, userId, ctx);
+    refreshNeeded = dispatch.refreshNeeded;
+
+    // Check for failures
+    const failedResults = dispatch.results.filter(r =>
+      r.startsWith('Could not') || r.startsWith('Action failed') || r.includes('not recognized')
+    );
+
+    actionResult = dispatch.results.length > 0 ? dispatch.results.join(' · ') : null;
+
+    // If actions failed, override Maria's optimistic response
+    if (failedResults.length > 0) {
+      result.response = `I tried, but it didn't work: ${failedResults.join('. ')}`;
+    }
+  }
+
+  // Store both messages — serialize response with action result for history
+  const storedResponse = actionResult
+    ? `${result.response}\n\n[${actionResult}]`
+    : result.response;
+
   await prisma.assistantMessage.createMany({
     data: [
       { userId, role: 'user', content: message, context: PARTNER_CHANNEL },
-      { userId, role: 'assistant', content: response, context: PARTNER_CHANNEL },
+      { userId, role: 'assistant', content: storedResponse, context: PARTNER_CHANNEL },
     ],
   });
 
-  res.json({ response });
+  res.json({
+    response: result.response,
+    actionResult,
+    refreshNeeded,
+    needsPageContent: false,
+  });
+});
+
+// POST /api/partner/page-content — fetch page content for Maria to read
+router.post('/page-content', async (req: Request, res: Response) => {
+  const { context } = req.body;
+  const userId = req.user!.userId;
+  const content = await readPageContent(userId, context || {});
+  res.json({ content });
 });
 
 // DELETE /api/partner/history — clear partner conversation only

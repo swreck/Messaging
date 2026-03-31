@@ -1,6 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { MariaAssistant } from './MariaAssistant';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Home' },
@@ -45,7 +44,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </nav>
       <main className="main-content">
         {children}
-        <MariaAssistant />
       </main>
     </div>
   );

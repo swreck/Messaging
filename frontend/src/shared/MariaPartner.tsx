@@ -6,13 +6,14 @@ import { useMaria } from './MariaContext';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  actionResult?: string | null;
 }
 
 type IntroPhase = 'name' | 'capabilities' | 'done';
 
 export function MariaPartner() {
   const { user } = useAuth();
-  const { pageContext } = useMaria();
+  const { pageContext, refreshPage } = useMaria();
 
   // Panel state
   const [open, setOpen] = useState(false);
@@ -96,13 +97,15 @@ export function MariaPartner() {
     setOpen(false);
   }, []);
 
-  // Send a message
-  const send = useCallback(async () => {
-    const text = input.trim();
+  // Send a message (with optional page content for retry)
+  const send = useCallback(async (overrideText?: string, pageContent?: string) => {
+    const text = overrideText || input.trim();
     if (!text || sending) return;
 
-    setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: text }]);
+    if (!overrideText) {
+      setInput('');
+      setMessages(prev => [...prev, { role: 'user', content: text }]);
+    }
     setSending(true);
 
     // Reset textarea height
@@ -111,11 +114,55 @@ export function MariaPartner() {
     }
 
     try {
-      const { response } = await api.post<{ response: string }>('/partner/message', {
-        message: text,
+      const result = await api.post<{
+        response: string;
+        actionResult: string | null;
+        refreshNeeded: boolean;
+        needsPageContent?: boolean;
+      }>('/partner/message', {
+        message: pageContent ? `[PAGE CONTENT]\n${pageContent}\n\n[USER QUESTION]\n${text}` : text,
         context: pageContext,
       });
-      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+
+      // If Maria needs to read the page, fetch content and retry
+      if (result.needsPageContent) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'Let me take a look...',
+        }]);
+
+        try {
+          const { content: pc } = await api.post<{ content: string }>('/partner/page-content', {
+            context: pageContext,
+          });
+          // Remove the "reading" message and retry with page content
+          setMessages(prev => prev.slice(0, -1));
+          setSending(false);
+          send(text, pc);
+          return;
+        } catch {
+          setMessages(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              role: 'assistant',
+              content: "I wasn't able to read the page content. Could you tell me what you're looking at?",
+            };
+            return updated;
+          });
+          setSending(false);
+          return;
+        }
+      }
+
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: result.response,
+        actionResult: result.actionResult,
+      }]);
+
+      if (result.refreshNeeded) {
+        refreshPage();
+      }
     } catch (err: any) {
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -124,7 +171,7 @@ export function MariaPartner() {
     } finally {
       setSending(false);
     }
-  }, [input, sending, pageContext]);
+  }, [input, sending, pageContext, refreshPage]);
 
   // Confirm name
   const confirmName = useCallback(async (name: string) => {
@@ -173,6 +220,7 @@ export function MariaPartner() {
                   value={customName}
                   onChange={e => setCustomName(e.target.value)}
                   onKeyDown={e => {
+                    if (e.key === 'Escape') setShowCustomInput(false);
                     if (e.key === 'Enter' && customName.trim()) {
                       confirmName(customName.trim());
                     }
@@ -199,7 +247,7 @@ export function MariaPartner() {
         <div className="partner-intro">
           <div className="partner-intro-message">
             <p>Great to meet you, {displayName}.</p>
-            <p>I can help you think through positioning, voice, audience priorities, competitive examples — anything related to your messaging. I'm the thinking partner. The editing tools on each page are where changes happen.</p>
+            <p>I can help you think through positioning, voice, audience priorities, competitive examples — anything related to your messaging. And if you ask me to make changes — add a priority, tweak a story, create an audience — I can do that too.</p>
             <p>You'll see my icon on every screen. Come find me whenever.</p>
           </div>
           <div className="partner-intro-actions">
@@ -230,16 +278,23 @@ export function MariaPartner() {
     return null;
   }
 
-  // Format message text with paragraph breaks
+  // Format message text with paragraph and line breaks
   function formatContent(text: string) {
     const paragraphs = text.split(/\n\n+/);
-    if (paragraphs.length === 1) return text;
-    return paragraphs.map((p, i) => (
-      <span key={i}>
-        {i > 0 && <><br /><br /></>}
-        {p}
-      </span>
-    ));
+    return paragraphs.map((p, i) => {
+      const lines = p.split(/\n/);
+      return (
+        <span key={i}>
+          {i > 0 && <><br /><br /></>}
+          {lines.map((line, j) => (
+            <span key={j}>
+              {j > 0 && <br />}
+              {line}
+            </span>
+          ))}
+        </span>
+      );
+    });
   }
 
   return (
@@ -292,6 +347,9 @@ export function MariaPartner() {
                   {messages.map((msg, i) => (
                     <div key={i} className={`partner-msg partner-msg-${msg.role}`}>
                       {formatContent(msg.content)}
+                      {msg.actionResult && (
+                        <span className="partner-action-badge">{msg.actionResult}</span>
+                      )}
                     </div>
                   ))}
                   {sending && (
@@ -325,7 +383,7 @@ export function MariaPartner() {
                   />
                   <button
                     className="partner-send"
-                    onClick={send}
+                    onClick={() => send()}
                     disabled={!input.trim() || sending}
                     aria-label="Send"
                   >

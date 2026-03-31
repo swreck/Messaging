@@ -170,6 +170,9 @@ export function FiveChapterShell() {
 
   async function blendStory() {
     if (!story) return;
+    if (story.blendedText && story.blendedText.trim()) {
+      if (!window.confirm('Blending will replace your current blended text. Continue?')) return;
+    }
     setBlending(true);
     try {
       const { story: updated } = await api.post<{ story: FiveChapterStory }>('/ai/blend-story', {

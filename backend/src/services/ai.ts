@@ -76,6 +76,10 @@ export async function callAIWithJSON<T>(
       tier
     );
     const retryCleaned = retryResponse.replace(/^```json?\n?/m, '').replace(/\n?```$/m, '').trim();
-    return JSON.parse(retryCleaned) as T;
+    try {
+      return JSON.parse(retryCleaned) as T;
+    } catch {
+      throw new Error('AI response was not valid JSON after retry');
+    }
   }
 }

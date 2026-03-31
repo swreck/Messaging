@@ -19,7 +19,7 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/audiences
 router.post('/', async (req: Request, res: Response) => {
   const { name, description } = req.body;
-  if (!name) {
+  if (!name || !name.trim()) {
     res.status(400).json({ error: 'Name is required' });
     return;
   }

@@ -900,13 +900,26 @@ router.post('/refine-chapter', async (req: Request, res: Response) => {
   if (!chapter) { res.status(404).json({ error: 'Chapter not found' }); return; }
 
   const ch = CHAPTER_CRITERIA[chapterNum - 1];
+
+  const chapterRuleReminders: Record<number, string> = {
+    1: 'Category-level ONLY. NEVER mention the specific company or product name. Make the status quo unattractive.',
+    2: 'This is the value chapter. Order follows audience priority ranking. NEVER include proof, credentials, or social validation — those belong in Ch3/Ch4.',
+    3: 'Reduce perceived risk and build trust. Be specific about HOW you support customers — no vague promises.',
+    4: 'Show similar organizations succeeding. Format: problem → solution → result. NEVER invent company names, metrics, or quotes.',
+    5: 'Call to action: first 1-3 concrete, simple steps ONLY. Keep it SHORT. NEVER write empty closers like "That\'s it for now."',
+  };
+
   const userMessage = `CHAPTER ${chapterNum}: "${ch.name}"
+CHAPTER ${chapterNum} RULE: ${chapterRuleReminders[chapterNum]}
+GOAL: ${ch.goal}
+DESIRED OUTCOME: ${ch.outcome}
+
 CURRENT CONTENT:
 ${chapter.content}
 
 USER FEEDBACK: ${feedback}
 
-Please revise this chapter based on the feedback.`;
+Please revise this chapter based on the feedback while respecting the chapter rules above.`;
 
   let content = await callAI(REFINE_CHAPTER_SYSTEM, userMessage, 'fast');
 

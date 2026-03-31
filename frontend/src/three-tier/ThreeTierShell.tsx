@@ -30,6 +30,11 @@ export function ThreeTierShell() {
     if (urlStep) {
       const parsed = parseInt(urlStep, 10);
       if (parsed >= 1 && parsed <= 5 && parsed !== activeStep) {
+        // Clamp to draft.currentStep so users can't jump ahead via URL
+        if (draft && parsed > draft.currentStep) {
+          setActiveStepInternal(draft.currentStep);
+          return;
+        }
         setActiveStepInternal(parsed);
       }
     }
@@ -94,7 +99,8 @@ export function ThreeTierShell() {
       if (!initialLoadDone.current) {
         initialLoadDone.current = true;
         const urlStep = searchParams.get('step');
-        const step = urlStep ? parseInt(urlStep, 10) : draft.currentStep;
+        const rawStep = urlStep ? parseInt(urlStep, 10) : draft.currentStep;
+        const step = Math.min(rawStep, draft.currentStep);
         setActiveStepInternal(step);
         if (!urlStep) {
           setSearchParams({ step: String(step) }, { replace: true });

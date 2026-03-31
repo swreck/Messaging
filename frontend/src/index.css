@@ -132,11 +132,16 @@ p { line-height: 1.5; color: var(--text-secondary); }
   text-decoration: none;
   margin-right: 32px;
   line-height: 1;
+  overflow: hidden;
+  min-width: 0;
 }
 .nav-brand-name {
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .nav-brand-tagline {
   font-size: 12px;
@@ -242,7 +247,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .entity-card:hover { box-shadow: var(--shadow-md); }
 .entity-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-.entity-card-header h3 { flex: 1; }
+.entity-card-header h3 { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entity-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
 .entity-card-meta { font-size: 14px; color: var(--text-secondary); margin-bottom: 4px; }
 .entity-card-desc { font-size: 15px; color: var(--text-secondary); margin-bottom: 8px; }
@@ -259,8 +264,8 @@ p { line-height: 1.5; color: var(--text-secondary); }
   transition: all 0.15s ease;
 }
 .draft-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
-.draft-card-title { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
-.draft-card-audience { font-size: 15px; color: var(--text-secondary); margin-bottom: 12px; }
+.draft-card-title { font-size: 17px; font-weight: 600; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-card-audience { font-size: 15px; color: var(--text-secondary); margin-bottom: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .draft-card-step { font-size: 14px; color: var(--text-tertiary); margin-bottom: 6px; }
 .draft-card-progress { height: 4px; background: var(--border-light); border-radius: 2px; overflow: hidden; }
 .progress-bar-mini { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s ease; }
@@ -2056,11 +2061,18 @@ p { line-height: 1.5; color: var(--text-secondary); }
   line-height: 1.5;
 }
 
+/* ─── Utility: Truncation ────────────────────────── */
+.truncate-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ─── Maria Partner (Floating Chat) ────────────── */
 
 .partner-bubble {
   position: fixed;
-  bottom: 80px;
+  bottom: 24px;
   right: 24px;
   z-index: 200;
   width: 48px;
@@ -2102,7 +2114,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 
 .partner-panel {
   position: fixed;
-  bottom: 80px;
+  bottom: 24px;
   right: 24px;
   z-index: 200;
   width: 380px;
@@ -2323,4 +2335,27 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .partner-send:not(:disabled):hover {
   opacity: 0.7;
+}
+
+.partner-action-badge {
+  display: block;
+  margin-top: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--success);
+  background: rgba(52, 199, 89, 0.08);
+  border-radius: 6px;
+  font-style: italic;
+}
+
+@media (max-width: 440px) {
+  .partner-panel {
+    width: calc(100vw - 16px);
+    right: 8px;
+    bottom: 8px;
+  }
+  .partner-bubble {
+    bottom: 16px;
+    right: 16px;
+  }
 }
