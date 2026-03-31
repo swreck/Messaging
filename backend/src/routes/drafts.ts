@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireWorkspace } from '../middleware/workspace.js';
+import { requireWorkspace, requireEditor } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
@@ -73,7 +73,7 @@ router.get('/hierarchy', async (req: Request, res: Response) => {
 });
 
 // POST /api/drafts
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireEditor, async (req: Request, res: Response) => {
   const { offeringId, audienceId } = req.body;
   if (!offeringId || !audienceId) {
     res.status(400).json({ error: 'offeringId and audienceId are required' });
@@ -138,7 +138,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // PATCH /api/drafts/:id — update step or status
-router.patch('/:id', async (req: Request, res: Response) => {
+router.patch('/:id', requireEditor, async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
     where: { id: param(req.params.id), offering: { workspaceId: req.workspaceId } },
   });
@@ -159,7 +159,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/drafts/:id
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireEditor, async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
     where: { id: param(req.params.id), offering: { workspaceId: req.workspaceId } },
   });

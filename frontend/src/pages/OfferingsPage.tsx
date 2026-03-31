@@ -25,7 +25,9 @@ export function OfferingsPage() {
   const copyDropdownRef = useRef<HTMLDivElement>(null);
 
   const { workspaces, activeWorkspace } = useWorkspace();
-  const otherWorkspaces = workspaces.filter(w => w.id !== activeWorkspace?.id);
+  const otherWorkspaces = activeWorkspace
+    ? workspaces.filter(w => w.id !== activeWorkspace.id)
+    : [];
   const hasMultipleWorkspaces = otherWorkspaces.length > 0;
 
   const { setPageContext, registerRefresh } = useMaria();
@@ -84,13 +86,17 @@ export function OfferingsPage() {
   // Close copy dropdown on click outside
   useEffect(() => {
     if (!copyDropdownId) return;
-    function handleClick(e: MouseEvent) {
+    function handleClick(e: MouseEvent | TouchEvent) {
       if (copyDropdownRef.current && !copyDropdownRef.current.contains(e.target as Node)) {
         setCopyDropdownId(null);
       }
     }
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('touchstart', handleClick);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('touchstart', handleClick);
+    };
   }, [copyDropdownId]);
 
   async function copyOfferingTo(offeringId: string, targetWorkspaceId: string, targetName: string) {

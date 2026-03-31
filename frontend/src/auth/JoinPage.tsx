@@ -84,19 +84,18 @@ export function JoinPage() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card join-page">
+      <div className="auth-card join-page join-card">
         <h1>Maria</h1>
 
         {invite.inviteeName && (
-          <p className="join-welcome">Welcome, {invite.inviteeName}</p>
+          <>
+            <p className="join-welcome">Welcome, {invite.inviteeName}</p>
+            <p className="auth-subtitle">You've been invited to collaborate on messaging that matters.</p>
+          </>
         )}
 
-        {invite.workspaceName ? (
-          <p className="auth-subtitle">
-            You've been invited to join <strong>{invite.workspaceName}</strong>
-          </p>
-        ) : (
-          <p className="auth-subtitle">You've been invited to Maria</p>
+        {invite.workspaceName && (
+          <span className="join-workspace-badge">{invite.workspaceName}</span>
         )}
 
         <form onSubmit={handleSubmit}>
@@ -111,6 +110,9 @@ export function JoinPage() {
               autoFocus
               required
             />
+            {invite.inviteeName && (
+              <p className="join-username-hint">We suggested this based on your invite — feel free to change it.</p>
+            )}
           </div>
           <div className="form-group">
             <label htmlFor="password">Choose a Password</label>

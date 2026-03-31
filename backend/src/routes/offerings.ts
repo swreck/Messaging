@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireWorkspace } from '../middleware/workspace.js';
+import { requireWorkspace, requireEditor } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
@@ -19,7 +19,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/offerings
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireEditor, async (req: Request, res: Response) => {
   const { name, smeRole, description } = req.body;
   if (!name || !name.trim()) {
     res.status(400).json({ error: 'Name is required' });
@@ -34,7 +34,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT /api/offerings/:id
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireEditor, async (req: Request, res: Response) => {
   const { name, smeRole, description } = req.body;
   const offering = await prisma.offering.findFirst({
     where: { id: param(req.params.id), workspaceId: req.workspaceId },
@@ -53,7 +53,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/offerings/:id
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireEditor, async (req: Request, res: Response) => {
   const offering = await prisma.offering.findFirst({
     where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
@@ -69,7 +69,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // ─── Elements ─────────────────────────────────────────
 
 // POST /api/offerings/:id/elements
-router.post('/:id/elements', async (req: Request, res: Response) => {
+router.post('/:id/elements', requireEditor, async (req: Request, res: Response) => {
   const offering = await prisma.offering.findFirst({
     where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
@@ -101,7 +101,7 @@ router.post('/:id/elements', async (req: Request, res: Response) => {
 });
 
 // PUT /api/offerings/:id/elements/reorder — must be before :elementId param route
-router.put('/:id/elements/reorder', async (req: Request, res: Response) => {
+router.put('/:id/elements/reorder', requireEditor, async (req: Request, res: Response) => {
   const { elementIds } = req.body;
   if (!Array.isArray(elementIds)) {
     res.status(400).json({ error: 'elementIds array required' });
@@ -129,7 +129,7 @@ router.put('/:id/elements/reorder', async (req: Request, res: Response) => {
 });
 
 // PUT /api/offerings/:offeringId/elements/:elementId
-router.put('/:offeringId/elements/:elementId', async (req: Request, res: Response) => {
+router.put('/:offeringId/elements/:elementId', requireEditor, async (req: Request, res: Response) => {
   const { text } = req.body;
   const element = await prisma.offeringElement.findFirst({
     where: { id: param(req.params.elementId), offering: { id: param(req.params.offeringId), workspaceId: req.workspaceId } },
@@ -147,7 +147,7 @@ router.put('/:offeringId/elements/:elementId', async (req: Request, res: Respons
 });
 
 // DELETE /api/offerings/:offeringId/elements/:elementId
-router.delete('/:offeringId/elements/:elementId', async (req: Request, res: Response) => {
+router.delete('/:offeringId/elements/:elementId', requireEditor, async (req: Request, res: Response) => {
   const element = await prisma.offeringElement.findFirst({
     where: { id: param(req.params.elementId), offering: { id: param(req.params.offeringId), workspaceId: req.workspaceId } },
   });

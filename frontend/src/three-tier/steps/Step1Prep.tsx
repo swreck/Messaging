@@ -50,9 +50,16 @@ export function Step1Prep({ draft, nextStep, goToStep }: StepProps) {
       <div className="step-actions">
         <div />
         {isReturning ? (
-          <button className="btn btn-primary" onClick={() => goToStep(draft.currentStep)}>
-            Continue where I left off
-          </button>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 8px' }}>
+              You were on: <strong style={{ color: 'var(--text-secondary)' }}>
+                {['Confirm', 'Your Offering', 'Your Audience', 'Building', 'Your Three Tier'][draft.currentStep - 1] || `Step ${draft.currentStep}`}
+              </strong>
+            </p>
+            <button className="btn btn-primary btn-lg" style={{ fontSize: 16, padding: '12px 28px' }} onClick={() => goToStep(draft.currentStep)}>
+              Continue where I left off
+            </button>
+          </div>
         ) : (
           <button className="btn btn-primary" onClick={nextStep}>
             Looks Good — Let's Go

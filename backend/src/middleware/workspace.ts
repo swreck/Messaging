@@ -43,3 +43,22 @@ export async function requireWorkspace(req: Request, res: Response, next: NextFu
   req.workspaceId = workspaceId;
   next();
 }
+
+/**
+ * Middleware that blocks viewers from mutation routes.
+ * Must run after requireWorkspace (needs req.workspaceId).
+ */
+export async function requireEditor(req: Request, res: Response, next: NextFunction) {
+  if (!req.workspaceId) {
+    res.status(400).json({ error: 'No workspace context' });
+    return;
+  }
+  const membership = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: req.workspaceId, userId: req.user!.userId } },
+  });
+  if (!membership || membership.role === 'viewer') {
+    res.status(403).json({ error: 'View-only access — ask the workspace owner to change your role' });
+    return;
+  }
+  next();
+}

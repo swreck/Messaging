@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireWorkspace } from '../middleware/workspace.js';
+import { requireWorkspace, requireEditor } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
@@ -54,7 +54,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/stories
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireEditor, async (req: Request, res: Response) => {
   const { draftId, medium, cta, emphasis } = req.body;
   if (!draftId || !medium || !cta) {
     res.status(400).json({ error: 'draftId, medium, and cta are required' });
@@ -95,7 +95,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // PUT /api/stories/:id
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireEditor, async (req: Request, res: Response) => {
   const story = await prisma.fiveChapterStory.findFirst({
     where: { id: param(req.params.id), draft: { offering: { workspaceId: req.workspaceId } } },
   });
@@ -121,7 +121,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // PUT /api/stories/:storyId/chapters/:chapterNum
-router.put('/:storyId/chapters/:chapterNum', async (req: Request, res: Response) => {
+router.put('/:storyId/chapters/:chapterNum', requireEditor, async (req: Request, res: Response) => {
   const story = await prisma.fiveChapterStory.findFirst({
     where: { id: param(req.params.storyId), draft: { offering: { workspaceId: req.workspaceId } } },
   });
@@ -160,7 +160,7 @@ router.put('/:storyId/chapters/:chapterNum', async (req: Request, res: Response)
 });
 
 // DELETE /api/stories/:id
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireEditor, async (req: Request, res: Response) => {
   const story = await prisma.fiveChapterStory.findFirst({
     where: { id: param(req.params.id), draft: { offering: { workspaceId: req.workspaceId } } },
   });

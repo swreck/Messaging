@@ -3,6 +3,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 class ApiClient {
   private token: string | null = null;
   private workspaceId: string | null = null;
+  private tokenRefreshed = false;
 
   setToken(token: string | null) {
     this.token = token;
@@ -64,8 +65,10 @@ class ApiClient {
     }
 
     // Sliding window token refresh: silently update if backend issued a fresh token
+    // Only accept the first refresh per page load to avoid races from parallel requests
     const refreshedToken = res.headers.get('x-refreshed-token');
-    if (refreshedToken) {
+    if (refreshedToken && !this.tokenRefreshed) {
+      this.tokenRefreshed = true;
       this.setToken(refreshedToken);
     }
 

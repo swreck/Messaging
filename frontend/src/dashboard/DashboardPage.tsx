@@ -180,27 +180,27 @@ export function DashboardPage() {
           <button className="workflow-dismiss" onClick={() => { setWorkflowDismissed(true); localStorage.setItem('maria-workflow-dismissed', 'true'); }} aria-label="Dismiss">&times;</button>
           <div className="workflow-steps">
             <div className={`workflow-step ${audStats.count > 0 ? 'step-done' : 'step-current'}`}>
-              <div className="workflow-step-num">1</div>
+              <div className="workflow-step-num">{audStats.count > 0 ? '✓' : '1'}</div>
               <div className="workflow-step-label">Audiences</div>
-              <div className="workflow-step-hint">{audStats.count > 0 ? `${audStats.count} defined` : 'Who are you talking to?'}</div>
+              <div className="workflow-step-hint">{audStats.count > 0 ? `${audStats.count} defined` : 'Define who matters most'}</div>
             </div>
             <div className="workflow-arrow">&rarr;</div>
             <div className={`workflow-step ${offStats.count > 0 ? 'step-done' : audStats.count > 0 ? 'step-current' : 'step-future'}`}>
-              <div className="workflow-step-num">2</div>
+              <div className="workflow-step-num">{offStats.count > 0 ? '✓' : '2'}</div>
               <div className="workflow-step-label">Offerings</div>
-              <div className="workflow-step-hint">{offStats.count > 0 ? `${offStats.count} defined` : 'What do you offer?'}</div>
+              <div className="workflow-step-hint">{offStats.count > 0 ? `${offStats.count} defined` : 'Describe what makes you different'}</div>
             </div>
             <div className="workflow-arrow">&rarr;</div>
             <div className={`workflow-step ${ttStats.complete > 0 ? 'step-done' : ttStats.active > 0 ? 'step-current' : 'step-future'}`}>
-              <div className="workflow-step-num">3</div>
+              <div className="workflow-step-num">{ttStats.complete > 0 ? '✓' : '3'}</div>
               <div className="workflow-step-label">Three Tier</div>
-              <div className="workflow-step-hint">{ttStats.complete > 0 ? `${ttStats.complete} complete` : ttStats.active > 0 ? `${ttStats.active} in progress` : 'Build your value hierarchy'}</div>
+              <div className="workflow-step-hint">{ttStats.complete > 0 ? `${ttStats.complete} complete` : ttStats.active > 0 ? `${ttStats.active} in progress` : 'Build your message'}</div>
             </div>
             <div className="workflow-arrow">&rarr;</div>
             <div className={`workflow-step ${fcsCount > 0 ? 'step-done' : ttStats.complete > 0 ? 'step-current' : 'step-future'}`}>
-              <div className="workflow-step-num">4</div>
+              <div className="workflow-step-num">{fcsCount > 0 ? '✓' : '4'}</div>
               <div className="workflow-step-label">Five Chapter</div>
-              <div className="workflow-step-hint">{fcsCount > 0 ? `${fcsCount} stories` : 'Generate stories'}</div>
+              <div className="workflow-step-hint">{fcsCount > 0 ? `${fcsCount} stories` : 'Turn your message into stories'}</div>
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireWorkspace } from '../middleware/workspace.js';
+import { requireWorkspace, requireEditor } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
@@ -19,7 +19,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/audiences
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireEditor, async (req: Request, res: Response) => {
   const { name, description } = req.body;
   if (!name || !name.trim()) {
     res.status(400).json({ error: 'Name is required' });
@@ -34,7 +34,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT /api/audiences/:id
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireEditor, async (req: Request, res: Response) => {
   const { name, description } = req.body;
   const audience = await prisma.audience.findFirst({
     where: { id: param(req.params.id), workspaceId: req.workspaceId },
@@ -53,7 +53,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/audiences/:id
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireEditor, async (req: Request, res: Response) => {
   const audience = await prisma.audience.findFirst({
     where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
@@ -67,7 +67,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/audiences/bulk — create multiple audiences at once (from discovery)
-router.post('/bulk', async (req: Request, res: Response) => {
+router.post('/bulk', requireEditor, async (req: Request, res: Response) => {
   const { audiences: audienceList } = req.body;
   if (!Array.isArray(audienceList) || audienceList.length === 0) {
     res.status(400).json({ error: 'audiences array is required' });
@@ -88,7 +88,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
 // ─── Priorities ───────────────────────────────────────
 
 // POST /api/audiences/:id/priorities
-router.post('/:id/priorities', async (req: Request, res: Response) => {
+router.post('/:id/priorities', requireEditor, async (req: Request, res: Response) => {
   const audience = await prisma.audience.findFirst({
     where: { id: param(req.params.id), workspaceId: req.workspaceId },
   });
@@ -123,7 +123,7 @@ router.post('/:id/priorities', async (req: Request, res: Response) => {
 });
 
 // PUT /api/audiences/:id/priorities/reorder — must be before :priorityId param route
-router.put('/:id/priorities/reorder', async (req: Request, res: Response) => {
+router.put('/:id/priorities/reorder', requireEditor, async (req: Request, res: Response) => {
   const { priorityIds } = req.body;
   if (!Array.isArray(priorityIds)) {
     res.status(400).json({ error: 'priorityIds array required' });
@@ -151,7 +151,7 @@ router.put('/:id/priorities/reorder', async (req: Request, res: Response) => {
 });
 
 // PUT /api/audiences/:audienceId/priorities/:priorityId
-router.put('/:audienceId/priorities/:priorityId', async (req: Request, res: Response) => {
+router.put('/:audienceId/priorities/:priorityId', requireEditor, async (req: Request, res: Response) => {
   const priority = await prisma.priority.findFirst({
     where: { id: param(req.params.priorityId), audience: { id: param(req.params.audienceId), workspaceId: req.workspaceId } },
   });
@@ -175,7 +175,7 @@ router.put('/:audienceId/priorities/:priorityId', async (req: Request, res: Resp
 });
 
 // DELETE /api/audiences/:audienceId/priorities/:priorityId
-router.delete('/:audienceId/priorities/:priorityId', async (req: Request, res: Response) => {
+router.delete('/:audienceId/priorities/:priorityId', requireEditor, async (req: Request, res: Response) => {
   const priority = await prisma.priority.findFirst({
     where: { id: param(req.params.priorityId), audience: { id: param(req.params.audienceId), workspaceId: req.workspaceId } },
   });

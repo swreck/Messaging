@@ -18,7 +18,7 @@ import {
   type StatementInput,
 } from '../services/voiceCheck.js';
 
-import { requireWorkspace } from '../middleware/workspace.js';
+import { requireWorkspace, requireEditor } from '../middleware/workspace.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -121,7 +121,7 @@ router.get('/conversation/:draftId/:step', async (req: Request, res: Response) =
 
 // ─── Interview (Steps 2 & 3) ────────────────────────────
 
-router.post('/coach', async (req: Request, res: Response) => {
+router.post('/coach', requireEditor, async (req: Request, res: Response) => {
   const { draftId, step, message } = req.body;
   if (!draftId || !step || !message) {
     res.status(400).json({ error: 'draftId, step, and message are required' });
@@ -179,7 +179,7 @@ router.post('/coach', async (req: Request, res: Response) => {
 
 // ─── Suggest Mappings (Step 5) ──────────────────────────
 
-router.post('/suggest-mappings', async (req: Request, res: Response) => {
+router.post('/suggest-mappings', requireEditor, async (req: Request, res: Response) => {
   const { draftId } = req.body;
   if (!draftId) {
     res.status(400).json({ error: 'draftId is required' });
@@ -216,7 +216,7 @@ ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`
 
 // ─── Preview Mapping (read-only) ────────────────────────
 
-router.post('/preview-mapping', async (req: Request, res: Response) => {
+router.post('/preview-mapping', requireEditor, async (req: Request, res: Response) => {
   const { draftId } = req.body;
   if (!draftId) {
     res.status(400).json({ error: 'draftId is required' });
@@ -280,7 +280,7 @@ ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`
 
 // ─── Build Message (orchestrates mapping + convert) ─────
 
-router.post('/build-message', async (req: Request, res: Response) => {
+router.post('/build-message', requireEditor, async (req: Request, res: Response) => {
   const { draftId } = req.body;
   if (!draftId) {
     res.status(400).json({ error: 'draftId is required' });
@@ -421,7 +421,7 @@ AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
 // ─── Resolve Questions (follow-up to build-message) ─────
 
-router.post('/resolve-questions', async (req: Request, res: Response) => {
+router.post('/resolve-questions', requireEditor, async (req: Request, res: Response) => {
   const { draftId, answers } = req.body;
   if (!draftId || !answers) {
     res.status(400).json({ error: 'draftId and answers are required' });
@@ -516,7 +516,7 @@ AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
 // ─── Convert Lines (Step 6 — kept for backward compatibility) ─
 
-router.post('/convert-lines', async (req: Request, res: Response) => {
+router.post('/convert-lines', requireEditor, async (req: Request, res: Response) => {
   const { draftId } = req.body;
   if (!draftId) {
     res.status(400).json({ error: 'draftId is required' });
@@ -578,7 +578,7 @@ AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
 // ─── Review (inline suggestions) ────────────────────────
 
-router.post('/review', async (req: Request, res: Response) => {
+router.post('/review', requireEditor, async (req: Request, res: Response) => {
   const { draftId } = req.body;
   if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
 
@@ -608,7 +608,7 @@ ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n'
 
 // ─── Refine Language ────────────────────────────────────
 
-router.post('/refine-language', async (req: Request, res: Response) => {
+router.post('/refine-language', requireEditor, async (req: Request, res: Response) => {
   const { draftId } = req.body;
   if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
 
@@ -659,7 +659,7 @@ ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n'
 
 // ─── Revise from user edits ─────────────────────────────
 
-router.post('/revise', async (req: Request, res: Response) => {
+router.post('/revise', requireEditor, async (req: Request, res: Response) => {
   const { draftId, previousState } = req.body;
   if (!draftId || !previousState) { res.status(400).json({ error: 'draftId and previousState are required' }); return; }
 
@@ -688,7 +688,7 @@ ${draft.tier2Statements.map((t2, i) => `[cell: tier2-${i}] "${t2.text}"
 
 // ─── Direction (big-picture user feedback) ───────────────
 
-router.post('/direction', async (req: Request, res: Response) => {
+router.post('/direction', requireEditor, async (req: Request, res: Response) => {
   const { draftId, direction } = req.body;
   if (!draftId || !direction) { res.status(400).json({ error: 'draftId and direction are required' }); return; }
 
@@ -724,7 +724,7 @@ ${draft.offering.elements.map((e) => `"${e.text}"`).join('\n')}`;
 
 // ─── Derive Motivating Factor ───────────────────────────
 
-router.post('/derive-motivation', async (req: Request, res: Response) => {
+router.post('/derive-motivation', requireEditor, async (req: Request, res: Response) => {
   const { priorityId, audienceId, offeringId } = req.body;
   if (!priorityId || !audienceId) {
     res.status(400).json({ error: 'priorityId and audienceId are required' });
@@ -780,7 +780,7 @@ Derive the motivating factor for this priority.`;
 
 // ─── Five Chapter Story ─────────────────────────────────
 
-router.post('/generate-chapter', async (req: Request, res: Response) => {
+router.post('/generate-chapter', requireEditor, async (req: Request, res: Response) => {
   const { storyId, chapterNum } = req.body;
   if (!storyId || !chapterNum) {
     res.status(400).json({ error: 'storyId and chapterNum are required' });
@@ -886,7 +886,7 @@ Write Chapter ${chapterNum}: "${ch.name}"`;
 
 // ─── Refine Chapter ─────────────────────────────────────
 
-router.post('/refine-chapter', async (req: Request, res: Response) => {
+router.post('/refine-chapter', requireEditor, async (req: Request, res: Response) => {
   const { storyId, chapterNum, feedback } = req.body;
   if (!storyId || !chapterNum || !feedback) {
     res.status(400).json({ error: 'storyId, chapterNum, and feedback are required' });
@@ -967,7 +967,7 @@ Please revise this chapter based on the feedback while respecting the chapter ru
 
 // ─── Join Chapters ─────────────────────────────────────
 
-router.post('/join-chapters', async (req: Request, res: Response) => {
+router.post('/join-chapters', requireEditor, async (req: Request, res: Response) => {
   const { storyId } = req.body;
   if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
 
@@ -1019,7 +1019,7 @@ Join these chapters into one flowing text.`;
 
 // ─── Blend Story ────────────────────────────────────────
 
-router.post('/blend-story', async (req: Request, res: Response) => {
+router.post('/blend-story', requireEditor, async (req: Request, res: Response) => {
   const { storyId } = req.body;
   if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
 
@@ -1092,7 +1092,7 @@ Polish this into a final, cohesive ${spec.label.toLowerCase()}.`;
 
 // ─── Copy Edit ─────────────────────────────────────────
 
-router.post('/copy-edit', async (req: Request, res: Response) => {
+router.post('/copy-edit', requireEditor, async (req: Request, res: Response) => {
   const { storyId, content, request: editRequest } = req.body;
   if (!storyId || !content || !editRequest) {
     res.status(400).json({ error: 'storyId, content, and request are required' });
@@ -1136,7 +1136,7 @@ Apply the requested changes.`;
 
 // ─── Audience Discovery ────────────────────────────────
 
-router.post('/discover-audiences', async (req: Request, res: Response) => {
+router.post('/discover-audiences', requireEditor, async (req: Request, res: Response) => {
   const { description } = req.body;
   if (!description) {
     res.status(400).json({ error: 'description is required' });

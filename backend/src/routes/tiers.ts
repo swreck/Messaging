@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireWorkspace } from '../middleware/workspace.js';
+import { requireWorkspace, requireEditor } from '../middleware/workspace.js';
 import { param } from '../lib/params.js';
 import { getLearning, updateLearning } from '../lib/learning.js';
 
@@ -36,7 +36,7 @@ async function createCellVersion(cellId: string, cellType: 'tier1' | 'tier2' | '
 // ─── Tier 1 ─────────────────────────────────────────────
 
 // PUT /api/tiers/:draftId/tier1
-router.put('/:draftId/tier1', async (req: Request, res: Response) => {
+router.put('/:draftId/tier1', requireEditor, async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
@@ -64,7 +64,7 @@ router.put('/:draftId/tier1', async (req: Request, res: Response) => {
 // ─── Tier 2 ─────────────────────────────────────────────
 
 // POST /api/tiers/:draftId/tier2
-router.post('/:draftId/tier2', async (req: Request, res: Response) => {
+router.post('/:draftId/tier2', requireEditor, async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
@@ -92,7 +92,7 @@ router.post('/:draftId/tier2', async (req: Request, res: Response) => {
 });
 
 // PUT /api/tiers/:draftId/tier2/:tier2Id
-router.put('/:draftId/tier2/:tier2Id', async (req: Request, res: Response) => {
+router.put('/:draftId/tier2/:tier2Id', requireEditor, async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
@@ -136,7 +136,7 @@ router.put('/:draftId/tier2/:tier2Id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/tiers/:draftId/tier2/:tier2Id
-router.delete('/:draftId/tier2/:tier2Id', async (req: Request, res: Response) => {
+router.delete('/:draftId/tier2/:tier2Id', requireEditor, async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
@@ -145,7 +145,7 @@ router.delete('/:draftId/tier2/:tier2Id', async (req: Request, res: Response) =>
 });
 
 // POST /api/tiers/:draftId/tier2/bulk — replace all tier2 statements (used by Refine Language, Convert Lines)
-router.post('/:draftId/tier2/bulk', async (req: Request, res: Response) => {
+router.post('/:draftId/tier2/bulk', requireEditor, async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
@@ -178,7 +178,7 @@ router.post('/:draftId/tier2/bulk', async (req: Request, res: Response) => {
 // ─── Tier 3 ─────────────────────────────────────────────
 
 // POST /api/tiers/:draftId/tier2/:tier2Id/tier3
-router.post('/:draftId/tier2/:tier2Id/tier3', async (req: Request, res: Response) => {
+router.post('/:draftId/tier2/:tier2Id/tier3', requireEditor, async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
@@ -203,7 +203,7 @@ router.post('/:draftId/tier2/:tier2Id/tier3', async (req: Request, res: Response
 });
 
 // PUT /api/tiers/:draftId/tier3/:tier3Id
-router.put('/:draftId/tier3/:tier3Id', async (req: Request, res: Response) => {
+router.put('/:draftId/tier3/:tier3Id', requireEditor, async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
@@ -220,7 +220,7 @@ router.put('/:draftId/tier3/:tier3Id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/tiers/:draftId/tier3/:tier3Id
-router.delete('/:draftId/tier3/:tier3Id', async (req: Request, res: Response) => {
+router.delete('/:draftId/tier3/:tier3Id', requireEditor, async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
@@ -229,7 +229,7 @@ router.delete('/:draftId/tier3/:tier3Id', async (req: Request, res: Response) =>
 });
 
 // POST /api/tiers/:draftId/tier3/bulk — replace all tier3 bullets for a tier2
-router.post('/:draftId/tier2/:tier2Id/tier3/bulk', async (req: Request, res: Response) => {
+router.post('/:draftId/tier2/:tier2Id/tier3/bulk', requireEditor, async (req: Request, res: Response) => {
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
@@ -252,7 +252,7 @@ router.post('/:draftId/tier2/:tier2Id/tier3/bulk', async (req: Request, res: Res
 });
 
 // POST /api/tiers/:draftId/reset — wipe tier statements and mappings for regeneration
-router.post('/:draftId/reset', async (req: Request, res: Response) => {
+router.post('/:draftId/reset', requireEditor, async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({
     where: { id: param(req.params.draftId), offering: { workspaceId: req.workspaceId } },
     include: {
