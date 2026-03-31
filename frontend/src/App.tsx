@@ -16,6 +16,7 @@ import { FiveChaptersPage } from './pages/FiveChaptersPage';
 import { ThreeTierShell } from './three-tier/ThreeTierShell';
 import { FiveChapterShell } from './five-chapter/FiveChapterShell';
 import { SettingsPage } from './pages/SettingsPage';
+import { WorkspacesPage } from './pages/WorkspacesPage';
 import { MappingPage } from './pages/MappingPage';
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
           <Route path="/five-chapters" element={<ProtectedRoute><Layout><FiveChaptersPage /></Layout></ProtectedRoute>} />
           <Route path="/three-tier/:draftId" element={<ProtectedRoute><Layout><ThreeTierShell /></Layout></ProtectedRoute>} />
           <Route path="/five-chapter/:draftId" element={<ProtectedRoute><Layout><FiveChapterShell /></Layout></ProtectedRoute>} />
+          <Route path="/workspaces" element={<ProtectedRoute><Layout><WorkspacesPage /></Layout></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
           <Route path="/mapping/:draftId" element={<ProtectedRoute><MappingPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />

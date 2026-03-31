@@ -1,20 +1,24 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useWorkspace } from './WorkspaceContext';
-
-const NAV_ITEMS = [
-  { path: '/', label: 'Home' },
-  { path: '/audiences', label: 'Audiences' },
-  { path: '/offerings', label: 'Offerings' },
-  { path: '/three-tiers', label: 'Three Tiers' },
-  { path: '/five-chapters', label: 'Five Chapters' },
-  { path: '/settings', label: 'Settings' },
-];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const { workspaces, activeWorkspace, switchWorkspace } = useWorkspace();
+
+  const showWorkspacesNav = user?.isAdmin || workspaces.length > 1;
+
+  const NAV_ITEMS = [
+    { path: '/', label: 'Home' },
+    { path: '/audiences', label: 'Audiences' },
+    { path: '/offerings', label: 'Offerings' },
+    { path: '/three-tiers', label: 'Three Tiers' },
+    { path: '/five-chapters', label: 'Five Chapters' },
+    ...(showWorkspacesNav ? [{ path: '/workspaces', label: 'Workspaces' }] : []),
+    { path: '/settings', label: 'Settings' },
+  ];
 
   function isActive(path: string) {
     if (path === '/') return location.pathname === '/';
@@ -41,6 +45,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <option key={ws.id} value={ws.id}>{ws.name}</option>
               ))}
             </select>
+            <button
+              className="workspace-picker-manage"
+              onClick={() => navigate('/workspaces')}
+            >
+              Manage
+            </button>
           </div>
         )}
         <div className="nav-links">

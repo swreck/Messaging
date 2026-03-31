@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { param } from '../lib/params.js';
 
 const router = Router();
@@ -29,6 +29,31 @@ router.get('/', async (req: Request, res: Response) => {
     memberCount: m.workspace._count.members,
     offeringCount: m.workspace._count.offerings,
     createdAt: m.workspace.createdAt.toISOString(),
+  }));
+
+  res.json({ workspaces });
+});
+
+// GET /api/workspaces/all — list ALL workspaces (admin only)
+router.get('/all', requireAdmin, async (_req: Request, res: Response) => {
+  const allWorkspaces = await prisma.workspace.findMany({
+    include: {
+      _count: { select: { members: true, offerings: true } },
+      members: {
+        include: { user: { select: { id: true, username: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const workspaces = allWorkspaces.map(ws => ({
+    id: ws.id,
+    name: ws.name,
+    role: 'admin' as const,
+    memberCount: ws._count.members,
+    offeringCount: ws._count.offerings,
+    createdAt: ws.createdAt.toISOString(),
   }));
 
   res.json({ workspaces });
@@ -107,19 +132,31 @@ router.delete('/:id', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-// POST /api/workspaces/:id/invite — invite a user by username (owner only)
+// POST /api/workspaces/:id/invite — invite a user by username or generate invite code (owner only)
 router.post('/:id/invite', async (req: Request, res: Response) => {
-  const { username, role } = req.body;
-  if (!username) {
-    res.status(400).json({ error: 'username is required' });
-    return;
-  }
-
   const membership = await prisma.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId: param(req.params.id), userId: req.user!.userId } },
   });
   if (!membership || membership.role !== 'owner') {
     res.status(403).json({ error: 'Only the workspace owner can invite members' });
+    return;
+  }
+
+  // Mode 1: Generate an invite code linked to this workspace
+  if (req.body.generateCode) {
+    const crypto = await import('crypto');
+    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
+    await prisma.inviteCode.create({
+      data: { code, workspaceId: param(req.params.id) },
+    });
+    res.status(201).json({ code });
+    return;
+  }
+
+  // Mode 2: Add existing user by username
+  const { username, role } = req.body;
+  if (!username) {
+    res.status(400).json({ error: 'username is required' });
     return;
   }
 
@@ -147,6 +184,27 @@ router.post('/:id/invite', async (req: Request, res: Response) => {
   });
 
   res.status(201).json({ member: { id: member.id, userId: targetUser.id, username, role: member.role } });
+});
+
+// GET /api/workspaces/:id/invite-codes — list active (unused) invite codes for a workspace
+router.get('/:id/invite-codes', async (req: Request, res: Response) => {
+  const membership = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: param(req.params.id), userId: req.user!.userId } },
+  });
+  if (!membership || membership.role !== 'owner') {
+    res.status(403).json({ error: 'Only the workspace owner can view invite codes' });
+    return;
+  }
+
+  const codes = await prisma.inviteCode.findMany({
+    where: {
+      workspaceId: param(req.params.id),
+      usedById: null,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  res.json({ codes: codes.map(c => ({ id: c.id, code: c.code, createdAt: c.createdAt.toISOString() })) });
 });
 
 // DELETE /api/workspaces/:id/members/:userId — remove a member (owner only)

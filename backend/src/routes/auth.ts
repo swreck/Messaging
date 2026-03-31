@@ -49,6 +49,27 @@ router.post('/register', async (req: Request, res: Response) => {
     data: { usedById: user.id },
   });
 
+  // If the invite code is linked to a workspace, add the user as a member
+  // Otherwise, create a default workspace for them
+  if (code.workspaceId) {
+    await prisma.workspaceMember.create({
+      data: {
+        workspaceId: code.workspaceId,
+        userId: user.id,
+        role: 'editor',
+      },
+    });
+  } else {
+    await prisma.workspace.create({
+      data: {
+        name: `${username}'s Workspace`,
+        members: {
+          create: { userId: user.id, role: 'owner' },
+        },
+      },
+    });
+  }
+
   const payload: AuthPayload = { userId: user.id, username: user.username, isAdmin: user.isAdmin };
   const token = signToken(payload);
 
