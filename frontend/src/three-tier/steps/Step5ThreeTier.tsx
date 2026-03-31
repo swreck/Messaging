@@ -151,7 +151,11 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       });
       await refreshDraft();
     } catch (err: any) {
-      setError('Something went wrong. Please try again.');
+      if (err?.status === 409) {
+        handleConflict();
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
     }
   }
 
@@ -167,6 +171,11 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   function clearSuggestions() {
     setSuggestions(new Map());
     previousStateRef.current = null;
+  }
+
+  function handleConflict() {
+    setError('This content was edited elsewhere. Refreshing to show the latest version...');
+    loadDraft();
   }
 
   function handleTableUpdate() {
@@ -317,6 +326,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       <ThreeTierTable
         draft={draft}
         onUpdate={handleTableUpdate}
+        onConflict={handleConflict}
         suggestions={suggestions}
         onAcceptSuggestion={handleAcceptSuggestion}
         onDismissSuggestion={handleDismissSuggestion}

@@ -8,34 +8,47 @@ import type { ThreeTierDraft } from '../../types';
 interface ThreeTierTableProps {
   draft: ThreeTierDraft;
   onUpdate: () => void;
+  onConflict?: () => void;
   suggestions?: Map<string, string>;
   onAcceptSuggestion?: (cell: string, text: string) => void;
   onDismissSuggestion?: (cell: string) => void;
 }
 
-export function ThreeTierTable({ draft, onUpdate, suggestions, onAcceptSuggestion, onDismissSuggestion }: ThreeTierTableProps) {
+export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, onDismissSuggestion }: ThreeTierTableProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
 
   async function updateTier1(text: string) {
     if (text && text !== draft.tier1Statement?.text) {
-      await api.put(`/tiers/${draft.id}/tier1`, { text, changeSource: 'manual' });
-      onUpdate();
+      try {
+        await api.put(`/tiers/${draft.id}/tier1`, { text, changeSource: 'manual', version: draft.version });
+        onUpdate();
+      } catch (err: any) {
+        if (err?.status === 409) { onConflict?.(); } else { throw err; }
+      }
     }
     setEditingCell(null);
   }
 
   async function updateTier2(tier2Id: string, text: string, currentText: string) {
     if (text && text !== currentText) {
-      await api.put(`/tiers/${draft.id}/tier2/${tier2Id}`, { text, changeSource: 'manual' });
-      onUpdate();
+      try {
+        await api.put(`/tiers/${draft.id}/tier2/${tier2Id}`, { text, changeSource: 'manual', version: draft.version });
+        onUpdate();
+      } catch (err: any) {
+        if (err?.status === 409) { onConflict?.(); } else { throw err; }
+      }
     }
     setEditingCell(null);
   }
 
   async function updateTier3(tier3Id: string, text: string, currentText: string) {
     if (text && text !== currentText) {
-      await api.put(`/tiers/${draft.id}/tier3/${tier3Id}`, { text, changeSource: 'manual' });
-      onUpdate();
+      try {
+        await api.put(`/tiers/${draft.id}/tier3/${tier3Id}`, { text, changeSource: 'manual', version: draft.version });
+        onUpdate();
+      } catch (err: any) {
+        if (err?.status === 409) { onConflict?.(); } else { throw err; }
+      }
     }
     setEditingCell(null);
   }

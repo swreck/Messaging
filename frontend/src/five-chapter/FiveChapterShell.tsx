@@ -191,22 +191,42 @@ export function FiveChapterShell() {
 
   async function saveChapterEdit(chapterNum: number) {
     if (!story) return;
-    await api.put(`/stories/${story.id}/chapters/${chapterNum}`, { content: editText });
-    setStory(prev => {
-      if (!prev) return prev;
-      const chapters = prev.chapters.map(c =>
-        c.chapterNum === chapterNum ? { ...c, content: editText } : c
-      );
-      return { ...prev, chapters };
-    });
-    setEditingChapter(null);
+    try {
+      await api.put(`/stories/${story.id}/chapters/${chapterNum}`, { content: editText, version: story.version });
+      setStory(prev => {
+        if (!prev) return prev;
+        const chapters = prev.chapters.map(c =>
+          c.chapterNum === chapterNum ? { ...c, content: editText } : c
+        );
+        return { ...prev, version: prev.version + 1, chapters };
+      });
+      setEditingChapter(null);
+    } catch (err: any) {
+      if (err?.status === 409) {
+        alert('This story was edited elsewhere. Refreshing to show the latest version.');
+        setEditingChapter(null);
+        loadData();
+      } else {
+        alert(err.message);
+      }
+    }
   }
 
   async function saveBlendedEdit() {
     if (!story) return;
-    await api.put(`/stories/${story.id}`, { blendedText: editContent });
-    setStory(prev => prev ? { ...prev, blendedText: editContent } : prev);
-    setEditingBlended(false);
+    try {
+      const { story: updated } = await api.put<{ story: FiveChapterStory }>(`/stories/${story.id}`, { blendedText: editContent, version: story.version });
+      setStory(updated);
+      setEditingBlended(false);
+    } catch (err: any) {
+      if (err?.status === 409) {
+        alert('This story was edited elsewhere. Refreshing to show the latest version.');
+        setEditingBlended(false);
+        loadData();
+      } else {
+        alert(err.message);
+      }
+    }
   }
 
   async function copyEdit() {
@@ -220,8 +240,8 @@ export function FiveChapterShell() {
         request: copyEditInput.trim(),
       });
       if (story.blendedText) {
-        await api.put(`/stories/${story.id}`, { blendedText: revised });
-        setStory(prev => prev ? { ...prev, blendedText: revised } : prev);
+        const { story: updated } = await api.put<{ story: FiveChapterStory }>(`/stories/${story.id}`, { blendedText: revised, version: story.version });
+        setStory(updated);
       }
       setCopyEditInput('');
     } catch (err: any) {
@@ -258,12 +278,22 @@ export function FiveChapterShell() {
 
   async function updateStoryParam(field: string, value: string) {
     if (!story) return;
-    const { story: updated } = await api.put<{ story: FiveChapterStory }>(`/stories/${story.id}`, { [field]: value });
-    setStory(updated);
-    // Update in stories list too
-    setStories(prev => prev.map(s => s.id === updated.id ? updated : s));
-    setEditingParam(null);
-    setParamsChanged(true);
+    try {
+      const { story: updated } = await api.put<{ story: FiveChapterStory }>(`/stories/${story.id}`, { [field]: value, version: story.version });
+      setStory(updated);
+      // Update in stories list too
+      setStories(prev => prev.map(s => s.id === updated.id ? updated : s));
+      setEditingParam(null);
+      setParamsChanged(true);
+    } catch (err: any) {
+      if (err?.status === 409) {
+        alert('This story was edited elsewhere. Refreshing to show the latest version.');
+        setEditingParam(null);
+        loadData();
+      } else {
+        alert(err.message);
+      }
+    }
   }
 
   async function regenerateAfterParamChange() {

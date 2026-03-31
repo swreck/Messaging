@@ -74,6 +74,13 @@ class ApiClient {
 
     const data = await res.json();
 
+    if (res.status === 409) {
+      const err = new Error(data.error || 'This content was edited elsewhere. Refresh to see the latest version.');
+      (err as any).status = 409;
+      (err as any).currentVersion = data.currentVersion;
+      throw err;
+    }
+
     if (!res.ok) {
       throw new Error(data.error || `Request failed: ${res.status}`);
     }

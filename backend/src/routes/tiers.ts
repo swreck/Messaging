@@ -40,8 +40,17 @@ router.put('/:draftId/tier1', requireEditor, async (req: Request, res: Response)
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
-  const { text, changeSource } = req.body;
+  const { text, changeSource, version } = req.body;
   if (!text) { res.status(400).json({ error: 'Text is required' }); return; }
+
+  // Optimistic concurrency check
+  if (version !== undefined && draft.version !== version) {
+    res.status(409).json({
+      error: 'This content was edited elsewhere. Refresh to see the latest version.',
+      currentVersion: draft.version,
+    });
+    return;
+  }
 
   const existing = await prisma.tier1Statement.findUnique({ where: { draftId: param(req.params.draftId) } });
 
@@ -58,6 +67,10 @@ router.put('/:draftId/tier1', requireEditor, async (req: Request, res: Response)
   }
 
   await createCellVersion(tier1.id, 'tier1', text, changeSource || 'manual');
+  await prisma.threeTierDraft.update({
+    where: { id: param(req.params.draftId) },
+    data: { version: { increment: 1 } },
+  });
   res.json({ tier1 });
 });
 
@@ -96,8 +109,17 @@ router.put('/:draftId/tier2/:tier2Id', requireEditor, async (req: Request, res: 
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
-  const { text, categoryLabel, changeSource } = req.body;
+  const { text, categoryLabel, changeSource, version } = req.body;
   if (!text) { res.status(400).json({ error: 'Text is required' }); return; }
+
+  // Optimistic concurrency check
+  if (version !== undefined && draft.version !== version) {
+    res.status(409).json({
+      error: 'This content was edited elsewhere. Refresh to see the latest version.',
+      currentVersion: draft.version,
+    });
+    return;
+  }
 
   const updateData: any = { text };
   if (categoryLabel !== undefined) updateData.categoryLabel = categoryLabel;
@@ -132,6 +154,10 @@ router.put('/:draftId/tier2/:tier2Id', requireEditor, async (req: Request, res: 
     }
   }
 
+  await prisma.threeTierDraft.update({
+    where: { id: param(req.params.draftId) },
+    data: { version: { increment: 1 } },
+  });
   res.json({ tier2 });
 });
 
@@ -207,8 +233,17 @@ router.put('/:draftId/tier3/:tier3Id', requireEditor, async (req: Request, res: 
   const draft = await verifyDraftOwnership(param(req.params.draftId), req.workspaceId!);
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
-  const { text, changeSource } = req.body;
+  const { text, changeSource, version } = req.body;
   if (!text) { res.status(400).json({ error: 'Text is required' }); return; }
+
+  // Optimistic concurrency check
+  if (version !== undefined && draft.version !== version) {
+    res.status(409).json({
+      error: 'This content was edited elsewhere. Refresh to see the latest version.',
+      currentVersion: draft.version,
+    });
+    return;
+  }
 
   const tier3 = await prisma.tier3Bullet.update({
     where: { id: param(req.params.tier3Id) },
@@ -216,6 +251,10 @@ router.put('/:draftId/tier3/:tier3Id', requireEditor, async (req: Request, res: 
   });
 
   await createCellVersion(tier3.id, 'tier3', text, changeSource || 'manual');
+  await prisma.threeTierDraft.update({
+    where: { id: param(req.params.draftId) },
+    data: { version: { increment: 1 } },
+  });
   res.json({ tier3 });
 });
 

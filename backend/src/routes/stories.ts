@@ -104,7 +104,17 @@ router.put('/:id', requireEditor, async (req: Request, res: Response) => {
     return;
   }
 
-  const { medium, cta, emphasis, stage, joinedText, blendedText } = req.body;
+  const { medium, cta, emphasis, stage, joinedText, blendedText, version } = req.body;
+
+  // Optimistic concurrency check
+  if (version !== undefined && story.version !== version) {
+    res.status(409).json({
+      error: 'This content was edited elsewhere. Refresh to see the latest version.',
+      currentVersion: story.version,
+    });
+    return;
+  }
+
   const updated = await prisma.fiveChapterStory.update({
     where: { id: param(req.params.id) },
     data: {
@@ -114,6 +124,7 @@ router.put('/:id', requireEditor, async (req: Request, res: Response) => {
       stage: stage ?? story.stage,
       joinedText: joinedText ?? story.joinedText,
       blendedText: blendedText ?? story.blendedText,
+      version: { increment: 1 },
     },
     include: { chapters: { orderBy: { chapterNum: 'asc' } } },
   });
@@ -130,8 +141,18 @@ router.put('/:storyId/chapters/:chapterNum', requireEditor, async (req: Request,
     return;
   }
 
+  const { title, content, version } = req.body;
+
+  // Optimistic concurrency check
+  if (version !== undefined && story.version !== version) {
+    res.status(409).json({
+      error: 'This content was edited elsewhere. Refresh to see the latest version.',
+      currentVersion: story.version,
+    });
+    return;
+  }
+
   const chapterNum = parseInt(param(req.params.chapterNum), 10);
-  const { title, content } = req.body;
 
   const chapter = await prisma.chapterContent.upsert({
     where: { storyId_chapterNum: { storyId: param(req.params.storyId), chapterNum } },
@@ -156,6 +177,10 @@ router.put('/:storyId/chapters/:chapterNum', requireEditor, async (req: Request,
     });
   }
 
+  await prisma.fiveChapterStory.update({
+    where: { id: param(req.params.storyId) },
+    data: { version: { increment: 1 } },
+  });
   res.json({ chapter });
 });
 
