@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { api } from '../../api/client';
 import { CellEditor } from './CellEditor';
 import { CellVersionNav } from './CellVersionNav';
@@ -14,9 +14,33 @@ interface ThreeTierTableProps {
   onDismissSuggestion?: (cell: string) => void;
 }
 
+interface PendingDelete {
+  id: string;
+  text: string;
+  tier2Id: string;
+  timeout: ReturnType<typeof setTimeout>;
+}
+
 export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, onDismissSuggestion }: ThreeTierTableProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const pendingDeleteRef = useRef<PendingDelete | null>(null);
+
+  // Keep ref in sync for cleanup
+  useEffect(() => {
+    pendingDeleteRef.current = pendingDelete;
+  }, [pendingDelete]);
+
+  // Flush pending delete on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingDeleteRef.current) {
+        clearTimeout(pendingDeleteRef.current.timeout);
+        api.delete(`/tiers/${draft.id}/tier3/${pendingDeleteRef.current.id}`).then(() => onUpdate());
+      }
+    };
+  }, [draft.id, onUpdate]);
 
   async function updateTier1(text: string) {
     if (text && text !== draft.tier1Statement?.text) {
@@ -80,9 +104,26 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
     onUpdate();
   }
 
-  async function deleteTier3(tier3Id: string) {
-    await api.delete(`/tiers/${draft.id}/tier3/${tier3Id}`);
-    onUpdate();
+  const startDeleteTier3 = useCallback((tier3Id: string, text: string, tier2Id: string) => {
+    // If there's already a pending delete, execute it immediately
+    if (pendingDeleteRef.current) {
+      clearTimeout(pendingDeleteRef.current.timeout);
+      api.delete(`/tiers/${draft.id}/tier3/${pendingDeleteRef.current.id}`).then(() => onUpdate());
+    }
+    const timeout = setTimeout(() => {
+      api.delete(`/tiers/${draft.id}/tier3/${tier3Id}`).then(() => {
+        setPendingDelete(null);
+        onUpdate();
+      });
+    }, 5000);
+    setPendingDelete({ id: tier3Id, text, tier2Id, timeout });
+  }, [draft.id, onUpdate]);
+
+  function undoDeleteTier3() {
+    if (pendingDelete) {
+      clearTimeout(pendingDelete.timeout);
+      setPendingDelete(null);
+    }
   }
 
   function copyTableToClipboard() {
@@ -102,7 +143,16 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
       <div className="three-tier-table">
         {/* Tier 1 */}
         <div className="tier1-row">
-          <div className="tier-label">Tier 1 <span className="tier-subtitle">Core Value</span> <InfoTooltip text="Your single most important value statement — the headline of your message." /></div>
+          <div className="tier-header-row">
+            <div className="tier-label">Tier 1 <span className="tier-subtitle">Core Value</span> <InfoTooltip text="Your single most important value statement — the headline of your message." /></div>
+            <button className="btn-copy-table" onClick={copyTableToClipboard} title="Copy entire table to clipboard">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              Copy
+            </button>
+          </div>
           {editingCell === 'tier1' ? (
             <CellEditor
               text={draft.tier1Statement?.text || ''}
@@ -116,9 +166,12 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
             </div>
           )}
           {suggestions?.has('tier1') && (
-            <div className="inline-suggestion" onClick={() => onAcceptSuggestion?.('tier1', suggestions.get('tier1')!)}>
+            <div className="inline-suggestion">
               <span className="inline-suggestion-text">{suggestions.get('tier1')}</span>
-              <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.('tier1'); }}>&times;</button>
+              <div className="inline-suggestion-actions">
+                <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.('tier1', suggestions.get('tier1')!)}>Accept</button>
+                <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.('tier1'); }}>Dismiss</button>
+              </div>
             </div>
           )}
           {draft.tier1Statement && (
@@ -155,9 +208,12 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
                   </div>
                 )}
                 {suggestions?.has(t2Key) && (
-                  <div className="inline-suggestion" onClick={() => onAcceptSuggestion?.(t2Key, suggestions.get(t2Key)!)}>
+                  <div className="inline-suggestion">
                     <span className="inline-suggestion-text">{suggestions.get(t2Key)}</span>
-                    <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(t2Key); }}>&times;</button>
+                    <div className="inline-suggestion-actions">
+                      <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(t2Key, suggestions.get(t2Key)!)}>Accept</button>
+                      <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(t2Key); }}>Dismiss</button>
+                    </div>
                   </div>
                 )}
                 <CellVersionNav cellId={t2.id} cellType="tier2" onRestore={() => onUpdate()} />
@@ -166,6 +222,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
                   <div className="tier-label tier-label-small">Tier 3 <span className="tier-subtitle">Proof Points</span> <InfoTooltip text="Brief facts that prove this value is true. If a skeptic couldn't verify it, it's not proof." /></div>
                   {t2.tier3Bullets.map((t3, t3Index) => {
                     const t3Key = `tier3-${t2Index}-${t3Index}`;
+                    const isPendingDelete = pendingDelete?.id === t3.id;
                     return (
                       <div key={t3.id} style={{ position: 'relative' }}>
                         {editingCell === `tier3-${t3.id}` ? (
@@ -176,21 +233,28 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
                             onCancel={() => setEditingCell(null)}
                           />
                         ) : (
-                          <div className="tier3-bullet" onClick={() => !saving && setEditingCell(`tier3-${t3.id}`)}>
+                          <div className={`tier3-bullet${isPendingDelete ? ' tier3-pending-delete' : ''}`} onClick={() => !saving && !isPendingDelete && setEditingCell(`tier3-${t3.id}`)}>
                             <span>{t3.text}</span>
-                            <button
-                              className="btn btn-ghost btn-sm btn-danger"
-                              onClick={(e) => { e.stopPropagation(); deleteTier3(t3.id); }}
-                              style={{ padding: '0 4px', fontSize: 12, opacity: 0.4 }}
-                            >
-                              &times;
-                            </button>
+                            {isPendingDelete ? (
+                              <span className="tier3-undo" onClick={(e) => { e.stopPropagation(); undoDeleteTier3(); }}>Undo</span>
+                            ) : (
+                              <button
+                                className="btn btn-ghost btn-sm btn-danger"
+                                onClick={(e) => { e.stopPropagation(); startDeleteTier3(t3.id, t3.text, t2.id); }}
+                                style={{ padding: '0 4px', fontSize: 12, opacity: 0.4 }}
+                              >
+                                &times;
+                              </button>
+                            )}
                           </div>
                         )}
                         {suggestions?.has(t3Key) && (
-                          <div className="inline-suggestion" onClick={() => onAcceptSuggestion?.(t3Key, suggestions.get(t3Key)!)}>
+                          <div className="inline-suggestion">
                             <span className="inline-suggestion-text">{suggestions.get(t3Key)}</span>
-                            <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(t3Key); }}>&times;</button>
+                            <div className="inline-suggestion-actions">
+                              <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(t3Key, suggestions.get(t3Key)!)}>Accept</button>
+                              <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(t3Key); }}>Dismiss</button>
+                            </div>
                           </div>
                         )}
                         <CellVersionNav cellId={t3.id} cellType="tier3" onRestore={() => onUpdate()} />
@@ -211,11 +275,6 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, gap: 8 }}>
-        <button className="copy-btn" onClick={copyTableToClipboard}>
-          Copy Table
-        </button>
-      </div>
     </div>
   );
 }

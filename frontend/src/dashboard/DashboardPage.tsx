@@ -184,19 +184,31 @@ export function DashboardPage() {
               <div className="workflow-step-label">Audiences</div>
               <div className="workflow-step-hint">{audStats.count > 0 ? `${audStats.count} defined` : 'Define who matters most'}</div>
             </div>
-            <div className="workflow-arrow">&rarr;</div>
+            <div className="workflow-arrow">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </div>
             <div className={`workflow-step ${offStats.count > 0 ? 'step-done' : audStats.count > 0 ? 'step-current' : 'step-future'}`}>
               <div className="workflow-step-num">{offStats.count > 0 ? '✓' : '2'}</div>
               <div className="workflow-step-label">Offerings</div>
               <div className="workflow-step-hint">{offStats.count > 0 ? `${offStats.count} defined` : 'Describe what makes you different'}</div>
             </div>
-            <div className="workflow-arrow">&rarr;</div>
+            <div className="workflow-arrow">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </div>
             <div className={`workflow-step ${ttStats.complete > 0 ? 'step-done' : ttStats.active > 0 ? 'step-current' : 'step-future'}`}>
               <div className="workflow-step-num">{ttStats.complete > 0 ? '✓' : '3'}</div>
               <div className="workflow-step-label">Three Tier</div>
               <div className="workflow-step-hint">{ttStats.complete > 0 ? `${ttStats.complete} complete` : ttStats.active > 0 ? `${ttStats.active} in progress` : 'Build your message'}</div>
             </div>
-            <div className="workflow-arrow">&rarr;</div>
+            <div className="workflow-arrow">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </div>
             <div className={`workflow-step ${fcsCount > 0 ? 'step-done' : ttStats.complete > 0 ? 'step-current' : 'step-future'}`}>
               <div className="workflow-step-num">{fcsCount > 0 ? '✓' : '4'}</div>
               <div className="workflow-step-label">Five Chapter</div>
