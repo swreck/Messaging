@@ -177,11 +177,11 @@ router.put('/:storyId/chapters/:chapterNum', requireEditor, async (req: Request,
     });
   }
 
-  await prisma.fiveChapterStory.update({
+  const updatedStory = await prisma.fiveChapterStory.update({
     where: { id: param(req.params.storyId) },
     data: { version: { increment: 1 } },
   });
-  res.json({ chapter });
+  res.json({ chapter, story: updatedStory });
 });
 
 // DELETE /api/stories/:id

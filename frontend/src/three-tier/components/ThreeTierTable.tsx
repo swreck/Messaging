@@ -16,14 +16,22 @@ interface ThreeTierTableProps {
 
 export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, onDismissSuggestion }: ThreeTierTableProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   async function updateTier1(text: string) {
     if (text && text !== draft.tier1Statement?.text) {
+      setSaving(true);
       try {
         await api.put(`/tiers/${draft.id}/tier1`, { text, changeSource: 'manual', version: draft.version });
         onUpdate();
       } catch (err: any) {
-        if (err?.status === 409) { onConflict?.(); } else { throw err; }
+        if (err?.status === 409) {
+          const discard = window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.');
+          if (discard) { onConflict?.(); }
+          return;
+        } else { throw err; }
+      } finally {
+        setSaving(false);
       }
     }
     setEditingCell(null);
@@ -31,11 +39,18 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
 
   async function updateTier2(tier2Id: string, text: string, currentText: string) {
     if (text && text !== currentText) {
+      setSaving(true);
       try {
         await api.put(`/tiers/${draft.id}/tier2/${tier2Id}`, { text, changeSource: 'manual', version: draft.version });
         onUpdate();
       } catch (err: any) {
-        if (err?.status === 409) { onConflict?.(); } else { throw err; }
+        if (err?.status === 409) {
+          const discard = window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.');
+          if (discard) { onConflict?.(); }
+          return;
+        } else { throw err; }
+      } finally {
+        setSaving(false);
       }
     }
     setEditingCell(null);
@@ -43,11 +58,18 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
 
   async function updateTier3(tier3Id: string, text: string, currentText: string) {
     if (text && text !== currentText) {
+      setSaving(true);
       try {
         await api.put(`/tiers/${draft.id}/tier3/${tier3Id}`, { text, changeSource: 'manual', version: draft.version });
         onUpdate();
       } catch (err: any) {
-        if (err?.status === 409) { onConflict?.(); } else { throw err; }
+        if (err?.status === 409) {
+          const discard = window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.');
+          if (discard) { onConflict?.(); }
+          return;
+        } else { throw err; }
+      } finally {
+        setSaving(false);
       }
     }
     setEditingCell(null);
@@ -89,7 +111,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
               onCancel={() => setEditingCell(null)}
             />
           ) : (
-            <div className="tier1-text" onClick={() => setEditingCell('tier1')}>
+            <div className="tier1-text" onClick={() => !saving && setEditingCell('tier1')}>
               {draft.tier1Statement?.text || 'Click to add Tier 1 statement'}
             </div>
           )}
@@ -128,7 +150,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
                     />
                   </div>
                 ) : (
-                  <div className="tier2-text" onClick={() => setEditingCell(`tier2-${t2.id}`)}>
+                  <div className="tier2-text" onClick={() => !saving && setEditingCell(`tier2-${t2.id}`)}>
                     {t2.text}
                   </div>
                 )}
@@ -154,7 +176,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
                             onCancel={() => setEditingCell(null)}
                           />
                         ) : (
-                          <div className="tier3-bullet" onClick={() => setEditingCell(`tier3-${t3.id}`)}>
+                          <div className="tier3-bullet" onClick={() => !saving && setEditingCell(`tier3-${t3.id}`)}>
                             <span>{t3.text}</span>
                             <button
                               className="btn btn-ghost btn-sm btn-danger"

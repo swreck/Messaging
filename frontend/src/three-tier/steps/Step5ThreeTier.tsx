@@ -127,12 +127,12 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   async function handleAcceptSuggestion(cell: string, text: string) {
     try {
       if (cell === 'tier1') {
-        await api.put(`/tiers/${draft.id}/tier1`, { text, changeSource: 'review' });
+        await api.put(`/tiers/${draft.id}/tier1`, { text, changeSource: 'review', version: draft.version });
       } else if (cell.startsWith('tier2-')) {
         const index = parseInt(cell.split('-')[1]);
         const t2 = draft.tier2Statements[index];
         if (t2) {
-          await api.put(`/tiers/${draft.id}/tier2/${t2.id}`, { text, changeSource: 'review' });
+          await api.put(`/tiers/${draft.id}/tier2/${t2.id}`, { text, changeSource: 'review', version: draft.version });
         }
       } else if (cell.startsWith('tier3-')) {
         const parts = cell.split('-');
@@ -140,7 +140,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         const t3Index = parseInt(parts[2]);
         const t2 = draft.tier2Statements[t2Index];
         if (t2 && t2.tier3Bullets[t3Index]) {
-          await api.put(`/tiers/${draft.id}/tier3/${t2.tier3Bullets[t3Index].id}`, { text, changeSource: 'review' });
+          await api.put(`/tiers/${draft.id}/tier3/${t2.tier3Bullets[t3Index].id}`, { text, changeSource: 'review', version: draft.version });
         }
       }
       setSuggestions(prev => {

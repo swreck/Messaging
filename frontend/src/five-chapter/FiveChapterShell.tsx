@@ -192,20 +192,22 @@ export function FiveChapterShell() {
   async function saveChapterEdit(chapterNum: number) {
     if (!story) return;
     try {
-      await api.put(`/stories/${story.id}/chapters/${chapterNum}`, { content: editText, version: story.version });
+      const { story: updated } = await api.put<{ story: FiveChapterStory }>(`/stories/${story.id}/chapters/${chapterNum}`, { content: editText, version: story.version });
       setStory(prev => {
         if (!prev) return prev;
         const chapters = prev.chapters.map(c =>
           c.chapterNum === chapterNum ? { ...c, content: editText } : c
         );
-        return { ...prev, version: prev.version + 1, chapters };
+        return { ...prev, version: updated.version, chapters };
       });
       setEditingChapter(null);
     } catch (err: any) {
       if (err?.status === 409) {
-        alert('This story was edited elsewhere. Refreshing to show the latest version.');
-        setEditingChapter(null);
-        loadData();
+        const discard = window.confirm('This story was edited by someone else. Click OK to reload with their changes, or Cancel to keep editing your version.');
+        if (discard) {
+          setEditingChapter(null);
+          loadData();
+        }
       } else {
         alert(err.message);
       }
@@ -220,9 +222,11 @@ export function FiveChapterShell() {
       setEditingBlended(false);
     } catch (err: any) {
       if (err?.status === 409) {
-        alert('This story was edited elsewhere. Refreshing to show the latest version.');
-        setEditingBlended(false);
-        loadData();
+        const discard = window.confirm('This story was edited by someone else. Click OK to reload with their changes, or Cancel to keep editing your version.');
+        if (discard) {
+          setEditingBlended(false);
+          loadData();
+        }
       } else {
         alert(err.message);
       }
