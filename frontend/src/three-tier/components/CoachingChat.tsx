@@ -11,7 +11,7 @@ interface CoachingChatProps {
   draftId: string;
   step: number;
   initialPrompt: string;
-  onExtractItem?: (text: string) => void;
+  onExtractItem?: (text: string, motivatingFactor?: string) => void;
 }
 
 export function CoachingChat({ draftId, step, initialPrompt, onExtractItem }: CoachingChatProps) {
@@ -73,7 +73,14 @@ export function CoachingChat({ draftId, step, initialPrompt, onExtractItem }: Co
     for (const line of lines) {
       const trimmed = line.trim();
       if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
-        onExtractItem(trimmed.replace(/^[*\-]\s*/, ''));
+        const text = trimmed.replace(/^[*\-]\s*/, '');
+        // Check for motivating factor extraction: "[MF] priority: motivating factor"
+        const mfMatch = text.match(/^\[MF\]\s*(.+?):\s*(.+)$/);
+        if (mfMatch) {
+          onExtractItem(mfMatch[1].trim(), mfMatch[2].trim());
+        } else {
+          onExtractItem(text);
+        }
       }
     }
   }

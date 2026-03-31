@@ -62,14 +62,18 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
     await loadDraft();
   }
 
-  async function addPriority(text: string) {
+  async function addPriority(text: string, motivatingFactor?: string) {
     if (!text.trim()) return;
     if (draft.audience.priorities.find(p => p.text === text.trim())) return;
 
-    await api.post(`/audiences/${draft.audienceId}/priorities`, {
+    const data: Record<string, any> = {
       text: text.trim(),
       rank: draft.audience.priorities.length + 1,
-    });
+    };
+    if (motivatingFactor) {
+      data.motivatingFactor = motivatingFactor;
+    }
+    await api.post(`/audiences/${draft.audienceId}/priorities`, data);
     await loadDraft();
   }
 
