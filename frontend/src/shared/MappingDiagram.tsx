@@ -360,6 +360,10 @@ export function MappingDiagram({
 
   return (
     <div>
+      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '4px 0 8px', lineHeight: 1.5 }}>
+        Lines connect priorities to the capabilities that support them. Each priority's color groups its connections.
+        {onChange && ' Drag from any box to draw a new connection, or drag an endpoint to reassign it.'}
+      </div>
       <div className="mapping-diagram" ref={containerRef}
         style={{ cursor: drag ? 'grabbing' : undefined }}
         onClick={() => setSelectedKey(null)}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
@@ -6,6 +6,7 @@ import { ConfirmModal } from '../shared/ConfirmModal';
 import { PriorityList } from '../shared/PriorityList';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
+import { useWorkspace } from '../shared/WorkspaceContext';
 import type { Audience } from '../types';
 
 interface AudienceDraftRef {
@@ -31,6 +32,13 @@ export function AudiencesPage() {
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{id: string, name: string, draftCount: number} | null>(null);
+  const [copyDropdownId, setCopyDropdownId] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const copyDropdownRef = useRef<HTMLDivElement>(null);
+
+  const { workspaces, activeWorkspace } = useWorkspace();
+  const otherWorkspaces = workspaces.filter(w => w.id !== activeWorkspace?.id);
+  const hasMultipleWorkspaces = otherWorkspaces.length > 0;
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'audiences' }); registerRefresh(loadData); }, []);
@@ -125,6 +133,33 @@ export function AudiencesPage() {
     loadData();
   }
 
+  // Close copy dropdown on click outside
+  useEffect(() => {
+    if (!copyDropdownId) return;
+    function handleClick(e: MouseEvent) {
+      if (copyDropdownRef.current && !copyDropdownRef.current.contains(e.target as Node)) {
+        setCopyDropdownId(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [copyDropdownId]);
+
+  async function copyAudienceTo(audienceId: string, targetWorkspaceId: string, targetName: string) {
+    setCopyDropdownId(null);
+    try {
+      await api.post(`/workspaces/${targetWorkspaceId}/copy-audience`, {
+        audienceId,
+        sourceWorkspaceId: activeWorkspace?.id,
+      });
+      setCopyFeedback(`Copied to ${targetName}`);
+      setTimeout(() => setCopyFeedback(null), 2500);
+    } catch (err: any) {
+      setCopyFeedback(`Failed: ${err.message}`);
+      setTimeout(() => setCopyFeedback(null), 3000);
+    }
+  }
+
   function getStatusLabel(step: number, status: string): string {
     if (status === 'complete') return 'Complete';
     const labels = ['Confirm', 'Your Offering', 'Your Audience', 'Building', 'Your Three Tier'];
@@ -162,6 +197,18 @@ export function AudiencesPage() {
                 <span className="badge">{a.priorities.length} priorit{a.priorities.length === 1 ? 'y' : 'ies'}</span>
               </div>
               <div className="expandable-card-actions" onClick={e => e.stopPropagation()}>
+                {hasMultipleWorkspaces && (
+                  <div className="copy-to-wrapper" ref={copyDropdownId === a.id ? copyDropdownRef : undefined}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setCopyDropdownId(copyDropdownId === a.id ? null : a.id)}>Copy to...</button>
+                    {copyDropdownId === a.id && (
+                      <div className="copy-to-dropdown">
+                        {otherWorkspaces.map(w => (
+                          <button key={w.id} className="copy-to-option" onClick={() => copyAudienceTo(a.id, w.id, w.name)}>{w.name}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button className="btn btn-ghost btn-sm" onClick={() => openEdit(a)}>Edit</button>
                 <button className="btn btn-ghost btn-sm btn-danger" onClick={() => requestDelete(a)}>Delete</button>
               </div>
@@ -228,6 +275,10 @@ export function AudiencesPage() {
             : 'Any Three Tier messages using this audience will also be deleted.'
         }
       />
+
+      {copyFeedback && (
+        <div className="copy-feedback-toast">{copyFeedback}</div>
+      )}
     </div>
   );
 }

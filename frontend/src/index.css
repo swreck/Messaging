@@ -2949,3 +2949,70 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .join-invalid a:hover {
   text-decoration: underline;
 }
+
+/* ─── Copy To Dropdown ──────────────────────────── */
+.copy-to-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.copy-to-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  min-width: 180px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  padding: 4px 0;
+  margin-top: 4px;
+}
+.copy-to-option {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font);
+}
+.copy-to-option:hover {
+  background: var(--bg-hover);
+}
+.copy-feedback-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-primary);
+  color: white;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  box-shadow: var(--shadow-lg);
+  z-index: 9999;
+  animation: toast-in 0.3s ease-out;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ─── Extraction Animation ──────────────────────── */
+.extracted-sidebar.highlight {
+  animation: sidebar-pulse 1s ease-out;
+}
+@keyframes sidebar-pulse {
+  0% { box-shadow: 0 0 0 2px var(--accent-light); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.chat-extraction-note {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 2px 0 4px;
+  text-align: right;
+}

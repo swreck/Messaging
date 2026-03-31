@@ -3,7 +3,7 @@ import { api } from '../../api/client';
 import { Spinner } from '../../shared/Spinner';
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'extraction-note';
   content: string;
 }
 
@@ -69,6 +69,7 @@ export function CoachingChat({ draftId, step, initialPrompt, onExtractItem }: Co
 
   function extractItems(response: string) {
     if (!onExtractItem) return;
+    let extractedCount = 0;
     const lines = response.split('\n');
     for (const line of lines) {
       const trimmed = line.trim();
@@ -81,7 +82,12 @@ export function CoachingChat({ draftId, step, initialPrompt, onExtractItem }: Co
         } else {
           onExtractItem(text);
         }
+        extractedCount++;
       }
+    }
+    if (extractedCount > 0) {
+      window.dispatchEvent(new CustomEvent('maria-extracted'));
+      setMessages(prev => [...prev, { role: 'extraction-note' as const, content: '(Added to your list \u2192)' }]);
     }
   }
 
@@ -120,9 +126,13 @@ export function CoachingChat({ draftId, step, initialPrompt, onExtractItem }: Co
     <div className="coaching-chat">
       <div className="chat-messages">
         {messages.map((msg, i) => (
-          <div key={i} className={`chat-message ${msg.role}`}>
-            {msg.content}
-          </div>
+          msg.role === 'extraction-note' ? (
+            <div key={i} className="chat-extraction-note">{msg.content}</div>
+          ) : (
+            <div key={i} className={`chat-message ${msg.role}`}>
+              {msg.content}
+            </div>
+          )
         ))}
         {sending && (
           <div className="chat-message assistant">

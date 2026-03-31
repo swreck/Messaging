@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { StepProps } from './types';
 import { CoachingChat } from '../components/CoachingChat';
 import { DifferentiatorList } from '../../shared/DifferentiatorList';
@@ -38,6 +38,18 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [showMappingModal, setShowMappingModal] = useState(false);
   const [elements, setElements] = useState(draft.offering.elements.map(e => e.text));
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleExtracted() {
+      if (sidebarRef.current) {
+        sidebarRef.current.classList.add('highlight');
+        setTimeout(() => sidebarRef.current?.classList.remove('highlight'), 1000);
+      }
+    }
+    window.addEventListener('maria-extracted', handleExtracted);
+    return () => window.removeEventListener('maria-extracted', handleExtracted);
+  }, []);
 
   async function addElement(text: string) {
     if (!text.trim()) return;
@@ -129,7 +141,7 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
           onExtractItem={addElement}
         />
 
-        <div className="extracted-sidebar">
+        <div className="extracted-sidebar" ref={sidebarRef}>
           <h3>Capabilities ({draft.offering.elements.length}) <InfoTooltip text="What makes your offering different or valuable. Maria maps these to what your audience cares about." /></h3>
           <DifferentiatorList
             offeringId={draft.offeringId}

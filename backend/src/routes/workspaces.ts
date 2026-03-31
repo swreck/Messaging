@@ -327,4 +327,116 @@ router.get('/:id/members', async (req: Request, res: Response) => {
   });
 });
 
+// POST /api/workspaces/:id/copy-audience — copy an audience + priorities to this workspace
+router.post('/:id/copy-audience', async (req: Request, res: Response) => {
+  const targetWorkspaceId = param(req.params.id);
+  const { audienceId, sourceWorkspaceId } = req.body;
+  if (!audienceId || !sourceWorkspaceId) {
+    res.status(400).json({ error: 'audienceId and sourceWorkspaceId are required' });
+    return;
+  }
+
+  // Verify user is a member of BOTH workspaces
+  const [sourceMembership, targetMembership] = await Promise.all([
+    prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: sourceWorkspaceId, userId: req.user!.userId } },
+    }),
+    prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: targetWorkspaceId, userId: req.user!.userId } },
+    }),
+  ]);
+  if (!sourceMembership || !targetMembership) {
+    res.status(403).json({ error: 'You must be a member of both workspaces' });
+    return;
+  }
+
+  // Load the source audience with priorities
+  const source = await prisma.audience.findFirst({
+    where: { id: audienceId, workspaceId: sourceWorkspaceId },
+    include: { priorities: { orderBy: { sortOrder: 'asc' } } },
+  });
+  if (!source) {
+    res.status(404).json({ error: 'Audience not found in source workspace' });
+    return;
+  }
+
+  // Create the copy
+  const newAudience = await prisma.audience.create({
+    data: {
+      userId: req.user!.userId,
+      workspaceId: targetWorkspaceId,
+      name: source.name,
+      description: source.description,
+      priorities: {
+        create: source.priorities.map(p => ({
+          text: p.text,
+          rank: p.rank,
+          isSpoken: p.isSpoken,
+          motivatingFactor: p.motivatingFactor,
+          whatAudienceThinks: p.whatAudienceThinks,
+          sortOrder: p.sortOrder,
+        })),
+      },
+    },
+    include: { priorities: true },
+  });
+
+  res.status(201).json({ audience: newAudience });
+});
+
+// POST /api/workspaces/:id/copy-offering — copy an offering + elements to this workspace
+router.post('/:id/copy-offering', async (req: Request, res: Response) => {
+  const targetWorkspaceId = param(req.params.id);
+  const { offeringId, sourceWorkspaceId } = req.body;
+  if (!offeringId || !sourceWorkspaceId) {
+    res.status(400).json({ error: 'offeringId and sourceWorkspaceId are required' });
+    return;
+  }
+
+  // Verify user is a member of BOTH workspaces
+  const [sourceMembership, targetMembership] = await Promise.all([
+    prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: sourceWorkspaceId, userId: req.user!.userId } },
+    }),
+    prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: targetWorkspaceId, userId: req.user!.userId } },
+    }),
+  ]);
+  if (!sourceMembership || !targetMembership) {
+    res.status(403).json({ error: 'You must be a member of both workspaces' });
+    return;
+  }
+
+  // Load the source offering with elements
+  const source = await prisma.offering.findFirst({
+    where: { id: offeringId, workspaceId: sourceWorkspaceId },
+    include: { elements: { orderBy: { sortOrder: 'asc' } } },
+  });
+  if (!source) {
+    res.status(404).json({ error: 'Offering not found in source workspace' });
+    return;
+  }
+
+  // Create the copy
+  const newOffering = await prisma.offering.create({
+    data: {
+      userId: req.user!.userId,
+      workspaceId: targetWorkspaceId,
+      name: source.name,
+      smeRole: source.smeRole,
+      description: source.description,
+      elements: {
+        create: source.elements.map(e => ({
+          text: e.text,
+          source: e.source,
+          sortOrder: e.sortOrder,
+        })),
+      },
+    },
+    include: { elements: true },
+  });
+
+  res.status(201).json({ offering: newOffering });
+});
+
 export default router;

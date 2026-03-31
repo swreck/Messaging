@@ -675,6 +675,95 @@ Write Chapter ${chNum}: "${ch.name}"`;
         refreshNeeded = true;
       }
 
+      // ─── Cross-workspace copy ─────────────────────────
+      if (a.type === 'copy_audience_to_workspace' && a.params.audienceName && a.params.targetWorkspaceName) {
+        // Find audience in current workspace
+        const scopeFilter = workspaceId ? { workspaceId } : { userId };
+        const audience = await prisma.audience.findFirst({
+          where: { ...scopeFilter, name: { contains: a.params.audienceName, mode: 'insensitive' as const } },
+          include: { priorities: { orderBy: { sortOrder: 'asc' } } },
+        });
+        if (!audience) {
+          actionResult = `Could not find audience "${a.params.audienceName}" in this workspace`;
+        } else {
+          // Find target workspace by name (fuzzy)
+          const userWorkspaces = await prisma.workspaceMember.findMany({
+            where: { userId },
+            include: { workspace: true },
+          });
+          const targetWs = userWorkspaces.find(m =>
+            m.workspace.name.toLowerCase().includes(a.params.targetWorkspaceName.toLowerCase())
+          );
+          if (!targetWs) {
+            actionResult = `Could not find a workspace named "${a.params.targetWorkspaceName}" that you have access to`;
+          } else if (targetWs.workspaceId === workspaceId) {
+            actionResult = `"${audience.name}" is already in that workspace`;
+          } else {
+            await prisma.audience.create({
+              data: {
+                userId,
+                workspaceId: targetWs.workspaceId,
+                name: audience.name,
+                description: audience.description,
+                priorities: {
+                  create: audience.priorities.map(p => ({
+                    text: p.text,
+                    rank: p.rank,
+                    isSpoken: p.isSpoken,
+                    motivatingFactor: p.motivatingFactor,
+                    whatAudienceThinks: p.whatAudienceThinks,
+                    sortOrder: p.sortOrder,
+                  })),
+                },
+              },
+            });
+            actionResult = `Copied "${audience.name}" audience (with ${audience.priorities.length} priorities) to "${targetWs.workspace.name}"`;
+          }
+        }
+      }
+
+      if (a.type === 'copy_offering_to_workspace' && a.params.offeringName && a.params.targetWorkspaceName) {
+        const scopeFilter = workspaceId ? { workspaceId } : { userId };
+        const offering = await prisma.offering.findFirst({
+          where: { ...scopeFilter, name: { contains: a.params.offeringName, mode: 'insensitive' as const } },
+          include: { elements: { orderBy: { sortOrder: 'asc' } } },
+        });
+        if (!offering) {
+          actionResult = `Could not find offering "${a.params.offeringName}" in this workspace`;
+        } else {
+          const userWorkspaces = await prisma.workspaceMember.findMany({
+            where: { userId },
+            include: { workspace: true },
+          });
+          const targetWs = userWorkspaces.find(m =>
+            m.workspace.name.toLowerCase().includes(a.params.targetWorkspaceName.toLowerCase())
+          );
+          if (!targetWs) {
+            actionResult = `Could not find a workspace named "${a.params.targetWorkspaceName}" that you have access to`;
+          } else if (targetWs.workspaceId === workspaceId) {
+            actionResult = `"${offering.name}" is already in that workspace`;
+          } else {
+            await prisma.offering.create({
+              data: {
+                userId,
+                workspaceId: targetWs.workspaceId,
+                name: offering.name,
+                smeRole: offering.smeRole,
+                description: offering.description,
+                elements: {
+                  create: offering.elements.map(e => ({
+                    text: e.text,
+                    source: e.source,
+                    sortOrder: e.sortOrder,
+                  })),
+                },
+              },
+            });
+            actionResult = `Copied "${offering.name}" offering (with ${offering.elements.length} capabilities) to "${targetWs.workspace.name}"`;
+          }
+        }
+      }
+
       // Catch silent failures: action dispatched but no handler ran
       if (!actionResult) {
         const missing: string[] = [];
@@ -917,6 +1006,10 @@ export function buildActionList(context: ActionContext): string {
   if (context.draftId) {
     actions.push('- edit_tier: Apply direction to the Three Tier table. Params: { instruction: string }');
   }
+
+  // Cross-workspace copy — always included, dispatch handles errors if user has only 1 workspace
+  actions.push('- copy_audience_to_workspace: Copy an audience and its priorities to another workspace. Params: { audienceName: string, targetWorkspaceName: string }');
+  actions.push('- copy_offering_to_workspace: Copy an offering and its capabilities to another workspace. Params: { offeringName: string, targetWorkspaceName: string }');
 
   return `\nACTIONS YOU CAN TAKE (only if the user's request clearly calls for one):\n${actions.join('\n')}\n`;
 }

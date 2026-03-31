@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
+import { useWorkspace } from '../shared/WorkspaceContext';
 import type { Offering } from '../types';
 
 export function OfferingsPage() {
@@ -19,6 +20,13 @@ export function OfferingsPage() {
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{id: string, name: string} | null>(null);
+  const [copyDropdownId, setCopyDropdownId] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const copyDropdownRef = useRef<HTMLDivElement>(null);
+
+  const { workspaces, activeWorkspace } = useWorkspace();
+  const otherWorkspaces = workspaces.filter(w => w.id !== activeWorkspace?.id);
+  const hasMultipleWorkspaces = otherWorkspaces.length > 0;
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'offerings' }); registerRefresh(loadData); }, []);
@@ -73,6 +81,33 @@ export function OfferingsPage() {
     setDeleteTarget({ id: o.id, name: o.name });
   }
 
+  // Close copy dropdown on click outside
+  useEffect(() => {
+    if (!copyDropdownId) return;
+    function handleClick(e: MouseEvent) {
+      if (copyDropdownRef.current && !copyDropdownRef.current.contains(e.target as Node)) {
+        setCopyDropdownId(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [copyDropdownId]);
+
+  async function copyOfferingTo(offeringId: string, targetWorkspaceId: string, targetName: string) {
+    setCopyDropdownId(null);
+    try {
+      await api.post(`/workspaces/${targetWorkspaceId}/copy-offering`, {
+        offeringId,
+        sourceWorkspaceId: activeWorkspace?.id,
+      });
+      setCopyFeedback(`Copied to ${targetName}`);
+      setTimeout(() => setCopyFeedback(null), 2500);
+    } catch (err: any) {
+      setCopyFeedback(`Failed: ${err.message}`);
+      setTimeout(() => setCopyFeedback(null), 3000);
+    }
+  }
+
   async function confirmDelete() {
     if (!deleteTarget) return;
     await api.delete(`/offerings/${deleteTarget.id}`);
@@ -109,6 +144,18 @@ export function OfferingsPage() {
                 </span>
               </div>
               <div className="list-card-actions" onClick={e => e.stopPropagation()}>
+                {hasMultipleWorkspaces && (
+                  <div className="copy-to-wrapper" ref={copyDropdownId === o.id ? copyDropdownRef : undefined}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setCopyDropdownId(copyDropdownId === o.id ? null : o.id)}>Copy to...</button>
+                    {copyDropdownId === o.id && (
+                      <div className="copy-to-dropdown">
+                        {otherWorkspaces.map(w => (
+                          <button key={w.id} className="copy-to-option" onClick={() => copyOfferingTo(o.id, w.id, w.name)}>{w.name}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button className="btn btn-ghost btn-sm" onClick={() => openEdit(o)}>Edit</button>
                 <button className="btn btn-ghost btn-sm btn-danger" onClick={() => requestDelete(o)}>Delete</button>
               </div>
@@ -147,6 +194,10 @@ export function OfferingsPage() {
         message={`Delete "${deleteTarget?.name}" and all its data?`}
         detail="Any Three Tier messages and Five Chapter stories built from this offering will also be deleted."
       />
+
+      {copyFeedback && (
+        <div className="copy-feedback-toast">{copyFeedback}</div>
+      )}
     </div>
   );
 }

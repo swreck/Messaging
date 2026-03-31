@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { StepProps } from './types';
 import { CoachingChat } from '../components/CoachingChat';
@@ -42,6 +42,18 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
   const [showMappingModal, setShowMappingModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleExtracted() {
+      if (sidebarRef.current) {
+        sidebarRef.current.classList.add('highlight');
+        setTimeout(() => sidebarRef.current?.classList.remove('highlight'), 1000);
+      }
+    }
+    window.addEventListener('maria-extracted', handleExtracted);
+    return () => window.removeEventListener('maria-extracted', handleExtracted);
+  }, []);
 
   function switchToEdit() {
     setSearchParams(prev => {
@@ -174,7 +186,7 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
           onExtractItem={addPriority}
         />
 
-        <div className="extracted-sidebar">
+        <div className="extracted-sidebar" ref={sidebarRef}>
           <h3>Priorities ({draft.audience.priorities.length}) <InfoTooltip text="What matters most to your audience. The top priority shapes your core value statement." /></h3>
           <PriorityList
             audienceId={draft.audienceId}

@@ -1,6 +1,8 @@
 import type { StepProps } from './types';
 
-export function Step1Prep({ draft, nextStep }: StepProps) {
+export function Step1Prep({ draft, nextStep, goToStep }: StepProps) {
+  const isReturning = draft.currentStep > 1;
+
   return (
     <div className="step-panel">
       <h2>Before We Begin</h2>
@@ -33,11 +35,29 @@ export function Step1Prep({ draft, nextStep }: StepProps) {
         </div>
       </div>
 
+      <div style={{ margin: '20px 0', padding: '16px 20px', background: 'var(--bg-secondary, #f8f8fa)', borderRadius: 10 }}>
+        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', margin: '0 0 8px' }}>
+          Here's the plan:
+        </p>
+        <ol style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
+          <li>You'll tell Maria about what makes {draft.offering.name} special</li>
+          <li>Then about what {draft.audience.name} cares about</li>
+          <li>Maria builds your three-tier message</li>
+          <li>You review, refine, and make it yours</li>
+        </ol>
+      </div>
+
       <div className="step-actions">
         <div />
-        <button className="btn btn-primary" onClick={nextStep}>
-          Looks Good — Let's Go
-        </button>
+        {isReturning ? (
+          <button className="btn btn-primary" onClick={() => goToStep(draft.currentStep)}>
+            Continue where I left off
+          </button>
+        ) : (
+          <button className="btn btn-primary" onClick={nextStep}>
+            Looks Good — Let's Go
+          </button>
+        )}
       </div>
     </div>
   );

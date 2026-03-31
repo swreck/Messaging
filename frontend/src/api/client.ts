@@ -63,6 +63,12 @@ class ApiClient {
       throw new Error('Authentication required');
     }
 
+    // Sliding window token refresh: silently update if backend issued a fresh token
+    const refreshedToken = res.headers.get('x-refreshed-token');
+    if (refreshedToken) {
+      this.setToken(refreshedToken);
+    }
+
     const data = await res.json();
 
     if (!res.ok) {
