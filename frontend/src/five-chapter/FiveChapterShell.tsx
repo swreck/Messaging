@@ -406,7 +406,7 @@ export function FiveChapterShell() {
           <p className="step-description">Select a content format and configure your Five Chapter Story.</p>
           <form onSubmit={createStory}>
             <div className="form-group">
-              <label>Content Format</label>
+              <label>Content Format <InfoTooltip text="Choose where this story will be used. Each format has different length and tone." /></label>
               <div className="medium-grid">
                 {MEDIUM_OPTIONS.map(opt => (
                   <button
@@ -422,7 +422,7 @@ export function FiveChapterShell() {
               </div>
             </div>
             <div className="form-group">
-              <label>Call to Action</label>
+              <label>Call to Action <InfoTooltip text="What you want your audience to do after reading — like scheduling a demo or starting a trial." /></label>
               <input value={cta} onChange={e => setCta(e.target.value)} placeholder="e.g. Schedule a demo, Start a free trial, Visit our website" required />
             </div>
             <div className="form-group">
@@ -578,6 +578,7 @@ export function FiveChapterShell() {
                   onClick={blendStory}
                   disabled={blending}
                   style={{ width: '100%' }}
+                  title="Combine all chapters into one polished narrative with transitions"
                 >
                   {blending ? <><Spinner size={14} /> Creating final draft...</> : 'Create Final Draft'}
                 </button>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { StepProps } from './types';
 import { CoachingChat } from '../components/CoachingChat';
 import { DifferentiatorList } from '../../shared/DifferentiatorList';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { Modal } from '../../shared/Modal';
 import { MappingDiagram } from '../../shared/MappingDiagram';
 import { api } from '../../api/client';
@@ -129,7 +130,7 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
         />
 
         <div className="extracted-sidebar">
-          <h3>Capabilities ({draft.offering.elements.length})</h3>
+          <h3>Capabilities ({draft.offering.elements.length}) <InfoTooltip text="What makes your offering different or valuable. Maria maps these to what your audience cares about." /></h3>
           <DifferentiatorList
             offeringId={draft.offeringId}
             elements={draft.offering.elements}

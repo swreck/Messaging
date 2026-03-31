@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
+import { InfoTooltip } from '../shared/InfoTooltip';
 import type { Offering, Audience } from '../types';
 
 interface HierarchyOffering {
@@ -210,7 +211,7 @@ export function DashboardPage() {
         <div className="nav-tiles">
           <div className="nav-tile nav-tile-audiences" onClick={() => navigate('/audiences')}>
             <div className="nav-tile-icon">👥</div>
-            <div className="nav-tile-title">Audiences</div>
+            <div className="nav-tile-title">Audiences <InfoTooltip text="The groups of people you want to persuade. Each has priorities they care about when evaluating what you offer." /></div>
             <div className="nav-tile-stat">
               {audStats.count > 0
                 ? `${audStats.count} audience${audStats.count !== 1 ? 's' : ''}${audStats.totalPriorities > 0 ? ` · ${audStats.totalPriorities} priorities` : ''}`
@@ -220,7 +221,7 @@ export function DashboardPage() {
 
           <div className="nav-tile nav-tile-offerings" onClick={() => navigate('/offerings')}>
             <div className="nav-tile-icon">✨</div>
-            <div className="nav-tile-title">Offerings</div>
+            <div className="nav-tile-title">Offerings <InfoTooltip text="Your products and services. Each has capabilities that make it valuable to your audiences." /></div>
             <div className="nav-tile-stat">
               {offStats.count > 0
                 ? `${offStats.count} offering${offStats.count !== 1 ? 's' : ''}${offStats.totalCapabilities > 0 ? ` · ${offStats.totalCapabilities} capabilities` : ''}`
@@ -230,7 +231,7 @@ export function DashboardPage() {
 
           <div className="nav-tile nav-tile-three-tiers" onClick={() => navigate('/three-tiers')}>
             <div className="nav-tile-icon">💬</div>
-            <div className="nav-tile-title">Three Tier Messages</div>
+            <div className="nav-tile-title">Three Tier Messages <InfoTooltip text="Connects what your audience cares about to what you offer — from the core value down to proof points." /></div>
             <div className="nav-tile-stat">
               {ttStats.active > 0 || ttStats.complete > 0
                 ? <>
@@ -244,7 +245,7 @@ export function DashboardPage() {
 
           <div className="nav-tile nav-tile-five-chapters" onClick={() => navigate('/five-chapters')}>
             <div className="nav-tile-icon">📖</div>
-            <div className="nav-tile-title">Five Chapter Stories</div>
+            <div className="nav-tile-title">Five Chapter Stories <InfoTooltip text="Narrative stories generated from completed three-tier messages, formatted for email, presentations, and more." /></div>
             <div className="nav-tile-stat">
               {fcsCount > 0
                 ? `${fcsCount} deliverable${fcsCount !== 1 ? 's' : ''}`

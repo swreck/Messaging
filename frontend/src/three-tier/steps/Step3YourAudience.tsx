@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import type { StepProps } from './types';
 import { CoachingChat } from '../components/CoachingChat';
 import { PriorityList } from '../../shared/PriorityList';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { Modal } from '../../shared/Modal';
 import { MappingDiagram } from '../../shared/MappingDiagram';
 import { api } from '../../api/client';
@@ -174,7 +175,7 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
         />
 
         <div className="extracted-sidebar">
-          <h3>Priorities ({draft.audience.priorities.length})</h3>
+          <h3>Priorities ({draft.audience.priorities.length}) <InfoTooltip text="What matters most to your audience. The top priority shapes your core value statement." /></h3>
           <PriorityList
             audienceId={draft.audienceId}
             audienceName={draft.audience.name}

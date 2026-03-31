@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMaria } from '../shared/MariaContext';
+import { InfoTooltip } from '../shared/InfoTooltip';
 import { api } from '../api/client';
 
 interface LearningData {
@@ -67,7 +68,7 @@ export function SettingsPage() {
       <h1>Settings</h1>
 
       <div style={{ marginTop: 32 }}>
-        <h2 style={{ fontSize: 18, marginBottom: 8 }}>Voice Quality</h2>
+        <h2 style={{ fontSize: 18, marginBottom: 8 }}>Voice Quality <InfoTooltip text="Maria checks every generated statement against voice rules to keep your messaging natural." /></h2>
         <p className="text-secondary" style={{ marginBottom: 16, lineHeight: 1.5 }}>
           Maria automatically checks every generated statement and story against Ken's Voice
           rules. If something doesn't sound right, she regenerates it before showing you the result.

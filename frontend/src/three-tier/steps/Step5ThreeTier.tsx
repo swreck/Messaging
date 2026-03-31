@@ -288,19 +288,19 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
       {/* Toolbar */}
       <div className="three-tier-toolbar">
-        <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={anyBusy}>
+        <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={anyBusy} title="Maria reviews your message and suggests improvements">
           {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria'}
         </button>
-        <button className="btn btn-secondary btn-sm" onClick={refineLanguage} disabled={anyBusy}>
+        <button className="btn btn-secondary btn-sm" onClick={refineLanguage} disabled={anyBusy} title="Rewrite statements to sound more natural while keeping the meaning">
           {refining ? <><Spinner size={12} /> Refining...</> : 'Refine Language'}
         </button>
         {draft.mappings.length > 0 && (
-          <button className="btn btn-ghost btn-sm" onClick={() => window.open(`/mapping/${draft.id}`, '_blank')}>
+          <button className="btn btn-ghost btn-sm" onClick={() => window.open(`/mapping/${draft.id}`, '_blank')} title="See how priorities connect to capabilities">
             Show mapping
           </button>
         )}
         {hasEdited && (
-          <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={anyBusy}>
+          <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={anyBusy} title="Maria analyzes your changes and suggests revisions to match">
             {revising ? <><Spinner size={12} /> Revising...</> : 'Learn from my edits & revise'}
           </button>
         )}
@@ -309,7 +309,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
             Clear suggestions
           </button>
         )}
-        <button className="btn btn-ghost btn-sm btn-danger" onClick={regenerate} disabled={anyBusy}>
+        <button className="btn btn-ghost btn-sm btn-danger" onClick={regenerate} disabled={anyBusy} title="Start fresh with a new three-tier message">
           {regenerating ? <><Spinner size={12} /> Regenerating...</> : 'Regenerate'}
         </button>
       </div>
