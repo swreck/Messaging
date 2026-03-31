@@ -88,6 +88,21 @@ export function MariaPartner() {
     }
   }, [open, introduced, introPhase]);
 
+  // Listen for keyboard shortcut events
+  useEffect(() => {
+    function onToggle(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.open) {
+        setOpen(true);
+        setShowDot(false);
+      } else {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('maria-toggle', onToggle);
+    return () => document.removeEventListener('maria-toggle', onToggle);
+  }, []);
+
   const handleOpen = useCallback(() => {
     setOpen(true);
     setShowDot(false);

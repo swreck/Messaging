@@ -19,6 +19,7 @@ import { FiveChapterShell } from './five-chapter/FiveChapterShell';
 import { SettingsPage } from './pages/SettingsPage';
 import { WorkspacesPage } from './pages/WorkspacesPage';
 import { MappingPage } from './pages/MappingPage';
+import { SharedView } from './pages/SharedView';
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
           <Route path="/workspaces" element={<ProtectedRoute><Layout><WorkspacesPage /></Layout></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
           <Route path="/mapping/:draftId" element={<ProtectedRoute><MappingPage /></ProtectedRoute>} />
+          <Route path="/s/:token" element={<SharedView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <MariaPartner />

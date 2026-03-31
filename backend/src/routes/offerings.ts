@@ -66,6 +66,37 @@ router.delete('/:id', requireEditor, async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// POST /api/offerings/:id/duplicate
+router.post('/:id/duplicate', requireEditor, async (req: Request, res: Response) => {
+  const offering = await prisma.offering.findFirst({
+    where: { id: param(req.params.id), workspaceId: req.workspaceId },
+    include: { elements: { orderBy: { sortOrder: 'asc' } } },
+  });
+  if (!offering) {
+    res.status(404).json({ error: 'Offering not found' });
+    return;
+  }
+
+  const newOffering = await prisma.offering.create({
+    data: {
+      name: `${offering.name} (copy)`,
+      smeRole: offering.smeRole,
+      description: offering.description,
+      userId: req.user!.userId,
+      workspaceId: req.workspaceId!,
+      elements: {
+        create: offering.elements.map(e => ({
+          text: e.text,
+          source: e.source,
+          sortOrder: e.sortOrder,
+        })),
+      },
+    },
+    include: { elements: { orderBy: { sortOrder: 'asc' } } },
+  });
+  res.status(201).json({ offering: newOffering });
+});
+
 // ─── Elements ─────────────────────────────────────────
 
 // POST /api/offerings/:id/elements

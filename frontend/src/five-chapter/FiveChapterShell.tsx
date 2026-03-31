@@ -48,6 +48,9 @@ export function FiveChapterShell() {
   // Track AI-derived MFs for future display markers
   const [, setAiDerivedMFs] = useState<Set<string>>(new Set());
 
+  // Share
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+
   // Editable params
   const [editingParam, setEditingParam] = useState<'medium' | 'cta' | 'emphasis' | null>(null);
   const [editCta, setEditCta] = useState('');
@@ -310,6 +313,41 @@ export function FiveChapterShell() {
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
+  }
+
+  async function shareStory() {
+    if (!story) return;
+    try {
+      const result = await api.post<{ token: string; url: string }>('/share', { storyId: story.id });
+      const fullUrl = `${window.location.origin}${result.url}`;
+      setShareUrl(fullUrl);
+      navigator.clipboard.writeText(fullUrl);
+    } catch {
+      alert('Could not create share link.');
+    }
+  }
+
+  function exportStory() {
+    if (!story) return;
+    const content = story.blendedText || story.chapters.map(c => c.content).join('\n\n');
+    const title = `${draft?.offering.name || 'Story'} — ${mediumLabel}`;
+
+    const html = `<!DOCTYPE html>
+<html><head><title>${title}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 700px; margin: 40px auto; padding: 20px; color: #1d1d1f; }
+  h1 { font-size: 18px; color: #6e6e73; margin-bottom: 8px; }
+  .meta { font-size: 14px; color: #6e6e73; margin-bottom: 24px; }
+  .content { font-size: 16px; line-height: 1.7; white-space: pre-wrap; }
+  @media print { body { margin: 0; } }
+</style></head><body>
+<h1>${title}</h1>
+<div class="meta">${draft?.audience.name || ''} &middot; CTA: ${story.cta}</div>
+<div class="content">${content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+</body></html>`;
+
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
   }
 
   if (loading) return <div className="loading-screen"><Spinner size={32} /></div>;
@@ -622,7 +660,16 @@ export function FiveChapterShell() {
                     <h3>Final Draft</h3>
                     <BlendedVersionNav storyId={story.id} onRestore={loadData} />
                     <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
+                    <button className="copy-btn" onClick={exportStory} title="Open printable version">Export</button>
+                    <button className="copy-btn" onClick={shareStory} title="Create shareable read-only link">Share</button>
                   </div>
+                  {shareUrl && (
+                    <div style={{ padding: '6px 12px', fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>Link copied!</span>
+                      <code style={{ fontSize: 12, background: 'var(--bg-secondary, #f5f5f7)', padding: '2px 6px', borderRadius: 4 }}>{shareUrl}</code>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setShareUrl(null)} style={{ padding: '0 4px', fontSize: 12 }}>&times;</button>
+                    </div>
+                  )}
                   {editingBlended ? (
                     <div className="fcs-chapter-edit">
                       <textarea

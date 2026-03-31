@@ -83,6 +83,15 @@ export function OfferingsPage() {
     setDeleteTarget({ id: o.id, name: o.name });
   }
 
+  async function duplicateOffering(id: string) {
+    try {
+      await api.post(`/offerings/${id}/duplicate`, {});
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to duplicate offering');
+    }
+  }
+
   // Close copy dropdown on click outside
   useEffect(() => {
     if (!copyDropdownId) return;
@@ -162,6 +171,7 @@ export function OfferingsPage() {
                     )}
                   </div>
                 )}
+                <button className="btn btn-ghost btn-sm" onClick={() => duplicateOffering(o.id)}>Duplicate</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => openEdit(o)}>Edit</button>
                 <button className="btn btn-ghost btn-sm btn-danger" onClick={() => requestDelete(o)}>Delete</button>
               </div>

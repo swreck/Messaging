@@ -85,6 +85,39 @@ router.post('/bulk', requireEditor, async (req: Request, res: Response) => {
   res.status(201).json({ audiences: created });
 });
 
+// POST /api/audiences/:id/duplicate
+router.post('/:id/duplicate', requireEditor, async (req: Request, res: Response) => {
+  const audience = await prisma.audience.findFirst({
+    where: { id: param(req.params.id), workspaceId: req.workspaceId },
+    include: { priorities: { orderBy: { sortOrder: 'asc' } } },
+  });
+  if (!audience) {
+    res.status(404).json({ error: 'Audience not found' });
+    return;
+  }
+
+  const newAudience = await prisma.audience.create({
+    data: {
+      name: `${audience.name} (copy)`,
+      description: audience.description,
+      userId: req.user!.userId,
+      workspaceId: req.workspaceId!,
+      priorities: {
+        create: audience.priorities.map(p => ({
+          text: p.text,
+          rank: p.rank,
+          isSpoken: p.isSpoken,
+          motivatingFactor: p.motivatingFactor,
+          whatAudienceThinks: p.whatAudienceThinks,
+          sortOrder: p.sortOrder,
+        })),
+      },
+    },
+    include: { priorities: { orderBy: { sortOrder: 'asc' } } },
+  });
+  res.status(201).json({ audience: newAudience });
+});
+
 // ─── Priorities ───────────────────────────────────────
 
 // POST /api/audiences/:id/priorities

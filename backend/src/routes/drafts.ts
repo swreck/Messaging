@@ -10,8 +10,12 @@ router.use(requireWorkspace);
 
 // GET /api/drafts
 router.get('/', async (req: Request, res: Response) => {
+  const includeArchived = req.query.includeArchived === 'true';
   const drafts = await prisma.threeTierDraft.findMany({
-    where: { offering: { workspaceId: req.workspaceId } },
+    where: {
+      offering: { workspaceId: req.workspaceId },
+      ...(!includeArchived ? { archived: false } : {}),
+    },
     include: {
       offering: { select: { id: true, name: true } },
       audience: { select: { id: true, name: true } },
@@ -23,11 +27,13 @@ router.get('/', async (req: Request, res: Response) => {
 
 // GET /api/drafts/hierarchy — full tree: offerings → audiences → three-tiers → deliverables
 router.get('/hierarchy', async (req: Request, res: Response) => {
+  const includeArchived = req.query.includeArchived === 'true';
   const offerings = await prisma.offering.findMany({
     where: { workspaceId: req.workspaceId },
     include: {
       elements: { select: { id: true } },
       drafts: {
+        where: includeArchived ? {} : { archived: false },
         include: {
           audience: { select: { id: true, name: true } },
           stories: {
@@ -59,6 +65,7 @@ router.get('/hierarchy', async (req: Request, res: Response) => {
         id: d.id,
         status: d.status,
         currentStep: d.currentStep,
+        archived: (d as any).archived ?? false,
       },
       deliverables: d.stories.map(s => ({
         id: s.id,
@@ -88,9 +95,9 @@ router.post('/', requireEditor, async (req: Request, res: Response) => {
     return;
   }
 
-  // Enforce unique per offering×audience
-  const existing = await prisma.threeTierDraft.findUnique({
-    where: { offeringId_audienceId: { offeringId, audienceId } },
+  // Enforce unique per offering×audience (only non-archived)
+  const existing = await prisma.threeTierDraft.findFirst({
+    where: { offeringId, audienceId, archived: false },
   });
   if (existing) {
     res.status(409).json({ error: 'Draft already exists for this offering and audience', draft: existing });
@@ -154,6 +161,116 @@ router.patch('/:id', requireEditor, async (req: Request, res: Response) => {
       currentStep: currentStep ?? draft.currentStep,
       status: status ?? draft.status,
     },
+  });
+  res.json({ draft: updated });
+});
+
+// POST /api/drafts/:id/duplicate
+router.post('/:id/duplicate', requireEditor, async (req: Request, res: Response) => {
+  const draft = await prisma.threeTierDraft.findFirst({
+    where: { id: param(req.params.id), offering: { workspaceId: req.workspaceId } },
+    include: {
+      tier1Statement: true,
+      tier2Statements: {
+        orderBy: { sortOrder: 'asc' },
+        include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } },
+      },
+      mappings: true,
+    },
+  });
+  if (!draft) {
+    res.status(404).json({ error: 'Draft not found' });
+    return;
+  }
+
+  // Create the new draft at step 5 (content is already built)
+  const newDraft = await prisma.threeTierDraft.create({
+    data: {
+      offeringId: draft.offeringId,
+      audienceId: draft.audienceId,
+      currentStep: 5,
+      status: draft.status,
+    },
+  });
+
+  // Copy tier1
+  if (draft.tier1Statement) {
+    await prisma.tier1Statement.create({
+      data: { draftId: newDraft.id, text: draft.tier1Statement.text },
+    });
+  }
+
+  // Copy tier2 + tier3
+  for (const t2 of draft.tier2Statements) {
+    const newT2 = await prisma.tier2Statement.create({
+      data: {
+        draftId: newDraft.id,
+        text: t2.text,
+        sortOrder: t2.sortOrder,
+        priorityId: t2.priorityId,
+        categoryLabel: t2.categoryLabel,
+      },
+    });
+    for (const t3 of t2.tier3Bullets) {
+      await prisma.tier3Bullet.create({
+        data: { tier2Id: newT2.id, text: t3.text, sortOrder: t3.sortOrder },
+      });
+    }
+  }
+
+  // Copy mappings
+  for (const m of draft.mappings) {
+    await prisma.mapping.create({
+      data: {
+        draftId: newDraft.id,
+        priorityId: m.priorityId,
+        elementId: m.elementId,
+        confidence: m.confidence,
+        status: m.status,
+      },
+    });
+  }
+
+  const result = await prisma.threeTierDraft.findFirst({
+    where: { id: newDraft.id },
+    include: {
+      offering: { select: { id: true, name: true } },
+      audience: { select: { id: true, name: true } },
+    },
+  });
+  res.status(201).json({ draft: result });
+});
+
+// PUT /api/drafts/:id/archive
+router.put('/:id/archive', requireEditor, async (req: Request, res: Response) => {
+  const draft = await prisma.threeTierDraft.findFirst({
+    where: { id: param(req.params.id), offering: { workspaceId: req.workspaceId } },
+  });
+  if (!draft) {
+    res.status(404).json({ error: 'Draft not found' });
+    return;
+  }
+
+  const updated = await prisma.threeTierDraft.update({
+    where: { id: param(req.params.id) },
+    data: { archived: true },
+  });
+  res.json({ draft: updated });
+});
+
+// PUT /api/drafts/:id/unarchive
+router.put('/:id/unarchive', requireEditor, async (req: Request, res: Response) => {
+  const draft = await prisma.threeTierDraft.findFirst({
+    where: { id: param(req.params.id), offering: { workspaceId: req.workspaceId } },
+  });
+  if (!draft) {
+    res.status(404).json({ error: 'Draft not found' });
+    return;
+  }
+
+  const updated = await prisma.threeTierDraft.update({
+    where: { id: param(req.params.id) },
+    data: { archived: false },
   });
   res.json({ draft: updated });
 });

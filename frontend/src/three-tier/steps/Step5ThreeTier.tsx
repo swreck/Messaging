@@ -1,10 +1,12 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { StepProps } from './types';
 import { api } from '../../api/client';
 import { ThreeTierTable } from '../components/ThreeTierTable';
 import { Spinner } from '../../shared/Spinner';
+import { CompareModal } from '../components/CompareModal';
 import type { TableVersion, ReviewResponse, DirectionResponse, TableSnapshot } from '../../types';
+import { useKeyboardShortcuts } from '../../shared/useKeyboardShortcuts';
 
 export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToStep }: StepProps) {
   const navigate = useNavigate();
@@ -22,6 +24,9 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   const [directionText, setDirectionText] = useState('');
   const [sendingDirection, setSendingDirection] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+
+  // Compare modal
+  const [compareSnapshot, setCompareSnapshot] = useState<{ snapshot: any; label: string } | null>(null);
 
   // Snapshot of table state for "revise from edits"
   const previousStateRef = useRef<TableSnapshot | null>(null);
@@ -215,6 +220,12 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
   const anyBusy = reviewing || revising || refining || sendingDirection || regenerating;
 
+  const shortcuts = useMemo(() => ({
+    'cmd+shift+m': () => document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true } })),
+    'escape': () => document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: false } })),
+  }), []);
+  useKeyboardShortcuts(shortcuts);
+
   return (
     <div className="step-panel" style={{ maxWidth: 1100 }}>
       {error && (
@@ -357,7 +368,10 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
                     {new Date(v.createdAt).toLocaleString()}
                   </span>
                 </div>
-                <button className="btn btn-ghost btn-sm" onClick={() => restoreSnapshot(v.id)}>Restore</button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setCompareSnapshot({ snapshot: v.snapshot, label: v.label })}>Compare</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => restoreSnapshot(v.id)}>Restore</button>
+                </div>
               </div>
             ))}
           </div>
@@ -375,6 +389,16 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       </div>
 
       <div className={`save-indicator ${showSaved ? 'visible' : ''}`}>Saved</div>
+
+      {compareSnapshot && (
+        <CompareModal
+          open={true}
+          onClose={() => setCompareSnapshot(null)}
+          snapshot={compareSnapshot.snapshot}
+          current={captureState()}
+          snapshotLabel={compareSnapshot.label}
+        />
+      )}
     </div>
   );
 }

@@ -976,6 +976,23 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .table-version-item:hover { background: var(--bg-hover); }
 
+/* ─── Compare Modal ──────────────────────────────── */
+.compare-modal-overlay .modal-card { max-width: 900px; width: 95vw; }
+.compare-container { overflow-x: auto; }
+.compare-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 6px;
+  align-items: start;
+}
+.compare-header-row { font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
+.compare-col-header { padding: 4px 10px; }
+.compare-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compare-label-indent { padding-left: 12px; font-weight: 400; }
+.compare-row-tier3 { margin-left: 0; }
+.compare-section { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border, #e5e7eb); }
+
 /* ─── Five Chapter ────────────────────────────────── */
 .five-chapter-shell { max-width: 800px; margin: 0 auto; }
 
@@ -3110,6 +3127,73 @@ p { line-height: 1.5; color: var(--text-secondary); }
 @keyframes card-appear {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Shared View (read-only) ────────────────────── */
+.shared-view {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 20px;
+  color: #1d1d1f;
+}
+.shared-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.shared-meta {
+  font-size: 14px;
+  color: #6e6e73;
+  margin-bottom: 24px;
+}
+.shared-tier1 {
+  font-size: 20px;
+  font-weight: 600;
+  padding: 20px;
+  background: #f5f5f7;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+.shared-tier2-grid {
+  display: grid;
+  gap: 16px;
+}
+.shared-tier2-col {
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  padding: 16px;
+}
+.shared-tier2-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6e6e73;
+  margin-bottom: 8px;
+}
+.shared-tier2-text {
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.shared-tier3-list {
+  list-style: disc;
+  padding-left: 20px;
+  margin: 0;
+}
+.shared-tier3-list li {
+  font-size: 13px;
+  color: #6e6e73;
+  line-height: 1.6;
+}
+.shared-story-content {
+  font-size: 16px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+@media print {
+  .shared-view { margin: 0; }
 }
 
 /* ─── Workspace Card Expansion ───────────────────── */

@@ -26,6 +26,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const pendingDeleteRef = useRef<PendingDelete | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   // Keep ref in sync for cleanup
   useEffect(() => {
@@ -138,6 +139,54 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
     navigator.clipboard.writeText(lines.join('\n'));
   }
 
+  function exportTable() {
+    const t1 = draft.tier1Statement?.text || '';
+    const t2s = draft.tier2Statements.map(t2 => ({
+      label: t2.categoryLabel,
+      text: t2.text,
+      proofs: t2.tier3Bullets.map(t3 => t3.text),
+    }));
+
+    const html = `<!DOCTYPE html>
+<html><head><title>Three Tier Message</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; color: #1d1d1f; }
+  h1 { font-size: 18px; color: #6e6e73; margin-bottom: 24px; }
+  .tier1 { font-size: 20px; font-weight: 600; padding: 20px; background: #f5f5f7; border-radius: 12px; margin-bottom: 24px; }
+  .tier2-grid { display: grid; grid-template-columns: repeat(${t2s.length}, 1fr); gap: 16px; }
+  .tier2-col { border: 1px solid #e5e5ea; border-radius: 12px; padding: 16px; }
+  .tier2-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #6e6e73; margin-bottom: 8px; }
+  .tier2-text { font-size: 15px; line-height: 1.5; margin-bottom: 12px; }
+  .tier3-list { list-style: disc; padding-left: 20px; margin: 0; }
+  .tier3-list li { font-size: 13px; color: #6e6e73; line-height: 1.6; }
+  @media print { body { margin: 0; } }
+</style></head><body>
+<h1>Three Tier Message</h1>
+<div class="tier1">${t1}</div>
+<div class="tier2-grid">
+${t2s.map(t2 => `<div class="tier2-col">
+  ${t2.label ? `<div class="tier2-label">${t2.label}</div>` : ''}
+  <div class="tier2-text">${t2.text}</div>
+  <ul class="tier3-list">${t2.proofs.map(p => `<li>${p}</li>`).join('')}</ul>
+</div>`).join('')}
+</div>
+</body></html>`;
+
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
+  }
+
+  async function shareDraft() {
+    try {
+      const result = await api.post<{ token: string; url: string }>('/share', { draftId: draft.id });
+      const fullUrl = `${window.location.origin}${result.url}`;
+      setShareUrl(fullUrl);
+      navigator.clipboard.writeText(fullUrl);
+    } catch {
+      alert('Could not create share link.');
+    }
+  }
+
   return (
     <div>
       <div className="three-tier-table">
@@ -152,7 +201,28 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
               </svg>
               Copy
             </button>
+            <button className="btn-copy-table" onClick={exportTable} title="Open printable version">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              Export
+            </button>
+            <button className="btn-copy-table" onClick={shareDraft} title="Create shareable read-only link">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+              Share
+            </button>
           </div>
+          {shareUrl && (
+            <div style={{ padding: '6px 12px', fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>Link copied!</span>
+              <code style={{ fontSize: 12, background: 'var(--bg-secondary, #f5f5f7)', padding: '2px 6px', borderRadius: 4 }}>{shareUrl}</code>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShareUrl(null)} style={{ padding: '0 4px', fontSize: 12 }}>&times;</button>
+            </div>
+          )}
           {editingCell === 'tier1' ? (
             <CellEditor
               text={draft.tier1Statement?.text || ''}

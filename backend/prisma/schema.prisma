@@ -136,6 +136,7 @@ model ThreeTierDraft {
   currentStep Int      @default(1) // 1-5
   status      String   @default("in_progress") // in_progress | completed
   version     Int      @default(1)
+  archived    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -145,8 +146,6 @@ model ThreeTierDraft {
   tableVersions  TableVersion[]
   stories        FiveChapterStory[]
   conversations  ConversationMessage[]
-
-  @@unique([offeringId, audienceId])
 }
 
 model Mapping {
@@ -289,6 +288,18 @@ model AssistantMessage {
   context   Json     @default("{}")
   action    String?
   createdAt DateTime @default(now())
+}
+
+// ─── Share Links ───────────────────────────────────────
+
+model ShareLink {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  draftId   String?
+  storyId   String?
+  createdBy String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
 }
 
 // ─── Chapter Versions ──────────────────────────────────

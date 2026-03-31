@@ -17,6 +17,7 @@ import assistantRoutes from './routes/assistant.js';
 import partnerRoutes from './routes/partner.js';
 import settingsRoutes from './routes/settings.js';
 import workspaceRoutes from './routes/workspaces.js';
+import shareRoutes from './routes/share.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -41,6 +42,7 @@ app.use('/api/assistant', assistantRoutes);
 app.use('/api/partner', partnerRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/workspaces', workspaceRoutes);
+app.use('/api/share', shareRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

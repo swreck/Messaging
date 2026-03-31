@@ -135,6 +135,15 @@ export function AudiencesPage() {
     loadData();
   }
 
+  async function duplicateAudience(id: string) {
+    try {
+      await api.post(`/audiences/${id}/duplicate`, {});
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to duplicate audience');
+    }
+  }
+
   // Close copy dropdown on click outside
   useEffect(() => {
     if (!copyDropdownId) return;
@@ -215,6 +224,7 @@ export function AudiencesPage() {
                     )}
                   </div>
                 )}
+                <button className="btn btn-ghost btn-sm" onClick={() => duplicateAudience(a.id)}>Duplicate</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => openEdit(a)}>Edit</button>
                 <button className="btn btn-ghost btn-sm btn-danger" onClick={() => requestDelete(a)}>Delete</button>
               </div>
