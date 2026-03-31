@@ -179,6 +179,13 @@ export function PriorityList({
             + Add motivating factor
           </button>
         )}
+        {showMotivatingFactor && !item.motivatingFactor && (isFirst || showMF) && (
+          <span className="mf-hint" onClick={() => {
+            if (!isFirst && !expandedMF.has(item.id)) toggleMF(item.id);
+          }}>
+            Why does this matter?
+          </span>
+        )}
       </div>
     );
   }

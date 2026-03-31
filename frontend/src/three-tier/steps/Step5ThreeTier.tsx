@@ -16,6 +16,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [snapshotLabel, setSnapshotLabel] = useState('');
   const [hasEdited, setHasEdited] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
 
   // Direction
   const [directionText, setDirectionText] = useState('');
@@ -171,7 +172,10 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   function handleTableUpdate() {
     previousStateRef.current = null;
     setHasEdited(true);
-    refreshDraft();
+    refreshDraft().then(() => {
+      setShowSaved(true);
+      setTimeout(() => setShowSaved(false), 1500);
+    });
   }
 
   async function regenerate() {
@@ -230,6 +234,14 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
             }}
           >
             &times;
+          </button>
+        </div>
+      )}
+      {suggestions.size > 0 && (
+        <div className="suggestion-banner">
+          <span>Maria suggested changes to {suggestions.size} cell{suggestions.size !== 1 ? 's' : ''} — look for the highlighted alternatives below</span>
+          <button className="suggestion-banner-dismiss" onClick={() => { setSuggestions(new Map()); previousStateRef.current = captureState(); }}>
+            Dismiss all
           </button>
         </div>
       )}
@@ -352,6 +364,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         </div>
       </div>
 
+      <div className={`save-indicator ${showSaved ? 'visible' : ''}`}>Saved</div>
     </div>
   );
 }

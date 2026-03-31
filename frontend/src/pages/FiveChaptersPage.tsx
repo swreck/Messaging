@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Spinner } from '../shared/Spinner';
+import { InfoTooltip } from '../shared/InfoTooltip';
 import { useMaria } from '../shared/MariaContext';
 import { MEDIUM_OPTIONS } from '../types';
 
@@ -40,9 +41,15 @@ export function FiveChaptersPage() {
   }
 
   function getStageLabel(stage: string): string {
-    if (stage === 'blended') return 'Blended';
-    if (stage === 'joined') return 'Joined';
-    return 'Chapters';
+    if (stage === 'blended') return 'Final Draft';
+    if (stage === 'joined') return 'Combined Draft';
+    return 'Draft Chapters';
+  }
+
+  function getStageDescription(stage: string): string {
+    if (stage === 'blended') return 'Automatically revised with transitions and smooth language for a strong first draft of your message.';
+    if (stage === 'joined') return 'Chapters put together without further automated edits, so you can see how they hold together. You can edit here too.';
+    return 'Each of the 5 chapters created individually, so you can review and edit before combining.';
   }
 
   function getStageIcon(stage: string): string {
@@ -100,10 +107,11 @@ export function FiveChaptersPage() {
       </header>
 
       {!hasAnyContent && (
-        <div className="empty-state">
-          <h2 style={{ marginBottom: 8 }}>No stories yet</h2>
-          <p>Complete a Three Tier message first, then you can generate Five Chapter stories from it.</p>
-          <button className="btn btn-secondary" onClick={() => navigate('/three-tiers')} style={{ marginTop: 16 }}>Go to Three Tiers</button>
+        <div className="empty-state empty-state-enhanced">
+          <div className="empty-icon">📖</div>
+          <h3>No stories yet</h3>
+          <p>Complete a Three Tier message first. Then you can generate Five Chapter stories for different formats — email, presentations, blog posts, and more.</p>
+          <button className="btn btn-primary" onClick={() => navigate('/three-tiers')} style={{ marginTop: 16 }}>Go to Three Tiers</button>
         </div>
       )}
 
@@ -127,6 +135,7 @@ export function FiveChaptersPage() {
                   <div className="tt-card-progress">
                     <span className="fcs-stage-icon">{getStageIcon(del.stage)}</span>
                     <span className="tt-card-status">{getStageLabel(del.stage)}</span>
+                    <InfoTooltip text={getStageDescription(del.stage)} />
                   </div>
                   <div className="tt-card-updated">{formatUpdatedAt(del.updatedAt)}</div>
                   <div className="tt-card-action">

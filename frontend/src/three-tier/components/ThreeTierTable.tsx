@@ -66,6 +66,7 @@ export function ThreeTierTable({ draft, onUpdate, suggestions, onAcceptSuggestio
       <div className="three-tier-table">
         {/* Tier 1 */}
         <div className="tier1-row">
+          <div className="tier-label">Tier 1 <span className="tier-subtitle">Core Value</span></div>
           {editingCell === 'tier1' ? (
             <CellEditor
               text={draft.tier1Statement?.text || ''}
@@ -94,6 +95,7 @@ export function ThreeTierTable({ draft, onUpdate, suggestions, onAcceptSuggestio
         </div>
 
         {/* Tier 2 + Tier 3 */}
+        <div className="tier-label">Tier 2 <span className="tier-subtitle">Supporting Values</span></div>
         <div className="tier2-row">
           {draft.tier2Statements.map((t2, t2Index) => {
             const t2Key = `tier2-${t2Index}`;
@@ -125,6 +127,7 @@ export function ThreeTierTable({ draft, onUpdate, suggestions, onAcceptSuggestio
                 <CellVersionNav cellId={t2.id} cellType="tier2" onRestore={() => onUpdate()} />
 
                 <div className="tier3-area">
+                  <div className="tier-label tier-label-small">Tier 3 <span className="tier-subtitle">Proof Points</span></div>
                   {t2.tier3Bullets.map((t3, t3Index) => {
                     const t3Key = `tier3-${t2Index}-${t3Index}`;
                     return (

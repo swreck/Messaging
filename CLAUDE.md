@@ -8,6 +8,25 @@ Maria, the Message Coach — a web app implementing Ken Rosen's two messaging me
 - **Three Tier Builder (3T)** — 8-step coached process that produces a canonical value hierarchy
 - **Five Chapter Story Generator (5CS)** — generates narrative stories from a completed Three Tier
 
+## Product Intent
+
+**Why this exists:** Ken Rosen has developed two proprietary messaging methodologies over his career. Maria turns those methodologies into a guided, AI-coached experience that anyone can walk through — without Ken being in the room. This is the product form of Ken's consulting expertise.
+
+**Core workflow (Three Tier):** A user answers a series of coached questions about their offering and audience. Maria (an AI persona) asks one question at a time, extracts capabilities and audience priorities from the answers, then maps capabilities to priorities to build a three-tier value hierarchy (Tier 1 = differentiators, Tier 2 = strong points, Tier 3 = table stakes). The output is a canonical messaging framework.
+
+**Core workflow (Five Chapter Story):** Takes a completed Three Tier and generates narrative stories in five chapters, each with a specific structural purpose. These stories can be adapted to different mediums (pitch deck, website, email, etc.).
+
+**Key design decisions:**
+- Maria is a persona, not a tool — she sounds like "a smart friend at a coffee shop," never a consultant with a clipboard
+- One question at a time — never overwhelm with lists or action items
+- Use the user's words — Maria extracts but never rewrites or polishes what the user said
+- Admin-controlled access via invite codes — this isn't a public SaaS, it's a guided professional tool
+- AI prompts encode the entire methodology — the prompts in `backend/src/prompts/` ARE the intellectual property
+
+**CRITICAL — Intellectual property:** The AI prompts in `backend/src/prompts/` (coaching.ts, fiveChapter.ts, generation.ts, mapping.ts, audienceDiscovery.ts, mediums.ts, assistant.ts) contain Ken's proprietary methodologies. These files are the most valuable non-data asset in all four projects. They encode decades of messaging consulting experience into structured AI interactions. If the codebase were lost, these prompts would be the hardest thing to recreate. The database backup covers user sessions, but the prompts in source code are the methodology itself.
+
+**What makes this app "Ken's":** Everything. The Three Tier and Five Chapter methodologies are Ken's original frameworks. Maria's voice, coaching style, extraction approach, and the specific sequence of questions are all designed by Ken. This is not a generic AI chatbot — it's a specific consulting methodology in software form.
+
 ## Running the app
 
 **Development:**

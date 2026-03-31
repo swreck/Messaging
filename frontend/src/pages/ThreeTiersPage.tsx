@@ -105,10 +105,11 @@ export function ThreeTiersPage() {
           <h1>Three Tier Messages</h1>
           <p className="page-description">Value hierarchies built from your offerings and audiences</p>
         </header>
-        <div className="empty-state">
-          <h2 style={{ marginBottom: 8 }}>No offerings yet</h2>
-          <p>Create an offering first, then you can build Three Tier messages for your audiences.</p>
-          <button className="btn btn-secondary" onClick={() => navigate('/offerings')} style={{ marginTop: 16 }}>Go to Offerings</button>
+        <div className="empty-state empty-state-enhanced">
+          <div className="empty-icon">📊</div>
+          <h3>No Three Tier messages yet</h3>
+          <p>Create audiences and offerings first, then build Three Tier messages that connect what your audience cares about to what you offer.</p>
+          <button className="btn btn-primary" onClick={() => navigate('/offerings')} style={{ marginTop: 16 }}>Go to Offerings</button>
         </div>
       </div>
     );

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
+import { ConfirmModal } from '../shared/ConfirmModal';
 import { PriorityList } from '../shared/PriorityList';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
@@ -29,6 +30,7 @@ export function AudiencesPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{id: string, name: string, draftCount: number} | null>(null);
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'audiences' }); registerRefresh(loadData); }, []);
@@ -113,9 +115,13 @@ export function AudiencesPage() {
     }
   }
 
-  async function deleteAudience(id: string) {
-    if (!confirm('Delete this audience and all associated priorities?')) return;
-    await api.delete(`/audiences/${id}`);
+  function requestDelete(a: AudienceWithRefs) {
+    setDeleteTarget({ id: a.id, name: a.name, draftCount: a.drafts?.length || 0 });
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    await api.delete(`/audiences/${deleteTarget.id}`);
     loadData();
   }
 
@@ -138,10 +144,11 @@ export function AudiencesPage() {
       </header>
 
       {audiences.length === 0 && (
-        <div className="empty-state">
-          <h2 style={{ marginBottom: 8 }}>No audiences yet</h2>
-          <p>Create your first audience to start defining their priorities.</p>
-          <button className="btn btn-secondary" onClick={openNew} style={{ marginTop: 16 }}>Add an Audience</button>
+        <div className="empty-state empty-state-enhanced">
+          <div className="empty-icon">👥</div>
+          <h3>No audiences yet</h3>
+          <p>Audiences are the people you want to persuade. Start by defining who they are and what they care about.</p>
+          <button className="btn btn-primary" onClick={openNew} style={{ marginTop: 16 }}>Add an Audience</button>
         </div>
       )}
 
@@ -156,7 +163,7 @@ export function AudiencesPage() {
               </div>
               <div className="expandable-card-actions" onClick={e => e.stopPropagation()}>
                 <button className="btn btn-ghost btn-sm" onClick={() => openEdit(a)}>Edit</button>
-                <button className="btn btn-ghost btn-sm btn-danger" onClick={() => deleteAudience(a.id)}>Delete</button>
+                <button className="btn btn-ghost btn-sm btn-danger" onClick={() => requestDelete(a)}>Delete</button>
               </div>
             </div>
 
@@ -208,6 +215,19 @@ export function AudiencesPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        title="Delete Audience"
+        message={`Delete "${deleteTarget?.name}" and all its priorities?`}
+        detail={
+          deleteTarget?.draftCount
+            ? `This will also delete ${deleteTarget.draftCount} Three Tier message${deleteTarget.draftCount !== 1 ? 's' : ''} using this audience.`
+            : 'Any Three Tier messages using this audience will also be deleted.'
+        }
+      />
     </div>
   );
 }

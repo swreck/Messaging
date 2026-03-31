@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
+import { ConfirmModal } from '../shared/ConfirmModal';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
 import type { Offering } from '../types';
@@ -17,6 +18,7 @@ export function OfferingsPage() {
   const [smeRole, setSmeRole] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{id: string, name: string} | null>(null);
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'offerings' }); registerRefresh(loadData); }, []);
@@ -67,9 +69,13 @@ export function OfferingsPage() {
     }
   }
 
-  async function deleteOffering(id: string) {
-    if (!confirm('Delete this offering and all associated data?')) return;
-    await api.delete(`/offerings/${id}`);
+  function requestDelete(o: Offering) {
+    setDeleteTarget({ id: o.id, name: o.name });
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    await api.delete(`/offerings/${deleteTarget.id}`);
     loadData();
   }
 
@@ -86,9 +92,10 @@ export function OfferingsPage() {
       </header>
 
       {offerings.length === 0 ? (
-        <div className="empty-state-card">
-          <h2>No offerings yet</h2>
-          <p>Create your first offering to start building messages.</p>
+        <div className="empty-state-card empty-state-enhanced">
+          <div className="empty-icon">✨</div>
+          <h3>No offerings yet</h3>
+          <p>An offering is your product or service. Define what it does and what makes it different.</p>
           <button className="btn btn-primary" onClick={openNew} style={{ marginTop: 16 }}>Add an Offering</button>
         </div>
       ) : (
@@ -103,7 +110,7 @@ export function OfferingsPage() {
               </div>
               <div className="list-card-actions" onClick={e => e.stopPropagation()}>
                 <button className="btn btn-ghost btn-sm" onClick={() => openEdit(o)}>Edit</button>
-                <button className="btn btn-ghost btn-sm btn-danger" onClick={() => deleteOffering(o.id)}>Delete</button>
+                <button className="btn btn-ghost btn-sm btn-danger" onClick={() => requestDelete(o)}>Delete</button>
               </div>
               <span className="list-card-arrow">&rsaquo;</span>
             </div>
@@ -131,6 +138,15 @@ export function OfferingsPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        title="Delete Offering"
+        message={`Delete "${deleteTarget?.name}" and all its data?`}
+        detail="Any Three Tier messages and Five Chapter stories built from this offering will also be deleted."
+      />
     </div>
   );
 }

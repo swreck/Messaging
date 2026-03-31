@@ -201,13 +201,13 @@ export function MariaPartner() {
             {!showCustomInput ? (
               <>
                 <button
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary"
                   onClick={() => confirmName(suggestedName)}
                 >
                   That's me
                 </button>
                 <button
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-secondary"
                   onClick={() => setShowCustomInput(true)}
                 >
                   Call me something else
@@ -229,7 +229,7 @@ export function MariaPartner() {
                   autoFocus
                 />
                 <button
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary"
                   onClick={() => customName.trim() && confirmName(customName.trim())}
                   disabled={!customName.trim()}
                 >
@@ -252,7 +252,7 @@ export function MariaPartner() {
           </div>
           <div className="partner-intro-actions">
             <button
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary"
               onClick={() => {
                 setIntroPhase('done');
                 setLoaded(false); // trigger history load
@@ -261,7 +261,7 @@ export function MariaPartner() {
               Sounds good
             </button>
             <button
-              className="btn btn-ghost btn-sm"
+              className="btn btn-ghost"
               onClick={() => {
                 setIntroPhase('done');
                 setOpen(false);

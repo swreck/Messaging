@@ -44,6 +44,9 @@ export function FiveChapterShell() {
   // Missing MF panel
   const [showMFPanel, setShowMFPanel] = useState(false);
   const [derivingMF, setDerivingMF] = useState(false);
+  const [bypassMF, setBypassMF] = useState(false);
+  // Track AI-derived MFs for future display markers
+  const [, setAiDerivedMFs] = useState<Set<string>>(new Set());
 
   // Editable params
   const [editingParam, setEditingParam] = useState<'medium' | 'cta' | 'emphasis' | null>(null);
@@ -114,8 +117,8 @@ export function FiveChapterShell() {
   async function generateAllChapters(skipMFCheck = false) {
     if (!story) return;
 
-    // Check MF first (skip if we just derived it)
-    if (!skipMFCheck && !topPriorityHasMF()) {
+    // Check MF first (skip if we just derived it, or if user chose to continue without)
+    if (!skipMFCheck && !bypassMF && !topPriorityHasMF()) {
       setShowMFPanel(true);
       return;
     }
@@ -171,7 +174,7 @@ export function FiveChapterShell() {
   async function blendStory() {
     if (!story) return;
     if (story.blendedText && story.blendedText.trim()) {
-      if (!window.confirm('Blending will replace your current blended text. Continue?')) return;
+      if (!window.confirm('This will replace your current final draft. Continue?')) return;
     }
     setBlending(true);
     try {
@@ -242,6 +245,7 @@ export function FiveChapterShell() {
       // Reload draft to get updated MF
       const { draft: d } = await api.get<{ draft: ThreeTierDraft }>(`/drafts/${draftId}`);
       setDraft(d);
+      setAiDerivedMFs(prev => new Set(prev).add(top.id));
       setShowMFPanel(false);
       // Now generate — skip MF check since we just derived it
       generateAllChapters(true);
@@ -450,10 +454,11 @@ export function FiveChapterShell() {
       {/* Missing motivating factor panel */}
       {showMFPanel && (
         <div className="mf-panel">
-          <h3>Motivating factor needed</h3>
-          <p>
-            Chapter 1 is built from your top priority's motivating factor.{' '}
-            <strong>{draft.audience.priorities[0]?.text}</strong> doesn't have one yet.
+          <p className="mf-panel-intro">
+            A motivating factor is <strong>why</strong> something matters to your audience. It helps make messages more compelling.
+          </p>
+          <p className="mf-panel-offer">
+            Your top priority — <strong>{draft.audience.priorities[0]?.text}</strong> — doesn't have one yet.
           </p>
           <div className="mf-panel-actions">
             <button
@@ -461,15 +466,18 @@ export function FiveChapterShell() {
               onClick={deriveMotivation}
               disabled={derivingMF}
             >
-              {derivingMF ? <><Spinner size={14} /> Generating...</> : 'Use AI-derived motivation'}
+              {derivingMF ? <><Spinner size={14} /> Thinking...</> : 'Go ahead and guess'}
             </button>
             <button
               className="btn btn-secondary"
-              onClick={() => { setShowMFPanel(false); navigate('/audiences'); }}
+              onClick={() => { setShowMFPanel(false); setBypassMF(true); }}
             >
-              Add it yourself
+              Continue without it
             </button>
           </div>
+          <p className="mf-panel-note">
+            Maria can make her best guess, but she might miss something important. You can always refine it later.
+          </p>
         </div>
       )}
 
@@ -571,12 +579,12 @@ export function FiveChapterShell() {
                   disabled={blending}
                   style={{ width: '100%' }}
                 >
-                  {blending ? <><Spinner size={14} /> Blending into story...</> : 'Blend into Story'}
+                  {blending ? <><Spinner size={14} /> Creating final draft...</> : 'Create Final Draft'}
                 </button>
               ) : (
                 <div className="fcs-blended">
                   <div className="fcs-blended-header">
-                    <h3>Final Story</h3>
+                    <h3>Final Draft</h3>
                     <BlendedVersionNav storyId={story.id} onRestore={loadData} />
                     <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
                   </div>
