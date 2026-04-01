@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
+import { useWorkspace } from '../shared/WorkspaceContext';
 import { InfoTooltip } from '../shared/InfoTooltip';
 import type { Offering, Audience } from '../types';
 
@@ -18,22 +19,13 @@ interface HierarchyOffering {
   }[];
 }
 
-interface ContinueItem {
-  draftId: string;
-  offeringName: string;
-  audienceName: string;
-  currentStep: number;
-  status: string;
-  updatedAt: string;
-}
-
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { activeWorkspace } = useWorkspace();
   const [hierarchy, setHierarchy] = useState<HierarchyOffering[]>([]);
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [loading, setLoading] = useState(true);
-  const [workflowDismissed, setWorkflowDismissed] = useState(() => localStorage.getItem('maria-workflow-dismissed') === 'true');
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'dashboard' }); registerRefresh(loadAll); }, []);
@@ -58,31 +50,6 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  // Find the most recently edited in-progress draft
-  function getContinueItem(): ContinueItem | null {
-    let best: ContinueItem | null = null;
-
-    for (const offering of hierarchy) {
-      for (const aud of offering.audiences) {
-        if (aud.threeTier.status === 'complete' && aud.threeTier.currentStep === 5) continue;
-        // Use deliverables updatedAt or fallback — we need to check draft updatedAt
-        // Since hierarchy doesn't include draft updatedAt, we'll use a heuristic:
-        // the first in-progress item found (hierarchy is already sorted by updatedAt desc)
-        if (!best) {
-          best = {
-            draftId: aud.threeTier.id,
-            offeringName: offering.name,
-            audienceName: aud.name,
-            currentStep: aud.threeTier.currentStep,
-            status: aud.threeTier.status,
-            updatedAt: '',
-          };
-        }
-      }
-    }
-    return best;
   }
 
   // Compute tile counts
@@ -123,14 +90,8 @@ export function DashboardPage() {
     return count;
   }
 
-  function getStepLabel(step: number): string {
-    const labels = ['Confirm', 'Your Offering', 'Your Audience', 'Building', 'Your Three Tier'];
-    return labels[step - 1] || `Step ${step}`;
-  }
-
   if (loading) return <div className="loading-screen"><Spinner size={32} /></div>;
 
-  const continueItem = getContinueItem();
   const audStats = getAudienceStats();
   const offStats = getOfferingStats();
   const ttStats = getThreeTierStats();
@@ -139,6 +100,11 @@ export function DashboardPage() {
 
   return (
     <div className="dashboard">
+      {/* Workspace header */}
+      {activeWorkspace && (
+        <h2 className="dashboard-workspace-name">{activeWorkspace.name}</h2>
+      )}
+
       {/* Empty state for new users */}
       {isNew && (
         <div className="dashboard-welcome empty-state-enhanced">
@@ -148,72 +114,6 @@ export function DashboardPage() {
           <div className="dashboard-welcome-actions">
             <button className="btn btn-primary" onClick={() => navigate('/audiences')}>Create an Audience</button>
             <button className="btn btn-secondary" onClick={() => navigate('/offerings')}>Create an Offering</button>
-          </div>
-        </div>
-      )}
-
-      {/* Continue Working card */}
-      {!isNew && continueItem && (
-        <div className="continue-card" onClick={() => navigate(`/three-tier/${continueItem.draftId}`)}>
-          <div className="continue-card-label">Continue Working</div>
-          <div className="continue-card-title">
-            {continueItem.offeringName} &times; {continueItem.audienceName}
-          </div>
-          <div className="continue-card-progress">
-            <div className="progress-dots">
-              {[1, 2, 3, 4, 5].map(i => (
-                <span
-                  key={i}
-                  className={`progress-dot-mini ${i <= continueItem.currentStep ? 'dot-filled' : 'dot-empty'}`}
-                />
-              ))}
-            </div>
-            <span className="continue-card-step">{getStepLabel(continueItem.currentStep)}</span>
-          </div>
-          <button className="btn btn-primary btn-sm continue-card-btn">Continue</button>
-        </div>
-      )}
-
-      {/* Workflow guide */}
-      {!isNew && !workflowDismissed && (
-        <div className="workflow-guide">
-          <button className="workflow-dismiss" onClick={() => { setWorkflowDismissed(true); localStorage.setItem('maria-workflow-dismissed', 'true'); }} aria-label="Dismiss">&times;</button>
-          <div className="workflow-steps">
-            <div className={`workflow-step ${audStats.count > 0 ? 'step-done' : 'step-current'}`}>
-              <div className="workflow-step-num">{audStats.count > 0 ? '✓' : '1'}</div>
-              <div className="workflow-step-label">Audiences</div>
-              <div className="workflow-step-hint">{audStats.count > 0 ? `${audStats.count} defined` : 'Define who matters most'}</div>
-            </div>
-            <div className="workflow-arrow">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </div>
-            <div className={`workflow-step ${offStats.count > 0 ? 'step-done' : audStats.count > 0 ? 'step-current' : 'step-future'}`}>
-              <div className="workflow-step-num">{offStats.count > 0 ? '✓' : '2'}</div>
-              <div className="workflow-step-label">Offerings</div>
-              <div className="workflow-step-hint">{offStats.count > 0 ? `${offStats.count} defined` : 'Describe what makes you different'}</div>
-            </div>
-            <div className="workflow-arrow">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </div>
-            <div className={`workflow-step ${ttStats.complete > 0 ? 'step-done' : ttStats.active > 0 ? 'step-current' : 'step-future'}`}>
-              <div className="workflow-step-num">{ttStats.complete > 0 ? '✓' : '3'}</div>
-              <div className="workflow-step-label">Three Tier</div>
-              <div className="workflow-step-hint">{ttStats.complete > 0 ? `${ttStats.complete} complete` : ttStats.active > 0 ? `${ttStats.active} in progress` : 'Build your message'}</div>
-            </div>
-            <div className="workflow-arrow">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </div>
-            <div className={`workflow-step ${fcsCount > 0 ? 'step-done' : ttStats.complete > 0 ? 'step-current' : 'step-future'}`}>
-              <div className="workflow-step-num">{fcsCount > 0 ? '✓' : '4'}</div>
-              <div className="workflow-step-label">Five Chapter</div>
-              <div className="workflow-step-hint">{fcsCount > 0 ? `${fcsCount} stories` : 'Turn your message into stories'}</div>
-            </div>
           </div>
         </div>
       )}
