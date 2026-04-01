@@ -37,9 +37,6 @@ export function MariaPartner() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Don't render if not logged in
-  if (!user) return null;
-
   // Load status on mount
   useEffect(() => {
     api.get<{ username: string; displayName?: string; introduced: boolean }>('/partner/status')
@@ -369,6 +366,9 @@ export function MariaPartner() {
       );
     });
   }
+
+  // Don't render if not logged in
+  if (!user) return null;
 
   return (
     <>
