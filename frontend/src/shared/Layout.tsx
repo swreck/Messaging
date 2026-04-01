@@ -8,13 +8,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { workspaces, activeWorkspace, switchWorkspace } = useWorkspace();
 
+  const showWorkspaces = user?.isAdmin || workspaces.length > 1;
+
   const NAV_ITEMS = [
     { path: '/', label: 'Home' },
     { path: '/audiences', label: 'Audiences' },
     { path: '/offerings', label: 'Offerings' },
     { path: '/three-tiers', label: 'Three Tiers' },
     { path: '/five-chapters', label: 'Five Chapters' },
-    { path: '/workspaces', label: 'Workspaces' },
+    ...(showWorkspaces ? [{ path: '/workspaces', label: 'Workspaces' }] : []),
     { path: '/settings', label: 'Settings' },
   ];
 

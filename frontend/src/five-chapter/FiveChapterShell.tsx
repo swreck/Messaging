@@ -349,7 +349,6 @@ export function FiveChapterShell() {
 <div class="meta">${escHtml(draft?.audience.name || '')} &middot; CTA: ${escHtml(story.cta)}</div>
 <div style="font-size:13px;color:#aeaeb2;margin-bottom:16px;">Exported ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
 <div class="content">${escHtml(content)}</div>
-<div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e5ea;font-size:13px;color:#aeaeb2;text-align:center;">Created with Maria, the Message Coach</div>
 </body></html>`;
 
     const win = window.open('', '_blank');

@@ -45,7 +45,8 @@ export async function requireWorkspace(req: Request, res: Response, next: NextFu
 }
 
 /**
- * Middleware that blocks viewers from mutation routes.
+ * Middleware that blocks storytellers and viewers from full editing routes.
+ * Allows: owner, collaborator, admin (app-level).
  * Must run after requireWorkspace (needs req.workspaceId).
  */
 export async function requireEditor(req: Request, res: Response, next: NextFunction) {
@@ -53,11 +54,35 @@ export async function requireEditor(req: Request, res: Response, next: NextFunct
     res.status(400).json({ error: 'No workspace context' });
     return;
   }
+  // App-level admins always pass
+  if (req.user?.isAdmin) { next(); return; }
+
+  const membership = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: req.workspaceId, userId: req.user!.userId } },
+  });
+  if (!membership || membership.role === 'viewer' || membership.role === 'storyteller') {
+    res.status(403).json({ error: 'You don\u2019t have permission for this action.' });
+    return;
+  }
+  next();
+}
+
+/**
+ * Middleware that allows storytellers (and above) to mutate story routes.
+ * Blocks viewers only.
+ */
+export async function requireStoryteller(req: Request, res: Response, next: NextFunction) {
+  if (!req.workspaceId) {
+    res.status(400).json({ error: 'No workspace context' });
+    return;
+  }
+  if (req.user?.isAdmin) { next(); return; }
+
   const membership = await prisma.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId: req.workspaceId, userId: req.user!.userId } },
   });
   if (!membership || membership.role === 'viewer') {
-    res.status(403).json({ error: 'View-only access — ask the workspace owner to change your role' });
+    res.status(403).json({ error: 'You don\u2019t have permission for this action.' });
     return;
   }
   next();

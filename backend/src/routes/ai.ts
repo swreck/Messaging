@@ -18,7 +18,7 @@ import {
   type StatementInput,
 } from '../services/voiceCheck.js';
 
-import { requireWorkspace, requireEditor } from '../middleware/workspace.js';
+import { requireWorkspace, requireEditor, requireStoryteller } from '../middleware/workspace.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -780,7 +780,7 @@ Derive the motivating factor for this priority.`;
 
 // ─── Five Chapter Story ─────────────────────────────────
 
-router.post('/generate-chapter', requireEditor, async (req: Request, res: Response) => {
+router.post('/generate-chapter', requireStoryteller, async (req: Request, res: Response) => {
   const { storyId, chapterNum } = req.body;
   if (!storyId || !chapterNum) {
     res.status(400).json({ error: 'storyId and chapterNum are required' });
@@ -886,7 +886,7 @@ Write Chapter ${chapterNum}: "${ch.name}"`;
 
 // ─── Refine Chapter ─────────────────────────────────────
 
-router.post('/refine-chapter', requireEditor, async (req: Request, res: Response) => {
+router.post('/refine-chapter', requireStoryteller, async (req: Request, res: Response) => {
   const { storyId, chapterNum, feedback } = req.body;
   if (!storyId || !chapterNum || !feedback) {
     res.status(400).json({ error: 'storyId, chapterNum, and feedback are required' });
@@ -967,7 +967,7 @@ Please revise this chapter based on the feedback while respecting the chapter ru
 
 // ─── Join Chapters ─────────────────────────────────────
 
-router.post('/join-chapters', requireEditor, async (req: Request, res: Response) => {
+router.post('/join-chapters', requireStoryteller, async (req: Request, res: Response) => {
   const { storyId } = req.body;
   if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
 
@@ -1019,7 +1019,7 @@ Join these chapters into one flowing text.`;
 
 // ─── Blend Story ────────────────────────────────────────
 
-router.post('/blend-story', requireEditor, async (req: Request, res: Response) => {
+router.post('/blend-story', requireStoryteller, async (req: Request, res: Response) => {
   const { storyId } = req.body;
   if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
 
@@ -1092,7 +1092,7 @@ Polish this into a final, cohesive ${spec.label.toLowerCase()}.`;
 
 // ─── Copy Edit ─────────────────────────────────────────
 
-router.post('/copy-edit', requireEditor, async (req: Request, res: Response) => {
+router.post('/copy-edit', requireStoryteller, async (req: Request, res: Response) => {
   const { storyId, content, request: editRequest } = req.body;
   if (!storyId || !content || !editRequest) {
     res.status(400).json({ error: 'storyId, content, and request are required' });

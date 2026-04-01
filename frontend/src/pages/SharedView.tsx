@@ -83,7 +83,6 @@ export function SharedView() {
             </div>
           ))}
         </div>
-        <div className="shared-footer">Created with Maria, the Message Coach</div>
       </div>
     );
   }

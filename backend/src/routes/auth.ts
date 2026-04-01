@@ -88,7 +88,7 @@ router.post('/register', async (req: Request, res: Response) => {
       data: {
         workspaceId: code.workspaceId,
         userId: user.id,
-        role: code.role === 'admin' ? 'owner' : (code.role || 'editor'),
+        role: code.role || 'collaborator',
       },
     });
   } else {

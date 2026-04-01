@@ -175,7 +175,6 @@ ${t2s.map(t2 => `<div class="tier2-col">
   <ul class="tier3-list">${t2.proofs.map(p => `<li>${esc(p)}</li>`).join('')}</ul>
 </div>`).join('')}
 </div>
-<div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e5ea;font-size:13px;color:#aeaeb2;text-align:center;">Created with Maria, the Message Coach</div>
 </body></html>`;
 
     const win = window.open('', '_blank');

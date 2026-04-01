@@ -3163,14 +3163,6 @@ p { line-height: 1.5; color: var(--text-secondary); }
   color: #6e6e73;
   margin-bottom: 24px;
 }
-.shared-footer {
-  margin-top: 40px;
-  padding-top: 16px;
-  border-top: 1px solid #e5e5ea;
-  font-size: 13px;
-  color: #aeaeb2;
-  text-align: center;
-}
 .shared-tier1 {
   font-size: 20px;
   font-weight: 600;

@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 import { Modal } from '../shared/Modal';
+import { InfoTooltip } from '../shared/InfoTooltip';
 
 interface WorkspaceData {
   id: string;
@@ -54,12 +55,18 @@ function getBaseUrl(): string {
 }
 
 function displayRole(role: string): string {
-  if (role === 'editor') return 'Message Creator';
-  if (role === 'admin') return 'Admin';
   if (role === 'owner') return 'Owner';
+  if (role === 'collaborator' || role === 'editor') return 'Collaborator';
+  if (role === 'storyteller') return 'Storyteller';
   if (role === 'viewer') return 'Viewer';
   return role;
 }
+
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+  owner: 'Full access. Can invite and remove collaborators.',
+  collaborator: 'Full access to audiences, offerings, Three Tiers, and Five Chapter Stories.',
+  storyteller: 'Can create and edit Five Chapter Stories from completed Three Tiers.',
+};
 
 export function WorkspacesPage() {
   const { user } = useAuth();
@@ -104,7 +111,7 @@ export function WorkspacesPage() {
   const [globalInviteName, setGlobalInviteName] = useState('');
   const [globalInviteEmail, setGlobalInviteEmail] = useState('');
   const [globalInviteWsId, setGlobalInviteWsId] = useState<string>('standalone');
-  const [globalInviteRole, setGlobalInviteRole] = useState('editor');
+  const [globalInviteRole, setGlobalInviteRole] = useState('collaborator');
   const [globalInviteResult, setGlobalInviteResult] = useState<InviteResult | null>(null);
   const [globalInviteError, setGlobalInviteError] = useState('');
   const [globalInviting, setGlobalInviting] = useState(false);
@@ -271,7 +278,7 @@ export function WorkspacesPage() {
     setGlobalInviteName('');
     setGlobalInviteEmail('');
     setGlobalInviteWsId('standalone');
-    setGlobalInviteRole('editor');
+    setGlobalInviteRole('collaborator');
     setGlobalInviteResult(null);
     setGlobalInviteError('');
     setShowInviteModal(false);
@@ -397,7 +404,7 @@ export function WorkspacesPage() {
                               {m.username[0].toUpperCase()}
                             </span>
                             <span className="workspace-member-name">{m.username}</span>
-                            <span className="workspace-member-role">{displayRole(m.role)}</span>
+                            <span className="workspace-member-role">{displayRole(m.role)}{ROLE_DESCRIPTIONS[m.role] && <InfoTooltip text={ROLE_DESCRIPTIONS[m.role]} />}</span>
                             {isOwner(ws) && m.userId !== user?.userId && (
                               <button
                                 className="btn btn-ghost btn-sm btn-danger"
@@ -438,14 +445,17 @@ export function WorkspacesPage() {
                           </div>
                           <div className="invite-form-row" style={{ marginTop: 8 }}>
                             <select
-                              value={wsInviteRole[ws.id] || 'editor'}
+                              value={wsInviteRole[ws.id] || 'collaborator'}
                               onChange={e => setWsInviteRole(prev => ({ ...prev, [ws.id]: e.target.value }))}
                               className="workspace-role-select"
                             >
-                              <option value="editor">Message Creator</option>
-                              <option value="viewer">Viewer</option>
-                              {user?.isAdmin && <option value="admin">Admin</option>}
+                              {user?.isAdmin && <option value="owner">Owner</option>}
+                              <option value="collaborator">Collaborator</option>
+                              <option value="storyteller">Storyteller</option>
                             </select>
+                            {user?.isAdmin && (
+                              <InfoTooltip text="Owner: full access + manage collaborators. Collaborator: full access. Storyteller: Five Chapter Stories only." />
+                            )}
                             <button
                               className="btn btn-primary btn-sm"
                               onClick={() => handleWsInvite(ws.id)}
@@ -519,13 +529,13 @@ export function WorkspacesPage() {
                                 className="workspace-invite-input"
                               />
                               <select
-                                value={addRole[ws.id] || 'editor'}
+                                value={addRole[ws.id] || 'collaborator'}
                                 onChange={e => setAddRole(prev => ({ ...prev, [ws.id]: e.target.value }))}
                                 className="workspace-role-select"
                               >
-                                <option value="editor">Message Creator</option>
-                                <option value="viewer">Viewer</option>
-                                {user?.isAdmin && <option value="admin">Admin</option>}
+                                {user?.isAdmin && <option value="owner">Owner</option>}
+                                <option value="collaborator">Collaborator</option>
+                                <option value="storyteller">Storyteller</option>
                               </select>
                               <button
                                 className="btn btn-primary btn-sm"
@@ -658,14 +668,14 @@ export function WorkspacesPage() {
             </div>
             {globalInviteWsId !== 'standalone' && (
               <div className="form-group">
-                <label>Role</label>
+                <label>Role <InfoTooltip text="Owner: full access + manage collaborators. Collaborator: full access. Storyteller: Five Chapter Stories only." /></label>
                 <select
                   value={globalInviteRole}
                   onChange={e => setGlobalInviteRole(e.target.value)}
                 >
-                  <option value="editor">Message Creator</option>
-                  <option value="viewer">Viewer</option>
-                  {user?.isAdmin && <option value="admin">Admin</option>}
+                  <option value="owner">Owner</option>
+                  <option value="collaborator">Collaborator</option>
+                  <option value="storyteller">Storyteller</option>
                 </select>
               </div>
             )}
