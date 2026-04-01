@@ -10,7 +10,16 @@ interface Message {
   actionResult?: string | null;
 }
 
-type IntroPhase = 'name' | 'capabilities' | 'done';
+interface ReturnContext {
+  draftId: string;
+  offeringName: string;
+  audienceName: string;
+  currentStep: number;
+  hasStories: boolean;
+  unblendedMedium?: string;
+}
+
+type IntroPhase = 'intro' | 'capabilities' | 'context' | 'done';
 
 export function MariaPartner() {
   const { user } = useAuth();
@@ -26,14 +35,22 @@ export function MariaPartner() {
 
   // Intro state
   const [introduced, setIntroduced] = useState<boolean | null>(null);
-  const [introPhase, setIntroPhase] = useState<IntroPhase>('name');
-  const [displayName, setDisplayName] = useState('');
+  const [introPhase, setIntroPhase] = useState<IntroPhase>('intro');
+  const [introReminder, setIntroReminder] = useState(false);
+  // displayName stored for backend partner prompt — not rendered in UI
+  const displayNameRef = useRef('');
+  const setDisplayName = (name: string) => { displayNameRef.current = name; };
   const [customName, setCustomName] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [suggestedName, setSuggestedName] = useState('');
 
-  // Notification dot — show once until first open
+  // Return context — for Phase 3 (intro) and glow (returning users)
+  const [returnContext, setReturnContext] = useState<ReturnContext | null>(null);
+  const [showReturnCard, setShowReturnCard] = useState(false);
+
+  // Bubble indicators
   const [showDot, setShowDot] = useState(false);
+  const [showGlow, setShowGlow] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -41,20 +58,27 @@ export function MariaPartner() {
 
   // Load status on mount
   useEffect(() => {
-    api.get<{ username: string; displayName?: string; introduced: boolean; hasNewMessage?: boolean }>('/partner/status')
+    api.get<{ username: string; displayName?: string; introduced: boolean; returnContext?: ReturnContext | null }>('/partner/status')
       .then(status => {
         setIntroduced(status.introduced);
         setDisplayName(status.displayName || '');
         setSuggestedName(
           status.username.charAt(0).toUpperCase() + status.username.slice(1)
         );
-        // Show dot if not yet introduced OR if Maria has a return greeting
-        if (!status.introduced || status.hasNewMessage) {
+
+        if (status.returnContext) {
+          setReturnContext(status.returnContext);
+        }
+
+        if (!status.introduced) {
+          // First time — show dot to draw attention to intro
           setShowDot(true);
+        } else if (status.returnContext) {
+          // Returning user with context — subtle glow, not a dot
+          setShowGlow(true);
         }
       })
       .catch(() => {
-        // Silently fail — partner feature is additive
         setIntroduced(false);
       });
   }, []);
@@ -66,6 +90,11 @@ export function MariaPartner() {
         .then(({ messages: history }) => {
           setMessages(history);
           setLoaded(true);
+          // If returning user has context, show the return card
+          if (returnContext) {
+            setShowReturnCard(true);
+            setShowGlow(false);
+          }
         })
         .catch(() => setLoaded(true));
     }
@@ -87,13 +116,14 @@ export function MariaPartner() {
     }
   }, [open, introduced, introPhase]);
 
-  // Listen for keyboard shortcut events (custom events from other components)
+  // Listen for keyboard shortcut events
   useEffect(() => {
     function onToggle(e: Event) {
       const detail = (e as CustomEvent).detail;
       if (detail?.open) {
         setOpen(true);
         setShowDot(false);
+        setShowGlow(false);
       } else {
         setOpen(false);
       }
@@ -111,7 +141,7 @@ export function MariaPartner() {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
         e.preventDefault();
         setOpen(prev => {
-          if (!prev) setShowDot(false);
+          if (!prev) { setShowDot(false); setShowGlow(false); }
           return !prev;
         });
       }
@@ -126,6 +156,7 @@ export function MariaPartner() {
   const handleOpen = useCallback(() => {
     setOpen(true);
     setShowDot(false);
+    setShowGlow(false);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -137,13 +168,15 @@ export function MariaPartner() {
     const text = overrideText || input.trim();
     if (!text || sending) return;
 
+    // Dismiss return card once user starts talking
+    setShowReturnCard(false);
+
     if (!overrideText) {
       setInput('');
       setMessages(prev => [...prev, { role: 'user', content: text }]);
     }
     setSending(true);
 
-    // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -159,7 +192,6 @@ export function MariaPartner() {
         context: pageContext,
       });
 
-      // If Maria needs to read the page, fetch content and retry
       if (result.needsPageContent) {
         setMessages(prev => [...prev, {
           role: 'assistant',
@@ -170,7 +202,6 @@ export function MariaPartner() {
           const { content: pc } = await api.post<{ content: string }>('/partner/page-content', {
             context: pageContext,
           });
-          // Remove the "reading" message and retry with page content
           setMessages(prev => prev.slice(0, -1));
           setSending(false);
           send(text, pc);
@@ -199,7 +230,6 @@ export function MariaPartner() {
       if (result.actionResult) {
         const navMatch = result.actionResult.match(/\[NAVIGATE:([^\]]+)\]/);
         if (navMatch) {
-          // Navigate after a brief delay so the user sees Maria's response
           setTimeout(() => navigate(navMatch[1]), 1200);
         }
       }
@@ -207,7 +237,7 @@ export function MariaPartner() {
       if (result.refreshNeeded) {
         refreshPage();
       }
-    } catch (err: any) {
+    } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: 'Sorry, I had trouble with that. Try again?',
@@ -217,46 +247,96 @@ export function MariaPartner() {
     }
   }, [input, sending, pageContext, refreshPage]);
 
-  // Confirm name
+  // Confirm name — marks intro as done on backend, advances to Phase 2
   const confirmName = useCallback(async (name: string) => {
     try {
       await api.put<{ success: boolean }>('/partner/name', { displayName: name });
       setDisplayName(name);
       setIntroduced(true);
       setIntroPhase('capabilities');
+      setIntroReminder(false);
     } catch {
-      // Silently continue
       setIntroduced(true);
       setIntroPhase('capabilities');
     }
   }, []);
 
-  // Render the intro flow
+  // Build Phase 3 message from return context or new-user prompt
+  function getContextMessage(): string {
+    if (returnContext) {
+      const { offeringName, audienceName, currentStep } = returnContext;
+      if (currentStep < 5) {
+        return `You were last building a message for ${offeringName} for ${audienceName}. Want to go there or start something else?`;
+      }
+      if (returnContext.unblendedMedium) {
+        return `You were working on a ${returnContext.unblendedMedium} for ${offeringName} → ${audienceName}. The chapters are written but not blended yet. Want to finish that or start something else?`;
+      }
+      if (!returnContext.hasStories) {
+        return `Your Three Tier for ${offeringName} → ${audienceName} is done. Want to turn it into something — an email, a pitch, a blog post? Or start something new?`;
+      }
+      return `Your ${offeringName} work is in good shape. Want to revisit it or start something new?`;
+    }
+    // New user — no work yet
+    return `What are you working on? Tell me about the product or service you want to build messaging for, and who needs to hear about it.`;
+  }
+
+  // Render the three-phase intro flow
   function renderIntro() {
-    if (introPhase === 'name') {
+    // ─── Phase 1: Introduction ─────────────────────────
+    if (introPhase === 'intro') {
+      if (introReminder) {
+        return (
+          <div className="partner-intro">
+            <div className="partner-intro-message">
+              <p>I'm your messaging partner. I know the Three Tier and Five Chapter methodologies, and I can help you build messaging for any product and audience. I work alongside the app — anything you can do in the UI, you can ask me to do instead.</p>
+            </div>
+            <div className="partner-intro-actions">
+              <button className="btn btn-primary" onClick={() => { setIntroReminder(false); setIntroPhase('intro'); }}>
+                Got it — interested
+              </button>
+              <button className="btn btn-ghost" onClick={() => { setIntroPhase('done'); setOpen(false); setLoaded(false); }}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="partner-intro">
           <div className="partner-intro-message">
-            <p>Hi — I'm Maria. I've been here before, but I've been working on being more helpful.</p>
-            <p>So I'm here whenever you want to think through your messaging together. I can see your work across the app, so you don't need to catch me up.</p>
-            <p>Can I call you {suggestedName}?</p>
+            <p>Hi — I'm Maria. I've been here before, but I've gotten better.</p>
+            <p>Interested in what I can do?</p>
           </div>
           <div className="partner-intro-actions">
             {!showCustomInput ? (
               <>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => confirmName(suggestedName)}
-                >
-                  That's me
+                <button className="btn btn-primary" onClick={() => setIntroPhase('capabilities')}>
+                  Yes
                 </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowCustomInput(true)}
-                >
-                  Call me something else
+                <button className="btn btn-secondary" onClick={() => setIntroReminder(true)}>
+                  Remind me
+                </button>
+                <button className="btn btn-ghost" onClick={() => { setIntroPhase('done'); setOpen(false); setLoaded(false); }}>
+                  Dismiss
                 </button>
               </>
+            ) : null}
+          </div>
+          {/* Name capture — fold it in naturally */}
+          <div style={{ marginTop: 16, borderTop: '1px solid var(--border-light, #e5e5ea)', paddingTop: 12 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 8px' }}>
+              Can I call you {suggestedName}?
+            </p>
+            {!showCustomInput ? (
+              <div className="partner-intro-actions">
+                <button className="btn btn-primary btn-sm" onClick={() => confirmName(suggestedName)}>
+                  That's me
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowCustomInput(true)}>
+                  Call me something else
+                </button>
+              </div>
             ) : (
               <div className="partner-name-input">
                 <input
@@ -265,15 +345,13 @@ export function MariaPartner() {
                   onChange={e => setCustomName(e.target.value)}
                   onKeyDown={e => {
                     if (e.key === 'Escape') setShowCustomInput(false);
-                    if (e.key === 'Enter' && customName.trim()) {
-                      confirmName(customName.trim());
-                    }
+                    if (e.key === 'Enter' && customName.trim()) confirmName(customName.trim());
                   }}
                   placeholder="What should I call you?"
                   autoFocus
                 />
                 <button
-                  className="btn btn-primary"
+                  className="btn btn-primary btn-sm"
                   onClick={() => customName.trim() && confirmName(customName.trim())}
                   disabled={!customName.trim()}
                 >
@@ -286,33 +364,71 @@ export function MariaPartner() {
       );
     }
 
+    // ─── Phase 2: Capabilities ─────────────────────────
     if (introPhase === 'capabilities') {
+      if (introReminder) {
+        return (
+          <div className="partner-intro">
+            <div className="partner-intro-message">
+              <p>For example: "Create an audience called Hospital CFOs," or "Add a priority about cost reduction," or "Review my Three Tier and suggest improvements." I can create, edit, and generate — just tell me what you need.</p>
+            </div>
+            <div className="partner-intro-actions">
+              <button className="btn btn-primary" onClick={() => { setIntroReminder(false); setIntroPhase('context'); }}>
+                Got it
+              </button>
+              <button className="btn btn-ghost" onClick={() => { setIntroPhase('done'); setOpen(false); setLoaded(false); }}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="partner-intro">
           <div className="partner-intro-message">
-            <p>Great to meet you, {displayName}.</p>
-            <p>I can help you think through positioning, voice, audience priorities, competitive examples — anything related to your messaging. And if you ask me to make changes — add a priority, tweak a story, create an audience — I can do that too.</p>
-            <p>You'll see my icon on every screen. Come find me whenever.</p>
+            <p>I can do most anything the UI can do, so you can tell me and I'll try.</p>
           </div>
           <div className="partner-intro-actions">
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                setIntroPhase('done');
-                setLoaded(false); // trigger history load
-              }}
-            >
-              Sounds good
+            <button className="btn btn-primary" onClick={() => setIntroPhase('context')}>
+              Continue
             </button>
-            <button
-              className="btn btn-ghost"
-              onClick={() => {
+            <button className="btn btn-secondary" onClick={() => setIntroReminder(true)}>
+              Remind me
+            </button>
+            <button className="btn btn-ghost" onClick={() => { setIntroPhase('done'); setOpen(false); setLoaded(false); }}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── Phase 3: Context ──────────────────────────────
+    if (introPhase === 'context') {
+      const contextMsg = getContextMessage();
+      const hasDraft = returnContext?.draftId;
+
+      return (
+        <div className="partner-intro">
+          <div className="partner-intro-message">
+            <p>{contextMsg}</p>
+          </div>
+          <div className="partner-intro-actions">
+            {hasDraft && (
+              <button className="btn btn-primary" onClick={() => {
                 setIntroPhase('done');
-                setOpen(false);
                 setLoaded(false);
-              }}
-            >
-              Dismiss for now
+                navigate(`/three-tier/${returnContext!.draftId}`);
+              }}>
+                Go there
+              </button>
+            )}
+            <button className={hasDraft ? 'btn btn-secondary' : 'btn btn-primary'} onClick={() => {
+              setIntroPhase('done');
+              setLoaded(false);
+            }}>
+              {hasDraft ? 'Start something else' : 'Let\u2019s go'}
             </button>
           </div>
         </div>
@@ -324,14 +440,11 @@ export function MariaPartner() {
 
   // Format message text with paragraph breaks, line breaks, and basic markdown
   function formatLine(line: string, key: number) {
-    // Process bold (**text**) and italic (*text*)
     const parts: React.ReactNode[] = [];
     let remaining = line;
     let partKey = 0;
     while (remaining.length > 0) {
-      // Bold: **text**
       const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
-      // Italic: *text* (but not **)
       const italicMatch = remaining.match(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/);
 
       const match = boldMatch && italicMatch
@@ -359,7 +472,6 @@ export function MariaPartner() {
   }
 
   function formatContent(text: string) {
-    // Strip action result brackets from stored messages
     const cleaned = text.replace(/\n\n\[.+\]$/, '');
     const paragraphs = cleaned.split(/\n\n+/);
     return paragraphs.map((p, i) => {
@@ -378,7 +490,6 @@ export function MariaPartner() {
     });
   }
 
-  // Don't render if not logged in
   if (!user) return null;
 
   return (
@@ -386,7 +497,7 @@ export function MariaPartner() {
       {/* Floating bubble */}
       {!open && (
         <button
-          className="partner-bubble"
+          className={`partner-bubble ${showGlow ? 'partner-glow' : ''}`}
           onClick={handleOpen}
           aria-label="Talk to Maria"
           title="Talk to Maria"
@@ -419,11 +530,39 @@ export function MariaPartner() {
           <div className="partner-body">
             {introduced === false && renderIntro()}
 
-            {introduced && (
+            {introduced && introPhase !== 'done' && renderIntro()}
+
+            {introduced && introPhase === 'done' && (
               <>
                 {/* Messages */}
                 <div className="partner-messages">
-                  {messages.length === 0 && loaded && (
+                  {/* Return context card for returning users */}
+                  {showReturnCard && returnContext && (
+                    <div className="partner-return-card" style={{
+                      padding: '12px 16px',
+                      marginBottom: 8,
+                      background: 'var(--bg-secondary, #f8f8fa)',
+                      borderRadius: 'var(--radius-sm, 6px)',
+                      border: '1px solid var(--border-light, #e5e5ea)',
+                    }}>
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
+                        {getContextMessage()}
+                      </p>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-primary btn-sm" onClick={() => {
+                          setShowReturnCard(false);
+                          navigate(`/three-tier/${returnContext.draftId}`);
+                        }}>
+                          Go there
+                        </button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setShowReturnCard(false)}>
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {messages.length === 0 && loaded && !showReturnCard && (
                     <div className="partner-empty">
                       What's on your mind?
                     </div>

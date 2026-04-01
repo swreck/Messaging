@@ -116,7 +116,16 @@ function buildCurrentContext(context: Record<string, any>): string {
   return parts.join('. ');
 }
 
-async function buildReturnGreeting(workspaceId: string, displayName: string): Promise<string | undefined> {
+interface ReturnContext {
+  draftId: string;
+  offeringName: string;
+  audienceName: string;
+  currentStep: number;
+  hasStories: boolean;
+  unblendedMedium?: string;
+}
+
+async function buildReturnContext(workspaceId: string): Promise<ReturnContext | null> {
   const recentDraft = await prisma.threeTierDraft.findFirst({
     where: { offering: { workspaceId } },
     orderBy: { updatedAt: 'desc' },
@@ -127,50 +136,17 @@ async function buildReturnGreeting(workspaceId: string, displayName: string): Pr
     },
   });
 
-  const name = displayName || 'there';
+  if (!recentDraft) return null;
 
-  if (!recentDraft) {
-    // User has no drafts — check if they have audiences/offerings started
-    const [offeringCount, audienceCount] = await Promise.all([
-      prisma.offering.count({ where: { workspaceId } }),
-      prisma.audience.count({ where: { workspaceId } }),
-    ]);
-    if (offeringCount === 0 && audienceCount === 0) {
-      return `Hey ${name} — good to have you back. Ready to get started on some messaging?`;
-    }
-    if (offeringCount > 0 && audienceCount > 0) {
-      return `Hey ${name} — welcome back. You've got audiences and offerings set up but haven't started a Three Tier yet. Want to build one?`;
-    }
-    return undefined;
-  }
-
-  const offeringName = recentDraft.offering.name;
-  const audienceName = recentDraft.audience.name;
-  const step = recentDraft.currentStep;
-
-  if (step < 5) {
-    const stepDescs: Record<number, string> = {
-      1: 'but hadn\'t started the coaching yet',
-      2: `and we were talking about what makes ${offeringName} special`,
-      3: `and we were exploring what ${audienceName} cares about most`,
-      4: 'and the message was being built',
-    };
-    return `Hey ${name} — been a bit. You were working on your Three Tier for ${offeringName} → ${audienceName}${stepDescs[step] ? `, ${stepDescs[step]}` : ''}. Want to pick that back up?`;
-  }
-
-  // Step 5 — completed Three Tier
-  const unblendedStory = recentDraft.stories.find(s => s.stage === 'chapters');
-  const hasStories = recentDraft.stories.length > 0;
-
-  if (unblendedStory) {
-    return `Hey ${name} — you left off with a ${unblendedStory.medium} story for ${offeringName} → ${audienceName}. The chapters are written but haven't been blended into a final draft yet. Want to finish that?`;
-  }
-
-  if (!hasStories) {
-    return `Welcome back, ${name}. Your Three Tier for ${offeringName} → ${audienceName} is looking good. Ready to turn it into something — an email, a pitch deck, a blog post?`;
-  }
-
-  return `Hey ${name} — good to see you. Your ${offeringName} work is in good shape. Anything you want to revisit or something new?`;
+  const unblended = recentDraft.stories.find(s => s.stage === 'chapters');
+  return {
+    draftId: recentDraft.id,
+    offeringName: recentDraft.offering.name,
+    audienceName: recentDraft.audience.name,
+    currentStep: recentDraft.currentStep,
+    hasStories: recentDraft.stories.length > 0,
+    unblendedMedium: unblended?.medium,
+  };
 }
 
 async function buildSurfacingHint(workspaceId: string): Promise<string | undefined> {
@@ -204,29 +180,23 @@ async function buildSurfacingHint(workspaceId: string): Promise<string | undefin
 
 // ─── Routes ──────────────────────────────────────────────
 
-// GET /api/partner/status — check intro state + load display name + return greeting if away >24h
+// GET /api/partner/status — check intro state, return context if useful
 router.get('/status', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { username, displayName, introduced, lastVisitAt } = await getPartnerSettings(userId);
 
-  let hasNewMessage = false;
+  let returnContext: ReturnContext | null = null;
 
-  // If user has been introduced and was away >24h, generate a return greeting
+  // If user has been introduced and was away >24h, build return context (no stored message)
   if (introduced && lastVisitAt) {
     const gap = Date.now() - new Date(lastVisitAt).getTime();
     const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
     if (gap > TWENTY_FOUR_HOURS) {
       try {
-        const greeting = await buildReturnGreeting(req.workspaceId!, displayName || username);
-        if (greeting) {
-          await prisma.assistantMessage.create({
-            data: { userId, role: 'assistant', content: greeting, context: PARTNER_CHANNEL },
-          });
-          hasNewMessage = true;
-        }
+        returnContext = await buildReturnContext(req.workspaceId!);
       } catch {
-        // Non-critical — don't block status on greeting failure
+        // Non-critical
       }
     }
   }
@@ -251,7 +221,7 @@ router.get('/status', async (req: Request, res: Response) => {
     // Non-critical
   }
 
-  res.json({ username, displayName, introduced, hasNewMessage });
+  res.json({ username, displayName, introduced, returnContext });
 });
 
 // PUT /api/partner/name — store display name and mark as introduced
@@ -282,26 +252,6 @@ router.put('/name', async (req: Request, res: Response) => {
       },
     },
   });
-
-  // For new users (no content yet), store a proactive first message from Maria
-  try {
-    const [offeringCount, audienceCount] = await Promise.all([
-      prisma.offering.count({ where: { workspaceId: req.workspaceId } }),
-      prisma.audience.count({ where: { workspaceId: req.workspaceId } }),
-    ]);
-    if (offeringCount === 0 && audienceCount === 0) {
-      await prisma.assistantMessage.create({
-        data: {
-          userId: req.user!.userId,
-          role: 'assistant',
-          content: `So ${displayName} — what are you working on? Tell me about the product or service you want to build messaging for, and who needs to hear about it.`,
-          context: PARTNER_CHANNEL,
-        },
-      });
-    }
-  } catch {
-    // Non-critical
-  }
 
   res.json({ success: true, displayName });
 });
