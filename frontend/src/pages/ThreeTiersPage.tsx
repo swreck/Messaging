@@ -29,6 +29,12 @@ export function ThreeTiersPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [archivedHierarchy, setArchivedHierarchy] = useState<HierarchyOffering[]>([]);
 
+  // Inline create within the modal
+  const [creatingOffering, setCreatingOffering] = useState(false);
+  const [newOfferingName, setNewOfferingName] = useState('');
+  const [creatingAudience, setCreatingAudience] = useState(false);
+  const [newAudienceName, setNewAudienceName] = useState('');
+
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'three-tiers' }); registerRefresh(loadData); }, []);
   useEffect(() => { loadData(); loadArchivedData(); }, []);
@@ -110,6 +116,40 @@ export function ThreeTiersPage() {
     return allAudiences.filter(a => !usedIds.has(a.id));
   }
 
+  async function inlineCreateOffering() {
+    if (!newOfferingName.trim()) return;
+    try {
+      const { offering } = await api.post<{ offering: Offering }>('/offerings', {
+        name: newOfferingName.trim(),
+        smeRole: '',
+        description: '',
+      });
+      await loadData();
+      setSelectedOfferingId(offering.id);
+      setSelectedAudienceId('');
+      setCreatingOffering(false);
+      setNewOfferingName('');
+    } catch (err: any) {
+      alert(err.message || 'Failed to create offering');
+    }
+  }
+
+  async function inlineCreateAudience() {
+    if (!newAudienceName.trim()) return;
+    try {
+      const { audience } = await api.post<{ audience: { id: string; name: string } }>('/audiences', {
+        name: newAudienceName.trim(),
+        description: '',
+      });
+      await loadData();
+      setSelectedAudienceId(audience.id);
+      setCreatingAudience(false);
+      setNewAudienceName('');
+    } catch (err: any) {
+      alert(err.message || 'Failed to create audience');
+    }
+  }
+
   function openNewModal(preselectedOfferingId?: string) {
     setSelectedOfferingId(preselectedOfferingId || '');
     setSelectedAudienceId('');
@@ -164,10 +204,13 @@ export function ThreeTiersPage() {
           <p className="page-description">Value hierarchies built from your offerings and audiences</p>
         </header>
         <div className="empty-state empty-state-enhanced">
-          <div className="empty-icon">📊</div>
-          <h3>No Three Tier messages yet</h3>
-          <p>Create audiences and offerings first, then build Three Tier messages that connect what your audience cares about to what you offer.</p>
-          <button className="btn btn-primary" onClick={() => navigate('/offerings')} style={{ marginTop: 16 }}>Go to Offerings</button>
+          <div className="empty-icon">💬</div>
+          <h3>Ready to build your first message?</h3>
+          <p>You'll need an offering and an audience first — then Maria will walk you through building a Three Tier message step by step.</p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <button className="btn btn-primary" onClick={() => navigate('/offerings')}>Add an Offering</button>
+            <button className="btn btn-secondary" onClick={() => navigate('/audiences')}>Add an Audience</button>
+          </div>
         </div>
       </div>
     );
@@ -294,21 +337,75 @@ export function ThreeTiersPage() {
       <Modal open={showNewModal} onClose={() => setShowNewModal(false)} title="Start a Three Tier Message">
         <div className="form-group">
           <label>Offering</label>
-          <select value={selectedOfferingId} onChange={e => { setSelectedOfferingId(e.target.value); setSelectedAudienceId(''); }}>
-            <option value="">Select an offering...</option>
-            {offerings.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+          {!creatingOffering ? (
+            <>
+              <select value={selectedOfferingId} onChange={e => { setSelectedOfferingId(e.target.value); setSelectedAudienceId(''); }}>
+                <option value="">Select an offering...</option>
+                {offerings.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ marginTop: 6, fontSize: 13 }}
+                onClick={() => setCreatingOffering(true)}
+              >
+                + Create new offering
+              </button>
+            </>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                value={newOfferingName}
+                onChange={e => setNewOfferingName(e.target.value)}
+                placeholder="Offering name"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newOfferingName.trim()) inlineCreateOffering();
+                  if (e.key === 'Escape') { setCreatingOffering(false); setNewOfferingName(''); }
+                }}
+                style={{ flex: 1 }}
+              />
+              <button className="btn btn-primary btn-sm" onClick={inlineCreateOffering} disabled={!newOfferingName.trim()}>Create</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setCreatingOffering(false); setNewOfferingName(''); }}>Cancel</button>
+            </div>
+          )}
         </div>
         <div className="form-group">
           <label>Audience</label>
-          <select value={selectedAudienceId} onChange={e => setSelectedAudienceId(e.target.value)} disabled={!selectedOfferingId}>
-            <option value="">Select an audience...</option>
-            {selectedOfferingId && getAvailableAudiences(selectedOfferingId).map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-          {selectedOfferingId && getAvailableAudiences(selectedOfferingId).length === 0 && (
-            <p className="form-hint" style={{ marginTop: 8 }}>All audiences already have a Three Tier for this offering.</p>
+          {!creatingAudience ? (
+            <>
+              <select value={selectedAudienceId} onChange={e => setSelectedAudienceId(e.target.value)} disabled={!selectedOfferingId}>
+                <option value="">Select an audience...</option>
+                {selectedOfferingId && getAvailableAudiences(selectedOfferingId).map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              {selectedOfferingId && getAvailableAudiences(selectedOfferingId).length === 0 && (
+                <p className="form-hint" style={{ marginTop: 8 }}>All audiences already have a Three Tier for this offering.</p>
+              )}
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ marginTop: 6, fontSize: 13 }}
+                onClick={() => setCreatingAudience(true)}
+              >
+                + Create new audience
+              </button>
+            </>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                value={newAudienceName}
+                onChange={e => setNewAudienceName(e.target.value)}
+                placeholder="Audience name"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newAudienceName.trim()) inlineCreateAudience();
+                  if (e.key === 'Escape') { setCreatingAudience(false); setNewAudienceName(''); }
+                }}
+                style={{ flex: 1 }}
+              />
+              <button className="btn btn-primary btn-sm" onClick={inlineCreateAudience} disabled={!newAudienceName.trim()}>Create</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setCreatingAudience(false); setNewAudienceName(''); }}>Cancel</button>
+            </div>
           )}
         </div>
         <div className="modal-actions">

@@ -127,12 +127,12 @@ export function DashboardPage() {
         <div className="dashboard-welcome empty-state-enhanced">
           <div className="empty-icon">💬</div>
           <h3>Welcome to Maria</h3>
-          <p>Start by creating an audience and an offering, then build your first Three Tier message.</p>
+          <p>Tell Maria what you're working on — she'll help you build your messaging from scratch. Open her panel in the bottom right corner.</p>
           <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 8 }}>
-            Or open Maria (bottom right) and tell her what you're working on — she'll set everything up.
+            Or if you prefer, start by adding an audience and an offering manually.
           </p>
           <div className="dashboard-welcome-actions">
-            <button className="btn btn-primary" onClick={() => navigate('/audiences')}>Create an Audience</button>
+            <button className="btn btn-secondary" onClick={() => navigate('/audiences')}>Create an Audience</button>
             <button className="btn btn-secondary" onClick={() => navigate('/offerings')}>Create an Offering</button>
           </div>
         </div>

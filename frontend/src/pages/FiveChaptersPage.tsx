@@ -109,8 +109,8 @@ export function FiveChaptersPage() {
       {!hasAnyContent && (
         <div className="empty-state empty-state-enhanced">
           <div className="empty-icon">📖</div>
-          <h3>No stories yet</h3>
-          <p>Complete a Three Tier message first. Then you can generate Five Chapter stories for different formats — email, presentations, blog posts, and more.</p>
+          <h3>Stories come from your Three Tier</h3>
+          <p>Once you've built a Three Tier message, Maria can turn it into an email, a pitch, a blog post — whatever you need. Start there first.</p>
           <button className="btn btn-primary" onClick={() => navigate('/three-tiers')} style={{ marginTop: 16 }}>Go to Three Tiers</button>
         </div>
       )}

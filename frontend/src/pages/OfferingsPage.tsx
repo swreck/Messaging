@@ -144,8 +144,8 @@ export function OfferingsPage() {
       {offerings.length === 0 ? (
         <div className="empty-state-card empty-state-enhanced">
           <div className="empty-icon">✨</div>
-          <h3>No offerings yet</h3>
-          <p>An offering is your product or service. Define what it does and what makes it different.</p>
+          <h3>What are you building messaging for?</h3>
+          <p>Add the product or service you want to message. You'll tell Maria what makes it special during the coaching.</p>
           <button className="btn btn-primary" onClick={openNew} style={{ marginTop: 16 }}>Add an Offering</button>
         </div>
       ) : (
