@@ -292,7 +292,7 @@ export function WorkspacesPage() {
   }
 
   async function handleRemoveMember(wsId: string, userId: string) {
-    if (!confirm('Remove this member from the workspace?')) return;
+    if (!confirm('Remove this member from the team?')) return;
     await api.delete(`/workspaces/${wsId}/members/${userId}`);
     await loadWorkspaceDetails(wsId);
     await reload();
@@ -317,21 +317,21 @@ export function WorkspacesPage() {
     <div className="page-container">
       <header className="page-header">
         <div>
-          <h1>Your Workspaces</h1>
-          <p className="page-description">Manage your workspaces and team members</p>
+          <h1>Your Teams</h1>
+          <p className="page-description">Manage your teams and collaborators</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-ghost" onClick={() => setShowInviteModal(true)}>Invite Someone</button>
-          <button className="btn btn-primary" onClick={() => setShowNewModal(true)}>New Workspace</button>
+          <button className="btn btn-primary" onClick={() => setShowNewModal(true)}>New Team</button>
         </div>
       </header>
 
       {workspaces.length === 0 && (
         <div className="empty-state empty-state-enhanced">
-          <h3>No workspaces yet</h3>
-          <p>Create a workspace to organize your messaging work and collaborate with others.</p>
+          <h3>No teams yet</h3>
+          <p>Create a team to organize your messaging work and collaborate with others.</p>
           <button className="btn btn-primary" onClick={() => setShowNewModal(true)} style={{ marginTop: 16 }}>
-            Create a Workspace
+            Create a Team
           </button>
         </div>
       )}
@@ -561,7 +561,7 @@ export function WorkspacesPage() {
       </div>
 
       {/* New Workspace Modal */}
-      <Modal open={showNewModal} onClose={() => setShowNewModal(false)} title="New Workspace">
+      <Modal open={showNewModal} onClose={() => setShowNewModal(false)} title="New Team">
         <form onSubmit={handleCreate}>
           <div className="form-group">
             <label>Name</label>
@@ -576,14 +576,14 @@ export function WorkspacesPage() {
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" onClick={() => setShowNewModal(false)}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={creating}>
-              {creating ? 'Creating...' : 'Create Workspace'}
+              {creating ? 'Creating...' : 'Create Team'}
             </button>
           </div>
         </form>
       </Modal>
 
       {/* Switch to new workspace prompt */}
-      <Modal open={!!justCreated} onClose={() => setJustCreated(null)} title="Workspace Created">
+      <Modal open={!!justCreated} onClose={() => setJustCreated(null)} title="Team Created">
         <p style={{ marginBottom: 16, lineHeight: 1.5 }}>
           <strong>{justCreated?.name}</strong> is ready. Would you like to switch to it now?
         </p>
@@ -662,7 +662,7 @@ export function WorkspacesPage() {
                     checked={globalInviteWsId === 'standalone'}
                     onChange={() => setGlobalInviteWsId('standalone')}
                   />
-                  <span>Their own fresh workspace</span>
+                  <span>Their own fresh team</span>
                 </label>
               </div>
             </div>

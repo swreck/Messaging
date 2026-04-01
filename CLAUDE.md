@@ -75,9 +75,12 @@ When told to deploy (or given a green light like "yes do all of that"):
 2. Copy to backend: `rm -rf backend/public/* && cp -r frontend/dist/* backend/public/`
 3. Type-check: `cd backend && npx tsc --noEmit` and `cd frontend && npx tsc --noEmit`
 4. Run test suites (if they exist)
-5. Commit with descriptive message
+5. Commit BOTH source changes AND `backend/public/` built assets
 6. Push to GitHub
-7. Deploy: `cd backend && railway up`
+7. Deploy: `railway up` from the **project root** (where `railway.toml` lives — NOT from backend/)
+8. Verify: `curl -s https://mariamessaging.up.railway.app/ | grep -o 'index-[^"]*\.js'` — hash must match `ls backend/public/assets/`. Do NOT tell the user it's live until verified.
+
+**CRITICAL:** All three of steps 5, 7, and 8 are mandatory. Missing any one causes stale deploys.
 
 Execute the full sequence without pausing at each step.
 

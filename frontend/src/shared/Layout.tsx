@@ -14,9 +14,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { path: '/', label: 'Home' },
     { path: '/audiences', label: 'Audiences' },
     { path: '/offerings', label: 'Offerings' },
-    { path: '/three-tiers', label: 'Three Tiers' },
-    { path: '/five-chapters', label: 'Five Chapters' },
-    ...(showWorkspaces ? [{ path: '/workspaces', label: 'Workspaces' }] : []),
+    { path: '/three-tiers', label: '3 Tiers' },
+    { path: '/five-chapters', label: '5 Ch. Stories' },
+    ...(showWorkspaces ? [{ path: '/workspaces', label: 'Teams' }] : []),
     { path: '/settings', label: 'Settings' },
   ];
 

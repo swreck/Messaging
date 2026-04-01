@@ -160,7 +160,7 @@ export function ThreeTiersPage() {
     return (
       <div className="page-container">
         <header className="page-header">
-          <h1>Three Tier Messages</h1>
+          <h1>3 Tier Messages</h1>
           <p className="page-description">Value hierarchies built from your offerings and audiences</p>
         </header>
         <div className="empty-state empty-state-enhanced">
@@ -177,7 +177,7 @@ export function ThreeTiersPage() {
     <div className="page-container">
       <header className="page-header">
         <div>
-          <h1>Three Tier Messages</h1>
+          <h1>3 Tier Messages</h1>
           <p className="page-description">Value hierarchies built from your offerings and audiences</p>
         </div>
         <button className="btn btn-primary" onClick={() => openNewModal()}>New Three Tier</button>
@@ -185,7 +185,6 @@ export function ThreeTiersPage() {
 
       {offeringsWithDrafts.map(offering => (
         <section key={offering.id} className="tt-offering-section">
-          <h2 className="tt-offering-name">{offering.name}</h2>
           <div className="tt-card-grid">
             {offering.audiences.map(aud => {
               const isComplete = aud.threeTier.status === 'complete' || aud.threeTier.currentStep === 5;
@@ -195,7 +194,8 @@ export function ThreeTiersPage() {
                   className="tt-card"
                   onClick={() => navigate(`/three-tier/${aud.threeTier.id}`)}
                 >
-                  <div className="tt-card-name">{aud.name}</div>
+                  <div className="tt-card-audience">{aud.name}</div>
+                  <div className="tt-card-offering">{offering.name}</div>
                   <div className="tt-card-progress">
                     {renderProgressDots(aud.threeTier.currentStep, aud.threeTier.status)}
                     <span className="tt-card-status">

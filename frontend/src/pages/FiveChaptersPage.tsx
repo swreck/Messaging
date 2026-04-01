@@ -102,7 +102,7 @@ export function FiveChaptersPage() {
   return (
     <div className="page-container">
       <header className="page-header">
-        <h1>Five Chapter Stories</h1>
+        <h1>5 Chapter Stories</h1>
         <p className="page-description">Narrative stories generated from completed Three Tier messages</p>
       </header>
 
@@ -117,7 +117,8 @@ export function FiveChaptersPage() {
 
       {groups.map(group => (
         <section key={`${group.offeringName}-${group.audienceName}`} className="fcs-group">
-          <h2 className="fcs-group-name">{group.offeringName} &rarr; {group.audienceName}</h2>
+          <h2 className="fcs-group-audience">{group.audienceName}</h2>
+          <h3 className="fcs-group-offering">{group.offeringName}</h3>
 
           {!group.isComplete ? (
             <div className="fcs-hint">

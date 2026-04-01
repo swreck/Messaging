@@ -2036,8 +2036,8 @@ p { line-height: 1.5; color: var(--text-secondary); }
 /* ─── Three Tier Page — Cards ────────────────────── */
 .tt-offering-section { margin-bottom: 32px; }
 .tt-offering-name {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-tertiary);
@@ -2062,6 +2062,8 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .tt-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .tt-card-name { font-size: 16px; font-weight: 600; }
+.tt-card-audience { font-size: 18px; font-weight: 600; }
+.tt-card-offering { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
 .tt-card-progress { display: flex; align-items: center; gap: 8px; }
 .tt-card-status { font-size: 13px; color: var(--text-secondary); }
 .tt-card-updated { font-size: 12px; color: var(--text-tertiary); }
@@ -2083,6 +2085,17 @@ p { line-height: 1.5; color: var(--text-secondary); }
 
 /* ─── Five Chapter Page ──────────────────────────── */
 .fcs-group { margin-bottom: 32px; }
+.fcs-group-audience {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.fcs-group-offering {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
 .fcs-group-name {
   font-size: 14px;
   font-weight: 600;
