@@ -158,10 +158,10 @@ p { line-height: 1.5; color: var(--text-secondary); }
   letter-spacing: 0.01em;
   margin-top: 1px;
 }
-.nav-links { display: flex; gap: 8px; flex: 1; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.nav-links { display: flex; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 .nav-links::-webkit-scrollbar { display: none; }
 .nav-links a {
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
   text-decoration: none;
   font-size: 17px;
@@ -174,7 +174,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .nav-links a:hover { background: var(--bg-hover); color: var(--text-primary); }
 .nav-links a:active { background: var(--bg-active); color: var(--text-primary); }
 .nav-links a.active { background: var(--accent-light); color: var(--accent); }
-.nav-right { display: flex; align-items: center; gap: 12px; }
+.nav-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .nav-user { font-size: 15px; color: var(--text-secondary); }
 
 /* ─── Layout ──────────────────────────────────────── */
