@@ -438,7 +438,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-ghost" onClick={() => navigate('/')}>Dashboard</button>
           <button className="btn btn-primary" onClick={() => navigate(`/five-chapter/${draft.id}`)}>
-            Create New Deliverable
+            Turn Into an Email, Pitch, or Story
           </button>
         </div>
       </div>

@@ -487,11 +487,11 @@ export function FiveChapterShell() {
       {/* Create form — inline, not modal */}
       {(!story || showCreateForm) && (
         <div className="story-input-form">
-          <h2>{stories.length > 0 ? 'New Deliverable' : 'Create a Deliverable'}</h2>
-          <p className="step-description">Select a content format and configure your Five Chapter Story.</p>
+          <h2>{stories.length > 0 ? 'New Deliverable' : 'Turn Your Three Tier Into Something'}</h2>
+          <p className="step-description">Pick a format and Maria will write a Five Chapter story tailored to it. Email is a good starting point — short enough to review quickly, long enough to see the full structure.</p>
           <form onSubmit={createStory}>
             <div className="form-group">
-              <label>Content Format <InfoTooltip text="Choose where this story will be used. Each format has different length and tone." /></label>
+              <label>Content Format</label>
               <div className="medium-grid">
                 {MEDIUM_OPTIONS.map(opt => (
                   <button
@@ -512,6 +512,9 @@ export function FiveChapterShell() {
             </div>
             <div className="form-group">
               <label>Chapter Emphasis (optional)</label>
+              <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 6px' }}>
+                Give more weight to one chapter if you know what this audience needs most. Leave on "None" if unsure.
+              </p>
               <select value={emphasis} onChange={e => setEmphasis(e.target.value)}>
                 <option value="">None — balanced across all chapters</option>
                 <option value="ch1">Ch 1: The Need — emphasize urgency</option>

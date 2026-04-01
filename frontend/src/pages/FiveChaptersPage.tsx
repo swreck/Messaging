@@ -121,8 +121,8 @@ export function FiveChaptersPage() {
           <h3 className="fcs-group-offering">{group.offeringName}</h3>
 
           {!group.isComplete ? (
-            <div className="fcs-hint">
-              Three Tier {group.status === 'in_progress' ? `in progress (Step ${group.currentStep})` : 'not yet started'} — complete it to generate stories.
+            <div className="fcs-hint" style={{ cursor: 'pointer' }} onClick={() => navigate(`/three-tier/${group.draftId}`)}>
+              Three Tier {group.status === 'in_progress' ? `in progress (Step ${group.currentStep})` : 'not yet started'} — <span style={{ color: 'var(--accent)', textDecoration: 'underline' }}>finish it</span> to generate stories.
             </div>
           ) : (
             <div className="tt-card-grid">

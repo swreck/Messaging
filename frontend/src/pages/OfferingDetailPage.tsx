@@ -94,6 +94,12 @@ export function OfferingDetailPage() {
         </div>
       </header>
 
+      {offering.elements.length === 0 && (
+        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
+          You can add capabilities here manually, or let Maria discover them during coaching. When you start a Three Tier, she'll ask you what makes this offering special and capture the answers automatically.
+        </p>
+      )}
+
       <DifferentiatorList
         offeringId={offering.id}
         elements={offering.elements}
