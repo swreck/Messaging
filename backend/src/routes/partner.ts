@@ -25,6 +25,7 @@ async function getPartnerSettings(userId: string) {
     username: user?.username || '',
     displayName: settings.partner?.displayName as string | undefined,
     introduced: !!settings.partner?.introduced,
+    lastVisitAt: settings.partner?.lastVisitAt as string | undefined,
   };
 }
 
@@ -115,6 +116,63 @@ function buildCurrentContext(context: Record<string, any>): string {
   return parts.join('. ');
 }
 
+async function buildReturnGreeting(workspaceId: string, displayName: string): Promise<string | undefined> {
+  const recentDraft = await prisma.threeTierDraft.findFirst({
+    where: { offering: { workspaceId } },
+    orderBy: { updatedAt: 'desc' },
+    include: {
+      offering: { select: { name: true } },
+      audience: { select: { name: true } },
+      stories: { select: { medium: true, stage: true } },
+    },
+  });
+
+  const name = displayName || 'there';
+
+  if (!recentDraft) {
+    // User has no drafts — check if they have audiences/offerings started
+    const [offeringCount, audienceCount] = await Promise.all([
+      prisma.offering.count({ where: { workspaceId } }),
+      prisma.audience.count({ where: { workspaceId } }),
+    ]);
+    if (offeringCount === 0 && audienceCount === 0) {
+      return `Hey ${name} — good to have you back. Ready to get started on some messaging?`;
+    }
+    if (offeringCount > 0 && audienceCount > 0) {
+      return `Hey ${name} — welcome back. You've got audiences and offerings set up but haven't started a Three Tier yet. Want to build one?`;
+    }
+    return undefined;
+  }
+
+  const offeringName = recentDraft.offering.name;
+  const audienceName = recentDraft.audience.name;
+  const step = recentDraft.currentStep;
+
+  if (step < 5) {
+    const stepDescs: Record<number, string> = {
+      1: 'but hadn\'t started the coaching yet',
+      2: `and we were talking about what makes ${offeringName} special`,
+      3: `and we were exploring what ${audienceName} cares about most`,
+      4: 'and the message was being built',
+    };
+    return `Hey ${name} — been a bit. You were working on your Three Tier for ${offeringName} → ${audienceName}${stepDescs[step] ? `, ${stepDescs[step]}` : ''}. Want to pick that back up?`;
+  }
+
+  // Step 5 — completed Three Tier
+  const unblendedStory = recentDraft.stories.find(s => s.stage === 'chapters');
+  const hasStories = recentDraft.stories.length > 0;
+
+  if (unblendedStory) {
+    return `Hey ${name} — you left off with a ${unblendedStory.medium} story for ${offeringName} → ${audienceName}. The chapters are written but haven't been blended into a final draft yet. Want to finish that?`;
+  }
+
+  if (!hasStories) {
+    return `Welcome back, ${name}. Your Three Tier for ${offeringName} → ${audienceName} is looking good. Ready to turn it into something — an email, a pitch deck, a blog post?`;
+  }
+
+  return `Hey ${name} — good to see you. Your ${offeringName} work is in good shape. Anything you want to revisit or something new?`;
+}
+
 async function buildSurfacingHint(workspaceId: string): Promise<string | undefined> {
   const drafts = await prisma.threeTierDraft.findMany({
     where: { offering: { workspaceId } },
@@ -146,10 +204,54 @@ async function buildSurfacingHint(workspaceId: string): Promise<string | undefin
 
 // ─── Routes ──────────────────────────────────────────────
 
-// GET /api/partner/status — check intro state + load display name
+// GET /api/partner/status — check intro state + load display name + return greeting if away >24h
 router.get('/status', async (req: Request, res: Response) => {
-  const { username, displayName, introduced } = await getPartnerSettings(req.user!.userId);
-  res.json({ username, displayName, introduced });
+  const userId = req.user!.userId;
+  const { username, displayName, introduced, lastVisitAt } = await getPartnerSettings(userId);
+
+  let hasNewMessage = false;
+
+  // If user has been introduced and was away >24h, generate a return greeting
+  if (introduced && lastVisitAt) {
+    const gap = Date.now() - new Date(lastVisitAt).getTime();
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+    if (gap > TWENTY_FOUR_HOURS) {
+      try {
+        const greeting = await buildReturnGreeting(req.workspaceId!, displayName || username);
+        if (greeting) {
+          await prisma.assistantMessage.create({
+            data: { userId, role: 'assistant', content: greeting, context: PARTNER_CHANNEL },
+          });
+          hasNewMessage = true;
+        }
+      } catch {
+        // Non-critical — don't block status on greeting failure
+      }
+    }
+  }
+
+  // Update lastVisitAt
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { settings: true },
+    });
+    const current = (user?.settings as Record<string, any>) || {};
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        settings: {
+          ...current,
+          partner: { ...current.partner, lastVisitAt: new Date().toISOString() },
+        },
+      },
+    });
+  } catch {
+    // Non-critical
+  }
+
+  res.json({ username, displayName, introduced, hasNewMessage });
 });
 
 // PUT /api/partner/name — store display name and mark as introduced
@@ -171,10 +273,35 @@ router.put('/name', async (req: Request, res: Response) => {
     data: {
       settings: {
         ...current,
-        partner: { ...current.partner, displayName, introduced: true },
+        partner: {
+          ...current.partner,
+          displayName,
+          introduced: true,
+          lastVisitAt: new Date().toISOString(),
+        },
       },
     },
   });
+
+  // For new users (no content yet), store a proactive first message from Maria
+  try {
+    const [offeringCount, audienceCount] = await Promise.all([
+      prisma.offering.count({ where: { workspaceId: req.workspaceId } }),
+      prisma.audience.count({ where: { workspaceId: req.workspaceId } }),
+    ]);
+    if (offeringCount === 0 && audienceCount === 0) {
+      await prisma.assistantMessage.create({
+        data: {
+          userId: req.user!.userId,
+          role: 'assistant',
+          content: `So ${displayName} — what are you working on? Tell me about the product or service you want to build messaging for, and who needs to hear about it.`,
+          context: PARTNER_CHANNEL,
+        },
+      });
+    }
+  } catch {
+    // Non-critical
+  }
 
   res.json({ success: true, displayName });
 });
@@ -222,12 +349,15 @@ router.post('/message', async (req: Request, res: Response) => {
 
   // Build work summary and context
   const workspaceId = req.workspaceId!;
-  const [workSummary, surfacingHint] = await Promise.all([
+  const [workSummary, surfacingHint, offeringCount, audienceCount] = await Promise.all([
     buildWorkSummary(workspaceId),
     history.length === 0 ? buildSurfacingHint(workspaceId) : Promise.resolve(undefined),
+    prisma.offering.count({ where: { workspaceId } }),
+    prisma.audience.count({ where: { workspaceId } }),
   ]);
 
   const currentContext = buildCurrentContext(ctx);
+  const isNewUser = offeringCount === 0 && audienceCount === 0;
 
   const systemPrompt = buildPartnerPrompt({
     displayName,
@@ -236,6 +366,7 @@ router.post('/message', async (req: Request, res: Response) => {
     pageContext: ctx,
     isFirstMessage: history.length === 0,
     surfacingHint: history.length === 0 ? surfacingHint : undefined,
+    isNewUser,
   });
 
   // Build conversation history for the AI

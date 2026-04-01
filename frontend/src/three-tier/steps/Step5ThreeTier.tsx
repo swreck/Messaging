@@ -32,6 +32,17 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   // Restore confirmation
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
 
+  // Step 5 orientation — show once per draft
+  const orientationKey = `step5-oriented-${draft.id}`;
+  const [showOrientation, setShowOrientation] = useState(() => {
+    return !localStorage.getItem(orientationKey);
+  });
+
+  function dismissOrientation() {
+    localStorage.setItem(orientationKey, '1');
+    setShowOrientation(false);
+  }
+
   // Snapshot of table state for "revise from edits"
   const previousStateRef = useRef<TableSnapshot | null>(null);
 
@@ -266,9 +277,48 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         </div>
       )}
       <h2>Your Three Tier</h2>
-      <p className="step-description">
-        Click any cell to edit. Use the tools below to have Maria suggest improvements.
-      </p>
+
+      {showOrientation && (
+        <div className="orientation-card" style={{
+          padding: '16px 20px',
+          marginBottom: 16,
+          background: 'var(--bg-secondary, #f8f8fa)',
+          borderRadius: 'var(--radius-md, 10px)',
+          border: '1px solid var(--border-light, #e5e5ea)',
+          position: 'relative',
+        }}>
+          <button
+            onClick={dismissOrientation}
+            aria-label="Dismiss"
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 12,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 16,
+              color: 'var(--text-tertiary)',
+              padding: '2px 6px',
+              lineHeight: 1,
+            }}
+          >
+            &times;
+          </button>
+          <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0, paddingRight: 24 }}>
+            Here's your first draft. The top line is your core message — keyed to what {draft.audience.name} cares about most.
+            The rows below break it down by priority, and the bullets underneath are your proof points.
+            Read through it and click anything that doesn't sound like you.
+            When you're ready, try <strong>Refine Language</strong> to make the whole thing sound more natural.
+          </p>
+        </div>
+      )}
+
+      {!showOrientation && (
+        <p className="step-description">
+          Click any cell to edit. Use the tools below to have Maria suggest improvements.
+        </p>
+      )}
 
       {/* Direction input */}
       <div className="direction-input" style={{ marginBottom: 16 }}>

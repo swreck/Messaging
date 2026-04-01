@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useMaria } from './MariaContext';
@@ -13,6 +14,7 @@ type IntroPhase = 'name' | 'capabilities' | 'done';
 
 export function MariaPartner() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { pageContext, refreshPage } = useMaria();
 
   // Panel state
@@ -39,15 +41,15 @@ export function MariaPartner() {
 
   // Load status on mount
   useEffect(() => {
-    api.get<{ username: string; displayName?: string; introduced: boolean }>('/partner/status')
+    api.get<{ username: string; displayName?: string; introduced: boolean; hasNewMessage?: boolean }>('/partner/status')
       .then(status => {
         setIntroduced(status.introduced);
         setDisplayName(status.displayName || '');
         setSuggestedName(
           status.username.charAt(0).toUpperCase() + status.username.slice(1)
         );
-        // Show dot if not yet introduced
-        if (!status.introduced) {
+        // Show dot if not yet introduced OR if Maria has a return greeting
+        if (!status.introduced || status.hasNewMessage) {
           setShowDot(true);
         }
       })
@@ -192,6 +194,15 @@ export function MariaPartner() {
         content: result.response,
         actionResult: result.actionResult,
       }]);
+
+      // Check for navigation directive in action result
+      if (result.actionResult) {
+        const navMatch = result.actionResult.match(/\[NAVIGATE:([^\]]+)\]/);
+        if (navMatch) {
+          // Navigate after a brief delay so the user sees Maria's response
+          setTimeout(() => navigate(navMatch[1]), 1200);
+        }
+      }
 
       if (result.refreshNeeded) {
         refreshPage();

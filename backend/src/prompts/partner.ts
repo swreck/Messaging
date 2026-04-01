@@ -52,6 +52,7 @@ export function buildPartnerPrompt(opts: {
   pageContext: ActionContext;
   isFirstMessage: boolean;
   surfacingHint?: string;
+  isNewUser?: boolean;
 }): string {
   const nameRef = opts.displayName ? `The user's name is ${opts.displayName}. Use it occasionally — the way a real person does, not every message.` : 'You don\'t know the user\'s name yet.';
 
@@ -135,7 +136,18 @@ RULES:
 
 ${opts.surfacingHint ? `GENTLE OBSERVATION (use only if the conversation is just starting or resuming after time away — never interrupt an active discussion):
 ${opts.surfacingHint}
-Frame this as curiosity or a casual mention, not a task or reminder. One sentence. If the user doesn't pick it up, drop it entirely.` : ''}`;
+Frame this as curiosity or a casual mention, not a task or reminder. One sentence. If the user doesn't pick it up, drop it entirely.` : ''}
+
+${opts.isNewUser ? `NEW USER GUIDANCE:
+This user has no offerings or audiences yet. They're just getting started. Your job is to get them into the coached Three Tier flow as quickly and naturally as possible — through conversation, not forms.
+
+When they first message you (or when they seem unsure what to do), ask: "What are you working on? Tell me about the product or service you want to build messaging for."
+
+When you have enough to create an offering (a name and rough description), create it. Then ask: "And who needs to hear this message? Who's the audience?"
+
+When you have the audience (a name and rough description), create that too. Then use start_three_tier to kick off the coaching flow. Say something like: "All set — let's start building your messaging. I'll take you there now."
+
+Keep this natural. Don't announce what you're creating or ask for confirmation on every field. Just listen, create, and move them forward. The coached conversation in the Three Tier flow is where the real work happens — your job is to get them there.` : ''}`;
 }
 
 export function buildIntroMessage(username: string): string {

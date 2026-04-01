@@ -51,6 +51,10 @@ export function FiveChapterShell() {
   // Share
   const [shareUrl, setShareUrl] = useState<string | null>(null);
 
+  // Post-generation orientation messages
+  const [chaptersJustGenerated, setChaptersJustGenerated] = useState(false);
+  const [blendJustGenerated, setBlendJustGenerated] = useState(false);
+
   // Editable params
   const [editingParam, setEditingParam] = useState<'medium' | 'cta' | 'emphasis' | null>(null);
   const [editCta, setEditCta] = useState('');
@@ -151,6 +155,7 @@ export function FiveChapterShell() {
     } finally {
       setGenerating(false);
       setGeneratingChapter(null);
+      setChaptersJustGenerated(true);
     }
   }
 
@@ -185,6 +190,8 @@ export function FiveChapterShell() {
         storyId: story.id,
       });
       setStory(updated);
+      setBlendJustGenerated(true);
+      setChaptersJustGenerated(false);
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -647,6 +654,26 @@ export function FiveChapterShell() {
             );
           })}
 
+          {/* Post-generation orientation: chapters */}
+          {chaptersJustGenerated && allChaptersGenerated && !story.blendedText && (
+            <div style={{
+              padding: '14px 18px',
+              marginBottom: 12,
+              background: 'var(--bg-secondary, #f8f8fa)',
+              borderRadius: 'var(--radius-sm, 6px)',
+              border: '1px solid var(--border-light, #e5e5ea)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              gap: 12,
+            }}>
+              <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
+                All five chapters are drafted. Each one has a job — Chapter 1 creates urgency, Chapter 2 is your value story, Chapter 3 builds trust, Chapter 4 proves it works, and Chapter 5 gives them a next step. Read through and click any chapter to edit it. When you're ready, <strong>Create Final Draft</strong> blends them into one smooth piece.
+              </p>
+              <button onClick={() => setChaptersJustGenerated(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, padding: '0 4px', flexShrink: 0 }}>&times;</button>
+            </div>
+          )}
+
           {/* Blend section */}
           {allChaptersGenerated && !generating && (
             <div className="fcs-blend-section">
@@ -669,6 +696,23 @@ export function FiveChapterShell() {
                     <button className="copy-btn" onClick={exportStory} title="Open printable version">Export</button>
                     <button className="copy-btn" onClick={shareStory} title="Create shareable read-only link">Share</button>
                   </div>
+                  {blendJustGenerated && (
+                    <div style={{
+                      padding: '12px 16px',
+                      marginBottom: 8,
+                      background: 'var(--bg-secondary, #f8f8fa)',
+                      borderRadius: 'var(--radius-sm, 6px)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 12,
+                    }}>
+                      <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
+                        Maria blended all five chapters into one {mediumLabel?.toLowerCase() || 'piece'} with smooth transitions. Click to edit anything directly. Use the edit box below to ask for changes — "make it shorter," "more emphasis on cost savings," "warmer tone."
+                      </p>
+                      <button onClick={() => setBlendJustGenerated(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, padding: '0 4px', flexShrink: 0 }}>&times;</button>
+                    </div>
+                  )}
                   {shareUrl && (
                     <div style={{ padding: '6px 12px', fontSize: 14, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span>Link copied!</span>

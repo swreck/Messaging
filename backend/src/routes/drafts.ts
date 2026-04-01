@@ -36,6 +36,7 @@ router.get('/hierarchy', async (req: Request, res: Response) => {
         where: includeArchived ? {} : { archived: false },
         include: {
           audience: { select: { id: true, name: true } },
+          tier1Statement: { select: { text: true } },
           stories: {
             select: { id: true, medium: true, stage: true, updatedAt: true },
             orderBy: { updatedAt: 'desc' },
@@ -66,6 +67,8 @@ router.get('/hierarchy', async (req: Request, res: Response) => {
         status: d.status,
         currentStep: d.currentStep,
         archived: (d as any).archived ?? false,
+        updatedAt: d.updatedAt.toISOString(),
+        tier1Text: d.tier1Statement?.text || null,
       },
       deliverables: d.stories.map(s => ({
         id: s.id,

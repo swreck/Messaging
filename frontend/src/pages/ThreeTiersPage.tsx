@@ -12,7 +12,7 @@ interface HierarchyOffering {
   audiences: {
     id: string;
     name: string;
-    threeTier: { id: string; status: string; currentStep: number; archived?: boolean };
+    threeTier: { id: string; status: string; currentStep: number; archived?: boolean; tier1Text?: string | null };
   }[];
 }
 
@@ -196,6 +196,17 @@ export function ThreeTiersPage() {
                 >
                   <div className="tt-card-audience">{aud.name}</div>
                   <div className="tt-card-offering">{offering.name}</div>
+                  {isComplete && aud.threeTier.tier1Text && (
+                    <div className="tt-card-tier1" style={{
+                      fontSize: 13,
+                      color: 'var(--text-secondary)',
+                      fontStyle: 'italic',
+                      lineHeight: 1.5,
+                      margin: '6px 0 4px',
+                    }}>
+                      "{aud.threeTier.tier1Text}"
+                    </div>
+                  )}
                   <div className="tt-card-progress">
                     {renderProgressDots(aud.threeTier.currentStep, aud.threeTier.status)}
                     <span className="tt-card-status">

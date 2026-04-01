@@ -286,10 +286,19 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
       )}
 
       {phase === 'done' && (
-        <div style={{ padding: '60px 0' }}>
+        <div style={{ padding: '48px 0' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>&#10003;</div>
           <h2>Your Three Tier is ready</h2>
-          <p className="step-description">Taking you there now...</p>
+          <p style={{
+            fontSize: 14,
+            lineHeight: 1.7,
+            color: 'var(--text-secondary)',
+            maxWidth: 480,
+            margin: '16px auto 0',
+            textAlign: 'center',
+          }}>
+            Maria mapped what {draft.audience.name} cares about to what {draft.offering.name} can deliver — one core message on top, supporting reasons below, and proof underneath each one.
+          </p>
         </div>
       )}
 

@@ -24,6 +24,10 @@ export const ACTION_ALIASES: Record<string, string> = {
   'edit_story_params': 'update_story_params',
   'generate_story': 'create_story',
   'new_story': 'create_story',
+  'start_draft': 'start_three_tier',
+  'create_draft': 'start_three_tier',
+  'new_draft': 'start_three_tier',
+  'begin_three_tier': 'start_three_tier',
 };
 
 // ─── Audience resolver ─────────────────────────────────────────
@@ -675,6 +679,36 @@ Write Chapter ${chNum}: "${ch.name}"`;
         refreshNeeded = true;
       }
 
+      // ─── Start Three Tier (create draft from offering + audience names) ─────
+      if (a.type === 'start_three_tier' && a.params.offeringName && a.params.audienceName) {
+        const scopeFilter = workspaceId ? { workspaceId } : { userId };
+        const offering = await prisma.offering.findFirst({
+          where: { ...scopeFilter, name: { contains: a.params.offeringName, mode: 'insensitive' as const } },
+        });
+        const audience = await prisma.audience.findFirst({
+          where: { ...scopeFilter, name: { contains: a.params.audienceName, mode: 'insensitive' as const } },
+        });
+        if (!offering) {
+          actionResult = `Could not find an offering called "${a.params.offeringName}"`;
+        } else if (!audience) {
+          actionResult = `Could not find an audience called "${a.params.audienceName}"`;
+        } else {
+          // Check for existing non-archived draft
+          const existing = await prisma.threeTierDraft.findFirst({
+            where: { offeringId: offering.id, audienceId: audience.id, archived: false },
+          });
+          if (existing) {
+            actionResult = `[NAVIGATE:/three-tier/${existing.id}] A Three Tier for ${offering.name} → ${audience.name} already exists`;
+          } else {
+            const draft = await prisma.threeTierDraft.create({
+              data: { offeringId: offering.id, audienceId: audience.id },
+            });
+            actionResult = `[NAVIGATE:/three-tier/${draft.id}] Started a Three Tier for ${offering.name} → ${audience.name}`;
+          }
+          refreshNeeded = true;
+        }
+      }
+
       // ─── Cross-workspace copy ─────────────────────────
       if (a.type === 'copy_audience_to_workspace' && a.params.audienceName && a.params.targetWorkspaceName) {
         // Find audience in current workspace
@@ -973,15 +1007,14 @@ export function buildActionList(context: ActionContext): string {
     actions.push('- delete_capabilities: Remove capabilities by position. Params: { positions: number[] } — 1-based positions');
   }
 
-  // Offerings listing page (no specific offering selected)
-  if (context.page === 'offerings' && !context.offeringId) {
-    actions.push('- create_offering: Create a new offering, optionally with initial capabilities. Params: { name: string, description?: string, capabilities?: string[] }');
-  }
+  // Create offering — available from any page (for quick-start and flexibility)
+  actions.push('- create_offering: Create a new offering, optionally with initial capabilities. Params: { name: string, description?: string, capabilities?: string[] }');
 
-  // Audiences listing page — create is always available here
-  if (context.page === 'audiences') {
-    actions.push('- create_audience: Create a new audience, optionally with initial priorities. Params: { name: string, description?: string, priorities?: string[] } — priorities is an ordered array of priority texts, rank follows array order');
-  }
+  // Create audience — available from any page (for quick-start and flexibility)
+  actions.push('- create_audience: Create a new audience, optionally with initial priorities. Params: { name: string, description?: string, priorities?: string[] } — priorities is an ordered array of priority texts, rank follows array order');
+
+  // Start a Three Tier — available from any page (for quick-start)
+  actions.push('- start_three_tier: Create a new Three Tier draft and navigate to coaching. Params: { offeringName: string, audienceName: string } — names are matched by partial, case-insensitive match');
 
   // Five Chapter Story actions
   if (context.storyId) {
