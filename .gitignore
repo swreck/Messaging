@@ -3,8 +3,7 @@ dist/
 .env
 .DS_Store
 *.log
-backend/public/*
-!backend/public/.gitkeep
+!backend/public/
 
 # Playwright
 /test-results/
