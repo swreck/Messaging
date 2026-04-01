@@ -53,6 +53,14 @@ function getBaseUrl(): string {
   return window.location.origin;
 }
 
+function displayRole(role: string): string {
+  if (role === 'editor') return 'Message Creator';
+  if (role === 'admin') return 'Admin';
+  if (role === 'owner') return 'Owner';
+  if (role === 'viewer') return 'Viewer';
+  return role;
+}
+
 export function WorkspacesPage() {
   const { user } = useAuth();
   const { switchWorkspace, reload } = useWorkspace();
@@ -355,7 +363,7 @@ export function WorkspacesPage() {
                     {ws.name}
                   </strong>
                 )}
-                <span className="badge">{ws.role}</span>
+                <span className="badge">{displayRole(ws.role)}</span>
                 <span className="workspace-card-meta">
                   {ws.memberCount} member{ws.memberCount !== 1 ? 's' : ''}
                 </span>
@@ -389,7 +397,7 @@ export function WorkspacesPage() {
                               {m.username[0].toUpperCase()}
                             </span>
                             <span className="workspace-member-name">{m.username}</span>
-                            <span className="workspace-member-role">{m.role}</span>
+                            <span className="workspace-member-role">{displayRole(m.role)}</span>
                             {isOwner(ws) && m.userId !== user?.userId && (
                               <button
                                 className="btn btn-ghost btn-sm btn-danger"
@@ -434,8 +442,9 @@ export function WorkspacesPage() {
                               onChange={e => setWsInviteRole(prev => ({ ...prev, [ws.id]: e.target.value }))}
                               className="workspace-role-select"
                             >
-                              <option value="editor">Editor</option>
+                              <option value="editor">Message Creator</option>
                               <option value="viewer">Viewer</option>
+                              {user?.isAdmin && <option value="admin">Admin</option>}
                             </select>
                             <button
                               className="btn btn-primary btn-sm"
@@ -477,7 +486,7 @@ export function WorkspacesPage() {
                               <div key={c.id} className="invite-pending-row">
                                 <span className="invite-pending-name">{c.inviteeName || 'Unnamed'}</span>
                                 <code className="invite-pending-code">{c.code}</code>
-                                <span className="invite-pending-role">{c.role}</span>
+                                <span className="invite-pending-role">{displayRole(c.role)}</span>
                                 <button
                                   className="btn btn-ghost btn-sm"
                                   onClick={() => handleCopyLink(`/join/${c.code}`)}
@@ -514,8 +523,9 @@ export function WorkspacesPage() {
                                 onChange={e => setAddRole(prev => ({ ...prev, [ws.id]: e.target.value }))}
                                 className="workspace-role-select"
                               >
-                                <option value="editor">Editor</option>
+                                <option value="editor">Message Creator</option>
                                 <option value="viewer">Viewer</option>
+                                {user?.isAdmin && <option value="admin">Admin</option>}
                               </select>
                               <button
                                 className="btn btn-primary btn-sm"
@@ -653,8 +663,9 @@ export function WorkspacesPage() {
                   value={globalInviteRole}
                   onChange={e => setGlobalInviteRole(e.target.value)}
                 >
-                  <option value="editor">Editor</option>
+                  <option value="editor">Message Creator</option>
                   <option value="viewer">Viewer</option>
+                  {user?.isAdmin && <option value="admin">Admin</option>}
                 </select>
               </div>
             )}

@@ -72,7 +72,7 @@ router.post('/register', async (req: Request, res: Response) => {
   const passwordHash = await bcryptjs.hash(password, 10);
 
   const user = await prisma.user.create({
-    data: { username, passwordHash },
+    data: { username, passwordHash, isAdmin: code.role === 'admin' },
   });
 
   // Mark invite code as used
@@ -88,7 +88,7 @@ router.post('/register', async (req: Request, res: Response) => {
       data: {
         workspaceId: code.workspaceId,
         userId: user.id,
-        role: code.role || 'editor',
+        role: code.role === 'admin' ? 'owner' : (code.role || 'editor'),
       },
     });
   } else {
