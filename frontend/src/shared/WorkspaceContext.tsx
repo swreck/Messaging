@@ -35,7 +35,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const loadWorkspaces = useCallback(async () => {
     if (!user) return;
     try {
-      const { workspaces: ws } = await api.get<{ workspaces: Workspace[] }>('/workspaces');
+      const endpoint = user.isAdmin ? '/workspaces/all' : '/workspaces';
+      const { workspaces: ws } = await api.get<{ workspaces: Workspace[] }>(endpoint);
       setWorkspaces(ws);
 
       // If no active workspace set, or active workspace no longer exists, pick the first one
