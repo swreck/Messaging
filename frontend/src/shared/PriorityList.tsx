@@ -154,37 +154,44 @@ export function PriorityList({
         </div>
         {showMotivatingFactor && isFirst && (
           <div className="priority-mf-wrapper">
-            <input
-              className="priority-mf-input priority-mf-top"
-              placeholder="Why is this most important to them?"
-              defaultValue={item.motivatingFactor}
-              onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
-            />
+            <div className={`driver-field ${item.motivatingFactor ? 'driver-drafted' : 'driver-ready'}`}>
+              <input
+                className="driver-input"
+                placeholder="Why is this so important to them?"
+                defaultValue={item.motivatingFactor}
+                onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
+              />
+              {!item.motivatingFactor && (
+                <svg className="driver-maria-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c06070" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                </svg>
+              )}
+            </div>
             <span className="priority-mf-label">Drives Chapter 1 of your stories</span>
           </div>
         )}
         {showMotivatingFactor && !isFirst && showMF && (
-          <input
-            className="priority-mf-input"
-            placeholder="Why is this important to them?"
-            defaultValue={item.motivatingFactor}
-            onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
-          />
+          <div className={`driver-field ${item.motivatingFactor ? 'driver-drafted' : 'driver-ready'}`}>
+            <input
+              className="driver-input"
+              placeholder="Why is this important to them?"
+              defaultValue={item.motivatingFactor}
+              onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
+            />
+            {!item.motivatingFactor && (
+              <svg className="driver-maria-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c06070" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+              </svg>
+            )}
+          </div>
         )}
         {showMotivatingFactor && !isFirst && !showMF && (
           <button
             className="priority-mf-expand"
             onClick={() => toggleMF(item.id)}
           >
-            + Add motivating factor
+            + Why is this important to them?
           </button>
-        )}
-        {showMotivatingFactor && !item.motivatingFactor && (isFirst || showMF) && (
-          <span className="mf-hint" onClick={() => {
-            if (!isFirst && !expandedMF.has(item.id)) toggleMF(item.id);
-          }}>
-            Why does this matter?
-          </span>
         )}
       </div>
     );

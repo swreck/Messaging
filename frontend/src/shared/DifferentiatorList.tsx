@@ -23,7 +23,6 @@ export function DifferentiatorList({
   const [showBanner, setShowBanner] = useState(false);
 
   async function handleReorder(newItems: OfferingElement[]) {
-    // Show info banner on first reorder
     if (!localStorage.getItem('maria-diff-reorder-info')) {
       setShowBanner(true);
     }
@@ -48,11 +47,31 @@ export function DifferentiatorList({
     onUpdate();
   }
 
+  async function updateMotivatingFactor(elementId: string, value: string) {
+    await api.put(`/offerings/${offeringId}/elements/${elementId}`, { motivatingFactor: value });
+  }
+
   function renderElement(item: OfferingElement, _index: number, { listeners, attributes }: DragHandleProps) {
+    const hasMF = !!item.motivatingFactor;
     return (
       <div className="differentiator-item">
         <span className="drag-handle" {...listeners} {...attributes}>⠿</span>
-        <span className="differentiator-text">{item.text}</span>
+        <div style={{ flex: 1 }}>
+          <span className="differentiator-text">{item.text}</span>
+          <div className={`mf-field ${hasMF ? 'mf-drafted' : 'mf-ready'}`}>
+            <input
+              className="mf-input"
+              placeholder="Why would someone care?"
+              defaultValue={item.motivatingFactor}
+              onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
+            />
+            {!hasMF && (
+              <svg className="mf-maria-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c06070" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+              </svg>
+            )}
+          </div>
+        </div>
         {allowRemove && (
           <button
             className="btn btn-ghost btn-sm btn-danger"

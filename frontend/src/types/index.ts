@@ -19,6 +19,7 @@ export interface OfferingElement {
   text: string;
   source: string;
   sortOrder: number;
+  motivatingFactor: string;
 }
 
 export interface Offering {

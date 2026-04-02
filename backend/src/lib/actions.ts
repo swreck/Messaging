@@ -371,10 +371,15 @@ export async function dispatchActions(
             for (const edit of a.params.edits) {
               const idx = edit.position - 1;
               if (idx >= 0 && idx < offering.elements.length) {
-                await prisma.offeringElement.update({
-                  where: { id: offering.elements[idx].id },
-                  data: { text: edit.text },
-                });
+                const updateData: Record<string, any> = {};
+                if (edit.text !== undefined) updateData.text = edit.text;
+                if (edit.motivatingFactor !== undefined) updateData.motivatingFactor = edit.motivatingFactor;
+                if (Object.keys(updateData).length > 0) {
+                  await prisma.offeringElement.update({
+                    where: { id: offering.elements[idx].id },
+                    data: updateData,
+                  });
+                }
                 editCount++;
               }
             }
@@ -1048,7 +1053,7 @@ export function buildActionList(context: ActionContext): string {
     actions.push('- edit_offering: Update the current offering name or description. Params: { name?: string, description?: string }');
   }
   actions.push('- add_capabilities: Add capabilities to an offering. Params: { texts: string[], offeringName?: string } — offeringName targets a specific offering by name (partial match OK). Required if not on an offering page.');
-  actions.push('- edit_capabilities: Rename/rewrite capabilities. Params: { edits: [{ position: number, text: string }], offeringName?: string } — position is 1-based.');
+  actions.push('- edit_capabilities: Update capabilities — rename text or set motivating factor. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }], offeringName?: string } — position is 1-based.');
   actions.push('- delete_capabilities: Remove capabilities by position. Params: { positions: number[], offeringName?: string } — 1-based positions.');
 
   // Create offering — available from any page (for quick-start and flexibility)

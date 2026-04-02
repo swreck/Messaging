@@ -2023,6 +2023,83 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .differentiator-item:last-of-type { border-bottom: none; }
 .differentiator-text { flex: 1; }
+
+/* Maria field system: bar + wash + icon */
+.mf-field {
+  position: relative;
+  margin-top: 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.3s, border-color 0.3s;
+}
+.mf-field.mf-ready {
+  border-left: 3px solid #c06070;
+  padding-left: 8px;
+}
+.mf-field.mf-drafted {
+  border-left: 3px solid #c06070;
+  padding-left: 8px;
+  background: rgba(192, 96, 112, 0.06);
+}
+.mf-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 24px 4px 0;
+  font-family: inherit;
+  line-height: 1.5;
+  outline: none;
+}
+.mf-input::placeholder { color: var(--text-tertiary); }
+.mf-input:focus { color: var(--text-primary); }
+.mf-maria-icon {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Driver field on priorities (same visual system) */
+.driver-field {
+  position: relative;
+  margin-top: 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.3s, border-color 0.3s;
+}
+.driver-field.driver-ready {
+  border-left: 3px solid #c06070;
+  padding-left: 8px;
+}
+.driver-field.driver-drafted {
+  border-left: 3px solid #c06070;
+  padding-left: 8px;
+  background: rgba(192, 96, 112, 0.06);
+}
+.driver-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 24px 4px 0;
+  font-family: inherit;
+  line-height: 1.5;
+  outline: none;
+}
+.driver-input::placeholder { color: var(--text-tertiary); }
+.driver-input:focus { color: var(--text-primary); }
+.driver-maria-icon {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .differentiator-add-form {
   display: flex;
   gap: 8px;

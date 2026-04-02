@@ -230,10 +230,12 @@ router.post('/suggest-mappings', requireEditor, async (req: Request, res: Respon
   }
 
   const userMessage = `PRIORITIES (ranked by importance):
-${draft.audience.priorities.map((p) => `- [ID: ${p.id}] [Rank ${p.rank}] "${p.text}" (Motivating factor: ${p.motivatingFactor || 'not specified'})`).join('\n')}
+${draft.audience.priorities.map((p) => `- [ID: ${p.id}] [Rank ${p.rank}] "${p.text}"${p.motivatingFactor ? ` (Driver: ${p.motivatingFactor})` : ''}`).join('\n')}
 
 CAPABILITIES/DIFFERENTIATORS:
-${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`;
+${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"${(e as any).motivatingFactor ? ` (Why someone would care: ${(e as any).motivatingFactor})` : ''}`).join('\n')}
+
+MAPPING GUIDE: A differentiator's "why someone would care" tells you which priority it should map to. When the motivating factor aligns with what the persona cares about, that's the connection.`;
 
   const result = await callAIWithJSON<{
     mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string }[];
@@ -267,7 +269,7 @@ router.post('/preview-mapping', requireEditor, async (req: Request, res: Respons
   }
 
   const mappingMessage = `PRIORITIES (ranked by importance):
-${draft.audience.priorities.map((p) => `- [ID: ${p.id}] [Rank ${p.rank}] "${p.text}" (Motivating factor: ${p.motivatingFactor || 'not specified'})`).join('\n')}
+${draft.audience.priorities.map((p) => `- [ID: ${p.id}] [Rank ${p.rank}] "${p.text}" ${p.motivatingFactor ? `(Driver: ${p.motivatingFactor})` : ''}`).join('\n')}
 
 CAPABILITIES/DIFFERENTIATORS:
 ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`;
@@ -332,7 +334,7 @@ router.post('/build-message', requireEditor, async (req: Request, res: Response)
 
   // Step 1: Suggest mappings
   const mappingMessage = `PRIORITIES (ranked by importance):
-${draft.audience.priorities.map((p) => `- [ID: ${p.id}] [Rank ${p.rank}] "${p.text}" (Motivating factor: ${p.motivatingFactor || 'not specified'})`).join('\n')}
+${draft.audience.priorities.map((p) => `- [ID: ${p.id}] [Rank ${p.rank}] "${p.text}" ${p.motivatingFactor ? `(Driver: ${p.motivatingFactor})` : ''}`).join('\n')}
 
 CAPABILITIES/DIFFERENTIATORS:
 ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`;
@@ -433,7 +435,7 @@ ${draft.audience.priorities
   .map((p) => {
     const group = byPriority.get(p.id)!;
     return `Priority [ID: ${p.id}] [Rank ${p.rank}]: "${p.text}"
-  Motivating factor: ${p.motivatingFactor || 'not specified'}
+  Driver (why this matters to them): ${p.motivatingFactor || 'not specified'}
   Mapped capabilities: ${group.elements.map((e: any) => `"${e.text}"`).join(', ')}`;
   })
   .join('\n\n')}
@@ -531,7 +533,7 @@ ${draft.audience.priorities
   .map((p) => {
     const group = byPriority.get(p.id)!;
     return `Priority [ID: ${p.id}] [Rank ${p.rank}]: "${p.text}"
-  Motivating factor: ${p.motivatingFactor || 'not specified'}
+  Driver (why this matters to them): ${p.motivatingFactor || 'not specified'}
   Mapped capabilities: ${group.elements.map((e: any) => `"${e.text}"`).join(', ')}`;
   })
   .join('\n\n')}
@@ -594,7 +596,7 @@ ${draft.audience.priorities
   .map((p) => {
     const group = byPriority.get(p.id)!;
     return `Priority [ID: ${p.id}] [Rank ${p.rank}]: "${p.text}"
-  Motivating factor: ${p.motivatingFactor || 'not specified'}
+  Driver (why this matters to them): ${p.motivatingFactor || 'not specified'}
   Mapped capabilities: ${group.elements.map((e) => `"${e.text}"`).join(', ')}`;
   })
   .join('\n\n')}
@@ -659,7 +661,7 @@ router.post('/refine-language', requireEditor, async (req: Request, res: Respons
   const userMessage = `TIER 1 STATEMENT TO REFINE:
 "${tier1Text}"
 Top priority (Rank 1): "${topPriority?.text || ''}"
-Motivating factor: "${topPriority?.motivatingFactor || 'not provided'}"
+Driver (why this matters to them): "${topPriority?.motivatingFactor || 'not provided'}"
 
 TIER 2 STATEMENTS TO REFINE:
 ${draft.tier2Statements.map((t2, i) => `[${i}] "${t2.text}"`).join('\n')}
@@ -872,11 +874,11 @@ ${story.emphasis ? `EMPHASIS: ${story.emphasis}` : ''}
 
 THREE TIER MESSAGE:
 Tier 1: "${story.draft.tier1Statement?.text || ''}"
-${story.draft.tier2Statements.map((t2, i) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}", Motivating factor: "${t2.priority?.motivatingFactor || ''}")
+${story.draft.tier2Statements.map((t2, i) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}"${t2.priority?.motivatingFactor ? `, Driver: "${t2.priority.motivatingFactor}"` : ''})
   Proof: ${t2.tier3Bullets.map((t3) => t3.text).join(', ')}`).join('\n')}
 
 AUDIENCE PRIORITIES:
-${story.draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}" — Why important: "${p.motivatingFactor}" — Audience thinks: "${p.whatAudienceThinks}"`).join('\n')}
+${story.draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"${p.motivatingFactor ? ` — Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
 ${story.chapters.filter((c) => c.chapterNum < chapterNum).map((c) => `CHAPTER ${c.chapterNum} (already written): ${c.content.substring(0, 200)}...`).join('\n')}
 

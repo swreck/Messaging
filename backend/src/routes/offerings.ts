@@ -161,7 +161,7 @@ router.put('/:id/elements/reorder', requireEditor, async (req: Request, res: Res
 
 // PUT /api/offerings/:offeringId/elements/:elementId
 router.put('/:offeringId/elements/:elementId', requireEditor, async (req: Request, res: Response) => {
-  const { text } = req.body;
+  const { text, motivatingFactor } = req.body;
   const element = await prisma.offeringElement.findFirst({
     where: { id: param(req.params.elementId), offering: { id: param(req.params.offeringId), workspaceId: req.workspaceId } },
   });
@@ -170,9 +170,13 @@ router.put('/:offeringId/elements/:elementId', requireEditor, async (req: Reques
     return;
   }
 
+  const updateData: Record<string, any> = {};
+  if (text !== undefined) updateData.text = text;
+  if (motivatingFactor !== undefined) updateData.motivatingFactor = motivatingFactor;
+
   const updated = await prisma.offeringElement.update({
     where: { id: param(req.params.elementId) },
-    data: { text: text ?? element.text },
+    data: Object.keys(updateData).length > 0 ? updateData : { text: element.text },
   });
   res.json({ element: updated });
 });

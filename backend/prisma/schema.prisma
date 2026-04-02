@@ -83,12 +83,13 @@ model Offering {
 }
 
 model OfferingElement {
-  id         String   @id @default(cuid())
-  offeringId String
-  offering   Offering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
-  text       String
-  source     String   @default("manual") // manual | ai_extracted
-  sortOrder  Int      @default(0)
+  id               String   @id @default(cuid())
+  offeringId       String
+  offering         Offering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+  text             String
+  source           String   @default("manual") // manual | ai_extracted
+  sortOrder        Int      @default(0)
+  motivatingFactor String   @default("") // Why would someone crave this differentiator?
 
   mappings Mapping[]
 }
