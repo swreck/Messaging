@@ -763,7 +763,6 @@ Write Chapter ${chNum}: "${ch.name}"`;
 
       if (a.type === 'edit_tier' && ctx.draftId && a.params.instruction) {
         try {
-          // Fetch the draft with full context
           const editDraft = await prisma.threeTierDraft.findFirst({
             where: { id: ctx.draftId },
             include: {
@@ -771,13 +770,97 @@ Write Chapter ${chNum}: "${ch.name}"`;
               tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
               audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
               offering: { include: { elements: true } },
+              mappings: true,
             },
           });
           if (editDraft) {
-            const { callAIWithJSON } = await import('../services/ai.js');
-            const { DIRECTION_SYSTEM } = await import('../prompts/generation.js');
+            const instruction = a.params.instruction.toLowerCase();
+            const isStructural = /restructur|add.*column|remove.*column|delete.*column|\d+\s*column|fewer column|more column/i.test(instruction);
 
-            const dirMessage = `USER'S DIRECTION: ${a.params.instruction}
+            if (isStructural) {
+              // Structural change: snapshot current state, then regenerate with direction
+              await prisma.$transaction(async (tx: any) => {
+                // Save snapshot
+                const maxVer = await tx.tableVersion.aggregate({ where: { draftId: ctx.draftId }, _max: { versionNum: true } });
+                await tx.tableVersion.create({
+                  data: {
+                    draftId: ctx.draftId!,
+                    snapshot: {
+                      tier1: editDraft.tier1Statement?.text || '',
+                      tier2: editDraft.tier2Statements.map((t2: any) => ({
+                        text: t2.text, priorityId: t2.priorityId, categoryLabel: t2.categoryLabel || '',
+                        tier3: t2.tier3Bullets.map((t3: any) => t3.text),
+                      })),
+                    },
+                    label: 'Before restructure (via Maria)',
+                    versionNum: (maxVer._max?.versionNum ?? 0) + 1,
+                  },
+                });
+
+                // Delete existing tiers
+                await tx.tier2Statement.deleteMany({ where: { draftId: ctx.draftId } });
+                await tx.tier1Statement.deleteMany({ where: { draftId: ctx.draftId } });
+              });
+
+              // Regenerate with direction as context
+              const { callAIWithJSON: callAI2 } = await import('../services/ai.js');
+              const { CONVERT_LINES_SYSTEM } = await import('../prompts/generation.js');
+
+              const mappedPriorities = editDraft.mappings.reduce((acc: any, m: any) => {
+                if (!acc[m.priorityId]) acc[m.priorityId] = [];
+                acc[m.priorityId].push(m.elementId);
+                return acc;
+              }, {});
+
+              const convertMsg = `CONFIRMED MAPPINGS:
+${editDraft.audience.priorities.map((p: any) => {
+  const elementIds = mappedPriorities[p.id] || [];
+  const elements = editDraft.offering.elements.filter((e: any) => elementIds.includes(e.id));
+  return `Priority [Rank ${p.rank}]: "${p.text}"
+  Mapped capabilities: ${elements.map((e: any) => `"${e.text}"`).join(', ') || '(none)'}`;
+}).join('\n')}
+
+ORPHAN CAPABILITIES (not mapped to any priority):
+${editDraft.offering.elements.filter((e: any) => !editDraft.mappings.some((m: any) => m.elementId === e.id)).map((e: any) => `"${e.text}"`).join(', ') || '(none)'}
+
+ADDITIONAL DIRECTION FROM USER: ${a.params.instruction}`;
+
+              const rank1 = editDraft.audience.priorities.find((p: any) => p.rank === 1);
+              const reminder = rank1 ? `\n\n══ CRITICAL ══\nYour Tier 1 MUST begin with the Rank 1 priority text: "${rank1.text}"` : '';
+
+              const result = await callAI2<{
+                tier1: { text: string; priorityId: string };
+                tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
+              }>(CONVERT_LINES_SYSTEM, convertMsg + reminder, 'elite');
+
+              // Apply new tiers
+              await prisma.tier1Statement.create({ data: { draftId: ctx.draftId!, text: result.tier1.text } });
+              for (let i = 0; i < result.tier2.length; i++) {
+                const t2 = await prisma.tier2Statement.create({
+                  data: {
+                    draftId: ctx.draftId!,
+                    text: result.tier2[i].text,
+                    sortOrder: i,
+                    priorityId: result.tier2[i].priorityId || null,
+                    categoryLabel: result.tier2[i].categoryLabel || '',
+                  },
+                });
+                for (let j = 0; j < (result.tier2[i].tier3 || []).length; j++) {
+                  await prisma.tier3Bullet.create({
+                    data: { tier2Id: t2.id, text: result.tier2[i].tier3[j], sortOrder: j },
+                  });
+                }
+              }
+
+              actionResult = `Restructured Three Tier — ${result.tier2.length} columns generated. A checkpoint was saved automatically.`;
+              refreshNeeded = true;
+
+            } else {
+              // Text-only change: use direction system
+              const { callAIWithJSON } = await import('../services/ai.js');
+              const { DIRECTION_SYSTEM } = await import('../prompts/generation.js');
+
+              const dirMessage = `USER'S DIRECTION: ${a.params.instruction}
 
 CURRENT THREE TIER TABLE:
 Tier 1: "${editDraft.tier1Statement?.text || '(empty)'}"
@@ -792,33 +875,33 @@ ${editDraft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}"`).
 OFFERING CAPABILITIES:
 ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
 
-            const dirResult = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
+              const dirResult = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
 
-            // Apply suggestions directly
-            let applied = 0;
-            for (const s of dirResult.suggestions || []) {
-              if (s.cell === 'tier1' && editDraft.tier1Statement) {
-                await prisma.tier1Statement.update({ where: { id: editDraft.tier1Statement.id }, data: { text: s.suggested } });
-                applied++;
-              } else if (s.cell.startsWith('tier2-')) {
-                const idx = parseInt(s.cell.split('-')[1]);
-                if (editDraft.tier2Statements[idx]) {
-                  await prisma.tier2Statement.update({ where: { id: editDraft.tier2Statements[idx].id }, data: { text: s.suggested } });
+              let applied = 0;
+              for (const s of dirResult.suggestions || []) {
+                if (s.cell === 'tier1' && editDraft.tier1Statement) {
+                  await prisma.tier1Statement.update({ where: { id: editDraft.tier1Statement.id }, data: { text: s.suggested } });
                   applied++;
-                }
-              } else if (s.cell.startsWith('tier3-')) {
-                const parts = s.cell.split('-');
-                const t2Idx = parseInt(parts[1]);
-                const t3Idx = parseInt(parts[2]);
-                const t2 = editDraft.tier2Statements[t2Idx];
-                if (t2 && t2.tier3Bullets[t3Idx]) {
-                  await prisma.tier3Bullet.update({ where: { id: t2.tier3Bullets[t3Idx].id }, data: { text: s.suggested } });
-                  applied++;
+                } else if (s.cell.startsWith('tier2-')) {
+                  const idx = parseInt(s.cell.split('-')[1]);
+                  if (editDraft.tier2Statements[idx]) {
+                    await prisma.tier2Statement.update({ where: { id: editDraft.tier2Statements[idx].id }, data: { text: s.suggested } });
+                    applied++;
+                  }
+                } else if (s.cell.startsWith('tier3-')) {
+                  const parts = s.cell.split('-');
+                  const t2Idx = parseInt(parts[1]);
+                  const t3Idx = parseInt(parts[2]);
+                  const t2 = editDraft.tier2Statements[t2Idx];
+                  if (t2 && t2.tier3Bullets[t3Idx]) {
+                    await prisma.tier3Bullet.update({ where: { id: t2.tier3Bullets[t3Idx].id }, data: { text: s.suggested } });
+                    applied++;
+                  }
                 }
               }
+              actionResult = applied > 0 ? `Updated ${applied} cell${applied !== 1 ? 's' : ''} based on your direction` : 'Direction processed but no changes were needed';
+              refreshNeeded = true;
             }
-            actionResult = applied > 0 ? `Updated ${applied} cell${applied !== 1 ? 's' : ''} based on your direction` : 'Direction processed but no changes were needed';
-            refreshNeeded = true;
           }
         } catch (err: any) {
           actionResult = `Could not apply direction: ${err.message || 'unknown error'}`;

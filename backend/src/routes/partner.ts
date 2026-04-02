@@ -10,8 +10,10 @@ const router = Router();
 router.use(requireAuth);
 router.use(requireWorkspace);
 
-// Channel marker to distinguish partner messages from the old page assistant
-const PARTNER_CHANNEL = { channel: 'partner' };
+// Channel marker — now includes workspaceId for conversation partitioning
+function partnerChannel(workspaceId: string) {
+  return { channel: 'partner', workspaceId };
+}
 
 // ─── Helpers ─────────────────────────────────────────────
 
@@ -128,7 +130,7 @@ interface ReturnContext {
 
 async function buildReturnContext(workspaceId: string): Promise<ReturnContext | null> {
   const recentDraft = await prisma.threeTierDraft.findFirst({
-    where: { offering: { workspaceId } },
+    where: { offering: { workspaceId }, archived: false },
     orderBy: { updatedAt: 'desc' },
     include: {
       offering: { select: { name: true } },
@@ -382,7 +384,10 @@ router.get('/history', async (req: Request, res: Response) => {
   const messages = await prisma.assistantMessage.findMany({
     where: {
       userId: req.user!.userId,
-      context: { path: ['channel'], equals: 'partner' },
+      AND: [
+        { context: { path: ['channel'], equals: 'partner' } },
+        { context: { path: ['workspaceId'], equals: req.workspaceId! } },
+      ],
     },
     select: { role: true, content: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
@@ -401,13 +406,17 @@ router.post('/message', async (req: Request, res: Response) => {
   }
 
   const userId = req.user!.userId;
+  const workspaceId = req.workspaceId!;
   const ctx: ActionContext = context || {};
 
-  // Load conversation history (last 40 messages)
+  // Load conversation history (last 40 messages, scoped to current workspace)
   const history = await prisma.assistantMessage.findMany({
     where: {
       userId,
-      context: { path: ['channel'], equals: 'partner' },
+      AND: [
+        { context: { path: ['channel'], equals: 'partner' } },
+        { context: { path: ['workspaceId'], equals: workspaceId } },
+      ],
     },
     select: { role: true, content: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
@@ -419,7 +428,6 @@ router.post('/message', async (req: Request, res: Response) => {
   const { displayName } = await getPartnerSettings(userId);
 
   // Build work summary and context
-  const workspaceId = req.workspaceId!;
   const [workSummary, surfacingHint, offeringCount, audienceCount, membership] = await Promise.all([
     buildWorkSummary(workspaceId),
     history.length === 0 ? buildSurfacingHint(workspaceId) : Promise.resolve(undefined),
@@ -476,7 +484,7 @@ router.post('/message', async (req: Request, res: Response) => {
   if (normalizedActions.length === 1 && normalizedActions[0].type === 'read_page') {
     // Store the user message but not the response yet (will retry with page content)
     await prisma.assistantMessage.create({
-      data: { userId, role: 'user', content: message, context: PARTNER_CHANNEL },
+      data: { userId, role: 'user', content: message, context: partnerChannel(workspaceId) },
     });
 
     res.json({
@@ -516,8 +524,8 @@ router.post('/message', async (req: Request, res: Response) => {
 
   await prisma.assistantMessage.createMany({
     data: [
-      { userId, role: 'user', content: message, context: PARTNER_CHANNEL },
-      { userId, role: 'assistant', content: storedResponse, context: PARTNER_CHANNEL },
+      { userId, role: 'user', content: message, context: partnerChannel(workspaceId) },
+      { userId, role: 'assistant', content: storedResponse, context: partnerChannel(workspaceId) },
     ],
   });
 
@@ -537,12 +545,15 @@ router.post('/page-content', async (req: Request, res: Response) => {
   res.json({ content });
 });
 
-// DELETE /api/partner/history — clear partner conversation only
+// DELETE /api/partner/history — clear partner conversation for current workspace
 router.delete('/history', async (req: Request, res: Response) => {
   await prisma.assistantMessage.deleteMany({
     where: {
       userId: req.user!.userId,
-      context: { path: ['channel'], equals: 'partner' },
+      AND: [
+        { context: { path: ['channel'], equals: 'partner' } },
+        { context: { path: ['workspaceId'], equals: req.workspaceId! } },
+      ],
     },
   });
   res.json({ success: true });
