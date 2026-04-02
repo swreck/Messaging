@@ -230,9 +230,14 @@ export function DashboardPage() {
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
                     {d.offeringName} → {d.audienceName}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', flexShrink: 0, marginLeft: 12 }}>
-                    {d.deliverableCount > 0 ? `${d.deliverableCount} stor${d.deliverableCount === 1 ? 'y' : 'ies'}` : ''}
-                  </div>
+                  {d.deliverableCount > 0 && (
+                    <div
+                      style={{ fontSize: 12, color: 'var(--accent, #007aff)', flexShrink: 0, marginLeft: 12, cursor: 'pointer' }}
+                      onClick={e => { e.stopPropagation(); navigate(`/five-chapter/${d.draftId}`); }}
+                    >
+                      {d.deliverableCount} stor{d.deliverableCount === 1 ? 'y' : 'ies'} →
+                    </div>
+                  )}
                 </div>
                 {d.tier1Text && (
                   <div style={{

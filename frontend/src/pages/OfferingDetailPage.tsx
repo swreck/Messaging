@@ -7,10 +7,18 @@ import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
 import type { Offering } from '../types';
 
+interface LinkedDraft {
+  id: string;
+  audienceName: string;
+  currentStep: number;
+  status: string;
+}
+
 export function OfferingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [offering, setOffering] = useState<Offering | null>(null);
+  const [linkedDrafts, setLinkedDrafts] = useState<LinkedDraft[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [showModal, setShowModal] = useState(false);
@@ -29,9 +37,22 @@ export function OfferingDetailPage() {
   async function loadData() {
     if (!offering) setLoading(true);
     try {
-      const { offerings } = await api.get<{ offerings: Offering[] }>('/offerings');
-      const found = offerings.find(o => o.id === id);
+      const [offRes, hierRes] = await Promise.all([
+        api.get<{ offerings: Offering[] }>('/offerings'),
+        api.get<{ hierarchy: { id: string; audiences: { name: string; threeTier: { id: string; currentStep: number; status: string } }[] }[] }>('/drafts/hierarchy'),
+      ]);
+      const found = offRes.offerings.find(o => o.id === id);
       setOffering(found || null);
+
+      const hierOffering = hierRes.hierarchy.find(h => h.id === id);
+      if (hierOffering) {
+        setLinkedDrafts(hierOffering.audiences.map(a => ({
+          id: a.threeTier.id,
+          audienceName: a.name,
+          currentStep: a.threeTier.currentStep,
+          status: a.threeTier.status,
+        })));
+      }
     } finally {
       setLoading(false);
     }
@@ -107,6 +128,35 @@ export function OfferingDetailPage() {
         allowAdd={true}
         allowRemove={true}
       />
+
+      {linkedDrafts.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Three Tier Messages</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {linkedDrafts.map(d => (
+              <div
+                key={d.id}
+                onClick={() => navigate(`/three-tier/${d.id}`)}
+                style={{
+                  padding: '10px 14px',
+                  background: 'var(--bg-secondary, #f8f8fa)',
+                  borderRadius: 'var(--radius-sm, 6px)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: 14,
+                }}
+              >
+                <span style={{ color: 'var(--text-primary)' }}>{d.audienceName}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                  {d.status === 'complete' || d.currentStep === 5 ? 'Complete' : `Step ${d.currentStep}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title="Edit Offering">
         <form onSubmit={save}>

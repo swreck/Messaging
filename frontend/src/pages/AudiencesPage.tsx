@@ -188,7 +188,7 @@ export function AudiencesPage() {
       <header className="page-header">
         <div>
           <h1>Audiences</h1>
-          <p className="page-description">Your target audiences and what they care about most</p>
+          <p className="page-description">The people you're building messaging for</p>
         </div>
         <button className="btn btn-primary" onClick={openNew}>Add Audience</button>
       </header>

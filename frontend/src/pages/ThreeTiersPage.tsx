@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
-import type { Offering, DraftSummary } from '../types';
+import type { Offering, DraftSummary, ThreeTierDraft } from '../types';
 
 interface HierarchyOffering {
   id: string;
@@ -28,6 +28,12 @@ export function ThreeTiersPage() {
   const [selectedAudienceId, setSelectedAudienceId] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [archivedHierarchy, setArchivedHierarchy] = useState<HierarchyOffering[]>([]);
+
+  // Compare
+  const [compareSelection, setCompareSelection] = useState<Set<string>>(new Set());
+  const [showCompare, setShowCompare] = useState(false);
+  const [compareDrafts, setCompareDrafts] = useState<[ThreeTierDraft, ThreeTierDraft] | null>(null);
+  const [loadingCompare, setLoadingCompare] = useState(false);
 
   // Inline create within the modal
   const [creatingOffering, setCreatingOffering] = useState(false);
@@ -116,6 +122,36 @@ export function ThreeTiersPage() {
     return allAudiences.filter(a => !usedIds.has(a.id));
   }
 
+  function toggleCompareSelect(draftId: string) {
+    setCompareSelection(prev => {
+      const next = new Set(prev);
+      if (next.has(draftId)) {
+        next.delete(draftId);
+      } else if (next.size < 2) {
+        next.add(draftId);
+      }
+      return next;
+    });
+  }
+
+  async function openCompare() {
+    const ids = Array.from(compareSelection);
+    if (ids.length !== 2) return;
+    setLoadingCompare(true);
+    setShowCompare(true);
+    try {
+      const [d1, d2] = await Promise.all([
+        api.get<{ draft: ThreeTierDraft }>(`/drafts/${ids[0]}`),
+        api.get<{ draft: ThreeTierDraft }>(`/drafts/${ids[1]}`),
+      ]);
+      setCompareDrafts([d1.draft, d2.draft]);
+    } catch {
+      setShowCompare(false);
+    } finally {
+      setLoadingCompare(false);
+    }
+  }
+
   async function inlineCreateOffering() {
     if (!newOfferingName.trim()) return;
     try {
@@ -201,7 +237,7 @@ export function ThreeTiersPage() {
       <div className="page-container">
         <header className="page-header">
           <h1>3 Tier Messages</h1>
-          <p className="page-description">Value hierarchies built from your offerings and audiences</p>
+          <p className="page-description">Your messaging frameworks</p>
         </header>
         <div className="empty-state empty-state-enhanced">
           <div className="empty-icon">💬</div>
@@ -221,9 +257,17 @@ export function ThreeTiersPage() {
       <header className="page-header">
         <div>
           <h1>3 Tier Messages</h1>
-          <p className="page-description">Value hierarchies built from your offerings and audiences</p>
+          <p className="page-description">Your messaging frameworks</p>
         </div>
-        <button className="btn btn-primary" onClick={() => openNewModal()}>New Three Tier</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {compareSelection.size === 2 && (
+            <button className="btn btn-secondary" onClick={openCompare}>Compare Selected</button>
+          )}
+          {compareSelection.size > 0 && compareSelection.size < 2 && (
+            <span style={{ fontSize: 13, color: 'var(--text-tertiary)', alignSelf: 'center' }}>Select one more to compare</span>
+          )}
+          <button className="btn btn-primary" onClick={() => openNewModal()}>New Three Tier</button>
+        </div>
       </header>
 
       {offeringsWithDrafts.map(offering => (
@@ -237,8 +281,22 @@ export function ThreeTiersPage() {
                   className="tt-card"
                   onClick={() => navigate(`/three-tier/${aud.threeTier.id}`)}
                 >
-                  <div className="tt-card-audience">{aud.name}</div>
-                  <div className="tt-card-offering">{offering.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {isComplete && (
+                      <input
+                        type="checkbox"
+                        checked={compareSelection.has(aud.threeTier.id)}
+                        onChange={() => toggleCompareSelect(aud.threeTier.id)}
+                        onClick={e => e.stopPropagation()}
+                        title="Select for comparison"
+                        style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                      />
+                    )}
+                    <div>
+                      <div className="tt-card-audience">{aud.name}</div>
+                      <div className="tt-card-offering">{offering.name}</div>
+                    </div>
+                  </div>
                   {isComplete && aud.threeTier.tier1Text && (
                     <div className="tt-card-tier1" style={{
                       fontSize: 13,
@@ -414,6 +472,52 @@ export function ThreeTiersPage() {
             Start Building
           </button>
         </div>
+      </Modal>
+
+      <Modal
+        open={showCompare}
+        onClose={() => { setShowCompare(false); setCompareDrafts(null); }}
+        title="Compare Three Tiers"
+        className="modal-wide"
+      >
+        {loadingCompare && <div style={{ padding: 40, textAlign: 'center' }}><Spinner size={24} /></div>}
+        {compareDrafts && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, fontSize: 14 }}>
+            {compareDrafts.map((d, i) => (
+              <div key={i}>
+                <div style={{ fontWeight: 600, marginBottom: 12, color: 'var(--text-primary)' }}>
+                  {d.offering.name} → {d.audience.name}
+                </div>
+
+                {d.tier1Statement && (
+                  <div style={{
+                    padding: '10px 14px',
+                    background: 'var(--bg-secondary, #f8f8fa)',
+                    borderRadius: 'var(--radius-sm, 6px)',
+                    marginBottom: 12,
+                    fontStyle: 'italic',
+                    lineHeight: 1.6,
+                  }}>
+                    {d.tier1Statement.text}
+                  </div>
+                )}
+
+                {d.tier2Statements.map((t2, j) => (
+                  <div key={j} style={{ marginBottom: 10 }}>
+                    {t2.categoryLabel && (
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
+                        {t2.categoryLabel}
+                      </div>
+                    )}
+                    <div style={{ lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+                      {t2.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
     </div>
   );

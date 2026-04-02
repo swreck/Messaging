@@ -136,7 +136,7 @@ export function OfferingsPage() {
       <header className="page-header">
         <div>
           <h1>Offerings</h1>
-          <p className="page-description">Your products and services, and what makes them different</p>
+          <p className="page-description">What you're building messaging for</p>
         </div>
         <button className="btn btn-primary" onClick={openNew}>Add Offering</button>
       </header>

@@ -103,7 +103,7 @@ export function FiveChaptersPage() {
     <div className="page-container">
       <header className="page-header">
         <h1>5 Chapter Stories</h1>
-        <p className="page-description">Narrative stories generated from completed Three Tier messages</p>
+        <p className="page-description">Stories built from your Three Tiers</p>
       </header>
 
       {!hasAnyContent && (
