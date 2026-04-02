@@ -25,6 +25,7 @@ async function getPartnerSettings(userId: string) {
     username: user?.username || '',
     displayName: settings.partner?.displayName as string | undefined,
     introduced: !!settings.partner?.introduced,
+    introStep: (settings.partner?.introStep as number) ?? 0,
     lastVisitAt: settings.partner?.lastVisitAt as string | undefined,
   };
 }
@@ -183,7 +184,7 @@ async function buildSurfacingHint(workspaceId: string): Promise<string | undefin
 // GET /api/partner/status — check intro state, return context if useful
 router.get('/status', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { username, displayName, introduced, lastVisitAt } = await getPartnerSettings(userId);
+  const { username, displayName, introduced, introStep, lastVisitAt } = await getPartnerSettings(userId);
 
   let returnContext: ReturnContext | null = null;
 
@@ -221,10 +222,10 @@ router.get('/status', async (req: Request, res: Response) => {
     // Non-critical
   }
 
-  res.json({ username, displayName, introduced, returnContext });
+  res.json({ username, displayName, introduced, introStep, returnContext });
 });
 
-// PUT /api/partner/name — store display name and mark as introduced
+// PUT /api/partner/name — store display name (does NOT complete intro)
 router.put('/name', async (req: Request, res: Response) => {
   const { displayName } = req.body;
   if (!displayName || typeof displayName !== 'string') {
@@ -246,7 +247,7 @@ router.put('/name', async (req: Request, res: Response) => {
         partner: {
           ...current.partner,
           displayName,
-          introduced: true,
+          introStep: Math.max(current.partner?.introStep || 0, 1),
           lastVisitAt: new Date().toISOString(),
         },
       },
@@ -254,6 +255,44 @@ router.put('/name', async (req: Request, res: Response) => {
   });
 
   res.json({ success: true, displayName });
+});
+
+// PUT /api/partner/intro-step — advance or complete the intro
+router.put('/intro-step', async (req: Request, res: Response) => {
+  const { step, dismiss } = req.body;
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { settings: true },
+  });
+  const current = (user?.settings as Record<string, any>) || {};
+
+  if (dismiss) {
+    // Dismiss = intro gone forever
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: {
+        settings: {
+          ...current,
+          partner: { ...current.partner, introduced: true, introStep: 4, lastVisitAt: new Date().toISOString() },
+        },
+      },
+    });
+  } else if (typeof step === 'number') {
+    // Advance to a specific step
+    const introduced = step >= 4;
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: {
+        settings: {
+          ...current,
+          partner: { ...current.partner, introStep: step, introduced, lastVisitAt: new Date().toISOString() },
+        },
+      },
+    });
+  }
+
+  res.json({ success: true });
 });
 
 // GET /api/partner/history — load persistent conversation
