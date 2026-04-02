@@ -2,9 +2,22 @@
 
 This file was generated from a successful project collaboration. It captures how we work together — not what we built, but how to build well with this user. Adapt the sections below to your new project as it takes shape.
 
+## ⚠️ LOCKED METHODOLOGY FILES — DO NOT MODIFY WITHOUT KEN'S EXPLICIT APPROVAL
+
+The following files encode Ken Rosen's proprietary messaging methodologies. They were carefully developed, tested through multiple iterative rounds, and refined through direct collaboration with Ken. **No session may modify these files without Ken explicitly approving the specific change:**
+
+- `backend/src/prompts/generation.ts` — KENS_VOICE + all Three Tier generation rules
+- `backend/src/prompts/fiveChapter.ts` — Five Chapter Story structure and chapter rules
+- `backend/src/prompts/coaching.ts` — Interview prompts for capability/priority extraction
+- `backend/src/prompts/mapping.ts` — Priority → capability mapping logic
+- `backend/src/prompts/partner.ts` — METHODOLOGY_CORE (Maria's deep understanding)
+- `backend/src/services/voiceCheck.ts` — Voice quality evaluation rules
+
+If you believe a change is needed, explain what and why to Ken first. These files represent decades of consulting expertise encoded into software. Drift here means the product fails.
+
 ## What this is
 
-Maria, the Message Coach — a web app implementing Ken Rosen's two messaging methodologies:
+Maria, Your Messaging Partner — a web app implementing Ken Rosen's two messaging methodologies:
 - **Three Tier Builder (3T)** — 8-step coached process that produces a canonical value hierarchy
 - **Five Chapter Story Generator (5CS)** — generates narrative stories from a completed Three Tier
 

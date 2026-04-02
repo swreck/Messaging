@@ -1,49 +1,79 @@
 import { KENS_VOICE } from './generation.js';
 import { buildActionList, type ActionContext } from '../lib/actions.js';
 
-// Methodology reference
+// Methodology reference — deep understanding, not rules
+// ⚠️ LOCKED: Do not modify without Ken Rosen's explicit approval.
 const METHODOLOGY_CORE = `
-═══ CORE CONCEPTS ═══
+═══ HOW PEOPLE MAKE DECISIONS ═══
 
-AUDIENCES & PRIORITIES:
-- An audience is a specific group you're trying to persuade.
-- Priorities are what the audience cares about most — in THEIR language. Priorities pull; capabilities do not compete.
-- Priorities are ranked. The #1 priority becomes Tier 1.
-- A motivating factor answers "Why is this priority so important?" — captures the deeper business or personal reason.
+People decide based on what THEY care about, not what you offer. A messaging framework starts from the audience's priorities — their strategic concerns, in their own words — and connects those to what the offering can deliver.
 
-OFFERINGS & CAPABILITIES:
-- An offering is your product or service.
-- Capabilities are what your offering can do.
-- Mapping goes ONE direction: priority → capability.
+Priorities PULL. Capabilities do not compete. The direction is always: what does this audience care about → which of our capabilities addresses that? Never the reverse.
 
-═══ THREE TIER MESSAGE ═══
+A motivating factor is WHY a priority matters at a deeper level. "Fast pathology results" is the priority. "In oncology, faster results mean faster treatment decisions — and that directly affects whether patients survive" is the motivating factor. Without the motivating factor, you're stating a preference. With it, you understand the stakes.
 
-TIER 1 — The Result (one statement):
-- The #1 ranked audience priority as a value statement.
-- Format: "You get [priority] because [differentiator(s)]"
-- Under 20 words.
+═══ THE THREE TIER MESSAGE ═══
 
-TIER 2 — The Reasons (5-6 columns):
-- Each maps a priority to the capability that delivers it.
-- Column order: Focus → Product → ROI → Support → Social Proof
-- Under 20 words each. No transitions between columns.
+A Three Tier is built entirely of value statements. Every value statement follows the same canonical form:
 
-TIER 3 — The Proof (2-4 bullets per column):
-- PROOF ONLY. Specific, verifiable hard data. 1-6 words each.
-- The test: could a skeptic verify this independently?
+  "You get [audience's priority] because [your differentiated capability]"
 
-═══ FIVE CHAPTER STORY ═══
+The Three Tier arranges these statements by importance for a specific audience. The SAME offering might produce different Three Tiers for different audiences — same value statements, different arrangement — because different people care about different things most.
 
-Takes a Three Tier and turns it into narrative for a specific medium. Five chapters, always in this order:
+TIER 1 — The most important value statement for this audience.
 
-1. "You Need This Category" — Make the status quo unattractive. Category-level only, never mention the company.
-2. "You Need Our Version" — The "let me tell you about us" chapter. Tier 2 becomes the backbone.
-3. "We'll Hold Your Hand" — Eliminate risk. Concrete support details.
-4. "You're Not Alone" — Show similar organizations succeeding. Problem → solution → result.
-5. "Let's Get Started" — Call to action. First 1-3 concrete, simple steps.
+Three levels of quality:
+- ACCEPTABLE: The #1 priority in canonical form. "You get fast pathology results because Slideflow delivers analysis in under a minute." Correct, clear, functional.
+- BETTER: Smoothed into natural language. Less formulaic, same substance. Sounds like a person, not a template.
+- BEST: A Thanksgiving. One sentence that keeps the #1 priority emphasis but elegantly hints at the cumulative value of the entire offering. The audience hears not just the top priority but gets a sense of the whole — without a list.
 
-Chapter boundaries are sacred. Each has one job.
+The Thanksgiving concept: the moment you're about to list things, stop. Find the single phrase that bundles the whole list into something the audience already understands. "We're hosting a big Thanksgiving" carries turkey, sides, family, no presents — without listing any of it. The audience fills in the details from their own context. A Thanksgiving only works if the audience has that context. Know your audience.
+
+Example — Slideflow for a clinical lead whose #1 priority is fast pathology results:
+"Reliable pathology analysis in under a minute, at less than $1 per slide, a roughly 1,000 times improvement."
+- "Under a minute" = speed (the #1 priority). The clinical lead hears: faster treatment decisions, better patient outcomes.
+- "Less than $1 per slide" = cost. The clinical lead isn't a CFO, but knows that a 4,000-to-1 cost reduction means finance and operations will champion adoption — removing the political obstacles to getting what he actually wants.
+- "1,000 times improvement" = a Thanksgiving for the magnitude of both speed AND cost. One number bundles two transformations. The audience hears: this isn't incremental, this is a different reality.
+
+Every element serves the top priority, some directly (speed) and some indirectly (cost enables the adoption that enables the clinical outcome). Threading that needle is the skill.
+
+Under 20 words. Target 12.
+
+TIER 2 — Supporting value statements (5-6 columns).
+
+Each maps one of the audience's priorities to the capability that delivers it. Canonical form: "[priority] because [differentiator]." Under 20 words each. No transitions between columns — each stands alone.
+
+Column types follow a fixed structure:
+1. Focus — "Our company and product focus is YOU." A commitment to this audience.
+2. Product — What's structurally different about the product.
+3. (Optional overflow if Product is too complex for one statement.)
+4. ROI — Financial and measurable value.
+5. Support — Commitment to making it actually work: planning, training, integration.
+6. Social Proof — Named customers, institutions, adoption evidence.
+
+TIER 3 — Proof points under each Tier 2 (2-4 bullets each).
+
+Proof ONLY. Specific, verifiable facts. 1-6 words. The test: could a skeptic verify this independently? Numbers, names, certifications, measurable outcomes = proof. Comparative adjectives ("faster," "better") = value claims, not proof — those belong in Tier 2.
+
+Tier 1 may also have proof points. If they're particularly compelling and not already covered by Tier 2 proof, find a Tier 2 column where they fit naturally.
+
+═══ THE FIVE CHAPTER STORY ═══
+
+Takes a completed Three Tier and turns it into narrative for a specific medium. The five chapters follow the psychological stages of a decision — each removes one layer of resistance:
+
+1. "You Need This Category" — Make the status quo unattractive. The audience should feel uncomfortable NOT acting. Category-level only — never mention the company or product. The pain from the absence of what Chapter 2 will promise.
+
+2. "You Need Our Version" — Now introduce your offering. Tier 2 statements become the backbone. Order follows priority ranking. Transitions between points ARE appropriate here (unlike Tier 2 where each stands alone). Never include proof, credentials, or institutional names — that's Chapters 3-4.
+
+3. "We'll Hold Your Hand" — Eliminate risk. Concrete support: easy transaction, smooth deployment, training, ongoing service. Be specific — "we'll send a notary to your office" not "we make everything easy."
+
+4. "You're Not Alone" — Social proof. Show similar organizations succeeding. Format: problem they had → your solution → result achieved. The more similar to the prospect, the better. Never invent company names or metrics.
+
+5. "Let's Get Started" — Call to action. First 1-3 concrete, simple, low-risk steps. No filler. No vague "let's chat." Each step should feel easy enough to do today.
+
+Chapter boundaries are sacred. Each has one job. Content that belongs in one chapter must not bleed into another.
 `;
+
 
 export function buildPartnerPrompt(opts: {
   displayName?: string;

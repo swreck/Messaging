@@ -36,7 +36,9 @@ CRITICAL RULES:
 
 14. Do NOT stack nouns into compound phrases. "Same-day diagnostic confidence" is three nouns compressed into a label — jargon. "A confident diagnosis on the same day" is a person talking. If a phrase has two or more nouns jammed together without articles or verbs between them, unpack it into natural subject-verb-object structure. "The pathologist reviews it" — not "pathologist review." "We detect delays in real time" — not "real-time delay detection."
 
-15. Avoid urgency and sales-pitch phrasing. "Ahead of time" manufactures urgency — just describe the actual timeline ("90 days before they give notice"). Multipliers should use conversational shorthand: "over 3x" not "3.2 times." If a sentence packs multiple selling points densely, it sounds rehearsed even if each word is plain.`;
+15. Avoid urgency and sales-pitch phrasing. "Ahead of time" manufactures urgency — just describe the actual timeline ("90 days before they give notice"). Multipliers should use conversational shorthand: "over 3x" not "3.2 times." If a sentence packs multiple selling points densely, it sounds rehearsed even if each word is plain.
+
+16. Find the Thanksgiving. The moment you're about to list more than three things, STOP. Find the single phrase that bundles the entire list into something the audience already understands — they fill in the details themselves because they know the pattern. "We're hosting a big Thanksgiving" carries the meaning of turkey, side dishes, family, no presents — without the list. You lose some precision on specifics but gain enormously on comprehension and impact. The Thanksgiving only works if the audience has context to unpack it. Know your audience. If they don't have the reference, it's not a Thanksgiving — it's confusion.`;
 
 export { KENS_VOICE };
 
