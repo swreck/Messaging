@@ -264,9 +264,13 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
     }
   }
 
+  const [showCheckpointSaved, setShowCheckpointSaved] = useState(false);
+
   async function createSnapshot() {
     await api.post(`/versions/table/${draft.id}`, { label: snapshotLabel || undefined });
     setSnapshotLabel('');
+    setShowCheckpointSaved(true);
+    setTimeout(() => setShowCheckpointSaved(false), 2000);
     await refreshDraft();
   }
 
@@ -424,7 +428,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria to review'}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={createSnapshot} title="Save the current state as a checkpoint you can return to">
-          Save checkpoint
+          {showCheckpointSaved ? 'Checkpoint saved' : 'Save checkpoint'}
         </button>
         {hasEdited && (
           <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={anyBusy} title="Maria revises other cells to match your edits">
