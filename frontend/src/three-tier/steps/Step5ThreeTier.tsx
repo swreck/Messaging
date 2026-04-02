@@ -31,6 +31,17 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   // Cell focus — for scoped directions and glow
   const [focusedCell, setFocusedCell] = useState<string | null>(null);
 
+  function formatTimeAgo(dateStr: string): string {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }
+
   // More tools dropdown
   const [showMoreTools, setShowMoreTools] = useState(false);
 
@@ -423,6 +434,9 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
               padding: '4px 0',
               minWidth: 180,
             }}>
+              <button className="btn btn-ghost btn-sm" style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '8px 14px' }} onClick={() => { setVersionsOpen(true); setShowMoreTools(false); }}>
+                View checkpoints ({draft.tableVersions?.length || 0})
+              </button>
               {draft.mappings.length > 0 && (
                 <button className="btn btn-ghost btn-sm" style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '8px 14px' }} onClick={() => { window.open(`/mapping/${draft.id}`, '_blank'); setShowMoreTools(false); }}>
                   Show mapping
@@ -453,45 +467,60 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         onCellFocus={setFocusedCell}
       />
 
-      {/* Table Version Panel */}
-      <div className="table-version-panel">
-        <div className="table-version-header" onClick={() => setVersionsOpen(!versionsOpen)}>
-          <span>Snapshots ({draft.tableVersions?.length || 0})</span>
-          <span>{versionsOpen ? '\u25B2' : '\u25BC'}</span>
-        </div>
-        {versionsOpen && (
-          <div className="table-version-list">
+      {/* Checkpoint slide-out panel */}
+      {versionsOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: 380,
+          maxWidth: '100vw',
+          background: 'var(--bg-card)',
+          borderLeft: '1px solid #d1d1d6',
+          boxShadow: '-4px 0 24px rgba(0,0,0,0.08)',
+          zIndex: 200,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #d1d1d6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Checkpoints</h3>
+            <button className="btn btn-ghost btn-sm" onClick={() => setVersionsOpen(false)}>&times;</button>
+          </div>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid #d1d1d6', display: 'flex', gap: 8 }}>
+            <input
+              value={snapshotLabel}
+              onChange={e => setSnapshotLabel(e.target.value)}
+              placeholder="Label (optional)"
+              style={{ flex: 1, padding: '6px 10px', border: '1px solid #d1d1d6', borderRadius: 'var(--radius-sm)', fontSize: 14 }}
+            />
+            <button className="btn btn-secondary btn-sm" onClick={createSnapshot}>Save</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
             {(draft.tableVersions?.length || 0) === 0 && (
-              <p style={{ padding: '8px 16px', fontSize: 13, color: 'var(--text-tertiary)', margin: 0 }}>
-                Save a snapshot to bookmark your current table. You can compare or restore it later.
+              <p style={{ padding: '16px 20px', fontSize: 13, color: 'var(--text-tertiary)', margin: 0 }}>
+                No checkpoints yet. Save one before making big changes.
               </p>
             )}
-            <div style={{ padding: '8px 16px', display: 'flex', gap: 8 }}>
-              <input
-                value={snapshotLabel}
-                onChange={e => setSnapshotLabel(e.target.value)}
-                placeholder="Snapshot label (optional)"
-                style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14 }}
-              />
-              <button className="btn btn-secondary btn-sm" onClick={createSnapshot}>Save Snapshot</button>
-            </div>
-            {(draft.tableVersions || []).map((v: TableVersion) => (
-              <div key={v.id} className="table-version-item">
-                <div>
-                  <strong>{v.label}</strong>
-                  <span style={{ color: 'var(--text-tertiary)', fontSize: 13, marginLeft: 8 }}>
-                    {new Date(v.createdAt).toLocaleString()}
-                  </span>
+            {(draft.tableVersions || []).map((v: TableVersion) => {
+              const timeAgo = formatTimeAgo(v.createdAt);
+              return (
+                <div key={v.id} style={{ padding: '10px 20px', borderBottom: '1px solid var(--bg-secondary)', cursor: 'default' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <strong style={{ fontSize: 14 }}>{v.label}</strong>
+                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{timeAgo}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setCompareSnapshot({ snapshot: v.snapshot, label: v.label })}>Compare</button>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setRestoreTarget(v.id)}>Restore</button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setCompareSnapshot({ snapshot: v.snapshot, label: v.label })}>Compare</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setRestoreTarget(v.id)}>Restore</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Refine nudge — shows when user tries to move on without refining */}
       {showRefineNudge && (
