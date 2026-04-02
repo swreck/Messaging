@@ -72,10 +72,6 @@ export function CellVersionNav({ cellId, cellType, currentText, onRestore }: Cel
   function cancelPreview() {
     setPreviewing(false);
     setPreviewIdx(-1);
-    // Restore the current version visually
-    if (versions[currentIdx]) {
-      onRestore(versions[currentIdx].text);
-    }
   }
 
   return (
@@ -99,6 +95,11 @@ export function CellVersionNav({ cellId, cellType, currentText, onRestore }: Cel
           <button className="cell-version-use" onClick={useThisVersion}>Use this</button>
           <button className="cell-version-cancel" onClick={cancelPreview}>Cancel</button>
         </span>
+      )}
+      {previewing && versions[previewIdx] && versions[previewIdx].text !== versions[currentIdx]?.text && (
+        <div className="cell-version-preview-text">
+          {versions[previewIdx].text}
+        </div>
       )}
     </div>
   );
