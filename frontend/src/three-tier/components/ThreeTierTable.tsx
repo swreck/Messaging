@@ -13,6 +13,8 @@ interface ThreeTierTableProps {
   onAcceptSuggestion?: (cell: string, text: string) => void;
   onDismissSuggestion?: (cell: string) => void;
   tier1Alternative?: string | null;
+  focusedCell?: string | null;
+  onCellFocus?: (cell: string | null) => void;
 }
 
 interface PendingDelete {
@@ -22,19 +24,15 @@ interface PendingDelete {
   timeout: ReturnType<typeof setTimeout>;
 }
 
-export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, onDismissSuggestion, tier1Alternative }: ThreeTierTableProps) {
+export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, onDismissSuggestion, tier1Alternative, focusedCell, onCellFocus }: ThreeTierTableProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const pendingDeleteRef = useRef<PendingDelete | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
 
-  // Keep ref in sync for cleanup
-  useEffect(() => {
-    pendingDeleteRef.current = pendingDelete;
-  }, [pendingDelete]);
+  useEffect(() => { pendingDeleteRef.current = pendingDelete; }, [pendingDelete]);
 
-  // Flush pending delete on unmount
   useEffect(() => {
     return () => {
       if (pendingDeleteRef.current) {
@@ -44,6 +42,12 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
     };
   }, [draft.id, onUpdate]);
 
+  function handleCellClick(cellKey: string) {
+    if (saving) return;
+    setEditingCell(cellKey);
+    onCellFocus?.(cellKey);
+  }
+
   async function updateTier1(text: string) {
     if (text && text !== draft.tier1Statement?.text) {
       setSaving(true);
@@ -52,15 +56,13 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
         onUpdate();
       } catch (err: any) {
         if (err?.status === 409) {
-          const discard = window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.');
-          if (discard) { onConflict?.(); }
+          if (window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.')) onConflict?.();
           return;
         } else { throw err; }
-      } finally {
-        setSaving(false);
-      }
+      } finally { setSaving(false); }
     }
     setEditingCell(null);
+    onCellFocus?.(null);
   }
 
   async function updateTier2(tier2Id: string, text: string, currentText: string) {
@@ -71,15 +73,13 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
         onUpdate();
       } catch (err: any) {
         if (err?.status === 409) {
-          const discard = window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.');
-          if (discard) { onConflict?.(); }
+          if (window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.')) onConflict?.();
           return;
         } else { throw err; }
-      } finally {
-        setSaving(false);
-      }
+      } finally { setSaving(false); }
     }
     setEditingCell(null);
+    onCellFocus?.(null);
   }
 
   async function updateTier3(tier3Id: string, text: string, currentText: string) {
@@ -90,15 +90,13 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
         onUpdate();
       } catch (err: any) {
         if (err?.status === 409) {
-          const discard = window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.');
-          if (discard) { onConflict?.(); }
+          if (window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.')) onConflict?.();
           return;
         } else { throw err; }
-      } finally {
-        setSaving(false);
-      }
+      } finally { setSaving(false); }
     }
     setEditingCell(null);
+    onCellFocus?.(null);
   }
 
   async function addTier3(tier2Id: string) {
@@ -107,7 +105,6 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
   }
 
   const startDeleteTier3 = useCallback((tier3Id: string, text: string, tier2Id: string) => {
-    // If there's already a pending delete, execute it immediately
     if (pendingDeleteRef.current) {
       clearTimeout(pendingDeleteRef.current.timeout);
       api.delete(`/tiers/${draft.id}/tier3/${pendingDeleteRef.current.id}`).then(() => onUpdate());
@@ -133,9 +130,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
     const lines = [tier1, '', '---'];
     for (const t2 of draft.tier2Statements) {
       lines.push('', t2.text);
-      for (const t3 of t2.tier3Bullets) {
-        lines.push(`  • ${t3.text}`);
-      }
+      for (const t3 of t2.tier3Bullets) lines.push(`  \u2022 ${t3.text}`);
     }
     navigator.clipboard.writeText(lines.join('\n'));
   }
@@ -151,7 +146,6 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
       text: t2.text,
       proofs: t2.tier3Bullets.map(t3 => t3.text),
     }));
-
     const html = `<!DOCTYPE html>
 <html><head><title>Three Tier Message</title>
 <style>
@@ -159,7 +153,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
   h1 { font-size: 18px; color: #6e6e73; margin-bottom: 24px; }
   .tier1 { font-size: 20px; font-weight: 600; padding: 20px; background: #f5f5f7; border-radius: 12px; margin-bottom: 24px; }
   .tier2-grid { display: grid; grid-template-columns: repeat(${t2s.length}, 1fr); gap: 16px; }
-  .tier2-col { border: 1px solid #e5e5ea; border-radius: 12px; padding: 16px; }
+  .tier2-col { border: 1px solid #d1d1d6; border-radius: 12px; padding: 16px; }
   .tier2-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #6e6e73; margin-bottom: 8px; }
   .tier2-text { font-size: 15px; line-height: 1.5; margin-bottom: 12px; }
   .tier3-list { list-style: disc; padding-left: 20px; margin: 0; }
@@ -177,9 +171,8 @@ ${t2s.map(t2 => `<div class="tier2-col">
 </div>`).join('')}
 </div>
 </body></html>`;
-
     const win = window.open('', '_blank');
-    if (!win) { alert('Export blocked — please allow popups for this site.'); return; }
+    if (!win) { alert('Export blocked \u2014 please allow popups for this site.'); return; }
     win.document.write(html); win.document.close();
   }
 
@@ -189,18 +182,18 @@ ${t2s.map(t2 => `<div class="tier2-col">
       const fullUrl = `${window.location.origin}${result.url}`;
       setShareUrl(fullUrl);
       navigator.clipboard.writeText(fullUrl);
-    } catch {
-      alert('Could not create share link.');
-    }
+    } catch { alert('Could not create share link.'); }
   }
+
+  const isTier1Focused = focusedCell === 'tier1' || editingCell === 'tier1';
 
   return (
     <div>
       <div className="three-tier-table">
         {/* Tier 1 */}
-        <div className="tier1-row">
+        <div className={`tier1-row${isTier1Focused ? ' cell-focused' : ''}`}>
           <div className="tier-header-row">
-            <div className="tier-label">Tier 1 <span className="tier-subtitle">Core Value</span> <InfoTooltip text="Your single most important value statement — the headline of your message." /></div>
+            <div className="tier-label">Tier 1 <span className="tier-subtitle">Core Value</span> <InfoTooltip text="Your single most important value statement \u2014 the headline of your message." /></div>
             <button className="btn-copy-table" onClick={copyTableToClipboard} title="Copy entire table to clipboard">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -235,10 +228,10 @@ ${t2s.map(t2 => `<div class="tier2-col">
               text={draft.tier1Statement?.text || ''}
               maxWords={20}
               onSave={updateTier1}
-              onCancel={() => setEditingCell(null)}
+              onCancel={() => { setEditingCell(null); onCellFocus?.(null); }}
             />
           ) : (
-            <div className="tier1-text" onClick={() => !saving && setEditingCell('tier1')}>
+            <div className="tier1-text" onClick={() => handleCellClick('tier1')}>
               {draft.tier1Statement?.text || 'Click to add Tier 1 statement'}
             </div>
           )}
@@ -247,14 +240,14 @@ ${t2s.map(t2 => `<div class="tier2-col">
               <span className="inline-suggestion-text">{suggestions.get('tier1')}</span>
               <div className="inline-suggestion-actions">
                 <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.('tier1', suggestions.get('tier1')!)}>Accept</button>
-                {tier1Alternative && (
-                  <button className="inline-suggestion-accept" style={{ opacity: 0.7 }} onClick={() => onAcceptSuggestion?.('tier1', tier1Alternative)}>Use simpler version</button>
-                )}
                 <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.('tier1'); }}>Dismiss</button>
               </div>
               {tier1Alternative && (
-                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, fontStyle: 'italic' }}>
-                  Simpler: "{tier1Alternative}"
+                <div
+                  style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8, cursor: 'pointer', lineHeight: 1.5 }}
+                  onClick={() => onAcceptSuggestion?.('tier1', tier1Alternative)}
+                >
+                  I also have a more straightforward version: <em>"{tier1Alternative}"</em>
                 </div>
               )}
             </div>
@@ -263,18 +256,20 @@ ${t2s.map(t2 => `<div class="tier2-col">
             <CellVersionNav
               cellId={draft.tier1Statement.id}
               cellType="tier1"
+              currentText={draft.tier1Statement.text}
               onRestore={() => onUpdate()}
             />
           )}
         </div>
 
         {/* Tier 2 + Tier 3 */}
-        <div className="tier-label">Tier 2 <span className="tier-subtitle">Supporting Values</span> <InfoTooltip text="Each column maps one of your audience's priorities to what you offer. Same format as the core value." /></div>
+        <div className="tier-label">Tier 2 <span className="tier-subtitle">Supporting Values</span> <InfoTooltip text="Each column maps one of your audience's priorities to what you offer." /></div>
         <div className="tier2-row">
           {draft.tier2Statements.map((t2, t2Index) => {
             const t2Key = `tier2-${t2Index}`;
+            const isColFocused = focusedCell === t2Key || editingCell === `tier2-${t2.id}`;
             return (
-              <div key={t2.id} className="tier2-col">
+              <div key={t2.id} className={`tier2-col${isColFocused ? ' cell-focused' : ''}`}>
                 {t2.categoryLabel && (
                   <div className="tier2-category-label">{t2.categoryLabel}</div>
                 )}
@@ -284,11 +279,11 @@ ${t2s.map(t2 => `<div class="tier2-col">
                       text={t2.text}
                       maxWords={20}
                       onSave={(text) => updateTier2(t2.id, text, t2.text)}
-                      onCancel={() => setEditingCell(null)}
+                      onCancel={() => { setEditingCell(null); onCellFocus?.(null); }}
                     />
                   </div>
                 ) : (
-                  <div className="tier2-text" onClick={() => !saving && setEditingCell(`tier2-${t2.id}`)}>
+                  <div className="tier2-text" onClick={() => handleCellClick(`tier2-${t2.id}`)}>
                     {t2.text}
                   </div>
                 )}
@@ -301,10 +296,15 @@ ${t2s.map(t2 => `<div class="tier2-col">
                     </div>
                   </div>
                 )}
-                <CellVersionNav cellId={t2.id} cellType="tier2" onRestore={() => onUpdate()} />
+                <CellVersionNav
+                  cellId={t2.id}
+                  cellType="tier2"
+                  currentText={t2.text}
+                  onRestore={() => onUpdate()}
+                />
 
                 <div className="tier3-area">
-                  <div className="tier-label tier-label-small">Tier 3 <span className="tier-subtitle">Proof Points</span> <InfoTooltip text="Brief facts that prove this value is true. If a skeptic couldn't verify it, it's not proof." /></div>
+                  <div className="tier-label tier-label-small">Tier 3 <span className="tier-subtitle">Proof Points</span> <InfoTooltip text="Brief facts that prove this value is true. If a skeptic couldn\u2019t verify it, it\u2019s not proof." /></div>
                   {t2.tier3Bullets.map((t3, t3Index) => {
                     const t3Key = `tier3-${t2Index}-${t3Index}`;
                     const isPendingDelete = pendingDelete?.id === t3.id;
@@ -315,10 +315,10 @@ ${t2s.map(t2 => `<div class="tier2-col">
                             text={t3.text}
                             maxWords={6}
                             onSave={(text) => updateTier3(t3.id, text, t3.text)}
-                            onCancel={() => setEditingCell(null)}
+                            onCancel={() => { setEditingCell(null); onCellFocus?.(null); }}
                           />
                         ) : (
-                          <div className={`tier3-bullet${isPendingDelete ? ' tier3-pending-delete' : ''}`} onClick={() => !saving && !isPendingDelete && setEditingCell(`tier3-${t3.id}`)}>
+                          <div className={`tier3-bullet${isPendingDelete ? ' tier3-pending-delete' : ''}`} onClick={() => !isPendingDelete && handleCellClick(`tier3-${t3.id}`)}>
                             <span>{t3.text}</span>
                             {isPendingDelete ? (
                               <span className="tier3-undo" onClick={(e) => { e.stopPropagation(); undoDeleteTier3(); }}>Undo</span>
@@ -342,7 +342,12 @@ ${t2s.map(t2 => `<div class="tier2-col">
                             </div>
                           </div>
                         )}
-                        <CellVersionNav cellId={t3.id} cellType="tier3" onRestore={() => onUpdate()} />
+                        <CellVersionNav
+                          cellId={t3.id}
+                          cellType="tier3"
+                          currentText={t3.text}
+                          onRestore={() => onUpdate()}
+                        />
                       </div>
                     );
                   })}
@@ -359,7 +364,6 @@ ${t2s.map(t2 => `<div class="tier2-col">
           })}
         </div>
       </div>
-
     </div>
   );
 }

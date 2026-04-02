@@ -751,13 +751,13 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   overflow: clip;
-  border: 1px solid var(--border-light);
+  border: 1px solid #d1d1d6;
 }
 
 .tier1-row {
   padding: 24px;
   text-align: center;
-  border-bottom: 2px solid var(--border-light);
+  border-bottom: 2px solid #d1d1d6;
   background: var(--bg-card);
   position: sticky;
   top: 56px;
@@ -798,16 +798,33 @@ p { line-height: 1.5; color: var(--text-secondary); }
 
 .tier2-row {
   display: flex;
-  border-bottom: 1px solid var(--border-light);
+  border-bottom: 1px solid #d1d1d6;
 }
 .tier2-col {
   flex: 1;
   min-width: 180px;
-  border-right: 1px solid var(--border-light);
+  border-right: 1px solid #d1d1d6;
   display: flex;
   flex-direction: column;
+  position: relative;
+  transition: box-shadow 0.2s;
 }
 .tier2-col:last-child { border-right: none; }
+.tier2-col.cell-focused { box-shadow: inset 0 0 0 2px rgba(255, 204, 0, 0.35); }
+.tier1-row.cell-focused { box-shadow: inset 0 0 0 2px rgba(255, 204, 0, 0.35); }
+/* Quality check bar — thin teal line inside left edge of checked cells */
+.tier2-col.quality-checked::before,
+.tier1-row.quality-checked::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 8px;
+  bottom: 8px;
+  width: 2.5px;
+  background: #5ac8c8;
+  border-radius: 2px;
+  opacity: 0.7;
+}
 
 .tier2-category-label {
   padding: 8px 16px 0;
@@ -925,6 +942,26 @@ p { line-height: 1.5; color: var(--text-secondary); }
   cursor: pointer;
   padding: 2px 4px;
   font-size: 15px;
+}
+.cell-version-label { white-space: nowrap; }
+.cell-version-source { color: var(--text-tertiary); font-style: italic; }
+.cell-version-preview-actions { margin-left: 6px; }
+.cell-version-use {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 6px;
+}
+.cell-version-cancel {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
 }
 .cell-version-nav button:hover { color: var(--accent); }
 .cell-version-nav span { font-size: 12px; color: var(--text-tertiary); }

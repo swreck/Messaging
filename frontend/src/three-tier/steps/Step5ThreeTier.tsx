@@ -28,6 +28,12 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   const [sendingDirection, setSendingDirection] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
+  // Cell focus — for scoped directions and glow
+  const [focusedCell, setFocusedCell] = useState<string | null>(null);
+
+  // More tools dropdown
+  const [showMoreTools, setShowMoreTools] = useState(false);
+
   // Compare modal
   const [compareSnapshot, setCompareSnapshot] = useState<{ snapshot: any; label: string } | null>(null);
 
@@ -283,8 +289,8 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       )}
       {suggestions.size > 0 && (
         <div className="suggestion-banner">
-          <span>Maria suggested changes to {suggestions.size} cell{suggestions.size !== 1 ? 's' : ''} — look for the highlighted alternatives below</span>
-          <button className="suggestion-banner-dismiss" onClick={() => { setSuggestions(new Map()); previousStateRef.current = captureState(); }}>
+          <span>I'd adjust {suggestions.size} cell{suggestions.size !== 1 ? 's' : ''}. Take a look?</span>
+          <button className="suggestion-banner-dismiss" onClick={() => { setSuggestions(new Map()); setTier1Alternative(null); previousStateRef.current = captureState(); }}>
             Dismiss all
           </button>
         </div>
@@ -330,13 +336,26 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         </p>
       )}
 
-      {/* Direction input */}
+      {/* Direction input — scope-aware */}
       <div className="direction-input" style={{ marginBottom: 16 }}>
+        {focusedCell && (
+          <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 4, fontWeight: 500 }}>
+            Scoped to {focusedCell.startsWith('tier1') ? 'Tier 1' : focusedCell.startsWith('tier2') ? `column ${parseInt(focusedCell.split('-')[1]) + 1}` : 'this cell'}
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 11, padding: '0 6px', marginLeft: 6 }}
+              onClick={() => setFocusedCell(null)}
+            >clear</button>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
           <textarea
             value={directionText}
             onChange={e => setDirectionText(e.target.value)}
-            placeholder="Tell Maria what you'd like changed... e.g. 'Make the whole thing more focused on cost savings'"
+            placeholder={hasRefined
+              ? "Tell Maria what to change..."
+              : "Ready to refine? Or tell Maria what to change first."
+            }
             style={{
               flex: 1,
               padding: '10px 14px',
@@ -366,32 +385,60 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         </div>
       </div>
 
-      {/* Toolbar */}
+      {/* Toolbar — simplified */}
       <div className="three-tier-toolbar">
-        <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={anyBusy} title="Maria reviews your message and suggests improvements">
-          {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria'}
-        </button>
-        <button className="btn btn-secondary btn-sm" onClick={refineLanguage} disabled={anyBusy} title="Rewrite statements to sound more natural while keeping the meaning">
+        <button
+          className={`btn btn-sm ${hasRefined ? 'btn-secondary' : 'btn-primary'}`}
+          onClick={refineLanguage}
+          disabled={anyBusy}
+          title="Rewrite statements to sound more natural while keeping the meaning"
+        >
           {refining ? <><Spinner size={12} /> Refining...</> : 'Refine Language'}
         </button>
-        {draft.mappings.length > 0 && (
-          <button className="btn btn-ghost btn-sm" onClick={() => window.open(`/mapping/${draft.id}`, '_blank')} title="See how priorities connect to capabilities">
-            Show mapping
-          </button>
-        )}
+        <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={anyBusy} title="Maria reviews your message and tells you what she'd improve">
+          {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria to review'}
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={createSnapshot} title="Save the current state as a checkpoint you can return to">
+          Save checkpoint
+        </button>
         {hasEdited && (
-          <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={anyBusy} title="Maria analyzes your changes and suggests revisions to match">
+          <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={anyBusy} title="Maria revises other cells to match your edits">
             {revising ? <><Spinner size={12} /> Revising...</> : 'Match the rest to my edits'}
           </button>
         )}
-        {suggestions.size > 0 && (
-          <button className="btn btn-ghost btn-sm" onClick={clearSuggestions}>
-            Clear suggestions
+        <div style={{ position: 'relative' }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowMoreTools(!showMoreTools)}>
+            &middot;&middot;&middot;
           </button>
-        )}
-        <button className="btn btn-ghost btn-sm btn-danger" onClick={regenerate} disabled={anyBusy} title="Start fresh with a new three-tier message">
-          {regenerating ? <><Spinner size={12} /> Regenerating...</> : 'Regenerate'}
-        </button>
+          {showMoreTools && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              background: 'var(--bg-card)',
+              border: '1px solid #d1d1d6',
+              borderRadius: 'var(--radius-sm)',
+              boxShadow: 'var(--shadow-md)',
+              zIndex: 20,
+              padding: '4px 0',
+              minWidth: 180,
+            }}>
+              {draft.mappings.length > 0 && (
+                <button className="btn btn-ghost btn-sm" style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '8px 14px' }} onClick={() => { window.open(`/mapping/${draft.id}`, '_blank'); setShowMoreTools(false); }}>
+                  Show mapping
+                </button>
+              )}
+              {suggestions.size > 0 && (
+                <button className="btn btn-ghost btn-sm" style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '8px 14px' }} onClick={() => { clearSuggestions(); setShowMoreTools(false); }}>
+                  Clear suggestions
+                </button>
+              )}
+              <button className="btn btn-ghost btn-sm btn-danger" style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '8px 14px' }} onClick={() => { regenerate(); setShowMoreTools(false); }} disabled={anyBusy}>
+                {regenerating ? 'Regenerating...' : 'Regenerate'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <ThreeTierTable
@@ -402,6 +449,8 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         onAcceptSuggestion={handleAcceptSuggestion}
         onDismissSuggestion={handleDismissSuggestion}
         tier1Alternative={tier1Alternative}
+        focusedCell={focusedCell}
+        onCellFocus={setFocusedCell}
       />
 
       {/* Table Version Panel */}
