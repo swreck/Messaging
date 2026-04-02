@@ -721,8 +721,67 @@ Write Chapter ${chNum}: "${ch.name}"`;
       }
 
       if (a.type === 'edit_tier' && ctx.draftId && a.params.instruction) {
-        actionResult = 'Direction applied — check your Three Tier table';
-        refreshNeeded = true;
+        try {
+          // Fetch the draft with full context
+          const editDraft = await prisma.threeTierDraft.findFirst({
+            where: { id: ctx.draftId },
+            include: {
+              tier1Statement: true,
+              tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } } },
+              audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+              offering: { include: { elements: true } },
+            },
+          });
+          if (editDraft) {
+            const { callAIWithJSON } = await import('../services/ai.js');
+            const { DIRECTION_SYSTEM } = await import('../prompts/generation.js');
+
+            const dirMessage = `USER'S DIRECTION: ${a.params.instruction}
+
+CURRENT THREE TIER TABLE:
+Tier 1: "${editDraft.tier1Statement?.text || '(empty)'}"
+
+Tier 2 statements:
+${editDraft.tier2Statements.map((t2: any, i: number) => `${i + 1}. [${t2.categoryLabel || 'unlabeled'}] "${t2.text}"
+   Tier 3 bullets: ${t2.tier3Bullets.map((t3: any) => `"${t3.text}"`).join(', ') || '(none)'}`).join('\n')}
+
+AUDIENCE PRIORITIES:
+${editDraft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}"`).join('\n')}
+
+OFFERING CAPABILITIES:
+${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
+
+            const dirResult = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
+
+            // Apply suggestions directly
+            let applied = 0;
+            for (const s of dirResult.suggestions || []) {
+              if (s.cell === 'tier1' && editDraft.tier1Statement) {
+                await prisma.tier1Statement.update({ where: { id: editDraft.tier1Statement.id }, data: { text: s.suggested } });
+                applied++;
+              } else if (s.cell.startsWith('tier2-')) {
+                const idx = parseInt(s.cell.split('-')[1]);
+                if (editDraft.tier2Statements[idx]) {
+                  await prisma.tier2Statement.update({ where: { id: editDraft.tier2Statements[idx].id }, data: { text: s.suggested } });
+                  applied++;
+                }
+              } else if (s.cell.startsWith('tier3-')) {
+                const parts = s.cell.split('-');
+                const t2Idx = parseInt(parts[1]);
+                const t3Idx = parseInt(parts[2]);
+                const t2 = editDraft.tier2Statements[t2Idx];
+                if (t2 && t2.tier3Bullets[t3Idx]) {
+                  await prisma.tier3Bullet.update({ where: { id: t2.tier3Bullets[t3Idx].id }, data: { text: s.suggested } });
+                  applied++;
+                }
+              }
+            }
+            actionResult = applied > 0 ? `Updated ${applied} cell${applied !== 1 ? 's' : ''} based on your direction` : 'Direction processed but no changes were needed';
+            refreshNeeded = true;
+          }
+        } catch (err: any) {
+          actionResult = `Could not apply direction: ${err.message || 'unknown error'}`;
+        }
       }
 
       // ─── Navigate (whitelist valid app routes) ──────────
