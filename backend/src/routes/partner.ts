@@ -176,7 +176,7 @@ async function buildSurfacingHint(workspaceId: string): Promise<string | undefin
     return `The audience "${emptyAudiences[0].name}" has no priorities yet. You could offer to draft them if the user tells you the persona — you know what most roles care about.`;
   }
 
-  // Check for audiences with priorities but no motivating factors on top priorities
+  // Check for audiences where the top priority has no motivating factor
   const audiencesNoMF = await prisma.audience.findMany({
     where: {
       workspaceId,
@@ -185,7 +185,7 @@ async function buildSurfacingHint(workspaceId: string): Promise<string | undefin
     select: { name: true },
   });
   if (audiencesNoMF.length > 0) {
-    return `The audience "${audiencesNoMF[0].name}" has priorities but no motivating factors. You could offer to draft them — you understand the offering well enough to connect the stakes.`;
+    return `The audience "${audiencesNoMF[0].name}" has a top priority with no motivating factor. You could offer to draft it — you understand the offering well enough to connect the stakes.`;
   }
 
   return undefined;
@@ -218,6 +218,57 @@ router.get('/status', async (req: Request, res: Response) => {
   const introduced = introStep >= 4;
 
   let returnContext: ReturnContext | null = null;
+  let proactiveOffer: string | null = null;
+
+  // Check for 0-to-1 moments — blank canvases Maria can fill
+  const wsId = req.workspaceId!;
+  if (introduced) {
+    try {
+      // Audiences with 0 priorities
+      const emptyAudience = await prisma.audience.findFirst({
+        where: { workspaceId: wsId, priorities: { none: {} } },
+        select: { name: true },
+      });
+      if (emptyAudience) {
+        proactiveOffer = `I know what ${emptyAudience.name} typically cares about. Want me to draft the priorities?`;
+      }
+
+      // Audiences where the TOP priority has no motivating factor, AND an offering exists
+      if (!proactiveOffer) {
+        const audNoMF = await prisma.audience.findFirst({
+          where: {
+            workspaceId: wsId,
+            priorities: { some: { rank: 1, motivatingFactor: { equals: '' } } },
+          },
+          select: { name: true },
+        });
+        const hasOffering = await prisma.offering.count({ where: { workspaceId: wsId } });
+        if (audNoMF && hasOffering > 0) {
+          proactiveOffer = `${audNoMF.name}'s top priority doesn't have a motivating factor yet. I can draft it — I understand the offering.`;
+        }
+      }
+
+      // Three Tier at step 5 with sparse Tier 3 (fewer than 1 per Tier 2 on average)
+      if (!proactiveOffer) {
+        const draftWithTiers = await prisma.threeTierDraft.findFirst({
+          where: { offering: { workspaceId: wsId }, currentStep: 5 },
+          include: {
+            tier2Statements: { include: { tier3Bullets: true } },
+            audience: { select: { name: true } },
+          },
+          orderBy: { updatedAt: 'desc' },
+        });
+        if (draftWithTiers && draftWithTiers.tier2Statements.length > 0) {
+          const avgT3 = draftWithTiers.tier2Statements.reduce((sum, t2) => sum + t2.tier3Bullets.length, 0) / draftWithTiers.tier2Statements.length;
+          if (avgT3 < 1) {
+            proactiveOffer = `Your Three Tier for ${draftWithTiers.audience.name} needs proof points. Want me to fill in what I can from the offering?`;
+          }
+        }
+      }
+    } catch {
+      // Non-critical
+    }
+  }
 
   // If user has been introduced and was away >24h, build return context (no stored message)
   if (introduced && lastVisitAt) {
@@ -253,7 +304,7 @@ router.get('/status', async (req: Request, res: Response) => {
     // Non-critical
   }
 
-  res.json({ username, displayName, introduced, introStep, returnContext });
+  res.json({ username, displayName, introduced, introStep, returnContext, proactiveOffer });
 });
 
 // PUT /api/partner/name — store display name (does NOT complete intro)

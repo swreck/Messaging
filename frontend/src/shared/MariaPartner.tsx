@@ -41,9 +41,11 @@ export function MariaPartner() {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [suggestedName, setSuggestedName] = useState('');
 
-  // Return context
+  // Return context and proactive offers
   const [returnContext, setReturnContext] = useState<ReturnContext | null>(null);
   const [showReturnCard, setShowReturnCard] = useState(false);
+  const [proactiveOffer, setProactiveOffer] = useState<string | null>(null);
+  const [showProactiveCard, setShowProactiveCard] = useState(false);
 
   // Bubble indicators
   const [showDot, setShowDot] = useState(false);
@@ -55,7 +57,7 @@ export function MariaPartner() {
 
   // Load status on mount
   useEffect(() => {
-    api.get<{ username: string; displayName?: string; introduced: boolean; introStep?: number; returnContext?: ReturnContext | null }>('/partner/status')
+    api.get<{ username: string; displayName?: string; introduced: boolean; introStep?: number; returnContext?: ReturnContext | null; proactiveOffer?: string | null }>('/partner/status')
       .then(status => {
         setIntroduced(status.introduced);
         setIntroStep(status.introStep ?? 0);
@@ -66,10 +68,13 @@ export function MariaPartner() {
         if (status.returnContext) {
           setReturnContext(status.returnContext);
         }
+        if (status.proactiveOffer) {
+          setProactiveOffer(status.proactiveOffer);
+        }
 
         if (!status.introduced) {
           setShowDot(true);
-        } else if (status.returnContext) {
+        } else if (status.returnContext || status.proactiveOffer) {
           setShowGlow(true);
         }
       })
@@ -87,6 +92,9 @@ export function MariaPartner() {
           setLoaded(true);
           if (returnContext) {
             setShowReturnCard(true);
+            setShowGlow(false);
+          } else if (proactiveOffer) {
+            setShowProactiveCard(true);
             setShowGlow(false);
           }
         })
@@ -179,6 +187,7 @@ export function MariaPartner() {
     if (!text || sending) return;
 
     setShowReturnCard(false);
+    setShowProactiveCard(false);
 
     if (!overrideText) {
       setInput('');
@@ -451,7 +460,29 @@ export function MariaPartner() {
                     </div>
                   )}
 
-                  {messages.length === 0 && loaded && !showReturnCard && (
+                  {/* Proactive offer card */}
+                  {showProactiveCard && proactiveOffer && !showReturnCard && (
+                    <div className="partner-return-card" style={{
+                      padding: '12px 16px',
+                      marginBottom: 8,
+                      background: 'var(--bg-secondary, #f8f8fa)',
+                      borderRadius: 'var(--radius-sm, 6px)',
+                      border: '1px solid var(--border-light, #e5e5ea)',
+                    }}>
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
+                        {proactiveOffer}
+                      </p>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-primary btn-sm" onClick={() => {
+                          setShowProactiveCard(false);
+                          send(proactiveOffer);
+                        }}>Yes, go ahead</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setShowProactiveCard(false)}>Not now</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && (
                     <div className="partner-empty">What's on your mind?</div>
                   )}
                   {messages.map((msg, i) => (
