@@ -173,7 +173,19 @@ async function buildSurfacingHint(workspaceId: string): Promise<string | undefin
     select: { name: true },
   });
   if (emptyAudiences.length > 0) {
-    return `The audience "${emptyAudiences[0].name}" is defined but has no priorities yet. The user may not have gotten to it.`;
+    return `The audience "${emptyAudiences[0].name}" has no priorities yet. You could offer to draft them if the user tells you the persona — you know what most roles care about.`;
+  }
+
+  // Check for audiences with priorities but no motivating factors on top priorities
+  const audiencesNoMF = await prisma.audience.findMany({
+    where: {
+      workspaceId,
+      priorities: { some: { rank: 1, motivatingFactor: { equals: '' } } },
+    },
+    select: { name: true },
+  });
+  if (audiencesNoMF.length > 0) {
+    return `The audience "${audiencesNoMF[0].name}" has priorities but no motivating factors. You could offer to draft them — you understand the offering well enough to connect the stakes.`;
   }
 
   return undefined;
