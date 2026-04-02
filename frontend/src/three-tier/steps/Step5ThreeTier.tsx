@@ -101,14 +101,24 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
     }
   }
 
+  // Tier 1 alternative from Refine Language
+  const [tier1Alternative, setTier1Alternative] = useState<string | null>(null);
+
   async function refineLanguage() {
     setError(null);
     setRefining(true);
+    setTier1Alternative(null);
     try {
       const result = await api.post<{
+        refinedTier1?: { best: string; alternative: string };
         refinedTier2: { index: number; text: string }[];
       }>('/ai/refine-language', { draftId: draft.id });
       const map = new Map<string, string>();
+      // Tier 1: Maria's pick goes in suggestions, alternative stored separately
+      if (result.refinedTier1) {
+        map.set('tier1', result.refinedTier1.best);
+        setTier1Alternative(result.refinedTier1.alternative);
+      }
       for (const item of result.refinedTier2 || []) {
         map.set(`tier2-${item.index}`, item.text);
       }
@@ -388,6 +398,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         suggestions={suggestions}
         onAcceptSuggestion={handleAcceptSuggestion}
         onDismissSuggestion={handleDismissSuggestion}
+        tier1Alternative={tier1Alternative}
       />
 
       {/* Table Version Panel */}

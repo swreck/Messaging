@@ -615,19 +615,29 @@ router.post('/refine-language', requireEditor, async (req: Request, res: Respons
   const draft = await prisma.threeTierDraft.findFirst({
     where: { id: draftId, offering: { workspaceId: req.workspaceId } },
     include: {
+      tier1Statement: true,
       tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } }, priority: true } },
       audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
     },
   });
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
 
-  const userMessage = `TIER 2 STATEMENTS TO REFINE:
+  const tier1Text = draft.tier1Statement?.text || '';
+  const topPriority = draft.audience.priorities[0];
+
+  const userMessage = `TIER 1 STATEMENT TO REFINE:
+"${tier1Text}"
+Top priority (Rank 1): "${topPriority?.text || ''}"
+Motivating factor: "${topPriority?.motivatingFactor || 'not provided'}"
+
+TIER 2 STATEMENTS TO REFINE:
 ${draft.tier2Statements.map((t2, i) => `[${i}] "${t2.text}"`).join('\n')}
 
 AUDIENCE PRIORITIES (for reference — the priority text must remain visible in each statement):
-${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n')}`;
+${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"${p.motivatingFactor ? ` (MF: ${p.motivatingFactor})` : ''}`).join('\n')}`;
 
   let result = await callAIWithJSON<{
+    refinedTier1?: { best: string; alternative: string };
     refinedTier2: { index: number; text: string }[];
   }>(REFINE_LANGUAGE_SYSTEM, userMessage, 'elite');
 

@@ -12,6 +12,7 @@ interface ThreeTierTableProps {
   suggestions?: Map<string, string>;
   onAcceptSuggestion?: (cell: string, text: string) => void;
   onDismissSuggestion?: (cell: string) => void;
+  tier1Alternative?: string | null;
 }
 
 interface PendingDelete {
@@ -21,7 +22,7 @@ interface PendingDelete {
   timeout: ReturnType<typeof setTimeout>;
 }
 
-export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, onDismissSuggestion }: ThreeTierTableProps) {
+export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, onDismissSuggestion, tier1Alternative }: ThreeTierTableProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
@@ -246,8 +247,16 @@ ${t2s.map(t2 => `<div class="tier2-col">
               <span className="inline-suggestion-text">{suggestions.get('tier1')}</span>
               <div className="inline-suggestion-actions">
                 <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.('tier1', suggestions.get('tier1')!)}>Accept</button>
+                {tier1Alternative && (
+                  <button className="inline-suggestion-accept" style={{ opacity: 0.7 }} onClick={() => onAcceptSuggestion?.('tier1', tier1Alternative)}>Use simpler version</button>
+                )}
                 <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.('tier1'); }}>Dismiss</button>
               </div>
+              {tier1Alternative && (
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, fontStyle: 'italic' }}>
+                  Simpler: "{tier1Alternative}"
+                </div>
+              )}
             </div>
           )}
           {draft.tier1Statement && (

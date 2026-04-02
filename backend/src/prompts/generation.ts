@@ -509,12 +509,29 @@ BAD EXAMPLES:
 - "Same-day diagnostic confidence from on-site pathology" — stacked compound nouns, not conversational
 - "Fixed monthly subscription covers all updates and support" — missing article ("A fixed...")
 
-DO NOT refine Tier 1 — leave it unchanged.
+TIER 1 REFINEMENT:
+Tier 1 gets special treatment. The first draft uses canonical form ("[priority] because [differentiator]"). Your job is to make it better — and ideally best.
+
+Three levels:
+- ACCEPTABLE (the input): canonical form, structurally correct
+- BETTER: smoothed into natural language, still clearly about the #1 priority
+- BEST: a Thanksgiving — one sentence that keeps the #1 priority emphasis but elegantly hints at the cumulative value of the whole offering. The audience hears not just the top priority but gets a sense of the whole without a list. A Thanksgiving only works if the audience has context to unpack it.
+
+You must produce TWO versions:
+- "best": Your pick. Go for the Thanksgiving if you can nail it. If a Thanksgiving doesn't land naturally for this content, go with the better version. This is your recommendation.
+- "alternative": The other level. If your best is a Thanksgiving, the alternative is the smoother-but-simpler version. If you couldn't nail a Thanksgiving, the alternative is the canonical form cleaned up.
+
+Both must be under 20 words. Both must keep the #1 priority recognizable.
+
 DO NOT touch Tier 3 proof bullets — they are data points, not prose.
 IMPORTANT: If you return text that is identical or nearly identical to the input, you have FAILED. But the change must stay in Ken's voice — plain, direct, factual. If it sounds like someone trying to be interesting, it's wrong. If it sounds like someone stating what they know, it's right.
 
 RESPOND WITH JSON:
 {
+  "refinedTier1": {
+    "best": "Maria's recommended Tier 1",
+    "alternative": "simpler version"
+  },
   "refinedTier2": [
     { "index": 0, "text": "refined statement" },
     { "index": 1, "text": "refined statement" }
