@@ -187,9 +187,22 @@ router.get('/status', async (req: Request, res: Response) => {
   const settings = await getPartnerSettings(userId);
   const username = settings.username;
   const displayName = settings.displayName;
-  const introStep = settings.introStep;
   const lastVisitAt = settings.lastVisitAt;
-  // Validate consistency: introStep is the source of truth
+
+  // Migration: existing users with introduced=true but no introStep need introStep=4
+  let introStep = settings.introStep;
+  if (settings.introduced && introStep < 4) {
+    introStep = 4;
+    // Persist the migration
+    try {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { settings: true } });
+      const current = (user?.settings as Record<string, any>) || {};
+      await prisma.user.update({
+        where: { id: userId },
+        data: { settings: { ...current, partner: { ...current.partner, introStep: 4 } } },
+      });
+    } catch { /* non-critical */ }
+  }
   const introduced = introStep >= 4;
 
   let returnContext: ReturnContext | null = null;
