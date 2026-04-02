@@ -42,11 +42,15 @@ export async function resolveAudienceId(
   // Use workspaceId for scoping if available, fall back to userId
   const scopeFilter = workspaceId ? { workspaceId } : { userId };
   if (params.audienceName) {
-    // Try exact match first (case insensitive)
-    const exact = await prisma.audience.findFirst({
+    // Try exact match first (case insensitive) — check for duplicates
+    const exactMatches = await prisma.audience.findMany({
       where: { ...scopeFilter, name: { equals: params.audienceName, mode: 'insensitive' as const } },
+      take: 2,
     });
-    if (exact) return exact.id;
+    if (exactMatches.length > 1) {
+      console.warn(`[resolveAudienceId] Multiple audiences named "${params.audienceName}" — using first match`);
+    }
+    if (exactMatches.length > 0) return exactMatches[0].id;
 
     // Fall back to contains match, shortest name first (most specific)
     const fuzzy = await prisma.audience.findFirst({
@@ -491,10 +495,27 @@ export async function dispatchActions(
         }
       }
 
-      if (a.type === 'create_story' && ctx.draftId && a.params.medium && a.params.cta) {
-        const newStory = await prisma.fiveChapterStory.create({
-          data: {
-            draftId: ctx.draftId,
+      if (a.type === 'create_story' && a.params.medium && a.params.cta) {
+        // Resolve draftId from context or by offering/audience name
+        let storyDraftId = ctx.draftId;
+        if (!storyDraftId && (a.params.offeringName || a.params.audienceName)) {
+          const scopeFilter = workspaceId ? { workspaceId } : { userId };
+          const draftSearch: any = { offering: scopeFilter };
+          if (a.params.offeringName) {
+            draftSearch.offering = { ...draftSearch.offering, name: { contains: a.params.offeringName, mode: 'insensitive' } };
+          }
+          if (a.params.audienceName) {
+            draftSearch.audience = { name: { contains: a.params.audienceName, mode: 'insensitive' } };
+          }
+          const found = await prisma.threeTierDraft.findFirst({ where: draftSearch, orderBy: { updatedAt: 'desc' } });
+          if (found) storyDraftId = found.id;
+        }
+        if (!storyDraftId) {
+          actionResult = 'Could not create story — no Three Tier draft found. Navigate to the Three Tier first, or specify the offering and audience names.';
+        } else {
+          const newStory = await prisma.fiveChapterStory.create({
+            data: {
+              draftId: storyDraftId,
             medium: a.params.medium,
             cta: a.params.cta,
             emphasis: a.params.emphasis || '',
@@ -580,8 +601,9 @@ Write Chapter ${chNum}: "${ch.name}"`;
           }
         }
 
-        actionResult = `Created ${getMediumSpec(a.params.medium).label} story — all chapters generated and blended`;
-        refreshNeeded = true;
+          actionResult = `Created ${getMediumSpec(a.params.medium).label} story — all chapters generated and blended`;
+          refreshNeeded = true;
+        }
       }
 
       if (a.type === 'update_story_params' && ctx.storyId) {
@@ -1154,7 +1176,7 @@ export function buildActionList(context: ActionContext): string {
 
   // When on a draft but no story yet, allow creating one
   if (context.draftId && !context.storyId) {
-    actions.push('- create_story: Generate a new Five Chapter Story from this Three Tier draft. Params: { medium: string, cta: string, emphasis?: string } — medium options: email, blog, social, landing_page, in_person, press_release, newsletter, report');
+    actions.push('- create_story: Generate a new Five Chapter Story. Params: { medium: string, cta: string, emphasis?: string, offeringName?: string, audienceName?: string } — can resolve draft by offering/audience name if not on a draft page. Medium options: email, blog, social, landing_page, in_person, press_release, newsletter, report');
   }
 
   // When a story exists, allow creating a new version in a different medium
@@ -1164,7 +1186,7 @@ export function buildActionList(context: ActionContext): string {
 
   // Three Tier actions
   if (context.draftId) {
-    actions.push('- edit_tier: Apply direction to the Three Tier table. Params: { instruction: string }');
+    actions.push('- edit_tier: Change the TEXT of existing Three Tier cells based on a direction. Params: { instruction: string } — Can rewrite text, shift emphasis, change wording. CANNOT add or remove Tier 2 columns — for structural changes (adding/removing columns), suggest the user uses Regenerate.');
   }
 
   // Cross-workspace copy — always included, dispatch handles errors if user has only 1 workspace
