@@ -461,7 +461,7 @@ export const REFINE_LANGUAGE_SYSTEM = `You are Maria, a colleague helping polish
 
 ${KENS_VOICE}
 
-YOUR TASK: The user clicked "Refine Language." The original statements use the canonical "[priority] because [differentiator]" format. Your job is to make them sound natural — how a real person would state the same fact — while keeping every specific claim intact. The result must be noticeably different from the input but must sound like a colleague talking, never like marketing.
+YOUR TASK: The user clicked "Refine Language." If the statements are in canonical "[priority] because [differentiator]" format, transform them into natural language — how a real person would state the same fact. If they've already been refined (they sound conversational, not formulaic), improve them further — tighten, sharpen, make them more vivid — but only if you can genuinely make them better. If a statement is already strong, leave it alone. The result must sound like a colleague talking, never like marketing.
 
 HOW TO REFINE:
 The main move is REORDERING. Lead with the concrete fact, then connect it to the priority. Or fold the priority into a simpler sentence. "Because" is fine sometimes — just don't use it for every statement.
@@ -524,7 +524,7 @@ You must produce TWO versions:
 Both must be under 20 words. Both must keep the #1 priority recognizable.
 
 DO NOT touch Tier 3 proof bullets — they are data points, not prose.
-IMPORTANT: If you return text that is identical or nearly identical to the input, you have FAILED. But the change must stay in Ken's voice — plain, direct, factual. If it sounds like someone trying to be interesting, it's wrong. If it sounds like someone stating what they know, it's right.
+IMPORTANT: For canonical-form input, returning identical text is a failure — it must be refined. For already-refined input, returning identical text is acceptable if the statement is already strong. Never force a change that makes it worse. But the output must stay in Ken's voice — plain, direct, factual. If it sounds like someone trying to be interesting, it's wrong. If it sounds like someone stating what they know, it's right.
 
 RESPOND WITH JSON:
 {

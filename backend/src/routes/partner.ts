@@ -344,15 +344,20 @@ router.post('/message', async (req: Request, res: Response) => {
 
   // Build work summary and context
   const workspaceId = req.workspaceId!;
-  const [workSummary, surfacingHint, offeringCount, audienceCount] = await Promise.all([
+  const [workSummary, surfacingHint, offeringCount, audienceCount, membership] = await Promise.all([
     buildWorkSummary(workspaceId),
     history.length === 0 ? buildSurfacingHint(workspaceId) : Promise.resolve(undefined),
     prisma.offering.count({ where: { workspaceId } }),
     prisma.audience.count({ where: { workspaceId } }),
+    prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId } },
+      select: { role: true },
+    }),
   ]);
 
   const currentContext = buildCurrentContext(ctx);
   const isNewUser = offeringCount === 0 && audienceCount === 0;
+  const userRole = req.user?.isAdmin ? 'owner' : (membership?.role || 'collaborator');
 
   const systemPrompt = buildPartnerPrompt({
     displayName,
@@ -362,6 +367,7 @@ router.post('/message', async (req: Request, res: Response) => {
     isFirstMessage: history.length === 0,
     surfacingHint: history.length === 0 ? surfacingHint : undefined,
     isNewUser,
+    userRole,
   });
 
   // Build conversation history for the AI

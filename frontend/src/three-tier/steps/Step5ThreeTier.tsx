@@ -319,7 +319,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
             &times;
           </button>
           <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0, paddingRight: 24 }}>
-            Your first draft for {draft.audience.name}. Click anything to edit. <strong>Refine Language</strong> smooths out the whole thing when you're ready.
+            Your first draft for {draft.audience.name} — in structural form so you can see the logic. Click anything to edit. <strong>Refine Language</strong> turns it into natural language.
           </p>
         </div>
       )}

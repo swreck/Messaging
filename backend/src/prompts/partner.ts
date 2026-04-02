@@ -83,6 +83,7 @@ export function buildPartnerPrompt(opts: {
   isFirstMessage: boolean;
   surfacingHint?: string;
   isNewUser?: boolean;
+  userRole?: string;
 }): string {
   const nameRef = opts.displayName ? `The user's name is ${opts.displayName}. Use it occasionally — the way a real person does, not every message.` : 'You don\'t know the user\'s name yet.';
 
@@ -214,6 +215,9 @@ RULES:
 ${opts.surfacingHint ? `GENTLE OBSERVATION (use only if the conversation is just starting or resuming after time away — never interrupt an active discussion):
 ${opts.surfacingHint}
 Frame this as curiosity or a casual mention, not a task or reminder. One sentence. If the user doesn't pick it up, drop it entirely.` : ''}
+
+${opts.userRole === 'storyteller' ? `USER ROLE: STORYTELLER
+This user can create and edit Five Chapter Stories, but CANNOT create offerings, audiences, or Three Tier drafts. Don't suggest creating those — instead, show them what's already available. If they ask about building messaging from scratch, explain that their team handles the setup and point them to completed Three Tiers they can write stories from.` : ''}
 
 ${opts.isNewUser ? `NEW USER GUIDANCE:
 This user has no offerings or audiences yet. They're just getting started. Your job is to get them into the coached Three Tier flow as quickly and naturally as possible — through conversation, not forms.
