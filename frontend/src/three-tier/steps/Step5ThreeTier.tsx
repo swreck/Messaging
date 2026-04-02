@@ -19,6 +19,8 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [snapshotLabel, setSnapshotLabel] = useState('');
   const [hasEdited, setHasEdited] = useState(false);
+  const [hasRefined, setHasRefined] = useState(false);
+  const [showRefineNudge, setShowRefineNudge] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
 
   // Direction
@@ -124,6 +126,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       }
       setSuggestions(map);
       previousStateRef.current = captureState();
+      setHasRefined(true);
     } catch (err: any) {
       setError('Something went wrong. Please try again.');
     } finally {
@@ -441,11 +444,44 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         )}
       </div>
 
+      {/* Refine nudge — shows when user tries to move on without refining */}
+      {showRefineNudge && (
+        <div style={{
+          padding: '14px 18px',
+          marginBottom: 12,
+          background: 'var(--bg-secondary, #f8f8fa)',
+          borderRadius: 'var(--radius-sm, 6px)',
+          border: '1px solid var(--border-light, #e5e5ea)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+            Your Three Tier is still in first-draft form. The story will be stronger if you refine the language first.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button className="btn btn-primary btn-sm" onClick={() => { setShowRefineNudge(false); refineLanguage(); }}>
+              Refine now
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setShowRefineNudge(false); navigate(`/five-chapter/${draft.id}`); }}>
+              Continue anyway
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="step-actions">
         <button className="btn btn-ghost" onClick={prevStep}>Back</button>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-ghost" onClick={() => navigate('/')}>Dashboard</button>
-          <button className="btn btn-primary" onClick={() => navigate(`/five-chapter/${draft.id}`)}>
+          <button className="btn btn-primary" onClick={() => {
+            if (!hasRefined && !hasEdited) {
+              setShowRefineNudge(true);
+            } else {
+              navigate(`/five-chapter/${draft.id}`);
+            }
+          }}>
             Turn Into an Email, Pitch, or Story
           </button>
         </div>
