@@ -306,10 +306,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
             &times;
           </button>
           <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0, paddingRight: 24 }}>
-            Here's your first draft. The top line is your core message — keyed to what {draft.audience.name} cares about most.
-            The rows below break it down by priority, and the bullets underneath are your proof points.
-            Read through it and click anything that doesn't sound like you.
-            When you're ready, try <strong>Refine Language</strong> to make the whole thing sound more natural.
+            Your first draft for {draft.audience.name}. Click anything to edit. <strong>Refine Language</strong> smooths out the whole thing when you're ready.
           </p>
         </div>
       )}

@@ -117,7 +117,7 @@ export function OfferingDetailPage() {
 
       {offering.elements.length === 0 && (
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
-          You can add capabilities here manually, or let Maria discover them during coaching. When you start a Three Tier, she'll ask you what makes this offering special and capture the answers automatically.
+          Add capabilities here, or let Maria pull them out during an interview. She'll ask what makes this offering different and capture what you tell her. You can start, stop, and continue whenever you want.
         </p>
       )}
 

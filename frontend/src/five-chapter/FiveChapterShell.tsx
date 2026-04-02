@@ -488,7 +488,7 @@ export function FiveChapterShell() {
       {(!story || showCreateForm) && (
         <div className="story-input-form">
           <h2>{stories.length > 0 ? 'New Deliverable' : 'Turn Your Three Tier Into Something'}</h2>
-          <p className="step-description">Pick a format and Maria will write a Five Chapter story tailored to it. Email is a good starting point — short enough to review quickly, long enough to see the full structure.</p>
+          <p className="step-description">Pick a format. Maria writes the Five Chapter story to fit.</p>
           <form onSubmit={createStory}>
             <div className="form-group">
               <label>Content Format</label>
@@ -513,7 +513,7 @@ export function FiveChapterShell() {
             <div className="form-group">
               <label>Chapter Emphasis (optional)</label>
               <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 6px' }}>
-                Give more weight to one chapter if you know what this audience needs most. Leave on "None" if unsure.
+                Shifts weight toward one chapter. Most people leave this on None.
               </p>
               <select value={emphasis} onChange={e => setEmphasis(e.target.value)}>
                 <option value="">None — balanced across all chapters</option>
@@ -671,7 +671,7 @@ export function FiveChapterShell() {
               gap: 12,
             }}>
               <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
-                All five chapters are drafted. Each one has a job — Chapter 1 creates urgency, Chapter 2 is your value story, Chapter 3 builds trust, Chapter 4 proves it works, and Chapter 5 gives them a next step. Read through and click any chapter to edit it. When you're ready, <strong>Create Final Draft</strong> blends them into one smooth piece.
+                All five chapters are drafted. Click any to edit. <strong>Create Final Draft</strong> blends them into one piece with transitions.
               </p>
               <button onClick={() => setChaptersJustGenerated(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, padding: '0 4px', flexShrink: 0 }}>&times;</button>
             </div>
@@ -711,7 +711,7 @@ export function FiveChapterShell() {
                       gap: 12,
                     }}>
                       <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
-                        Maria blended all five chapters into one {mediumLabel?.toLowerCase() || 'piece'} with smooth transitions. Click to edit anything directly. Use the edit box below to ask for changes — "make it shorter," "more emphasis on cost savings," "warmer tone."
+                        Blended into one {mediumLabel?.toLowerCase() || 'piece'}. Click to edit directly, or use the box below to tell Maria what to change.
                       </p>
                       <button onClick={() => setBlendJustGenerated(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, padding: '0 4px', flexShrink: 0 }}>&times;</button>
                     </div>
@@ -775,10 +775,10 @@ export function FiveChapterShell() {
               border: '1px solid var(--border-light, #e5e5ea)',
             }}>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 10px', lineHeight: 1.6 }}>
-                Your {mediumLabel?.toLowerCase()} is ready. You can create another format from the same Three Tier — a different audience hears things differently in a pitch than an email.
+                Your {mediumLabel?.toLowerCase()} is done, but you're still in the flow. If your next deliverable is related — say, the landing page that email links to — you can draft it now and it'll stay tightly unified with what you just built.
               </p>
               <button className="btn btn-secondary btn-sm" onClick={() => setShowCreateForm(true)}>
-                Create Another Format
+                Draft the Next Piece
               </button>
             </div>
           )}

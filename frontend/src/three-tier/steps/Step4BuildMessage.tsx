@@ -297,7 +297,7 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
             margin: '16px auto 0',
             textAlign: 'center',
           }}>
-            Maria mapped what {draft.audience.name} cares about to what {draft.offering.name} can deliver — one core message on top, supporting reasons below, and proof underneath each one.
+            Maria connected {draft.audience.name}'s priorities to what {draft.offering.name} delivers. Your first draft is ready to review.
           </p>
         </div>
       )}

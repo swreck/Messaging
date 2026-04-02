@@ -145,7 +145,7 @@ export function OfferingsPage() {
         <div className="empty-state-card empty-state-enhanced">
           <div className="empty-icon">✨</div>
           <h3>What are you building messaging for?</h3>
-          <p>Add the product or service you want to message. You'll tell Maria what makes it special during the coaching.</p>
+          <p>Add the product or service you want to message. When you're ready, Maria will interview you about what makes it different.</p>
           <button className="btn btn-primary" onClick={openNew} style={{ marginTop: 16 }}>Add an Offering</button>
         </div>
       ) : (

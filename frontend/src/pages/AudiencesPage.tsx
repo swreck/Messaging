@@ -196,8 +196,8 @@ export function AudiencesPage() {
       {audiences.length === 0 && (
         <div className="empty-state empty-state-enhanced">
           <div className="empty-icon">👥</div>
-          <h3>Who are you trying to reach?</h3>
-          <p>Every good message starts with who's going to hear it. Add the audience you're building messaging for — you can always add more later.</p>
+          <h3>No audiences yet</h3>
+          <p>Add the audience you're building messaging for. You can always add more later.</p>
           <button className="btn btn-primary" onClick={openNew} style={{ marginTop: 16 }}>Add an Audience</button>
         </div>
       )}
