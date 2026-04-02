@@ -750,7 +750,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
-  overflow: clip;
+  overflow-x: auto;
   border: 1px solid #d1d1d6;
 }
 
