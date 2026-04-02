@@ -56,6 +56,29 @@ export async function resolveAudienceId(
   return fallbackAudienceId || null;
 }
 
+// ─── Offering resolver ────────────────────────────────────────
+export async function resolveOfferingId(
+  params: Record<string, any>,
+  userId: string,
+  fallbackOfferingId?: string | null,
+  workspaceId?: string,
+): Promise<string | null> {
+  const scopeFilter = workspaceId ? { workspaceId } : { userId };
+  if (params.offeringName) {
+    const exact = await prisma.offering.findFirst({
+      where: { ...scopeFilter, name: { equals: params.offeringName, mode: 'insensitive' as const } },
+    });
+    if (exact) return exact.id;
+
+    const fuzzy = await prisma.offering.findFirst({
+      where: { ...scopeFilter, name: { contains: params.offeringName, mode: 'insensitive' as const } },
+      orderBy: { name: 'asc' },
+    });
+    return fuzzy?.id || null;
+  }
+  return fallbackOfferingId || null;
+}
+
 // ─── Context type used by dispatch and page-content ────────────
 export interface ActionContext {
   page?: string;
@@ -305,52 +328,67 @@ export async function dispatchActions(
         refreshNeeded = true;
       }
 
-      if (a.type === 'add_capabilities' && ctx.offeringId && a.params.texts) {
-        const offering = await prisma.offering.findFirst({
-          where: { id: ctx.offeringId, ...(workspaceId ? { workspaceId } : { userId }) },
-          include: { elements: true },
-        });
-        if (offering) {
-          const maxSort = offering.elements.reduce((max: number, e: any) => Math.max(max, e.sortOrder), 0);
-          for (let i = 0; i < a.params.texts.length; i++) {
-            await prisma.offeringElement.create({
-              data: {
-                offeringId: ctx.offeringId,
-                text: a.params.texts[i],
-                sortOrder: maxSort + i + 1,
-              },
-            });
-          }
-          actionResult = `Added ${a.params.texts.length} capabilit${a.params.texts.length === 1 ? 'y' : 'ies'}`;
-          refreshNeeded = true;
-        }
-      }
-
-      if (a.type === 'edit_capabilities' && ctx.offeringId && a.params.edits) {
-        const offering = await prisma.offering.findFirst({
-          where: { id: ctx.offeringId, ...(workspaceId ? { workspaceId } : { userId }) },
-          include: { elements: { orderBy: { sortOrder: 'asc' } } },
-        });
-        if (offering) {
-          let editCount = 0;
-          for (const edit of a.params.edits) {
-            const idx = edit.position - 1;
-            if (idx >= 0 && idx < offering.elements.length) {
-              await prisma.offeringElement.update({
-                where: { id: offering.elements[idx].id },
-                data: { text: edit.text },
+      if (a.type === 'add_capabilities' && a.params.texts) {
+        const targetOfferingId = await resolveOfferingId(a.params, userId, ctx.offeringId, workspaceId);
+        if (!targetOfferingId) {
+          actionResult = 'Could not add capabilities — no offering specified or found. Try including the offering name.';
+        } else {
+          const offering = await prisma.offering.findFirst({
+            where: { id: targetOfferingId, ...(workspaceId ? { workspaceId } : { userId }) },
+            include: { elements: true },
+          });
+          if (offering) {
+            const maxSort = offering.elements.reduce((max: number, e: any) => Math.max(max, e.sortOrder), 0);
+            for (let i = 0; i < a.params.texts.length; i++) {
+              await prisma.offeringElement.create({
+                data: {
+                  offeringId: targetOfferingId,
+                  text: a.params.texts[i],
+                  sortOrder: maxSort + i + 1,
+                },
               });
-              editCount++;
             }
+            const targetLabel = targetOfferingId !== ctx.offeringId ? ` to "${offering.name}"` : '';
+            actionResult = `Added ${a.params.texts.length} capabilit${a.params.texts.length === 1 ? 'y' : 'ies'}${targetLabel}`;
+            refreshNeeded = true;
           }
-          actionResult = `Updated ${editCount} capabilit${editCount === 1 ? 'y' : 'ies'}`;
-          refreshNeeded = true;
         }
       }
 
-      if (a.type === 'delete_capabilities' && ctx.offeringId && a.params.positions) {
+      if (a.type === 'edit_capabilities' && a.params.edits) {
+        const targetOfferingId = await resolveOfferingId(a.params, userId, ctx.offeringId, workspaceId);
+        if (!targetOfferingId) {
+          actionResult = 'Could not edit capabilities — no offering specified or found.';
+        } else {
+          const offering = await prisma.offering.findFirst({
+            where: { id: targetOfferingId, ...(workspaceId ? { workspaceId } : { userId }) },
+            include: { elements: { orderBy: { sortOrder: 'asc' } } },
+          });
+          if (offering) {
+            let editCount = 0;
+            for (const edit of a.params.edits) {
+              const idx = edit.position - 1;
+              if (idx >= 0 && idx < offering.elements.length) {
+                await prisma.offeringElement.update({
+                  where: { id: offering.elements[idx].id },
+                  data: { text: edit.text },
+                });
+                editCount++;
+              }
+            }
+            actionResult = `Updated ${editCount} capabilit${editCount === 1 ? 'y' : 'ies'}`;
+            refreshNeeded = true;
+          }
+        }
+      }
+
+      if (a.type === 'delete_capabilities' && a.params.positions) {
+        const targetOfferingId = await resolveOfferingId(a.params, userId, ctx.offeringId, workspaceId);
+        if (!targetOfferingId) {
+          actionResult = 'Could not delete capabilities — no offering specified or found.';
+        } else {
         const offering = await prisma.offering.findFirst({
-          where: { id: ctx.offeringId, ...(workspaceId ? { workspaceId } : { userId }) },
+          where: { id: targetOfferingId, ...(workspaceId ? { workspaceId } : { userId }) },
           include: { elements: { orderBy: { sortOrder: 'asc' } } },
         });
         if (offering) {
@@ -368,6 +406,7 @@ export async function dispatchActions(
           }
           actionResult = `Deleted ${idsToDelete.length} capabilit${idsToDelete.length === 1 ? 'y' : 'ies'}`;
           refreshNeeded = true;
+        }
         }
       }
 
@@ -981,31 +1020,22 @@ export function buildActionList(context: ActionContext): string {
   // read_page is always available
   actions.push('- read_page: Request to see the content currently visible on the page. Use this when the user references specific items on the page ("the 2nd priority," "chapter 3," "that first column") and you need to see what they see. Params: {}');
 
-  // Audience actions
+  // Audience actions — always available (Maria can interview from any page)
   if (context.audienceId) {
     actions.push('- edit_audience: Update the current audience name or description. Params: { name?: string, description?: string }');
   }
+  actions.push('- add_priorities: Add priorities to an audience. Params: { texts: string[], audienceName?: string } — audienceName targets a specific audience by name (partial match OK). Required if not on an audience page.');
+  actions.push('- edit_priorities: Update priority text or motivatingFactor. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }], audienceName?: string } — position is 1-based.');
+  actions.push('- delete_priorities: Remove priorities by position. Params: { positions: number[], audienceName?: string } — 1-based positions.');
+  actions.push('- reorder_priorities: Reorder priorities. Params: { order: number[], audienceName?: string } — array of current positions in desired new order.');
 
-  // Priority actions — on audiences page, all can target ANY audience by name
-  if (context.page === 'audiences') {
-    actions.push('- add_priorities: Add new priorities to an audience. Params: { texts: string[], audienceName?: string } — audienceName targets a specific audience by name (partial match OK). If omitted, adds to the currently selected audience.');
-    actions.push('- edit_priorities: Rename, rewrite, or update the text/motivatingFactor of existing priorities. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }], audienceName?: string } — position is 1-based. audienceName targets a specific audience by name. If omitted, edits the currently selected audience.');
-    actions.push('- delete_priorities: Remove priorities by their position. Params: { positions: number[], audienceName?: string } — 1-based positions. audienceName targets a specific audience.');
-    actions.push('- reorder_priorities: Set the full ranked order of priorities. Params: { order: number[], audienceName?: string } — array of current positions in the desired new order, e.g. [4, 1, 3, 2] means current #4 becomes #1. audienceName targets a specific audience.');
-  } else if (context.audienceId) {
-    actions.push('- add_priorities: Add new priorities to the current audience. Params: { texts: string[] }');
-    actions.push('- edit_priorities: Rename, rewrite, or update the text/motivatingFactor of existing priorities. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }] } — position is 1-based');
-    actions.push('- delete_priorities: Remove priorities by their position on the page. Params: { positions: number[] } — 1-based positions');
-    actions.push('- reorder_priorities: Set the full ranked order of priorities. Params: { order: number[] } — array of current positions in the desired new order, e.g. [4, 1, 3, 2] means current #4 becomes #1');
-  }
-
-  // Offering actions
+  // Offering actions — always available (Maria can interview from any page)
   if (context.offeringId) {
     actions.push('- edit_offering: Update the current offering name or description. Params: { name?: string, description?: string }');
-    actions.push('- add_capabilities: Add new capabilities to the current offering. Params: { texts: string[] }');
-    actions.push('- edit_capabilities: Rename/rewrite capabilities. Params: { edits: [{ position: number, text: string }] } — position is 1-based');
-    actions.push('- delete_capabilities: Remove capabilities by position. Params: { positions: number[] } — 1-based positions');
   }
+  actions.push('- add_capabilities: Add capabilities to an offering. Params: { texts: string[], offeringName?: string } — offeringName targets a specific offering by name (partial match OK). Required if not on an offering page.');
+  actions.push('- edit_capabilities: Rename/rewrite capabilities. Params: { edits: [{ position: number, text: string }], offeringName?: string } — position is 1-based.');
+  actions.push('- delete_capabilities: Remove capabilities by position. Params: { positions: number[], offeringName?: string } — 1-based positions.');
 
   // Create offering — available from any page (for quick-start and flexibility)
   actions.push('- create_offering: Create a new offering, optionally with initial capabilities. Params: { name: string, description?: string, capabilities?: string[] }');
