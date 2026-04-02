@@ -764,10 +764,30 @@ export function FiveChapterShell() {
       )}
 
       {story && !showCreateForm && (
-        <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
-          <button className="btn btn-ghost" onClick={() => navigate(`/three-tier/${draftId}`)}>Back to Three Tier</button>
-          <button className="btn btn-ghost" onClick={() => navigate('/')}>Dashboard</button>
-        </div>
+        <>
+          {/* What's next — only show when story has been blended */}
+          {story.blendedText && (
+            <div style={{
+              marginTop: 24,
+              padding: '16px 20px',
+              background: 'var(--bg-secondary, #f8f8fa)',
+              borderRadius: 'var(--radius-md, 10px)',
+              border: '1px solid var(--border-light, #e5e5ea)',
+            }}>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 10px', lineHeight: 1.6 }}>
+                Your {mediumLabel?.toLowerCase()} is ready. You can create another format from the same Three Tier — a different audience hears things differently in a pitch than an email.
+              </p>
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowCreateForm(true)}>
+                Create Another Format
+              </button>
+            </div>
+          )}
+
+          <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between' }}>
+            <button className="btn btn-ghost" onClick={() => navigate(`/three-tier/${draftId}`)}>Back to Three Tier</button>
+            <button className="btn btn-ghost" onClick={() => navigate('/')}>Dashboard</button>
+          </div>
+        </>
       )}
     </div>
   );

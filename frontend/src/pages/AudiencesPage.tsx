@@ -210,6 +210,11 @@ export function AudiencesPage() {
               <div className="expandable-card-title">
                 <strong>{a.name}</strong>
                 <span className="badge">{a.priorities.length} priorit{a.priorities.length === 1 ? 'y' : 'ies'}</span>
+                {a.drafts && a.drafts.length > 0 && (
+                  <span className="badge" style={{ background: 'var(--accent-bg, #e8f0fe)', color: 'var(--accent, #007aff)' }}>
+                    {a.drafts.length} draft{a.drafts.length !== 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
               <div className="expandable-card-actions" onClick={e => e.stopPropagation()}>
                 {hasMultipleWorkspaces && (
