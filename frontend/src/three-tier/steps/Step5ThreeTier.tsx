@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { StepProps } from './types';
 import { api } from '../../api/client';
@@ -33,6 +33,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
   function formatTimeAgo(dateStr: string): string {
     const diff = Date.now() - new Date(dateStr).getTime();
+    if (isNaN(diff)) return 'recently';
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return 'just now';
     if (mins < 60) return `${mins}m ago`;
@@ -44,6 +45,19 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
   // More tools dropdown
   const [showMoreTools, setShowMoreTools] = useState(false);
+  const moreToolsRef = useRef<HTMLDivElement>(null);
+
+  // Close "..." menu on outside click
+  useEffect(() => {
+    if (!showMoreTools) return;
+    function handleClick(e: MouseEvent) {
+      if (moreToolsRef.current && !moreToolsRef.current.contains(e.target as Node)) {
+        setShowMoreTools(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showMoreTools]);
 
   // Compare modal
   const [compareSnapshot, setCompareSnapshot] = useState<{ snapshot: any; label: string } | null>(null);
@@ -351,7 +365,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       <div className="direction-input" style={{ marginBottom: 16 }}>
         {focusedCell && (
           <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 4, fontWeight: 500 }}>
-            Scoped to {focusedCell.startsWith('tier1') ? 'Tier 1' : focusedCell.startsWith('tier2') ? `column ${parseInt(focusedCell.split('-')[1]) + 1}` : 'this cell'}
+            Scoped to {focusedCell.startsWith('tier1') ? 'Tier 1' : focusedCell.startsWith('tier2') ? `Tier 2 column` : 'a proof point'}
             <button
               className="btn btn-ghost"
               style={{ fontSize: 11, padding: '0 6px', marginLeft: 6 }}
@@ -417,7 +431,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
             {revising ? <><Spinner size={12} /> Revising...</> : 'Match the rest to my edits'}
           </button>
         )}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative' }} ref={moreToolsRef}>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowMoreTools(!showMoreTools)}>
             &middot;&middot;&middot;
           </button>

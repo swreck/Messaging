@@ -318,7 +318,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                             onCancel={() => { setEditingCell(null); onCellFocus?.(null); }}
                           />
                         ) : (
-                          <div className={`tier3-bullet${isPendingDelete ? ' tier3-pending-delete' : ''}`} onClick={() => !isPendingDelete && handleCellClick(`tier3-${t3.id}`)}>
+                          <div className={`tier3-bullet${isPendingDelete ? ' tier3-pending-delete' : ''}${focusedCell === `tier3-${t3.id}` ? ' cell-focused' : ''}`} onClick={() => !isPendingDelete && handleCellClick(`tier3-${t3.id}`)}>
                             <span>{t3.text}</span>
                             {isPendingDelete ? (
                               <span className="tier3-undo" onClick={(e) => { e.stopPropagation(); undoDeleteTier3(); }}>Undo</span>

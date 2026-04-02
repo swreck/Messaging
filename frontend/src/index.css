@@ -861,6 +861,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .tier3-bullet::before { content: '\2022'; color: var(--text-tertiary); }
 .tier3-bullet:hover { color: var(--text-primary); background: var(--bg-hover); border-radius: var(--radius-sm); cursor: text; }
+.tier3-bullet.cell-focused { box-shadow: inset 0 0 0 2px rgba(255, 204, 0, 0.35); border-radius: var(--radius-sm); }
 .tier3-pending-delete {
   opacity: 0.4;
   text-decoration: line-through;
