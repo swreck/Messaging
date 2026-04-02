@@ -167,6 +167,8 @@ export function ThreeTiersPage() {
       setNewOfferingName('');
     } catch (err: any) {
       alert(err.message || 'Failed to create offering');
+      setCreatingOffering(false);
+      setNewOfferingName('');
     }
   }
 
@@ -183,6 +185,8 @@ export function ThreeTiersPage() {
       setNewAudienceName('');
     } catch (err: any) {
       alert(err.message || 'Failed to create audience');
+      setCreatingAudience(false);
+      setNewAudienceName('');
     }
   }
 

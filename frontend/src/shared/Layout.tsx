@@ -55,41 +55,41 @@ export function Layout({ children }: { children: React.ReactNode }) {
               {item.label}
             </Link>
           ))}
-          {showTeams && (
-            <div className="team-dropdown-wrapper" ref={dropdownRef}>
-              <button
-                className={`team-dropdown-trigger ${location.pathname.startsWith('/workspaces') ? 'active' : ''}`}
-                onClick={() => setTeamDropdownOpen(!teamDropdownOpen)}
-              >
-                {activeWorkspace ? activeWorkspace.name : 'Teams'}
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft: 4 }}>
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-              {teamDropdownOpen && (
-                <div className="team-dropdown-menu">
-                  {workspaces.map(ws => (
-                    <button
-                      key={ws.id}
-                      className={`team-dropdown-item ${ws.id === activeWorkspace?.id ? 'team-dropdown-active' : ''}`}
-                      onClick={() => { switchWorkspace(ws.id); setTeamDropdownOpen(false); }}
-                    >
-                      {ws.name}
-                      {ws.id === activeWorkspace?.id && <span className="team-dropdown-check">✓</span>}
-                    </button>
-                  ))}
-                  <div className="team-dropdown-divider" />
-                  <button
-                    className="team-dropdown-item team-dropdown-manage"
-                    onClick={() => { navigate('/workspaces'); setTeamDropdownOpen(false); }}
-                  >
-                    Manage Teams
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
+        {showTeams && (
+          <div className="team-dropdown-wrapper" ref={dropdownRef}>
+            <button
+              className={`team-dropdown-trigger ${location.pathname.startsWith('/workspaces') ? 'active' : ''}`}
+              onClick={() => setTeamDropdownOpen(!teamDropdownOpen)}
+            >
+              {activeWorkspace ? activeWorkspace.name : 'Teams'}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft: 4 }}>
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            {teamDropdownOpen && (
+              <div className="team-dropdown-menu">
+                {workspaces.map(ws => (
+                  <button
+                    key={ws.id}
+                    className={`team-dropdown-item ${ws.id === activeWorkspace?.id ? 'team-dropdown-active' : ''}`}
+                    onClick={() => { switchWorkspace(ws.id); setTeamDropdownOpen(false); }}
+                  >
+                    {ws.name}
+                    {ws.id === activeWorkspace?.id && <span className="team-dropdown-check">✓</span>}
+                  </button>
+                ))}
+                <div className="team-dropdown-divider" />
+                <button
+                  className="team-dropdown-item team-dropdown-manage"
+                  onClick={() => { navigate('/workspaces'); setTeamDropdownOpen(false); }}
+                >
+                  Manage Teams
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         <div className="nav-right">
           <span className="nav-user">{user?.username}</span>
           <button onClick={logout} className="btn btn-ghost btn-sm">Sign Out</button>

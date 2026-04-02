@@ -387,26 +387,26 @@ export async function dispatchActions(
         if (!targetOfferingId) {
           actionResult = 'Could not delete capabilities — no offering specified or found.';
         } else {
-        const offering = await prisma.offering.findFirst({
-          where: { id: targetOfferingId, ...(workspaceId ? { workspaceId } : { userId }) },
-          include: { elements: { orderBy: { sortOrder: 'asc' } } },
-        });
-        if (offering) {
-          const idsToDelete: string[] = [];
-          for (const pos of a.params.positions) {
-            const idx = pos - 1;
-            if (idx >= 0 && idx < offering.elements.length) {
-              idsToDelete.push(offering.elements[idx].id);
+          const offering = await prisma.offering.findFirst({
+            where: { id: targetOfferingId, ...(workspaceId ? { workspaceId } : { userId }) },
+            include: { elements: { orderBy: { sortOrder: 'asc' } } },
+          });
+          if (offering) {
+            const idsToDelete: string[] = [];
+            for (const pos of a.params.positions) {
+              const idx = pos - 1;
+              if (idx >= 0 && idx < offering.elements.length) {
+                idsToDelete.push(offering.elements[idx].id);
+              }
             }
+            if (idsToDelete.length > 0) {
+              await prisma.offeringElement.deleteMany({
+                where: { id: { in: idsToDelete } },
+              });
+            }
+            actionResult = `Deleted ${idsToDelete.length} capabilit${idsToDelete.length === 1 ? 'y' : 'ies'}`;
+            refreshNeeded = true;
           }
-          if (idsToDelete.length > 0) {
-            await prisma.offeringElement.deleteMany({
-              where: { id: { in: idsToDelete } },
-            });
-          }
-          actionResult = `Deleted ${idsToDelete.length} capabilit${idsToDelete.length === 1 ? 'y' : 'ies'}`;
-          refreshNeeded = true;
-        }
         }
       }
 
@@ -667,10 +667,10 @@ Write Chapter ${chNum}: "${ch.name}"`;
                 chapterContentId: chapter.id,
                 title: ch.name,
                 content,
-                versionNum: (await prisma.chapterVersion.aggregate({
+                versionNum: ((await prisma.chapterVersion.aggregate({
                   where: { chapterContentId: chapter.id },
                   _max: { versionNum: true },
-                }))._max?.versionNum ?? 0 + 1,
+                }))._max?.versionNum ?? 0) + 1,
                 changeSource: 'ai_regenerate',
               },
             });

@@ -278,8 +278,8 @@ router.put('/intro-step', async (req: Request, res: Response) => {
         },
       },
     });
-  } else if (typeof step === 'number') {
-    // Advance to a specific step
+  } else if (typeof step === 'number' && step >= 0 && step <= 4) {
+    // Advance to a specific step (0=name, 1=phase1, 2=phase2, 3=phase3, 4=done)
     const introduced = step >= 4;
     await prisma.user.update({
       where: { id: req.user!.userId },
