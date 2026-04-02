@@ -25,6 +25,8 @@ export const ACTION_ALIASES: Record<string, string> = {
   'generate_story': 'create_story',
   'new_story': 'create_story',
   'start_draft': 'start_three_tier',
+  'go_to': 'navigate',
+  'show_page': 'navigate',
   'create_draft': 'start_three_tier',
   'new_draft': 'start_three_tier',
   'begin_three_tier': 'start_three_tier',
@@ -718,6 +720,11 @@ Write Chapter ${chNum}: "${ch.name}"`;
         refreshNeeded = true;
       }
 
+      // ─── Navigate ─────────────────────────────────────
+      if (a.type === 'navigate' && a.params.path) {
+        actionResult = `[NAVIGATE:${a.params.path}]`;
+      }
+
       // ─── Start Three Tier (create draft from offering + audience names) ─────
       if (a.type === 'start_three_tier' && a.params.offeringName && a.params.audienceName) {
         const scopeFilter = workspaceId ? { workspaceId } : { userId };
@@ -1017,8 +1024,9 @@ export async function readPageContent(
 export function buildActionList(context: ActionContext): string {
   const actions: string[] = [];
 
-  // read_page is always available
+  // read_page and navigate are always available
   actions.push('- read_page: Request to see the content currently visible on the page. Use this when the user references specific items on the page ("the 2nd priority," "chapter 3," "that first column") and you need to see what they see. Params: {}');
+  actions.push('- navigate: Take the user to a different page. Params: { path: string } — e.g. "/audiences", "/offerings", "/three-tier/{draftId}". Use when the user asks to see something on another page.');
 
   // Audience actions — always available (Maria can interview from any page)
   if (context.audienceId) {
