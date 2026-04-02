@@ -12,6 +12,8 @@ The following files encode Ken Rosen's proprietary messaging methodologies. They
 - `backend/src/prompts/mapping.ts` — Priority → capability mapping logic
 - `backend/src/prompts/partner.ts` — METHODOLOGY_CORE (Maria's deep understanding)
 - `backend/src/services/voiceCheck.ts` — Voice quality evaluation rules
+- `backend/src/services/threeTierCheck.ts` — Three Tier structural/doctrinal evaluator
+- `backend/src/services/fiveChapterCheck.ts` — Five Chapter boundary/structure evaluator
 
 If you believe a change is needed, explain what and why to Ken first. These files represent decades of consulting expertise encoded into software. Drift here means the product fails.
 
