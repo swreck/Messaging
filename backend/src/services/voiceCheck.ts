@@ -232,6 +232,16 @@ export async function isVoiceCheckEnabled(userId: string): Promise<boolean> {
   return settings.voiceCheckEnabled !== false;
 }
 
+export async function isMethodologyCheckEnabled(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { settings: true },
+  });
+  const settings = (user?.settings as Record<string, any>) || {};
+  // Default: DISABLED. Must be explicitly enabled for testing.
+  return settings.methodologyCheckEnabled === true;
+}
+
 // ─── Statement evaluator ────────────────────────────────────
 
 export async function checkStatements(statements: StatementInput[]): Promise<StatementCheckResult> {

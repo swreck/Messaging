@@ -11,6 +11,7 @@ import { AUDIENCE_DISCOVERY_SYSTEM } from '../prompts/audienceDiscovery.js';
 import { getLearning, updateLearning, buildLearningPromptBlock } from '../lib/learning.js';
 import {
   isVoiceCheckEnabled,
+  isMethodologyCheckEnabled,
   checkStatements,
   checkProse,
   buildViolationFeedback,
@@ -104,6 +105,9 @@ async function generateTierWithVoiceCheck(
   }
 
   // Three Tier methodology check (structural/doctrinal)
+  // Gated separately — disabled by default until tested with Ken
+  const methodologyCheckEnabled = await isMethodologyCheckEnabled(userId);
+  if (!methodologyCheckEnabled) return result;
   try {
     const allPriorities = priorities?.map(p => ({ text: p.text, rank: p.rank })) || [];
     const topPriority = allPriorities.find(p => p.rank === 1) || { text: '', rank: 1 };
@@ -897,7 +901,7 @@ Write Chapter ${chapterNum}: "${ch.name}"`;
   }
 
   // Five Chapter methodology check (structural/boundary)
-  if (await isVoiceCheckEnabled(req.user!.userId)) {
+  if (await isMethodologyCheckEnabled(req.user!.userId)) {
     try {
       const fcInput: FiveChapterInput = {
         chapters: [{ num: chapterNum, title: ch.name, content }],
