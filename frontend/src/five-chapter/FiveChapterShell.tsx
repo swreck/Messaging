@@ -150,12 +150,12 @@ export function FiveChapterShell() {
           chapterRefs.current[i - 1]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 100);
       }
+      setChaptersJustGenerated(true);
     } catch (err: any) {
       alert(err.message);
     } finally {
       setGenerating(false);
       setGeneratingChapter(null);
-      setChaptersJustGenerated(true);
     }
   }
 

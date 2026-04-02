@@ -184,7 +184,13 @@ async function buildSurfacingHint(workspaceId: string): Promise<string | undefin
 // GET /api/partner/status — check intro state, return context if useful
 router.get('/status', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { username, displayName, introduced, introStep, lastVisitAt } = await getPartnerSettings(userId);
+  const settings = await getPartnerSettings(userId);
+  const username = settings.username;
+  const displayName = settings.displayName;
+  const introStep = settings.introStep;
+  const lastVisitAt = settings.lastVisitAt;
+  // Validate consistency: introStep is the source of truth
+  const introduced = introStep >= 4;
 
   let returnContext: ReturnContext | null = null;
 

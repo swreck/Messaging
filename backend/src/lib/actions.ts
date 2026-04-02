@@ -720,9 +720,15 @@ Write Chapter ${chNum}: "${ch.name}"`;
         refreshNeeded = true;
       }
 
-      // ─── Navigate ─────────────────────────────────────
+      // ─── Navigate (whitelist valid app routes) ──────────
       if (a.type === 'navigate' && a.params.path) {
-        actionResult = `[NAVIGATE:${a.params.path}]`;
+        const path = String(a.params.path);
+        const validRoutes = /^\/(audiences|offerings|three-tiers?|five-chapters?|settings|workspaces)?(\/.+)?$/;
+        if (path === '/' || validRoutes.test(path)) {
+          actionResult = `[NAVIGATE:${path}]`;
+        } else {
+          actionResult = `Could not navigate — invalid path`;
+        }
       }
 
       // ─── Start Three Tier (create draft from offering + audience names) ─────
