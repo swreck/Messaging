@@ -24,7 +24,7 @@ CRITICAL RULES:
 
 8. NEVER add contrast clauses. Do NOT write "not X," "instead of X," "no X," or "without X" after stating a fact. The audience knows their current situation — you do not need to position against it. Just state the fact and stop.
 
-9. In the "because" clause, use AUDIENCE-FACING language — describe what the audience GETS or EXPERIENCES, not the deployment model, technical implementation, or internal product terminology. Always translate capability language into outcome language the audience would use.
+9. Use AUDIENCE-FACING language. Describe what the audience GETS or EXPERIENCES, not the deployment model, technical implementation, or internal product terminology. Always translate capability language into outcome language the audience would use.
 
 10. Do NOT pack multiple impressive claims into one sentence. If a sentence contains more than one number, metric, or notable fact, break it into two sentences. Dense sentences sound rehearsed — like someone reciting marketing material. One thought per sentence.
 
