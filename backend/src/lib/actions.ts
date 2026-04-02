@@ -536,11 +536,11 @@ ${story.emphasis ? `EMPHASIS: ${story.emphasis}` : ''}
 
 THREE TIER MESSAGE:
 Tier 1: "${story.draft.tier1Statement?.text || ''}"
-${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}", Motivating factor: "${t2.priority?.motivatingFactor || ''}")
+${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}", ${t2.priority?.motivatingFactor ? `Driver: "${t2.priority.motivatingFactor}"` : ''})
   Proof: ${t2.tier3Bullets.map((t3: any) => t3.text).join(', ')}`).join('\n')}
 
 AUDIENCE PRIORITIES:
-${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — Why important: "${p.motivatingFactor}" — Audience thinks: "${p.whatAudienceThinks}"`).join('\n')}
+${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — ${p.motivatingFactor ? `Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
 ${prevChapters.map((c: any) => `CHAPTER ${c.chapterNum} (already written): ${c.content.substring(0, 200)}...`).join('\n')}
 
@@ -652,11 +652,11 @@ ${story.emphasis ? `EMPHASIS: ${story.emphasis}` : ''}
 
 THREE TIER MESSAGE:
 Tier 1: "${story.draft.tier1Statement?.text || ''}"
-${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}", Motivating factor: "${t2.priority?.motivatingFactor || ''}")
+${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}", ${t2.priority?.motivatingFactor ? `Driver: "${t2.priority.motivatingFactor}"` : ''})
   Proof: ${t2.tier3Bullets.map((t3: any) => t3.text).join(', ')}`).join('\n')}
 
 AUDIENCE PRIORITIES:
-${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — Why important: "${p.motivatingFactor}" — Audience thinks: "${p.whatAudienceThinks}"`).join('\n')}
+${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — ${p.motivatingFactor ? `Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
 ${prevChapters.map((c: any) => `CHAPTER ${c.chapterNum} (already written): ${c.content.substring(0, 200)}...`).join('\n')}
 
@@ -706,8 +706,27 @@ Write Chapter ${chNum}: "${ch.name}"`;
       if (a.type === 'copy_edit' && ctx.storyId && a.params.instruction) {
         const story = await prisma.fiveChapterStory.findFirst({
           where: { id: ctx.storyId },
+          include: { chapters: { orderBy: { chapterNum: 'asc' } } },
         });
         if (story && story.blendedText) {
+          // Snapshot before edit so user can undo
+          const maxSnapVer = await prisma.storyVersion.aggregate({
+            where: { storyId: ctx.storyId },
+            _max: { versionNum: true },
+          });
+          await prisma.storyVersion.create({
+            data: {
+              storyId: ctx.storyId,
+              snapshot: {
+                medium: story.medium, cta: story.cta, emphasis: story.emphasis,
+                stage: story.stage, joinedText: story.joinedText, blendedText: story.blendedText,
+                chapters: story.chapters.map((c: any) => ({ chapterNum: c.chapterNum, title: c.title, content: c.content })),
+              },
+              label: 'Before copy edit (via Maria)',
+              versionNum: (maxSnapVer._max?.versionNum ?? 0) + 1,
+            },
+          });
+
           const spec = getMediumSpec(story.medium);
           const userMessage = `CONTENT FORMAT: ${spec.label}\nUSER'S REQUEST: ${a.params.instruction}\n\nCURRENT CONTENT:\n${story.blendedText}\n\nApply the requested changes.`;
           const revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'fast');
