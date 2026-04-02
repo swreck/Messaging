@@ -49,6 +49,7 @@ export function DifferentiatorList({
 
   async function updateMotivatingFactor(elementId: string, value: string) {
     await api.put(`/offerings/${offeringId}/elements/${elementId}`, { motivatingFactor: value });
+    onUpdate();
   }
 
   function renderElement(item: OfferingElement, _index: number, { listeners, attributes }: DragHandleProps) {

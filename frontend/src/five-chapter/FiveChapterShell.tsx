@@ -539,11 +539,11 @@ export function FiveChapterShell() {
         </div>
       )}
 
-      {/* Missing motivating factor panel */}
+      {/* Missing driver panel */}
       {showMFPanel && (
         <div className="mf-panel">
           <p className="mf-panel-intro">
-            A motivating factor is <strong>why</strong> something matters to your audience. It helps make messages more compelling.
+            A driver explains <strong>why</strong> a priority matters so much to this specific person. It helps Maria write more persuasive copy.
           </p>
           <p className="mf-panel-offer">
             Your top priority — <strong>{draft.audience.priorities[0]?.text}</strong> — doesn't have one yet.

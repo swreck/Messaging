@@ -92,6 +92,7 @@ export function PriorityList({
 
   async function updateMotivatingFactor(id: string, value: string) {
     await api.put(`/audiences/${audienceId}/priorities/${id}`, { motivatingFactor: value });
+    onUpdate();
   }
 
   function startEditing(item: Priority) {

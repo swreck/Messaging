@@ -430,6 +430,7 @@ router.post('/:id/copy-offering', async (req: Request, res: Response) => {
           text: e.text,
           source: e.source,
           sortOrder: e.sortOrder,
+          motivatingFactor: e.motivatingFactor || '',
         })),
       },
     },

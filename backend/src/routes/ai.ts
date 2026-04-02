@@ -233,7 +233,7 @@ router.post('/suggest-mappings', requireEditor, async (req: Request, res: Respon
 ${draft.audience.priorities.map((p) => `- [ID: ${p.id}] [Rank ${p.rank}] "${p.text}"${p.motivatingFactor ? ` (Driver: ${p.motivatingFactor})` : ''}`).join('\n')}
 
 CAPABILITIES/DIFFERENTIATORS:
-${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"${(e as any).motivatingFactor ? ` (Why someone would care: ${(e as any).motivatingFactor})` : ''}`).join('\n')}
+${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"${e.motivatingFactor ? ` (Why someone would care: ${e.motivatingFactor})` : ''}`).join('\n')}
 
 MAPPING GUIDE: A differentiator's "why someone would care" tells you which priority it should map to. When the motivating factor aligns with what the persona cares about, that's the connection.`;
 
@@ -853,7 +853,7 @@ router.post('/generate-chapter', requireStoryteller, async (req: Request, res: R
   const topPriority = story.draft.audience.priorities[0];
   if (topPriority && !topPriority.motivatingFactor) {
     res.status(400).json({
-      error: 'A motivating factor is required for the top priority before generating a Five Chapter Story',
+      error: 'A driver is needed for the top priority before generating a Five Chapter Story — it helps Maria understand why this matters to the audience',
       missingTopPriority: { id: topPriority.id, text: topPriority.text },
     });
     return;
