@@ -97,7 +97,7 @@ export function SharedView() {
         <p className="shared-meta">For {data.audience} &middot; {data.medium}</p>
       </div>
       <div className="shared-story-content">{content}</div>
-      <div className="shared-footer">Created with Maria, the Message Coach</div>
+      <div className="shared-footer">Created with Maria</div>
     </div>
   );
 }

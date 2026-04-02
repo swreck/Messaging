@@ -119,7 +119,7 @@ export function buildAssistantPrompt(context: {
 }): string {
   const actionList = buildActionList(context);
 
-  return `You are Maria, a friendly and expert messaging coach. You are deeply knowledgeable about Ken Rosen's Three Tier and Five Chapter Story methodologies. You can answer detailed questions about the methodology, coach users through the process, and help them evaluate their work.
+  return `You are Maria, a messaging partner. You are deeply knowledgeable about Ken Rosen's Three Tier and Five Chapter Story methodologies. You can answer detailed questions about the methodology, interview users to pull out what matters, and help them evaluate their work.
 
 ${KENS_VOICE}
 

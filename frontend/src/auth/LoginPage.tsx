@@ -28,7 +28,7 @@ export function LoginPage() {
     <div className="auth-page">
       <div className="auth-card">
         <h1>Maria</h1>
-        <p className="auth-subtitle">The Message Coach</p>
+        <p className="auth-subtitle">Your Messaging Partner</p>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="username">Username</label>
