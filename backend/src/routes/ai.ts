@@ -17,6 +17,8 @@ import {
   buildProseViolationFeedback,
   type StatementInput,
 } from '../services/voiceCheck.js';
+import { checkThreeTier, buildThreeTierFeedback, type ThreeTierInput } from '../services/threeTierCheck.js';
+import { checkFiveChapter, buildFiveChapterFeedback, type FiveChapterInput } from '../services/fiveChapterCheck.js';
 
 import { requireWorkspace, requireEditor, requireStoryteller } from '../middleware/workspace.js';
 
@@ -91,19 +93,44 @@ async function generateTierWithVoiceCheck(
 
   try {
     const check = await checkStatements(statements);
-    if (check.passed) {
-      console.log('[VoiceCheck] All tier statements passed');
-      return result;
+    if (!check.passed) {
+      console.log(`[VoiceCheck] ${check.violations.length} statement violations, retrying generation`);
+      const feedback = buildViolationFeedback(check.violations);
+      return await generateTier(convertMessage + feedback, rank1Priority);
     }
-
-    // Retry once with violation feedback
-    console.log(`[VoiceCheck] ${check.violations.length} statement violations, retrying generation`);
-    const feedback = buildViolationFeedback(check.violations);
-    return await generateTier(convertMessage + feedback, rank1Priority);
+    console.log('[VoiceCheck] All tier statements passed');
   } catch (err) {
-    console.error('[VoiceCheck] Statement evaluation failed, returning original:', err);
-    return result;
+    console.error('[VoiceCheck] Statement evaluation failed, continuing:', err);
   }
+
+  // Three Tier methodology check (structural/doctrinal)
+  try {
+    const allPriorities = priorities?.map(p => ({ text: p.text, rank: p.rank })) || [];
+    const topPriority = allPriorities.find(p => p.rank === 1) || { text: '', rank: 1 };
+    const ttInput: ThreeTierInput = {
+      tier1Text: result.tier1.text,
+      tier2Statements: result.tier2.map(t2 => ({
+        text: t2.text,
+        categoryLabel: t2.categoryLabel,
+        priorityText: priorityById.get(t2.priorityId)?.text,
+        tier3Bullets: t2.tier3 || [],
+      })),
+      topPriority,
+      allPriorities,
+      isRefined: false,
+    };
+    const ttCheck = await checkThreeTier(ttInput);
+    if (!ttCheck.passed) {
+      console.log(`[ThreeTierCheck] ${ttCheck.checks.filter(c => !c.pass).length} structural issues, retrying generation`);
+      const feedback = buildThreeTierFeedback(ttCheck);
+      return await generateTier(convertMessage + feedback, rank1Priority);
+    }
+    console.log('[ThreeTierCheck] All structural checks passed');
+  } catch (err) {
+    console.error('[ThreeTierCheck] Evaluation failed, returning original:', err);
+  }
+
+  return result;
 }
 
 // ─── Conversation History ────────────────────────────────
@@ -866,6 +893,30 @@ Write Chapter ${chapterNum}: "${ch.name}"`;
       }
     } catch (err) {
       console.error('[VoiceCheck] Chapter evaluation failed, returning original:', err);
+    }
+  }
+
+  // Five Chapter methodology check (structural/boundary)
+  if (await isVoiceCheckEnabled(req.user!.userId)) {
+    try {
+      const fcInput: FiveChapterInput = {
+        chapters: [{ num: chapterNum, title: ch.name, content }],
+        medium: story.medium,
+        cta: story.cta,
+        offeringName: story.draft.offering.name,
+        audienceName: story.draft.audience.name,
+        tier1Text: story.draft.tier1Statement?.text,
+      };
+      const fcCheck = await checkFiveChapter(fcInput);
+      if (!fcCheck.passed) {
+        console.log(`[FiveChapterCheck] Chapter ${chapterNum}: structural issues, retrying`);
+        const feedback = buildFiveChapterFeedback(fcCheck);
+        content = await callAI(systemPrompt, userMessage + feedback, 'elite');
+      } else {
+        console.log(`[FiveChapterCheck] Chapter ${chapterNum} passed`);
+      }
+    } catch (err) {
+      console.error('[FiveChapterCheck] Evaluation failed, returning original:', err);
     }
   }
 
