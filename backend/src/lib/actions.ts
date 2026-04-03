@@ -499,15 +499,17 @@ export async function dispatchActions(
         // Resolve draftId from context or by offering/audience name
         let storyDraftId = ctx.draftId;
         if (!storyDraftId && (a.params.offeringName || a.params.audienceName)) {
-          const scopeFilter = workspaceId ? { workspaceId } : { userId };
-          const draftSearch: any = { offering: scopeFilter };
+          const draftWhere: any = {
+            offering: { ...(workspaceId ? { workspaceId } : { userId }) },
+            archived: false,
+          };
           if (a.params.offeringName) {
-            draftSearch.offering = { ...draftSearch.offering, name: { contains: a.params.offeringName, mode: 'insensitive' } };
+            draftWhere.offering.name = { contains: a.params.offeringName, mode: 'insensitive' };
           }
           if (a.params.audienceName) {
-            draftSearch.audience = { name: { contains: a.params.audienceName, mode: 'insensitive' } };
+            draftWhere.audience = { name: { contains: a.params.audienceName, mode: 'insensitive' } };
           }
-          const found = await prisma.threeTierDraft.findFirst({ where: draftSearch, orderBy: { updatedAt: 'desc' } });
+          const found = await prisma.threeTierDraft.findFirst({ where: draftWhere, orderBy: { updatedAt: 'desc' } });
           if (found) storyDraftId = found.id;
         }
         if (!storyDraftId) {
@@ -777,7 +779,10 @@ Write Chapter ${chNum}: "${ch.name}"`;
             const instruction = a.params.instruction.toLowerCase();
             const isStructural = /restructur|add.*column|remove.*column|delete.*column|\d+\s*column|fewer column|more column/i.test(instruction);
 
-            if (isStructural) {
+            if (isStructural && editDraft.mappings.length === 0) {
+              actionResult = 'Cannot restructure without confirmed mappings. Complete the mapping step first (Step 4), then try again.';
+              refreshNeeded = false;
+            } else if (isStructural) {
               // Structural change: snapshot current state, then regenerate with direction
               await prisma.$transaction(async (tx: any) => {
                 // Save snapshot

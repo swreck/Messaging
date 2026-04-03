@@ -381,18 +381,22 @@ router.put('/intro-step', async (req: Request, res: Response) => {
 
 // GET /api/partner/history — load persistent conversation
 router.get('/history', async (req: Request, res: Response) => {
-  const messages = await prisma.assistantMessage.findMany({
+  // Load partner messages for current workspace + legacy messages without workspaceId
+  const allPartner = await prisma.assistantMessage.findMany({
     where: {
       userId: req.user!.userId,
-      AND: [
-        { context: { path: ['channel'], equals: 'partner' } },
-        { context: { path: ['workspaceId'], equals: req.workspaceId! } },
-      ],
+      context: { path: ['channel'], equals: 'partner' },
     },
-    select: { role: true, content: true, createdAt: true },
+    select: { role: true, content: true, createdAt: true, context: true },
     orderBy: { createdAt: 'desc' },
     take: 200,
   });
+  // Filter: include messages for this workspace OR legacy messages (no workspaceId field)
+  const wsId = req.workspaceId!;
+  const messages = allPartner.filter(m => {
+    const ctx = m.context as any;
+    return !ctx?.workspaceId || ctx.workspaceId === wsId;
+  }).map(({ role, content, createdAt }) => ({ role, content, createdAt }));
   messages.reverse();
   res.json({ messages });
 });
@@ -409,19 +413,20 @@ router.post('/message', async (req: Request, res: Response) => {
   const workspaceId = req.workspaceId!;
   const ctx: ActionContext = context || {};
 
-  // Load conversation history (last 40 messages, scoped to current workspace)
-  const history = await prisma.assistantMessage.findMany({
+  // Load conversation history (last 40 messages, scoped to current workspace + legacy)
+  const allHistory = await prisma.assistantMessage.findMany({
     where: {
       userId,
-      AND: [
-        { context: { path: ['channel'], equals: 'partner' } },
-        { context: { path: ['workspaceId'], equals: workspaceId } },
-      ],
+      context: { path: ['channel'], equals: 'partner' },
     },
-    select: { role: true, content: true, createdAt: true },
+    select: { role: true, content: true, createdAt: true, context: true },
     orderBy: { createdAt: 'desc' },
-    take: 40,
+    take: 200,
   });
+  const history = allHistory.filter(m => {
+    const ctx = m.context as any;
+    return !ctx?.workspaceId || ctx.workspaceId === workspaceId;
+  }).slice(0, 40);
   history.reverse();
 
   // Get user's display name
