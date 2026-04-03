@@ -126,26 +126,41 @@ export function FiveChaptersPage() {
             </div>
           ) : (
             <div className="tt-card-grid">
-              {group.deliverables.map(del => (
-                <div
-                  key={del.id}
-                  className="tt-card"
-                  onClick={() => navigate(`/five-chapter/${group.draftId}`)}
-                >
-                  <div className="tt-card-name">{getMediumLabel(del.medium)}</div>
-                  <div className="tt-card-progress">
-                    <span className="fcs-stage-icon">{getStageIcon(del.stage)}</span>
-                    <span className="tt-card-status">{getStageLabel(del.stage)}</span>
-                    <InfoTooltip text={getStageDescription(del.stage)} />
-                  </div>
-                  <div className="tt-card-updated">{formatUpdatedAt(del.updatedAt)}</div>
-                  <div className="tt-card-action">
-                    <button className="btn btn-ghost btn-sm">
-                      {del.stage === 'blended' ? 'Open' : 'Continue'}
-                    </button>
-                  </div>
-                </div>
-              ))}
+              {(() => {
+                const mediumCounts = new Map<string, number>();
+                const mediumTotals = new Map<string, number>();
+                for (const d of group.deliverables) {
+                  mediumTotals.set(d.medium, (mediumTotals.get(d.medium) || 0) + 1);
+                }
+                return group.deliverables.map(del => {
+                  const count = (mediumCounts.get(del.medium) || 0) + 1;
+                  mediumCounts.set(del.medium, count);
+                  const total = mediumTotals.get(del.medium) || 1;
+                  const displayName = total > 1
+                    ? `${getMediumLabel(del.medium)} #${count}`
+                    : getMediumLabel(del.medium);
+                  return (
+                    <div
+                      key={del.id}
+                      className="tt-card"
+                      onClick={() => navigate(`/five-chapter/${group.draftId}`)}
+                    >
+                      <div className="tt-card-name">{displayName}</div>
+                      <div className="tt-card-progress">
+                        <span className="fcs-stage-icon">{getStageIcon(del.stage)}</span>
+                        <span className="tt-card-status">{getStageLabel(del.stage)}</span>
+                        <InfoTooltip text={getStageDescription(del.stage)} />
+                      </div>
+                      <div className="tt-card-updated">{formatUpdatedAt(del.updatedAt)}</div>
+                      <div className="tt-card-action">
+                        <button className="btn btn-ghost btn-sm">
+                          {del.stage === 'blended' ? 'Open' : 'Continue'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
 
               <div
                 className="tt-card tt-card-new"

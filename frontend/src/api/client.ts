@@ -58,12 +58,6 @@ class ApiClient {
       headers,
     });
 
-    if (res.status === 401) {
-      this.setToken(null);
-      window.location.href = '/login';
-      throw new Error('Authentication required');
-    }
-
     // Sliding window token refresh: silently update if backend issued a fresh token
     // Only accept the first refresh per page load to avoid races from parallel requests
     const refreshedToken = res.headers.get('x-refreshed-token');
@@ -72,7 +66,21 @@ class ApiClient {
       this.setToken(refreshedToken);
     }
 
-    const data = await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
+
+    if (res.status === 401) {
+      const isAuthEndpoint = path.startsWith('/auth/login') || path.startsWith('/auth/register');
+      if (!isAuthEndpoint) {
+        this.setToken(null);
+        window.location.href = '/login';
+      }
+      throw new Error(data.error || 'Invalid username or password');
+    }
 
     if (res.status === 409) {
       const err = new Error(data.error || 'This content was edited elsewhere. Refresh to see the latest version.');

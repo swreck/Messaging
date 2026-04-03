@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useMaria } from '../shared/MariaContext';
-import { InfoTooltip } from '../shared/InfoTooltip';
 import { api } from '../api/client';
 
 interface LearningData {
@@ -15,8 +14,6 @@ export function SettingsPage() {
   const { setPageContext } = useMaria();
   const [learning, setLearning] = useState<LearningData | null>(null);
   const [resetting, setResetting] = useState(false);
-  const [voiceCheckEnabled, setVoiceCheckEnabled] = useState<boolean>(true);
-
   useEffect(() => {
     setPageContext({ page: 'settings' });
     loadSettings();
@@ -25,13 +22,6 @@ export function SettingsPage() {
   async function loadSettings() {
     const { settings } = await api.get<{ settings: { learning?: LearningData; voiceCheckEnabled?: boolean } }>('/settings');
     setLearning(settings.learning || null);
-    setVoiceCheckEnabled(settings.voiceCheckEnabled !== false);
-  }
-
-  async function handleToggleVoiceCheck() {
-    const newValue = !voiceCheckEnabled;
-    setVoiceCheckEnabled(newValue);
-    await api.put('/settings', { settings: { voiceCheckEnabled: newValue } });
   }
 
   async function handleReset() {
@@ -66,55 +56,6 @@ export function SettingsPage() {
   return (
     <div className="page-container">
       <h1>Settings</h1>
-
-      <div style={{ marginTop: 32 }}>
-        <h2 style={{ fontSize: 18, marginBottom: 8 }}>Voice Quality <InfoTooltip text="Maria checks every generated statement against voice rules to keep your messaging natural." /></h2>
-        <p className="text-secondary" style={{ marginBottom: 16, lineHeight: 1.5 }}>
-          Maria automatically checks every generated statement and story against Ken's Voice
-          rules. If something doesn't sound right, she regenerates it before showing you the result.
-        </p>
-
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: 16,
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius)',
-        }}>
-          <button
-            role="switch"
-            aria-checked={voiceCheckEnabled}
-            onClick={handleToggleVoiceCheck}
-            style={{
-              width: 51,
-              height: 31,
-              borderRadius: 16,
-              border: 'none',
-              cursor: 'pointer',
-              background: voiceCheckEnabled ? 'var(--success)' : 'var(--border)',
-              position: 'relative',
-              transition: 'background 0.2s ease',
-              flexShrink: 0,
-            }}
-          >
-            <span style={{
-              position: 'absolute',
-              top: 2,
-              left: voiceCheckEnabled ? 22 : 2,
-              width: 27,
-              height: 27,
-              borderRadius: '50%',
-              background: 'white',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-              transition: 'left 0.2s ease',
-            }} />
-          </button>
-          <span style={{ fontSize: 15, color: 'var(--text-primary)' }}>
-            {voiceCheckEnabled ? 'Enabled' : 'Disabled'}
-          </span>
-        </div>
-      </div>
 
       <div style={{ marginTop: 32 }}>
         <h2 style={{ fontSize: 18, marginBottom: 8 }}>Maria's Memory</h2>

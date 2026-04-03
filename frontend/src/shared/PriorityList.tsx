@@ -36,6 +36,7 @@ export function PriorityList({
     oldIndex: number;
     newIndex: number;
   } | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   async function handleReorder(newItems: Priority[], oldIndex: number, newIndex: number) {
     if (newIndex === 0 && oldIndex !== 0) {
@@ -148,7 +149,7 @@ export function PriorityList({
           {allowRemove && (
             <button
               className="btn btn-ghost btn-sm btn-danger"
-              onClick={() => removePriority(item.id)}
+              onClick={() => setConfirmDeleteId(item.id)}
               title="Remove"
             >&times;</button>
           )}
@@ -156,11 +157,12 @@ export function PriorityList({
         {showMotivatingFactor && isFirst && (
           <div className="priority-mf-wrapper">
             <div className={`driver-field ${item.motivatingFactor ? 'driver-drafted' : 'driver-ready'}`}>
-              <input
+              <textarea
                 className="driver-input"
                 placeholder="Why is this so important to them?"
                 defaultValue={item.motivatingFactor}
                 onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
+                rows={2}
               />
             </div>
             <span className="priority-mf-label">Drives Chapter 1 of your stories</span>
@@ -168,11 +170,12 @@ export function PriorityList({
         )}
         {showMotivatingFactor && !isFirst && showMF && (
           <div className={`driver-field ${item.motivatingFactor ? 'driver-drafted' : 'driver-ready'}`}>
-            <input
+            <textarea
               className="driver-input"
               placeholder="Why is this important to them?"
               defaultValue={item.motivatingFactor}
               onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
+              rows={2}
             />
             {!item.motivatingFactor && (
               <svg className="driver-maria-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c06070" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -239,6 +242,19 @@ export function PriorityList({
         cancelLabel="Cancel"
         onConfirm={handleConfirmReorder}
         onCancel={() => setConfirmReorder(null)}
+      />
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Remove Priority?"
+        message={`This will remove the priority and its driver text. This can't be undone.`}
+        confirmLabel="Remove"
+        cancelLabel="Keep"
+        onConfirm={() => {
+          if (confirmDeleteId) removePriority(confirmDeleteId);
+          setConfirmDeleteId(null);
+        }}
+        onCancel={() => setConfirmDeleteId(null)}
       />
     </div>
   );

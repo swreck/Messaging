@@ -795,6 +795,38 @@ ${draft.offering.elements.map(e => `"${e.text}"`).join('\n')}`;
   res.json(result);
 });
 
+// ─── Polish Story (voice check for Five Chapter Stories) ──────
+router.post('/polish-story', requireEditor, async (req: Request, res: Response) => {
+  const { storyId } = req.body;
+  if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
+
+  const story = await prisma.fiveChapterStory.findFirst({
+    where: { id: storyId },
+    include: { chapters: { orderBy: { chapterNum: 'asc' } } },
+  });
+  if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+
+  const chapterResults: { chapter: number; title: string; passed: boolean; violations: string[] }[] = [];
+
+  for (const ch of story.chapters) {
+    if (!ch.content || ch.content.trim().length === 0) continue;
+    const check = await checkProse(ch.content, `Chapter ${ch.chapterNum}: ${ch.title || ''} of a Five Chapter Story (${story.medium} format)`);
+    chapterResults.push({
+      chapter: ch.chapterNum,
+      title: ch.title || `Chapter ${ch.chapterNum}`,
+      passed: check.passed,
+      violations: check.violations,
+    });
+  }
+
+  const allPassed = chapterResults.every(r => r.passed);
+  res.json({
+    passed: allPassed,
+    chapters: chapterResults,
+    message: allPassed ? 'All chapters sound natural and conversational.' : undefined,
+  });
+});
+
 // ─── Direction (big-picture user feedback) ───────────────
 
 router.post('/direction', requireEditor, async (req: Request, res: Response) => {

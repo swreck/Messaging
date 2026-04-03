@@ -31,6 +31,10 @@ export function FiveChapterShell() {
   // Blending
   const [blending, setBlending] = useState(false);
 
+  // Polish
+  const [polishing, setPolishing] = useState(false);
+  const [polishResults, setPolishResults] = useState<{ passed: boolean; chapters: { chapter: number; title: string; passed: boolean; violations: string[] }[] } | null>(null);
+
   // Inline editing
   const [editingChapter, setEditingChapter] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
@@ -118,6 +122,20 @@ export function FiveChapterShell() {
       alert(err.message);
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function polishStory() {
+    if (!story) return;
+    setPolishing(true);
+    setPolishResults(null);
+    try {
+      const result = await api.post<{ passed: boolean; chapters: { chapter: number; title: string; passed: boolean; violations: string[] }[]; message?: string }>('/ai/polish-story', { storyId: story.id });
+      setPolishResults(result);
+    } catch {
+      setPolishResults(null);
+    } finally {
+      setPolishing(false);
     }
   }
 
@@ -379,18 +397,29 @@ export function FiveChapterShell() {
       {/* Story selector — only if multiple stories */}
       {stories.length > 1 && !showCreateForm && (
         <div className="fcs-story-selector">
-          {stories.map(s => {
-            const label = MEDIUM_OPTIONS.find(m => m.id === s.medium)?.label || s.medium;
-            return (
-              <button
-                key={s.id}
-                className={`btn btn-sm ${story?.id === s.id ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setStory(s)}
-              >
-                {label}
-              </button>
-            );
-          })}
+          {(() => {
+            const mediumCounts = new Map<string, number>();
+            const mediumTotals = new Map<string, number>();
+            for (const st of stories) {
+              mediumTotals.set(st.medium, (mediumTotals.get(st.medium) || 0) + 1);
+            }
+            return stories.map(s => {
+              const count = (mediumCounts.get(s.medium) || 0) + 1;
+              mediumCounts.set(s.medium, count);
+              const total = mediumTotals.get(s.medium) || 1;
+              const baseLabel = MEDIUM_OPTIONS.find(m => m.id === s.medium)?.label || s.medium;
+              const label = total > 1 ? `${baseLabel} #${count}` : baseLabel;
+              return (
+                <button
+                  key={s.id}
+                  className={`btn btn-sm ${story?.id === s.id ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setStory(s)}
+                >
+                  {label}
+                </button>
+              );
+            });
+          })()}
           <button className="btn btn-ghost btn-sm" onClick={() => setShowCreateForm(true)}>
             + New Deliverable
           </button>
@@ -575,12 +604,45 @@ export function FiveChapterShell() {
           <div className="fcs-chapters-header">
             <button
               className="btn btn-primary btn-sm"
-              onClick={() => generateAllChapters()}
-              disabled={generating}
+              onClick={() => {
+                if (allChaptersGenerated && !confirm('Regenerate all 5 chapters? This will replace the current content.')) return;
+                generateAllChapters();
+              }}
+              disabled={generating || polishing}
             >
               {generating ? <><Spinner size={12} /> Generating...</> : allChaptersGenerated ? 'Regenerate All' : 'Generate All Chapters'}
             </button>
+            {allChaptersGenerated && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={polishStory}
+                disabled={generating || polishing}
+              >
+                {polishing ? <><Spinner size={12} /> Polishing...</> : <>Polish <InfoTooltip text="Checks your story against Table for Two guidelines. Takes a moment." /></>}
+              </button>
+            )}
           </div>
+          {polishResults && (
+            <div style={{ padding: '12px 16px', marginBottom: 16, background: polishResults.passed ? 'var(--success-light, #e8f5e9)' : 'var(--warning-light, #fff8e1)', borderRadius: 'var(--radius)', fontSize: 14, lineHeight: 1.6 }}>
+              {polishResults.passed ? (
+                <span>All chapters sound natural and conversational.</span>
+              ) : (
+                <>
+                  <strong style={{ display: 'block', marginBottom: 8 }}>Table for Two found a few things to look at:</strong>
+                  {polishResults.chapters.filter(c => !c.passed).map(c => (
+                    <div key={c.chapter} style={{ marginBottom: 8 }}>
+                      <strong>Chapter {c.chapter}: {c.title}</strong>
+                      <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                        {c.violations.map((v, i) => <li key={i} style={{ marginBottom: 2 }}>{v}</li>)}
+                      </ul>
+                    </div>
+                  ))}
+                  <p style={{ marginTop: 8, color: 'var(--text-secondary)', fontSize: 13 }}>Use "Ask Maria to edit" below each chapter to address these.</p>
+                </>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={() => setPolishResults(null)} style={{ marginTop: 4 }}>Dismiss</button>
+            </div>
+          )}
 
           {CHAPTER_CRITERIA.map((ch, idx) => {
             const chapterContent = story.chapters.find(c => c.chapterNum === ch.num);

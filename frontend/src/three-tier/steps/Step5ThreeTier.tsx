@@ -315,7 +315,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   // Keyboard shortcuts now handled globally in MariaPartner
 
   return (
-    <div className="step-panel" style={{ maxWidth: 1100 }}>
+    <div className="step-panel" style={{ maxWidth: 1400 }}>
       {error && (
         <div style={{
           padding: '10px 16px',

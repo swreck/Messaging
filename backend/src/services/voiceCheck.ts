@@ -222,14 +222,10 @@ export interface ProseCheckResult {
 
 // ─── Settings check ─────────────────────────────────────────
 
-export async function isVoiceCheckEnabled(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { settings: true },
-  });
-  const settings = (user?.settings as Record<string, any>) || {};
-  // Default: enabled. User must explicitly disable.
-  return settings.voiceCheckEnabled !== false;
+export async function isVoiceCheckEnabled(_userId: string): Promise<boolean> {
+  // Always-on voice check removed — Polish button provides on-demand evaluation.
+  // Faster generation without the extra Opus evaluation + retry cycle.
+  return false;
 }
 
 export async function isMethodologyCheckEnabled(userId: string): Promise<boolean> {
