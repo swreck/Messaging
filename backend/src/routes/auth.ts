@@ -94,7 +94,7 @@ router.post('/register', async (req: Request, res: Response) => {
   } else {
     await prisma.workspace.create({
       data: {
-        name: `${username}'s Workspace`,
+        name: `${username.charAt(0).toUpperCase() + username.slice(1)}'s Workspace`,
         members: {
           create: { userId: user.id, role: 'owner' },
         },

@@ -237,7 +237,7 @@ export function PriorityList({
       <ConfirmDialog
         open={!!confirmReorder}
         title="Change Top Priority?"
-        message={`Changing ${audienceName}'s top priority will drive significant change to messaging. Continue?`}
+        message={`Changing ${audienceName}${audienceName.endsWith('s') ? "'" : "'s"} top priority will drive significant change to messaging. Continue?`}
         confirmLabel="Yes"
         cancelLabel="Cancel"
         onConfirm={handleConfirmReorder}

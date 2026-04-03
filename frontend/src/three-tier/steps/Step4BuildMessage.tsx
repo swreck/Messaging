@@ -297,7 +297,7 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
             margin: '16px auto 0',
             textAlign: 'center',
           }}>
-            Maria connected {draft.audience.name}'s priorities to what {draft.offering.name} delivers. Your first draft is ready to review.
+            Maria connected {draft.audience.name}{draft.audience.name.endsWith('s') ? "'" : "'s"} priorities to what {draft.offering.name} delivers. Your first draft is ready to review.
           </p>
         </div>
       )}

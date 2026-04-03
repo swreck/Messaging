@@ -478,7 +478,7 @@ export function MappingDiagram({
 
         {/* Left column: priorities */}
         <div className="mapping-col">
-          <div className="mapping-col-header">{audienceName}'s Priorities</div>
+          <div className="mapping-col-header">{audienceName}{audienceName.endsWith('s') ? "'" : "'s"} Priorities</div>
           {sorted.map(p => {
             const c = color(p.id);
             const isDrop = dropId === p.id;
@@ -502,7 +502,7 @@ export function MappingDiagram({
 
         {/* Right column: capabilities */}
         <div className="mapping-col">
-          <div className="mapping-col-header">{offeringName}'s Capabilities</div>
+          <div className="mapping-col-header">{offeringName}{offeringName.endsWith('s') ? "'" : "'s"} Capabilities</div>
           {elements.map(el => {
             const isDrop = dropId === el.id;
             const connColors = (byE.get(el.id) || []).map(pid => color(pid));

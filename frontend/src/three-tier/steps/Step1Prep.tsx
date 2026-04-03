@@ -18,7 +18,7 @@ export function Step1Prep({ draft, nextStep, goToStep }: StepProps) {
         {draft.offering.description && <p className="entity-card-desc">{draft.offering.description}</p>}
         <div className="entity-card-count">
           {draft.offering.elements.length > 0
-            ? `${draft.offering.elements.length} capability${draft.offering.elements.length !== 1 ? 'ies' : 'y'} already captured`
+            ? `${draft.offering.elements.length} ${draft.offering.elements.length !== 1 ? 'capabilities' : 'capability'} already captured`
             : 'No capabilities captured yet'}
         </div>
       </div>

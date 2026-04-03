@@ -105,7 +105,7 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
     return (
       <div className="step-panel">
         <div className="confirm-panel">
-          <h2>{draft.audience.name}'s Priorities</h2>
+          <h2>{draft.audience.name}{draft.audience.name.endsWith('s') ? "'" : "'s"} Priorities</h2>
           <ol className="confirm-list">
             {draft.audience.priorities.map(p => (
               <li key={p.id} className="confirm-list-item confirm-list-item-clickable">
