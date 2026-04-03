@@ -402,7 +402,8 @@ export function MariaPartner() {
 
   if (!user) return null;
 
-  const showIntro = !introduced || introStep < INTRO_DONE;
+  const statusLoaded = introduced !== null;
+  const showIntro = statusLoaded && (!introduced || introStep < INTRO_DONE);
 
   return (
     <>
@@ -434,9 +435,14 @@ export function MariaPartner() {
           </div>
 
           <div className="partner-body">
+            {!statusLoaded && (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                <span>Loading...</span>
+              </div>
+            )}
             {showIntro && renderIntro()}
 
-            {!showIntro && (
+            {statusLoaded && !showIntro && (
               <>
                 <div className="partner-messages">
                   {/* Return context card */}

@@ -126,7 +126,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   display: flex;
   align-items: center;
   height: var(--nav-height);
-  padding: 0 24px;
+  padding: env(safe-area-inset-top, 0px) 24px 0;
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -1017,6 +1017,15 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .cell-version-label { white-space: nowrap; }
 .cell-version-source { color: var(--text-tertiary); font-style: italic; }
+
+/* Touch devices: always show version nav (no hover available) */
+@media (hover: none) {
+  .cell-version-nav {
+    max-height: 28px;
+    opacity: 1;
+    padding: 4px 16px;
+  }
+}
 .cell-version-preview-actions { margin-left: 6px; }
 .cell-version-use {
   background: none;
@@ -2878,6 +2887,19 @@ p { line-height: 1.5; color: var(--text-secondary); }
   .partner-input-area textarea { font-size: 16px; }
   .btn-copy-table { padding: 8px 12px; min-height: 44px; font-size: 14px; }
   .copy-btn { padding: 8px 14px; min-height: 44px; font-size: 15px; }
+  .tier3-bullet button { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .expand-icon { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  /* iOS zoom prevention: inputs below 16px trigger page zoom on focus */
+  .fcs-param-input { font-size: 16px; }
+  .fcs-copy-edit input { font-size: 16px; }
+  .maria-input-bar textarea { font-size: 16px; }
+  .priority-text-input { font-size: 16px; }
+  .priority-mf-input { font-size: 16px; }
+  .mf-input { font-size: 16px; }
+  .driver-input { font-size: 16px; }
+  .priority-add-form input { font-size: 16px; }
+  .differentiator-add-form input { font-size: 16px; }
+  .cell-editor textarea { font-size: 16px; }
 }
 
 /* ─── Empty State Enhanced ───────────────────────── */
