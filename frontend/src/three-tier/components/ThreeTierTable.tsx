@@ -27,6 +27,49 @@ interface PendingDelete {
 export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, onDismissSuggestion, tier1Alternative, focusedCell, onCellFocus }: ThreeTierTableProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Suggestion focus: show one column at a time
+  const [activeReviewCol, setActiveReviewCol] = useState<number>(-1); // -1 = tier1, 0+ = tier2 index
+
+  // Compute which columns have suggestions
+  const colsWithSuggestions: number[] = [];
+  if (suggestions && suggestions.size > 0) {
+    if (suggestions.has('tier1')) colsWithSuggestions.push(-1);
+    for (let i = 0; i < draft.tier2Statements.length; i++) {
+      const hasT2 = suggestions.has(`tier2-${i}`);
+      const hasT3 = draft.tier2Statements[i].tier3Bullets.some((_, j) => suggestions.has(`tier3-${i}-${j}`));
+      const hasAdd = suggestions.has(`tier3-${i}-add`);
+      if (hasT2 || hasT3 || hasAdd) colsWithSuggestions.push(i);
+    }
+  }
+
+  // Auto-set active column when suggestions first appear
+  useEffect(() => {
+    if (colsWithSuggestions.length > 0 && !colsWithSuggestions.includes(activeReviewCol)) {
+      setActiveReviewCol(colsWithSuggestions[0]);
+    }
+    if (colsWithSuggestions.length === 0) {
+      setActiveReviewCol(-1);
+    }
+  }, [suggestions?.size]);
+
+  function isSuggestionVisible(cell: string): boolean {
+    if (!suggestions || suggestions.size === 0) return false;
+    if (colsWithSuggestions.length === 0) return false;
+    if (cell === 'tier1') return activeReviewCol === -1;
+    const match = cell.match(/^tier[23]-(\d+)/);
+    if (match) return parseInt(match[1]) === activeReviewCol;
+    return false;
+  }
+
+  function nextReviewCol() {
+    const idx = colsWithSuggestions.indexOf(activeReviewCol);
+    if (idx < colsWithSuggestions.length - 1) setActiveReviewCol(colsWithSuggestions[idx + 1]);
+  }
+  function prevReviewCol() {
+    const idx = colsWithSuggestions.indexOf(activeReviewCol);
+    if (idx > 0) setActiveReviewCol(colsWithSuggestions[idx - 1]);
+  }
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const pendingDeleteRef = useRef<PendingDelete | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -190,6 +233,39 @@ ${t2s.map(t2 => `<div class="tier2-col">
   return (
     <div>
       <div className={`three-tier-table${suggestions && suggestions.size > 0 ? ' has-suggestions' : ''}`}>
+        {/* Suggestion navigation */}
+        {colsWithSuggestions.length > 0 && (
+          <div style={{
+            padding: '8px 16px',
+            background: 'rgba(0, 122, 255, 0.04)',
+            borderBottom: '1px solid #d1d1d6',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+          }}>
+            <span>
+              Reviewing {activeReviewCol === -1 ? 'Tier 1' : `column ${activeReviewCol + 1}${draft.tier2Statements[activeReviewCol]?.categoryLabel ? ` (${draft.tier2Statements[activeReviewCol].categoryLabel})` : ''}`}
+              {' '}&middot; {colsWithSuggestions.indexOf(activeReviewCol) + 1} of {colsWithSuggestions.length}
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '2px 8px', fontSize: 12 }}
+                onClick={prevReviewCol}
+                disabled={colsWithSuggestions.indexOf(activeReviewCol) <= 0}
+              >&lsaquo; Prev</button>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '2px 8px', fontSize: 12 }}
+                onClick={nextReviewCol}
+                disabled={colsWithSuggestions.indexOf(activeReviewCol) >= colsWithSuggestions.length - 1}
+              >Next &rsaquo;</button>
+            </div>
+          </div>
+        )}
+
         {/* Tier 1 */}
         <div className={`tier1-row${isTier1Focused ? ' cell-focused' : ''}`}>
           <div className="tier-header-row">
@@ -235,7 +311,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
               {draft.tier1Statement?.text || 'Click to add Tier 1 statement'}
             </div>
           )}
-          {suggestions?.has('tier1') && (
+          {suggestions?.has('tier1') && isSuggestionVisible('tier1') && (
             <div className="inline-suggestion">
               <span className="inline-suggestion-text">{suggestions.get('tier1')}</span>
               <div className="inline-suggestion-actions">
@@ -287,7 +363,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                     {t2.text}
                   </div>
                 )}
-                {suggestions?.has(t2Key) && (
+                {suggestions?.has(t2Key) && isSuggestionVisible(t2Key) && (
                   <div className="inline-suggestion">
                     <span className="inline-suggestion-text">{suggestions.get(t2Key)}</span>
                     <div className="inline-suggestion-actions">
@@ -333,7 +409,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                             )}
                           </div>
                         )}
-                        {suggestions?.has(t3Key) && (
+                        {suggestions?.has(t3Key) && isSuggestionVisible(t3Key) && (
                           <div className="inline-suggestion">
                             <span className="inline-suggestion-text">{suggestions.get(t3Key)}</span>
                             <div className="inline-suggestion-actions">
@@ -352,7 +428,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                     );
                   })}
                   {/* Suggestion to ADD a new proof point */}
-                  {suggestions?.has(`tier3-${t2Index}-add`) && (
+                  {suggestions?.has(`tier3-${t2Index}-add`) && isSuggestionVisible(`tier3-${t2Index}-add`) && (
                     <div className="inline-suggestion">
                       <span className="inline-suggestion-text">{suggestions.get(`tier3-${t2Index}-add`)}</span>
                       <div className="inline-suggestion-actions">
