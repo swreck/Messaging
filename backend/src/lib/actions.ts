@@ -885,15 +885,26 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
 
               const dirResult = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
 
+              // Helper to create version entry
+              async function createVersion(cellId: string, cellType: 'tier1' | 'tier2' | 'tier3', text: string) {
+                const where = cellType === 'tier1' ? { tier1Id: cellId } : cellType === 'tier2' ? { tier2Id: cellId } : { tier3Id: cellId };
+                const maxV = await prisma.cellVersion.aggregate({ where, _max: { versionNum: true } });
+                await prisma.cellVersion.create({
+                  data: { ...where, text, versionNum: (maxV._max?.versionNum ?? 0) + 1, changeSource: 'direction' },
+                });
+              }
+
               let applied = 0;
               for (const s of dirResult.suggestions || []) {
                 if (s.cell === 'tier1' && editDraft.tier1Statement) {
                   await prisma.tier1Statement.update({ where: { id: editDraft.tier1Statement.id }, data: { text: s.suggested } });
+                  await createVersion(editDraft.tier1Statement.id, 'tier1', s.suggested);
                   applied++;
                 } else if (s.cell.startsWith('tier2-')) {
                   const idx = parseInt(s.cell.split('-')[1]);
                   if (editDraft.tier2Statements[idx]) {
                     await prisma.tier2Statement.update({ where: { id: editDraft.tier2Statements[idx].id }, data: { text: s.suggested } });
+                    await createVersion(editDraft.tier2Statements[idx].id, 'tier2', s.suggested);
                     applied++;
                   }
                 } else if (s.cell.startsWith('tier3-')) {
@@ -903,6 +914,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
                   const t2 = editDraft.tier2Statements[t2Idx];
                   if (t2 && t2.tier3Bullets[t3Idx]) {
                     await prisma.tier3Bullet.update({ where: { id: t2.tier3Bullets[t3Idx].id }, data: { text: s.suggested } });
+                    await createVersion(t2.tier3Bullets[t3Idx].id, 'tier3', s.suggested);
                     applied++;
                   }
                 }
