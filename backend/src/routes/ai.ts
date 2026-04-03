@@ -729,6 +729,72 @@ ${draft.tier2Statements.map((t2, i) => `[cell: tier2-${i}] "${t2.text}"
   res.json(result);
 });
 
+// ─── Polish (methodology evaluator) ──────────────────────
+
+router.post('/polish', requireEditor, async (req: Request, res: Response) => {
+  const { draftId } = req.body;
+  if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
+
+  const draft = await prisma.threeTierDraft.findFirst({
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
+    include: {
+      tier1Statement: true,
+      tier2Statements: { orderBy: { sortOrder: 'asc' }, include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } }, priority: true } },
+      audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+      offering: { include: { elements: true } },
+    },
+  });
+  if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
+
+  // Run the Three Tier methodology evaluator
+  const allPriorities = draft.audience.priorities.map(p => ({ text: p.text, rank: p.rank }));
+  const topPriority = allPriorities.find(p => p.rank === 1) || { text: '', rank: 1 };
+
+  const ttInput: ThreeTierInput = {
+    tier1Text: draft.tier1Statement?.text || '',
+    tier2Statements: draft.tier2Statements.map(t2 => ({
+      text: t2.text,
+      categoryLabel: t2.categoryLabel || '',
+      priorityText: t2.priority?.text,
+      tier3Bullets: t2.tier3Bullets.map(t3 => t3.text),
+    })),
+    topPriority,
+    allPriorities,
+    isRefined: true, // Polish runs on refined/edited text, not first draft
+  };
+
+  const ttCheck = await checkThreeTier(ttInput);
+
+  // Convert evaluator findings into suggestions via a direction call
+  if (ttCheck.passed) {
+    res.json({ suggestions: [], message: 'Everything looks solid.' });
+    return;
+  }
+
+  // Use the findings as a direction to generate specific improvements
+  const findings = ttCheck.checks.filter(c => !c.pass).map(c => `${c.id}: ${c.detail}`).join('\n');
+
+  const { DIRECTION_SYSTEM } = await import('../prompts/generation.js');
+  const dirMessage = `USER'S DIRECTION: Fix these methodology issues found by quality check:\n${findings}
+
+CURRENT THREE TIER TABLE:
+Tier 1: "${draft.tier1Statement?.text || '(empty)'}"
+
+Tier 2 statements:
+${draft.tier2Statements.map((t2, i) => `${i + 1}. [${t2.categoryLabel || 'unlabeled'}] "${t2.text}"
+   Tier 3 bullets: ${t2.tier3Bullets.map(t3 => `"${t3.text}"`).join(', ') || '(none)'}`).join('\n')}
+
+AUDIENCE PRIORITIES:
+${draft.audience.priorities.map(p => `[Rank ${p.rank}] "${p.text}"`).join('\n')}
+
+OFFERING CAPABILITIES:
+${draft.offering.elements.map(e => `"${e.text}"`).join('\n')}`;
+
+  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
+
+  res.json(result);
+});
+
 // ─── Direction (big-picture user feedback) ───────────────
 
 router.post('/direction', requireEditor, async (req: Request, res: Response) => {

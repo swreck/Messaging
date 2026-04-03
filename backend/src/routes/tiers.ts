@@ -17,11 +17,16 @@ async function verifyDraftOwnership(draftId: string, workspaceId: string) {
 
 async function createCellVersion(cellId: string, cellType: 'tier1' | 'tier2' | 'tier3', text: string, changeSource: string) {
   const where = cellType === 'tier1' ? { tier1Id: cellId } : cellType === 'tier2' ? { tier2Id: cellId } : { tier3Id: cellId };
-  const maxVersion = await prisma.cellVersion.aggregate({
+
+  // Skip if text is identical to the most recent version
+  const latest = await prisma.cellVersion.findFirst({
     where,
-    _max: { versionNum: true },
+    orderBy: { versionNum: 'desc' },
+    select: { text: true, versionNum: true },
   });
-  const versionNum = (maxVersion._max?.versionNum ?? 0) + 1;
+  if (latest && latest.text === text) return latest;
+
+  const versionNum = (latest?.versionNum ?? 0) + 1;
 
   return prisma.cellVersion.create({
     data: {

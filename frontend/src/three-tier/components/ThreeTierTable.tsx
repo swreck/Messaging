@@ -351,6 +351,16 @@ ${t2s.map(t2 => `<div class="tier2-col">
                       </div>
                     );
                   })}
+                  {/* Suggestion to ADD a new proof point */}
+                  {suggestions?.has(`tier3-${t2Index}-add`) && (
+                    <div className="inline-suggestion">
+                      <span className="inline-suggestion-text">{suggestions.get(`tier3-${t2Index}-add`)}</span>
+                      <div className="inline-suggestion-actions">
+                        <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(`tier3-${t2Index}-add`, suggestions.get(`tier3-${t2Index}-add`)!)}>Add</button>
+                        <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(`tier3-${t2Index}-add`); }}>Dismiss</button>
+                      </div>
+                    </div>
+                  )}
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={() => addTier3(t2.id)}

@@ -4,6 +4,7 @@ import type { StepProps } from './types';
 import { api } from '../../api/client';
 import { ThreeTierTable } from '../components/ThreeTierTable';
 import { Spinner } from '../../shared/Spinner';
+import { InfoTooltip } from '../../shared/InfoTooltip';
 import { CompareModal } from '../components/CompareModal';
 import { Modal } from '../../shared/Modal';
 import type { TableVersion, ReviewResponse, DirectionResponse, TableSnapshot } from '../../types';
@@ -27,6 +28,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   const [directionText, setDirectionText] = useState('');
   const [sendingDirection, setSendingDirection] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [polishing, setPolishing] = useState(false);
 
   // Cell focus — for scoped directions and glow
   const [focusedCell, setFocusedCell] = useState<string | null>(null);
@@ -165,6 +167,26 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
     }
   }
 
+  async function polish() {
+    setError(null);
+    setPolishing(true);
+    try {
+      const result = await api.post<{
+        suggestions: { cell: string; suggested: string }[];
+      }>('/ai/polish', { draftId: draft.id });
+      const map = new Map<string, string>();
+      for (const s of result.suggestions || []) {
+        map.set(s.cell, s.suggested);
+      }
+      setSuggestions(map);
+      previousStateRef.current = captureState();
+    } catch (err: any) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setPolishing(false);
+    }
+  }
+
   async function sendDirection() {
     if (!directionText.trim()) return;
     setError(null);
@@ -197,6 +219,13 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         const t2 = draft.tier2Statements[index];
         if (t2) {
           await api.put(`/tiers/${draft.id}/tier2/${t2.id}`, { text, changeSource: 'review', version: draft.version });
+        }
+      } else if (cell.match(/^tier3-\d+-add$/)) {
+        // Add new Tier 3 bullet
+        const t2Index = parseInt(cell.split('-')[1]);
+        const t2 = draft.tier2Statements[t2Index];
+        if (t2) {
+          await api.post(`/tiers/${draft.id}/tier2/${t2.id}/tier3`, { text, changeSource: 'review' });
         }
       } else if (cell.startsWith('tier3-')) {
         const parts = cell.split('-');
@@ -281,7 +310,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
     setRestoreTarget(null);
   }
 
-  const anyBusy = reviewing || revising || refining || sendingDirection || regenerating;
+  const anyBusy = reviewing || revising || refining || sendingDirection || regenerating || polishing;
 
   // Keyboard shortcuts now handled globally in MariaPartner
 
@@ -426,6 +455,9 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         </button>
         <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={anyBusy} title="Maria reviews your message and tells you what she'd improve">
           {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria to review'}
+        </button>
+        <button className="btn btn-secondary btn-sm" onClick={polish} disabled={anyBusy} title="Results are usually better, but takes a little longer">
+          {polishing ? <><Spinner size={12} /> Polishing...</> : <>Polish <InfoTooltip text="Results are usually better, but takes a little longer." /></>}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={createSnapshot} title="Save the current state as a checkpoint you can return to">
           {showCheckpointSaved ? 'Checkpoint saved' : 'Save checkpoint'}

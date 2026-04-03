@@ -385,13 +385,18 @@ WHAT TO CHECK:
 
 ONLY include cells that should change.
 
-CELL KEY FORMAT: "tier1", "tier2-0", "tier2-1", "tier3-0-0", "tier3-0-1", "tier3-1-0" etc.
+CELL KEY FORMAT:
+- "tier1" — the Tier 1 statement
+- "tier2-0", "tier2-1" — Tier 2 columns by index
+- "tier3-0-0", "tier3-1-2" — Tier 3 bullets (first number = Tier 2 column index, second = bullet index)
+- "tier3-0-add", "tier3-1-add" — ADD a new Tier 3 bullet to a column (use this when a column needs MORE proof, not when existing proof needs replacing)
 
 RESPOND WITH JSON:
 {
   "suggestions": [
     { "cell": "tier1", "suggested": "better text here" },
-    { "cell": "tier2-0", "suggested": "better text here" }
+    { "cell": "tier2-0", "suggested": "better text here" },
+    { "cell": "tier3-2-add", "suggested": "new proof point to add" }
   ]
 }`;
 
@@ -447,13 +452,18 @@ Maintain doctrinal correctness:
 
 ONLY include cells that should change.
 
-CELL KEY FORMAT: "tier1", "tier2-0", "tier2-1", "tier3-0-0", "tier3-0-1", "tier3-1-0" etc.
+CELL KEY FORMAT:
+- "tier1" — the Tier 1 statement
+- "tier2-0", "tier2-1" — Tier 2 columns by index
+- "tier3-0-0", "tier3-1-2" — Tier 3 bullets (first number = column index, second = bullet index)
+- "tier3-0-add", "tier3-1-add" — ADD a new Tier 3 bullet to a column
 
 RESPOND WITH JSON:
 {
   "suggestions": [
     { "cell": "tier1", "suggested": "new text" },
-    { "cell": "tier2-0", "suggested": "new text" }
+    { "cell": "tier2-0", "suggested": "new text" },
+    { "cell": "tier3-2-add", "suggested": "new proof point" }
   ]
 }`;
 

@@ -885,12 +885,13 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
 
               const dirResult = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
 
-              // Helper to create version entry
+              // Helper to create version entry (skips if text unchanged)
               async function createVersion(cellId: string, cellType: 'tier1' | 'tier2' | 'tier3', text: string) {
                 const where = cellType === 'tier1' ? { tier1Id: cellId } : cellType === 'tier2' ? { tier2Id: cellId } : { tier3Id: cellId };
-                const maxV = await prisma.cellVersion.aggregate({ where, _max: { versionNum: true } });
+                const latest = await prisma.cellVersion.findFirst({ where, orderBy: { versionNum: 'desc' }, select: { text: true, versionNum: true } });
+                if (latest && latest.text === text) return;
                 await prisma.cellVersion.create({
-                  data: { ...where, text, versionNum: (maxV._max?.versionNum ?? 0) + 1, changeSource: 'direction' },
+                  data: { ...where, text, versionNum: (latest?.versionNum ?? 0) + 1, changeSource: 'direction' },
                 });
               }
 
@@ -905,6 +906,17 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
                   if (editDraft.tier2Statements[idx]) {
                     await prisma.tier2Statement.update({ where: { id: editDraft.tier2Statements[idx].id }, data: { text: s.suggested } });
                     await createVersion(editDraft.tier2Statements[idx].id, 'tier2', s.suggested);
+                    applied++;
+                  }
+                } else if (s.cell.match(/^tier3-\d+-add$/)) {
+                  // Add new Tier 3 bullet
+                  const t2Idx = parseInt(s.cell.split('-')[1]);
+                  const t2 = editDraft.tier2Statements[t2Idx];
+                  if (t2) {
+                    const maxSort = t2.tier3Bullets.reduce((max: number, b: any) => Math.max(max, b.sortOrder), -1);
+                    await prisma.tier3Bullet.create({
+                      data: { tier2Id: t2.id, text: s.suggested, sortOrder: maxSort + 1 },
+                    });
                     applied++;
                   }
                 } else if (s.cell.startsWith('tier3-')) {
