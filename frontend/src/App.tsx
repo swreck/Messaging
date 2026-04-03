@@ -8,6 +8,7 @@ import { Layout } from './shared/Layout';
 import { MariaProvider } from './shared/MariaContext';
 import { WorkspaceProvider } from './shared/WorkspaceContext';
 import { MariaPartner } from './shared/MariaPartner';
+import { ToastProvider } from './shared/ToastContext';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { AudiencesPage } from './pages/AudiencesPage';
 import { OfferingsPage } from './pages/OfferingsPage';
@@ -25,6 +26,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ToastProvider>
         <WorkspaceProvider>
         <MariaProvider>
         <Routes>
@@ -48,6 +50,7 @@ function App() {
         <MariaPartner />
         </MariaProvider>
         </WorkspaceProvider>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

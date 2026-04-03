@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
+import { useToast } from '../shared/ToastContext';
 import type { Offering, DraftSummary, ThreeTierDraft } from '../types';
 
 interface HierarchyOffering {
@@ -18,6 +19,7 @@ interface HierarchyOffering {
 
 export function ThreeTiersPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [hierarchy, setHierarchy] = useState<HierarchyOffering[]>([]);
   const [allAudiences, setAllAudiences] = useState<{ id: string; name: string }[]>([]);
   const [offerings, setOfferings] = useState<Offering[]>([]);
@@ -83,10 +85,10 @@ export function ThreeTiersPage() {
       if (result.draft?.archived) {
         setShowArchived(true);
         loadArchivedData();
-        alert('Duplicate created in the Archived section (an active draft already exists for this audience).');
+        showToast('Duplicate created in the Archived section (an active draft already exists for this audience).', 'info');
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to duplicate draft');
+      showToast(err.message || 'Failed to duplicate draft');
     }
   }
 
@@ -96,7 +98,7 @@ export function ThreeTiersPage() {
       loadData();
       if (showArchived) loadArchivedData();
     } catch (err: any) {
-      alert(err.message || 'Failed to archive draft');
+      showToast(err.message || 'Failed to archive draft');
     }
   }
 
@@ -106,7 +108,7 @@ export function ThreeTiersPage() {
       loadData();
       loadArchivedData();
     } catch (err: any) {
-      alert(err.message || 'Failed to unarchive draft');
+      showToast(err.message || 'Failed to unarchive draft');
     }
   }
 
@@ -166,7 +168,7 @@ export function ThreeTiersPage() {
       setCreatingOffering(false);
       setNewOfferingName('');
     } catch (err: any) {
-      alert(err.message || 'Failed to create offering');
+      showToast(err.message || 'Failed to create offering');
       setCreatingOffering(false);
       setNewOfferingName('');
     }
@@ -184,7 +186,7 @@ export function ThreeTiersPage() {
       setCreatingAudience(false);
       setNewAudienceName('');
     } catch (err: any) {
-      alert(err.message || 'Failed to create audience');
+      showToast(err.message || 'Failed to create audience');
       setCreatingAudience(false);
       setNewAudienceName('');
     }
@@ -210,7 +212,7 @@ export function ThreeTiersPage() {
         const audience = offering?.audiences.find(a => a.id === selectedAudienceId);
         if (audience) navigate(`/three-tier/${audience.threeTier.id}`);
       } else {
-        alert(err.message);
+        showToast(err.message);
       }
     }
   }

@@ -3327,6 +3327,42 @@ p { line-height: 1.5; color: var(--text-secondary); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* ─── App Toast (global error/info/success) ─────── */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.app-toast {
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1.4;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  max-width: 480px;
+  text-align: center;
+  animation: toast-in 0.3s ease-out;
+}
+.app-toast-error {
+  background: #c62828;
+  color: white;
+}
+.app-toast-info {
+  background: var(--text-primary);
+  color: white;
+}
+.app-toast-success {
+  background: #2e7d32;
+  color: white;
+}
+
 /* ─── Extraction Animation ──────────────────────── */
 .extracted-sidebar.highlight {
   animation: sidebar-pulse 1s ease-out;

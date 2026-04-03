@@ -7,6 +7,7 @@ import { PriorityList } from '../shared/PriorityList';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
+import { useToast } from '../shared/ToastContext';
 import type { Audience } from '../types';
 
 interface AudienceDraftRef {
@@ -22,6 +23,7 @@ interface AudienceWithRefs extends Audience {
 
 export function AudiencesPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [audiences, setAudiences] = useState<AudienceWithRefs[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -140,7 +142,7 @@ export function AudiencesPage() {
       await api.post(`/audiences/${id}/duplicate`, {});
       loadData();
     } catch (err: any) {
-      alert(err.message || 'Failed to duplicate audience');
+      showToast(err.message || 'Failed to duplicate audience');
     }
   }
 

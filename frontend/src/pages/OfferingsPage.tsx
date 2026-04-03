@@ -6,10 +6,12 @@ import { ConfirmModal } from '../shared/ConfirmModal';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
+import { useToast } from '../shared/ToastContext';
 import type { Offering } from '../types';
 
 export function OfferingsPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -88,7 +90,7 @@ export function OfferingsPage() {
       await api.post(`/offerings/${id}/duplicate`, {});
       loadData();
     } catch (err: any) {
-      alert(err.message || 'Failed to duplicate offering');
+      showToast(err.message || 'Failed to duplicate offering');
     }
   }
 

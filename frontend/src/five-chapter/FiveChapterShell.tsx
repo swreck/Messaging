@@ -6,12 +6,14 @@ import { InfoTooltip } from '../shared/InfoTooltip';
 import { ChapterVersionNav } from '../shared/ChapterVersionNav';
 import { BlendedVersionNav } from '../shared/BlendedVersionNav';
 import { useMaria } from '../shared/MariaContext';
+import { useToast } from '../shared/ToastContext';
 import type { ThreeTierDraft, FiveChapterStory, ChapterContent, StoryMedium } from '../types';
 import { CHAPTER_CRITERIA, MEDIUM_OPTIONS } from '../types';
 
 export function FiveChapterShell() {
   const { draftId } = useParams<{ draftId: string }>();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [draft, setDraft] = useState<ThreeTierDraft | null>(null);
   const [stories, setStories] = useState<FiveChapterStory[]>([]);
   const [story, setStory] = useState<FiveChapterStory | null>(null);
@@ -48,7 +50,7 @@ export function FiveChapterShell() {
   // Missing MF panel
   const [showMFPanel, setShowMFPanel] = useState(false);
   const [derivingMF, setDerivingMF] = useState(false);
-  const [bypassMF, setBypassMF] = useState(false);
+  const [bypassMF] = useState(false);
   // Track AI-derived MFs for future display markers
   const [, setAiDerivedMFs] = useState<Set<string>>(new Set());
 
@@ -119,7 +121,7 @@ export function FiveChapterShell() {
       setCta('');
       setEmphasis('');
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message);
     } finally {
       setCreating(false);
     }
@@ -170,7 +172,7 @@ export function FiveChapterShell() {
       }
       setChaptersJustGenerated(true);
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message);
     } finally {
       setGenerating(false);
       setGeneratingChapter(null);
@@ -191,7 +193,7 @@ export function FiveChapterShell() {
         return { ...prev, chapters };
       });
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message);
     } finally {
       setGeneratingChapter(null);
     }
@@ -211,7 +213,7 @@ export function FiveChapterShell() {
       setBlendJustGenerated(true);
       setChaptersJustGenerated(false);
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message);
     } finally {
       setBlending(false);
     }
@@ -237,7 +239,7 @@ export function FiveChapterShell() {
           loadData();
         }
       } else {
-        alert(err.message);
+        showToast(err.message);
       }
     }
   }
@@ -256,7 +258,7 @@ export function FiveChapterShell() {
           loadData();
         }
       } else {
-        alert(err.message);
+        showToast(err.message);
       }
     }
   }
@@ -277,7 +279,7 @@ export function FiveChapterShell() {
       }
       setCopyEditInput('');
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message);
     } finally {
       setCopyEditing(false);
     }
@@ -302,7 +304,7 @@ export function FiveChapterShell() {
       // Now generate — skip MF check since we just derived it
       generateAllChapters(true);
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message);
     } finally {
       setDerivingMF(false);
     }
@@ -319,11 +321,11 @@ export function FiveChapterShell() {
       setParamsChanged(true);
     } catch (err: any) {
       if (err?.status === 409) {
-        alert('This story was edited elsewhere. Refreshing to show the latest version.');
+        showToast('This story was edited elsewhere. Refreshing to show the latest version.', 'info');
         setEditingParam(null);
         loadData();
       } else {
-        alert(err.message);
+        showToast(err.message);
       }
     }
   }
@@ -348,7 +350,7 @@ export function FiveChapterShell() {
       setShareUrl(fullUrl);
       navigator.clipboard.writeText(fullUrl);
     } catch {
-      alert('Could not create share link.');
+      showToast('Could not create share link.');
     }
   }
 
@@ -377,7 +379,7 @@ export function FiveChapterShell() {
 </body></html>`;
 
     const win = window.open('', '_blank');
-    if (!win) { alert('Export blocked — please allow popups for this site.'); return; }
+    if (!win) { showToast('Export blocked — please allow popups for this site.'); return; }
     win.document.write(html); win.document.close();
   }
 
@@ -587,9 +589,10 @@ export function FiveChapterShell() {
             </button>
             <button
               className="btn btn-secondary"
-              onClick={() => { setShowMFPanel(false); setBypassMF(true); }}
+              onClick={deriveMotivation}
+              disabled={derivingMF}
             >
-              Continue without it
+              {derivingMF ? <><Spinner size={14} /> Working on it...</> : 'Just guess and go'}
             </button>
           </div>
           <p className="mf-panel-note">

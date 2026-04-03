@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import { CellEditor } from './CellEditor';
 import { CellVersionNav } from './CellVersionNav';
 import { InfoTooltip } from '../../shared/InfoTooltip';
+import { useToast } from '../../shared/ToastContext';
 import type { ThreeTierDraft } from '../../types';
 
 interface ThreeTierTableProps {
@@ -25,6 +26,7 @@ interface PendingDelete {
 }
 
 export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, onDismissSuggestion, tier1Alternative, focusedCell, onCellFocus }: ThreeTierTableProps) {
+  const { showToast } = useToast();
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -215,7 +217,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
 </div>
 </body></html>`;
     const win = window.open('', '_blank');
-    if (!win) { alert('Export blocked \u2014 please allow popups for this site.'); return; }
+    if (!win) { showToast('Export blocked — please allow popups for this site.'); return; }
     win.document.write(html); win.document.close();
   }
 
@@ -225,7 +227,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
       const fullUrl = `${window.location.origin}${result.url}`;
       setShareUrl(fullUrl);
       navigator.clipboard.writeText(fullUrl);
-    } catch { alert('Could not create share link.'); }
+    } catch { showToast('Could not create share link.'); }
   }
 
   const isTier1Focused = focusedCell === 'tier1' || editingCell === 'tier1';
