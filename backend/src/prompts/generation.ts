@@ -443,6 +443,8 @@ This might mean:
 - Moving proof points between columns
 - Changing the category labels
 
+CRITICAL — COLUMNS ARE UNITS: Each Tier 2 column and its Tier 3 proof points belong together. When swapping, reordering, or consolidating columns, you MUST include suggestions for BOTH the Tier 2 text AND every Tier 3 bullet in each affected column. A column swap without moving the Tier 3s leaves mismatched proof points under the wrong value statement.
+
 Maintain doctrinal correctness:
 - Every Tier 1/2 statement must use the audience's priority text nearly verbatim (their strategic concern, not a product metric). The "because" clause should be a specific differentiator hook that creates curiosity.
 - No tautology (same concept restated), no contrast clauses, no em-dash extra clauses, no sales language.
