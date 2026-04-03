@@ -182,6 +182,15 @@ async function run() {
     test('Stories is array', Array.isArray(stories.data.stories))
   }
 
+  // ─── Polish ───────────────────────────────────
+  console.log('\nPOLISH:')
+
+  if (completeDraftId) {
+    const polish = await req('POST', '/ai/polish', { draftId: completeDraftId })
+    test('Polish endpoint returns 200', polish.status === 200)
+    test('Polish has suggestions array', Array.isArray(polish.data.suggestions))
+  }
+
   // ─── Partner Message (read_page) ──────────────
   console.log('\nPARTNER MESSAGE:')
 
