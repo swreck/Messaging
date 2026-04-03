@@ -227,7 +227,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 
 /* ─── Layout ──────────────────────────────────────── */
 .app-layout { min-height: 100vh; }
-.main-content { max-width: 1200px; margin: 0 auto; padding: 24px; padding-bottom: 80px; }
+.main-content { max-width: 1200px; margin: 0 auto; padding: 24px; padding-bottom: 40px; }
 
 /* ─── Auth ────────────────────────────────────────── */
 .auth-page {
@@ -563,7 +563,6 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .three-tier-shell {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - var(--nav-height));
 }
 .step-content {
   flex: 1;
