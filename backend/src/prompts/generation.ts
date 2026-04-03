@@ -443,7 +443,12 @@ This might mean:
 - Moving proof points between columns
 - Changing the category labels
 
-CRITICAL — COLUMNS ARE UNITS: Each Tier 2 column and its Tier 3 proof points belong together. When swapping, reordering, or consolidating columns, you MUST include suggestions for BOTH the Tier 2 text AND every Tier 3 bullet in each affected column. A column swap without moving the Tier 3s leaves mismatched proof points under the wrong value statement.
+CRITICAL — COLUMNS ARE UNITS: Each Tier 2 column and its Tier 3 proof points belong together. ANY change to Tier 2 columns must account for their Tier 3 bullets:
+- SWAP/REORDER: Include suggestions for BOTH the Tier 2 text AND every Tier 3 bullet in each affected column.
+- SPLIT (1 column → 2): Distribute the original Tier 3 bullets between the two new columns based on which proof point supports which new value statement. Use tier3-X-add for bullets that need to move to the new column.
+- MERGE (2 columns → 1): Combine Tier 3 bullets from both source columns under the merged column. Remove duplicates.
+- The result must always be 5 or 6 total columns (Focus, Product, Product overflow if needed, ROI, Support, Social proof).
+A column change without moving the Tier 3s leaves mismatched proof points under the wrong value statement.
 
 Maintain doctrinal correctness:
 - Every Tier 1/2 statement must use the audience's priority text nearly verbatim (their strategic concern, not a product metric). The "because" clause should be a specific differentiator hook that creates curiosity.
