@@ -550,17 +550,23 @@ router.post('/page-content', async (req: Request, res: Response) => {
   res.json({ content });
 });
 
-// DELETE /api/partner/history — clear partner conversation for current workspace
+// DELETE /api/partner/history — clear partner conversation for current workspace + legacy
 router.delete('/history', async (req: Request, res: Response) => {
-  await prisma.assistantMessage.deleteMany({
+  // Load all partner messages, filter to current workspace + legacy, delete by IDs
+  const allPartner = await prisma.assistantMessage.findMany({
     where: {
       userId: req.user!.userId,
-      AND: [
-        { context: { path: ['channel'], equals: 'partner' } },
-        { context: { path: ['workspaceId'], equals: req.workspaceId! } },
-      ],
+      context: { path: ['channel'], equals: 'partner' },
     },
+    select: { id: true, context: true },
   });
+  const wsId = req.workspaceId!;
+  const idsToDelete = allPartner
+    .filter(m => { const ctx = m.context as any; return !ctx?.workspaceId || ctx.workspaceId === wsId; })
+    .map(m => m.id);
+  if (idsToDelete.length > 0) {
+    await prisma.assistantMessage.deleteMany({ where: { id: { in: idsToDelete } } });
+  }
   res.json({ success: true });
 });
 

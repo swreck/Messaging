@@ -510,11 +510,14 @@ export async function dispatchActions(
             draftWhere.audience = { name: { contains: a.params.audienceName, mode: 'insensitive' } };
           }
           const found = await prisma.threeTierDraft.findFirst({ where: draftWhere, orderBy: { updatedAt: 'desc' } });
-          if (found) storyDraftId = found.id;
+          if (found && found.currentStep >= 5) storyDraftId = found.id;
+          else if (found) {
+            actionResult = `Found a Three Tier but it's not complete yet (Step ${found.currentStep}). Finish the Three Tier first, then create a story from it.`;
+          }
         }
-        if (!storyDraftId) {
+        if (!storyDraftId && !actionResult) {
           actionResult = 'Could not create story — no Three Tier draft found. Navigate to the Three Tier first, or specify the offering and audience names.';
-        } else {
+        } else if (storyDraftId) {
           const newStory = await prisma.fiveChapterStory.create({
             data: {
               draftId: storyDraftId,
