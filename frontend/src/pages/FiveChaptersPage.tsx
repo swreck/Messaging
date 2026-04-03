@@ -37,7 +37,11 @@ export function FiveChaptersPage() {
   }
 
   function getMediumLabel(medium: string): string {
-    return MEDIUM_OPTIONS.find(m => m.id === medium)?.label || medium;
+    const standard = MEDIUM_OPTIONS.find(m => m.id === medium);
+    if (standard) return standard.label;
+    // Custom deliverable — truncate at first em-dash, period, or 35 chars
+    const short = medium.split(/\s*[—.]\s*/)[0].trim();
+    return short.length > 35 ? short.substring(0, 32) + '...' : short;
   }
 
   function getStageLabel(stage: string): string {

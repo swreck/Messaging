@@ -387,7 +387,13 @@ export function FiveChapterShell() {
   if (!draft) return null;
 
   const allChaptersGenerated = story ? story.chapters.length === 5 : false;
-  const mediumLabel = MEDIUM_OPTIONS.find(m => m.id === story?.medium)?.label || story?.medium;
+  const mediumLabel = (() => {
+    const std = MEDIUM_OPTIONS.find(m => m.id === story?.medium);
+    if (std) return std.label;
+    const raw = story?.medium || '';
+    const short = raw.split(/\s*[—.]\s*/)[0].trim();
+    return short.length > 35 ? short.substring(0, 32) + '...' : short;
+  })();
 
   return (
     <div className="five-chapter-shell">
@@ -409,7 +415,8 @@ export function FiveChapterShell() {
               const count = (mediumCounts.get(s.medium) || 0) + 1;
               mediumCounts.set(s.medium, count);
               const total = mediumTotals.get(s.medium) || 1;
-              const baseLabel = MEDIUM_OPTIONS.find(m => m.id === s.medium)?.label || s.medium;
+              const stdLabel = MEDIUM_OPTIONS.find(m => m.id === s.medium);
+              const baseLabel = stdLabel ? stdLabel.label : (() => { const sh = s.medium.split(/\s*[—.]\s*/)[0].trim(); return sh.length > 35 ? sh.substring(0, 32) + '...' : sh; })();
               const label = total > 1 ? `${baseLabel} #${count}` : baseLabel;
               return (
                 <button
