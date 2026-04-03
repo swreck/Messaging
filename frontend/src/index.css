@@ -2053,9 +2053,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   padding-left: 8px;
 }
 .mf-field.mf-drafted {
-  border-left: 3px solid #c06070;
   padding-left: 8px;
-  background: rgba(192, 96, 112, 0.06);
 }
 .mf-input {
   width: 100%;
@@ -2091,9 +2089,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   padding-left: 8px;
 }
 .driver-field.driver-drafted {
-  border-left: 3px solid #c06070;
   padding-left: 8px;
-  background: rgba(192, 96, 112, 0.06);
 }
 .driver-input {
   width: 100%;
