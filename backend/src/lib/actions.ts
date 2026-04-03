@@ -841,8 +841,11 @@ ADDITIONAL DIRECTION FROM USER: ${a.params.instruction}`;
                 tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
               }>(CONVERT_LINES_SYSTEM, convertMsg + reminder, 'elite');
 
-              // Apply new tiers
-              await prisma.tier1Statement.create({ data: { draftId: ctx.draftId!, text: result.tier1.text } });
+              // Apply new tiers (with version entries so version nav works)
+              const newT1 = await prisma.tier1Statement.create({ data: { draftId: ctx.draftId!, text: result.tier1.text } });
+              await prisma.cellVersion.create({
+                data: { tier1Id: newT1.id, text: result.tier1.text, versionNum: 1, changeSource: 'ai_generate' },
+              });
               for (let i = 0; i < result.tier2.length; i++) {
                 const t2 = await prisma.tier2Statement.create({
                   data: {
@@ -853,9 +856,15 @@ ADDITIONAL DIRECTION FROM USER: ${a.params.instruction}`;
                     categoryLabel: result.tier2[i].categoryLabel || '',
                   },
                 });
+                await prisma.cellVersion.create({
+                  data: { tier2Id: t2.id, text: result.tier2[i].text, versionNum: 1, changeSource: 'ai_generate' },
+                });
                 for (let j = 0; j < (result.tier2[i].tier3 || []).length; j++) {
-                  await prisma.tier3Bullet.create({
+                  const t3 = await prisma.tier3Bullet.create({
                     data: { tier2Id: t2.id, text: result.tier2[i].tier3[j], sortOrder: j },
+                  });
+                  await prisma.cellVersion.create({
+                    data: { tier3Id: t3.id, text: result.tier2[i].tier3[j], versionNum: 1, changeSource: 'ai_generate' },
                   });
                 }
               }
