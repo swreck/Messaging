@@ -55,8 +55,9 @@ export function MariaPartner() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Load status on mount
+  // Load status on mount — only if logged in
   useEffect(() => {
+    if (!user) return;
     api.get<{ username: string; displayName?: string; introduced: boolean; introStep?: number; returnContext?: ReturnContext | null; proactiveOffer?: string | null }>('/partner/status')
       .then(status => {
         setIntroduced(status.introduced);
@@ -81,7 +82,7 @@ export function MariaPartner() {
       .catch(() => {
         setIntroduced(false);
       });
-  }, []);
+  }, [user]);
 
   // Load conversation history when panel first opens and intro is done
   useEffect(() => {
