@@ -189,7 +189,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
 
   return (
     <div>
-      <div className="three-tier-table">
+      <div className={`three-tier-table${suggestions && suggestions.size > 0 ? ' has-suggestions' : ''}`}>
         {/* Tier 1 */}
         <div className={`tier1-row${isTier1Focused ? ' cell-focused' : ''}`}>
           <div className="tier-header-row">

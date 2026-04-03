@@ -40,8 +40,10 @@ export function CellVersionNav({ cellId, cellType, currentText, onRestore }: Cel
     }
   }
 
-  // Always show — even for v1 (shows "v1" so user knows history exists)
-  if (versions.length === 0) return null;
+  // Hide if no versions, or if only one version, or if all versions have the same text
+  if (versions.length <= 1) return null;
+  const uniqueTexts = new Set(versions.map(v => v.text));
+  if (uniqueTexts.size <= 1) return null;
 
   const displayIdx = previewing ? previewIdx : currentIdx;
   const displayVersion = versions[displayIdx];
