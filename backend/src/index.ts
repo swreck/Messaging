@@ -64,6 +64,11 @@ app.use((req, res, next) => {
 
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// AI routes (especially Five Chapter generation with voice check) can take 2-3 minutes.
+// Node's default is 2 minutes which is too tight. Set to 5 minutes.
+server.timeout = 5 * 60 * 1000;
+server.keepAliveTimeout = 5 * 60 * 1000;

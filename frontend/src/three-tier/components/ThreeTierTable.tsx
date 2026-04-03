@@ -337,6 +337,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
               cellId={draft.tier1Statement.id}
               cellType="tier1"
               currentText={draft.tier1Statement.text}
+              draftVersion={draft.version}
               onRestore={() => onUpdate()}
             />
           )}
@@ -380,6 +381,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                   cellId={t2.id}
                   cellType="tier2"
                   currentText={t2.text}
+                  draftVersion={draft.version}
                   onRestore={() => onUpdate()}
                 />
 
@@ -426,6 +428,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                           cellId={t3.id}
                           cellType="tier3"
                           currentText={t3.text}
+                          draftVersion={draft.version}
                           onRestore={() => onUpdate()}
                         />
                       </div>

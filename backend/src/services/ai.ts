@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
+  timeout: 5 * 60 * 1000, // 5 minutes — Opus calls with voice check can take 2-3 minutes
 });
 
 export type ModelTier = 'fast' | 'deep' | 'elite';

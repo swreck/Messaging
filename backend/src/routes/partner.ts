@@ -109,10 +109,31 @@ async function buildWorkSummary(workspaceId: string): Promise<string> {
   return lines.join('\n');
 }
 
-function buildCurrentContext(context: Record<string, any>): string {
+async function buildCurrentContext(context: Record<string, any>): Promise<string> {
   if (!context?.page) return 'Unknown page';
   const parts = [`Page: ${context.page}`];
-  if (context.draftId) parts.push('Viewing a Three Tier draft');
+  if (context.draftId) {
+    // Include draft completion status so Maria knows whether work is done or in progress
+    try {
+      const draft = await prisma.threeTierDraft.findUnique({
+        where: { id: context.draftId },
+        select: {
+          currentStep: true,
+          status: true,
+          offering: { select: { name: true } },
+          audience: { select: { name: true } },
+        },
+      });
+      if (draft) {
+        const stepLabel = draft.currentStep >= 5 ? 'complete (step 5)' : `in progress (step ${draft.currentStep}/5)`;
+        parts.push(`Viewing Three Tier draft: ${draft.offering.name} → ${draft.audience.name}, ${stepLabel}`);
+      } else {
+        parts.push('Viewing a Three Tier draft');
+      }
+    } catch {
+      parts.push('Viewing a Three Tier draft');
+    }
+  }
   if (context.storyId) parts.push('Viewing a Five Chapter Story');
   if (context.audienceId) parts.push('An audience is selected');
   if (context.offeringId) parts.push('An offering is selected');
@@ -444,7 +465,7 @@ router.post('/message', async (req: Request, res: Response) => {
     }),
   ]);
 
-  const currentContext = buildCurrentContext(ctx);
+  const currentContext = await buildCurrentContext(ctx);
   const isNewUser = offeringCount === 0 && audienceCount === 0;
   const userRole = req.user?.isAdmin ? 'owner' : (membership?.role || 'collaborator');
 

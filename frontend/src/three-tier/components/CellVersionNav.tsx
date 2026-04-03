@@ -6,6 +6,7 @@ interface CellVersionNavProps {
   cellId: string;
   cellType: 'tier1' | 'tier2' | 'tier3';
   currentText?: string; // Pass current text to detect when to refresh
+  draftVersion?: number; // Draft version number — triggers re-fetch on any draft change (e.g. Maria edits)
   onRestore: (text: string) => void;
 }
 
@@ -18,7 +19,7 @@ const SOURCE_LABELS: Record<string, string> = {
   direction: 'Maria\u2019s direction',
 };
 
-export function CellVersionNav({ cellId, cellType, currentText, onRestore }: CellVersionNavProps) {
+export function CellVersionNav({ cellId, cellType, currentText, draftVersion, onRestore }: CellVersionNavProps) {
   const [versions, setVersions] = useState<CellVersion[]>([]);
   const [currentIdx, setCurrentIdx] = useState(-1);
   const [previewing, setPreviewing] = useState(false);
@@ -26,7 +27,7 @@ export function CellVersionNav({ cellId, cellType, currentText, onRestore }: Cel
 
   useEffect(() => {
     loadVersions();
-  }, [cellId, currentText]); // Refresh when text changes
+  }, [cellId, currentText, draftVersion]); // Refresh when text or draft version changes
 
   async function loadVersions() {
     try {

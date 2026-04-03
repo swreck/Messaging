@@ -636,6 +636,32 @@ AUDIENCE PRIORITIES:
 ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n')}`;
 
   const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(REVIEW_SYSTEM, userMessage, 'elite');
+
+  // Post-process: convert tier3 suggestions that reference non-existent indices to "add" format.
+  // The AI sometimes returns tier3-X-Y where Y is beyond the existing bullets — that means
+  // "add a new proof point", not "replace existing". Convert to tier3-X-add so the frontend
+  // handles it correctly.
+  if (result.suggestions) {
+    const addKeys = new Set<string>();
+    result.suggestions = result.suggestions.map(s => {
+      const t3Match = s.cell.match(/^tier3-(\d+)-(\d+)$/);
+      if (t3Match) {
+        const t2Index = parseInt(t3Match[1]);
+        const t3Index = parseInt(t3Match[2]);
+        const t2 = draft.tier2Statements[t2Index];
+        if (t2 && t3Index >= t2.tier3Bullets.length) {
+          // This index doesn't exist — convert to "add"
+          const addKey = `tier3-${t2Index}-add`;
+          // Only allow one "add" per column; skip duplicates
+          if (addKeys.has(addKey)) return null;
+          addKeys.add(addKey);
+          return { ...s, cell: addKey };
+        }
+      }
+      return s;
+    }).filter((s): s is { cell: string; suggested: string } => s !== null);
+  }
+
   res.json(result);
 });
 
