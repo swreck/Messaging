@@ -226,7 +226,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 
 /* ─── Layout ──────────────────────────────────────── */
 .app-layout { min-height: 100vh; }
-.main-content { max-width: 1200px; margin: 0 auto; padding: 24px; padding-bottom: 40px; overflow-x: hidden; }
+.main-content { max-width: 1200px; margin: 0 auto; padding: 24px; padding-bottom: 40px; }
 
 /* ─── Auth ────────────────────────────────────────── */
 .auth-page {
