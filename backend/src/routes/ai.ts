@@ -1022,13 +1022,28 @@ AUDIENCE PRIORITIES:
 ${story.draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"${p.motivatingFactor ? ` — Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
 ${story.chapters.filter((c) => c.chapterNum < chapterNum).length > 0 ? `
-PREVIOUS CHAPTERS (summaries for context — do NOT continue or repeat their content):
-${story.chapters.filter((c) => c.chapterNum < chapterNum).map((c) => `Ch ${c.chapterNum}: ${c.content.substring(0, 150)}`).join('\n')}
+PREVIOUS CHAPTERS (topic summaries for context — do NOT continue or repeat their content):
+${story.chapters.filter((c) => c.chapterNum < chapterNum).map((c) => {
+    // Truncate at last sentence boundary to avoid mid-sentence fragments that the AI compulsively continues
+    const text = c.content;
+    const maxLen = 200;
+    if (text.length <= maxLen) return `Ch ${c.chapterNum}: ${text}`;
+    const truncated = text.substring(0, maxLen);
+    const lastSentenceEnd = Math.max(truncated.lastIndexOf('. '), truncated.lastIndexOf('? '), truncated.lastIndexOf('! '));
+    const clean = lastSentenceEnd > 50 ? truncated.substring(0, lastSentenceEnd + 1) : truncated.substring(0, truncated.lastIndexOf(' '));
+    return `Ch ${c.chapterNum}: ${clean}`;
+  }).join('\n')}
 ` : ''}
 Write Chapter ${chapterNum}: "${ch.name}"
 IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.`;
 
   let content = await callAI(systemPrompt, userMessage, 'elite');
+
+  // Strip leading "..." or sentence fragments — chapter boundary bleed safety net
+  content = content.replace(/^\s*\.{2,}\s*/g, '').replace(/^[a-z].*?\.\s*/s, function(match) {
+    // If the chapter starts with a lowercase word followed by a period, it's a continuation fragment — strip it
+    return match.length < 60 ? '' : match; // Only strip short fragments, not full paragraphs
+  }).trim();
 
   // Voice check chapter prose
   if (await isVoiceCheckEnabled(req.user!.userId)) {

@@ -568,11 +568,19 @@ ${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${
 AUDIENCE PRIORITIES:
 ${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — ${p.motivatingFactor ? `Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
-${prevChapters.map((c: any) => `CHAPTER ${c.chapterNum} (already written): ${c.content.substring(0, 200)}...`).join('\n')}
+${prevChapters.length > 0 ? prevChapters.map((c: any) => {
+              const text = c.content; const maxLen = 200;
+              if (text.length <= maxLen) return `Ch ${c.chapterNum} (context only): ${text}`;
+              const t = text.substring(0, maxLen);
+              const e = Math.max(t.lastIndexOf('. '), t.lastIndexOf('? '), t.lastIndexOf('! '));
+              return `Ch ${c.chapterNum} (context only): ${e > 50 ? t.substring(0, e + 1) : t.substring(0, t.lastIndexOf(' '))}`;
+            }).join('\n') : ''}
 
-Write Chapter ${chNum}: "${ch.name}"`;
+Write Chapter ${chNum}: "${ch.name}"
+IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or continue from a previous chapter.`;
 
-            const content = await callAI(systemPrompt, userMsg, 'elite');
+            let content = await callAI(systemPrompt, userMsg, 'elite');
+            content = content.replace(/^\s*\.{2,}\s*/g, '').trim();
             const chapter = await prisma.chapterContent.upsert({
               where: { storyId_chapterNum: { storyId: newStory.id, chapterNum: chNum } },
               update: { title: ch.name, content },
@@ -685,11 +693,19 @@ ${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${
 AUDIENCE PRIORITIES:
 ${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — ${p.motivatingFactor ? `Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
-${prevChapters.map((c: any) => `CHAPTER ${c.chapterNum} (already written): ${c.content.substring(0, 200)}...`).join('\n')}
+${prevChapters.length > 0 ? prevChapters.map((c: any) => {
+              const text = c.content; const maxLen = 200;
+              if (text.length <= maxLen) return `Ch ${c.chapterNum} (context only): ${text}`;
+              const t = text.substring(0, maxLen);
+              const e = Math.max(t.lastIndexOf('. '), t.lastIndexOf('? '), t.lastIndexOf('! '));
+              return `Ch ${c.chapterNum} (context only): ${e > 50 ? t.substring(0, e + 1) : t.substring(0, t.lastIndexOf(' '))}`;
+            }).join('\n') : ''}
 
-Write Chapter ${chNum}: "${ch.name}"`;
+Write Chapter ${chNum}: "${ch.name}"
+IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or continue from a previous chapter.`;
 
-            const content = await callAI(systemPrompt, userMsg, 'elite');
+            let content = await callAI(systemPrompt, userMsg, 'elite');
+            content = content.replace(/^\s*\.{2,}\s*/g, '').trim();
             const chapter = await prisma.chapterContent.upsert({
               where: { storyId_chapterNum: { storyId: ctx.storyId, chapterNum: chNum } },
               update: { title: ch.name, content },
