@@ -908,12 +908,12 @@ p { line-height: 1.5; color: var(--text-secondary); }
   cursor: text;
   transition: background 0.15s ease;
   min-height: 80px;
+  flex: 1;
 }
 .tier2-text:hover { background: var(--bg-hover); border-radius: var(--radius-sm); cursor: text; }
 
 .tier3-area {
   padding: 8px 16px 16px;
-  flex: 1;
 }
 .tier3-bullet {
   display: flex;
