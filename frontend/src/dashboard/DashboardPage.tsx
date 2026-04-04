@@ -208,7 +208,7 @@ export function DashboardPage() {
       {completed.length > 0 && (
         <div style={{ marginTop: 24 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Your messaging
+            Your recent messaging work
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {completed.map(d => (

@@ -54,7 +54,7 @@ export const CHAPTER_CRITERIA = [
   },
 ];
 
-export function buildChapterPrompt(chapterNum: number, medium?: string, emphasisChapter?: number): string {
+export function buildChapterPrompt(chapterNum: number, medium?: string, emphasisChapter?: number, sourceContent?: { medium: string; chapterText: string }): string {
   const ch = CHAPTER_CRITERIA[chapterNum - 1];
   const spec = medium ? getMediumSpec(medium) : null;
 
@@ -142,6 +142,19 @@ HARD RULES (ALL CHAPTERS):
 5. If the format is "In-Person / Verbal," write speaker note bullets — brief triggers, not a verbatim script.
 6. RESPECT CHAPTER BOUNDARIES. Each chapter has a specific job. Do NOT bleed content between chapters — no proof in Ch2, no value claims in Ch4, no credentials in Ch1. If content doesn't match this chapter's goal, leave it out.
 
+${sourceContent ? `
+CONTENT CONVERSION:
+The user has already written this chapter for a ${sourceContent.medium}. They edited and approved it.
+Now adapt it to ${spec?.label || medium || 'this'} format. CRITICAL RULES for conversion:
+1. Keep ALL the user's editorial decisions — their word choices, their facts, their structure.
+2. Expand or contract to fit the new format's word budget.
+3. Apply the new format's rules (headings, tone, structure) while preserving the core messaging.
+4. Do NOT discard content the user added or reinvent content they removed.
+5. The user's version is the source of truth for WHAT to say. The new format determines HOW to say it.
+
+SOURCE CONTENT (from ${sourceContent.medium}):
+${sourceContent.chapterText}
+` : ''}
 Respond with the chapter content as plain text. No JSON, no markdown headers.`;
 }
 

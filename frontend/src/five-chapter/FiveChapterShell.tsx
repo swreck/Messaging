@@ -34,6 +34,10 @@ export function FiveChapterShell() {
   const [emphasis, setEmphasis] = useState('');
   const [creating, setCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [sourceStoryIdForCreate, setSourceStoryIdForCreate] = useState<string | null>(null);
+  const [renamingStoryId, setRenamingStoryId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [confirmDeleteStory, setConfirmDeleteStory] = useState<string | null>(null);
 
   // Generation
   const [generatingChapter, setGeneratingChapter] = useState<number | null>(null);
@@ -50,6 +54,8 @@ export function FiveChapterShell() {
   const [editingChapter, setEditingChapter] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
   const [showCompleteDraft, setShowCompleteDraft] = useState(false);
+  // Auto-show complete draft if it already exists (user created it previously)
+  useEffect(() => { if (story?.blendedText) setShowCompleteDraft(true); }, [story?.id]);
   const [editingBlended, setEditingBlended] = useState(false);
   const [editContent, setEditContent] = useState('');
 
@@ -129,17 +135,61 @@ export function FiveChapterShell() {
         medium,
         cta,
         emphasis,
+        sourceStoryId: sourceStoryIdForCreate || undefined,
       });
       setStories(prev => [s, ...prev]);
       setStory(s);
       setShowCreateForm(false);
+      setSourceStoryIdForCreate(null);
       setCta('');
       setEmphasis('');
+
+      // Auto-generate chapters if this was created from "Draft the Next Piece"
+      if (sourceStoryIdForCreate) {
+        setGenerating(true);
+        for (let i = 1; i <= 5; i++) {
+          setGeneratingChapter(i);
+          const { chapter } = await api.post<{ chapter: ChapterContent }>('/ai/generate-chapter', {
+            storyId: s.id,
+            chapterNum: i,
+          });
+          setStory(prev => {
+            if (!prev) return prev;
+            const existing = prev.chapters.findIndex(c => c.chapterNum === i);
+            const chapters = [...prev.chapters];
+            if (existing >= 0) chapters[existing] = chapter;
+            else chapters.push(chapter);
+            return { ...prev, chapters };
+          });
+        }
+        setGenerating(false);
+        setGeneratingChapter(null);
+      }
     } catch (err: any) {
       showToast(err.message);
+      setGenerating(false);
+      setGeneratingChapter(null);
     } finally {
       setCreating(false);
     }
+  }
+
+  async function renameStory(storyId: string, newName: string) {
+    try {
+      await api.patch(`/stories/${storyId}/rename`, { customName: newName });
+      setStories(prev => prev.map(s => s.id === storyId ? { ...s, customName: newName } : s));
+      if (story?.id === storyId) setStory(prev => prev ? { ...prev, customName: newName } : prev);
+    } catch { showToast('Could not rename'); }
+    setRenamingStoryId(null);
+  }
+
+  async function deleteStory(storyId: string) {
+    try {
+      await api.delete(`/stories/${storyId}`);
+      setStories(prev => prev.filter(s => s.id !== storyId));
+      if (story?.id === storyId) setStory(stories.find(s => s.id !== storyId) || null);
+    } catch { showToast('Could not delete'); }
+    setConfirmDeleteStory(null);
   }
 
   async function polishStory() {
@@ -449,13 +499,34 @@ export function FiveChapterShell() {
               const baseLabel = stdLabel ? stdLabel.label : (() => { const sh = s.medium.split(/\s*[—.]\s*/)[0].trim(); return sh.length > 35 ? sh.substring(0, 32) + '...' : sh; })();
               const label = total > 1 ? `${baseLabel} #${count}` : baseLabel;
               return (
-                <button
-                  key={s.id}
-                  className={`btn btn-sm ${story?.id === s.id ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setStory(s)}
-                >
-                  {label}
-                </button>
+                <div key={s.id} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                  {renamingStoryId === s.id ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={e => setRenameValue(e.target.value)}
+                      onBlur={() => renameStory(s.id, renameValue)}
+                      onKeyDown={e => { if (e.key === 'Enter') renameStory(s.id, renameValue); if (e.key === 'Escape') setRenamingStoryId(null); }}
+                      style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--accent)', width: 140 }}
+                    />
+                  ) : (
+                    <button
+                      className={`btn btn-sm ${story?.id === s.id ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setStory(s)}
+                      onDoubleClick={() => { setRenamingStoryId(s.id); setRenameValue(s.customName || label); }}
+                      title="Double-click to rename"
+                    >
+                      {s.customName || label}
+                    </button>
+                  )}
+                  {stories.length > 1 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteStory(s.id); }}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 14, padding: '0 4px', marginLeft: 2 }}
+                      title="Delete deliverable"
+                    >&times;</button>
+                  )}
+                </div>
               );
             });
           })()}
@@ -885,9 +956,9 @@ export function FiveChapterShell() {
               border: '1px solid var(--border-light, #e5e5ea)',
             }}>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 10px', lineHeight: 1.6 }}>
-                Your {mediumLabel?.toLowerCase()} is done, but you're still in the flow. If your next deliverable is related — say, the landing page that email links to — you can draft it now and it'll stay tightly unified with what you just built.
+                Your new {mediumLabel?.toLowerCase()} draft is done. If your next deliverable is related, e.g., a landing page for that {mediumLabel?.toLowerCase()}, you can build on your work and go straight to a new deliverable format.
               </p>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowCreateForm(true)}>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setSourceStoryIdForCreate(story.id); setShowCreateForm(true); }}>
                 Draft the Next Piece
               </button>
             </div>
@@ -928,6 +999,15 @@ export function FiveChapterShell() {
         message="This story was edited by someone else. Reload with their changes, or cancel to keep editing your version."
         confirmLabel="Reload"
         confirmDanger={false}
+      />
+      <ConfirmModal
+        open={!!confirmDeleteStory}
+        onClose={() => setConfirmDeleteStory(null)}
+        onConfirm={() => confirmDeleteStory && deleteStory(confirmDeleteStory)}
+        title="Delete this deliverable?"
+        message="This will permanently delete this deliverable and all its chapters. This cannot be undone."
+        confirmLabel="Delete"
+        confirmDanger
       />
     </div>
   );

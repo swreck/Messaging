@@ -204,6 +204,8 @@ model FiveChapterStory {
   draftId     String
   draft       ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
   medium      String         // "email" | "blog" | "social" | "landing_page" | "in_person" | "press_release" | "newsletter" | "report"
+  customName    String         @default("")
+  sourceStoryId String?
   cta         String
   emphasis    String         @default("")
   stage       String         @default("chapters") // "chapters" | "joined" | "blended"

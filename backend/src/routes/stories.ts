@@ -69,12 +69,16 @@ router.post('/', requireStoryteller, async (req: Request, res: Response) => {
     return;
   }
 
+  const { sourceStoryId, customName } = req.body;
+
   const story = await prisma.fiveChapterStory.create({
     data: {
       draftId,
       medium,
       cta,
       emphasis: emphasis || '',
+      customName: customName || '',
+      sourceStoryId: sourceStoryId || null,
     },
     include: { chapters: true },
   });
@@ -182,6 +186,27 @@ router.put('/:storyId/chapters/:chapterNum', requireStoryteller, async (req: Req
     data: { version: { increment: 1 } },
   });
   res.json({ chapter, story: updatedStory });
+});
+
+// PATCH /api/stories/:id/rename
+router.patch('/:id/rename', requireStoryteller, async (req: Request, res: Response) => {
+  const story = await prisma.fiveChapterStory.findFirst({
+    where: { id: param(req.params.id), draft: { offering: { workspaceId: req.workspaceId } } },
+  });
+  if (!story) {
+    res.status(404).json({ error: 'Story not found' });
+    return;
+  }
+  const { customName } = req.body;
+  if (customName === undefined) {
+    res.status(400).json({ error: 'customName required' });
+    return;
+  }
+  const updated = await prisma.fiveChapterStory.update({
+    where: { id: param(req.params.id) },
+    data: { customName },
+  });
+  res.json({ story: updated });
 });
 
 // DELETE /api/stories/:id

@@ -986,7 +986,24 @@ router.post('/generate-chapter', requireStoryteller, async (req: Request, res: R
   // Parse emphasis chapter number if provided (e.g. "ch3" or just a string)
   const emphasisMatch = story.emphasis?.match(/^ch(\d)$/i);
   const emphasisChapter = emphasisMatch ? parseInt(emphasisMatch[1]) : undefined;
-  const systemPrompt = buildChapterPrompt(chapterNum, story.medium, emphasisChapter);
+
+  // If this story was derived from another deliverable, include source content for conversion
+  let sourceContent: { medium: string; chapterText: string } | undefined;
+  if (story.sourceStoryId) {
+    const sourceStory = await prisma.fiveChapterStory.findUnique({
+      where: { id: story.sourceStoryId },
+      include: { chapters: { where: { chapterNum } } },
+    });
+    if (sourceStory && sourceStory.chapters.length > 0) {
+      const sourceMediumSpec = getMediumSpec(sourceStory.medium);
+      sourceContent = {
+        medium: sourceMediumSpec?.label || sourceStory.medium,
+        chapterText: sourceStory.chapters[0].content,
+      };
+    }
+  }
+
+  const systemPrompt = buildChapterPrompt(chapterNum, story.medium, emphasisChapter, sourceContent);
   const ch = CHAPTER_CRITERIA[chapterNum - 1];
   const spec = getMediumSpec(story.medium);
 

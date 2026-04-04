@@ -147,8 +147,10 @@ export interface FiveChapterStory {
   id: string;
   draftId: string;
   medium: StoryMedium;
+  customName: string;
   cta: string;
   emphasis: string;
+  sourceStoryId?: string;
   stage: StoryStage;
   joinedText: string;
   blendedText: string;

@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Spinner } from '../shared/Spinner';
 import { InfoTooltip } from '../shared/InfoTooltip';
+import { ConfirmModal } from '../shared/ConfirmModal';
 import { useMaria } from '../shared/MariaContext';
+import { useToast } from '../shared/ToastContext';
 import { MEDIUM_OPTIONS } from '../types';
 
 interface HierarchyOffering {
@@ -19,8 +21,19 @@ interface HierarchyOffering {
 
 export function FiveChaptersPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [hierarchy, setHierarchy] = useState<HierarchyOffering[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteStoryId, setDeleteStoryId] = useState<string | null>(null);
+
+  async function handleDeleteStory() {
+    if (!deleteStoryId) return;
+    try {
+      await api.delete(`/stories/${deleteStoryId}`);
+      setDeleteStoryId(null);
+      loadData();
+    } catch { showToast('Could not delete deliverable'); setDeleteStoryId(null); }
+  }
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'five-chapters' }); registerRefresh(loadData); }, []);
@@ -158,9 +171,16 @@ export function FiveChaptersPage() {
                         <InfoTooltip text={getStageDescription(del.stage)} />
                       </div>
                       <div className="tt-card-updated">{formatUpdatedAt(del.updatedAt)}</div>
-                      <div className="tt-card-action">
+                      <div className="tt-card-action" style={{ display: 'flex', gap: 8 }}>
                         <button className="btn btn-ghost btn-sm">
                           {del.stage === 'blended' ? 'Open' : 'Continue'}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: 'var(--danger)' }}
+                          onClick={(e) => { e.stopPropagation(); setDeleteStoryId(del.id); }}
+                        >
+                          Delete
                         </button>
                       </div>
                     </div>
@@ -179,6 +199,15 @@ export function FiveChaptersPage() {
           )}
         </section>
       ))}
+      <ConfirmModal
+        open={!!deleteStoryId}
+        onClose={() => setDeleteStoryId(null)}
+        onConfirm={handleDeleteStory}
+        title="Delete this deliverable?"
+        message="This will permanently delete this deliverable and all its chapters. This cannot be undone."
+        confirmLabel="Delete"
+        confirmDanger
+      />
     </div>
   );
 }
