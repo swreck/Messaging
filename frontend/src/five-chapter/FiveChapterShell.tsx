@@ -5,6 +5,7 @@ import { Spinner } from '../shared/Spinner';
 import { InfoTooltip } from '../shared/InfoTooltip';
 import { ChapterVersionNav } from '../shared/ChapterVersionNav';
 import { BlendedVersionNav } from '../shared/BlendedVersionNav';
+import { ConfirmModal } from '../shared/ConfirmModal';
 import { useMaria } from '../shared/MariaContext';
 import { useToast } from '../shared/ToastContext';
 import type { ThreeTierDraft, FiveChapterStory, ChapterContent, StoryMedium } from '../types';
@@ -56,6 +57,11 @@ export function FiveChapterShell() {
 
   // Share
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+
+  // Confirm modals
+  const [confirmBlendReplace, setConfirmBlendReplace] = useState(false);
+  const [confirmRegenerateAll, setConfirmRegenerateAll] = useState(false);
+  const [conflictConfirm, setConflictConfirm] = useState<{ onDiscard: () => void } | null>(null);
 
   // Post-generation orientation messages
   const [chaptersJustGenerated, setChaptersJustGenerated] = useState(false);
@@ -202,8 +208,14 @@ export function FiveChapterShell() {
   async function blendStory() {
     if (!story) return;
     if (story.blendedText && story.blendedText.trim()) {
-      if (!window.confirm('This will replace your current final draft. Continue?')) return;
+      setConfirmBlendReplace(true);
+      return;
     }
+    doBlendStory();
+  }
+
+  async function doBlendStory() {
+    if (!story) return;
     setBlending(true);
     try {
       const { story: updated } = await api.post<{ story: FiveChapterStory }>('/ai/blend-story', {
@@ -233,11 +245,9 @@ export function FiveChapterShell() {
       setEditingChapter(null);
     } catch (err: any) {
       if (err?.status === 409) {
-        const discard = window.confirm('This story was edited by someone else. Click OK to reload with their changes, or Cancel to keep editing your version.');
-        if (discard) {
-          setEditingChapter(null);
-          loadData();
-        }
+        setConflictConfirm({
+          onDiscard: () => { setEditingChapter(null); loadData(); },
+        });
       } else {
         showToast(err.message);
       }
@@ -252,11 +262,9 @@ export function FiveChapterShell() {
       setEditingBlended(false);
     } catch (err: any) {
       if (err?.status === 409) {
-        const discard = window.confirm('This story was edited by someone else. Click OK to reload with their changes, or Cancel to keep editing your version.');
-        if (discard) {
-          setEditingBlended(false);
-          loadData();
-        }
+        setConflictConfirm({
+          onDiscard: () => { setEditingBlended(false); loadData(); },
+        });
       } else {
         showToast(err.message);
       }
@@ -615,7 +623,7 @@ export function FiveChapterShell() {
             <button
               className="btn btn-primary btn-sm"
               onClick={() => {
-                if (allChaptersGenerated && !confirm('Regenerate all 5 chapters? This will replace the current content.')) return;
+                if (allChaptersGenerated) { setConfirmRegenerateAll(true); return; }
                 generateAllChapters();
               }}
               disabled={generating || polishing}
@@ -861,6 +869,36 @@ export function FiveChapterShell() {
           </div>
         </>
       )}
+
+      <ConfirmModal
+        open={confirmBlendReplace}
+        onClose={() => setConfirmBlendReplace(false)}
+        onConfirm={doBlendStory}
+        title="Replace final draft?"
+        message="This will replace your current final draft."
+        confirmLabel="Replace"
+        confirmDanger
+      />
+
+      <ConfirmModal
+        open={confirmRegenerateAll}
+        onClose={() => setConfirmRegenerateAll(false)}
+        onConfirm={() => generateAllChapters()}
+        title="Regenerate all chapters?"
+        message="This will replace the current content of all 5 chapters."
+        confirmLabel="Regenerate"
+        confirmDanger
+      />
+
+      <ConfirmModal
+        open={!!conflictConfirm}
+        onClose={() => setConflictConfirm(null)}
+        onConfirm={() => { conflictConfirm?.onDiscard(); setConflictConfirm(null); }}
+        title="Editing conflict"
+        message="This story was edited by someone else. Reload with their changes, or cancel to keep editing your version."
+        confirmLabel="Reload"
+        confirmDanger={false}
+      />
     </div>
   );
 }

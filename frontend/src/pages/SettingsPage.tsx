@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMaria } from '../shared/MariaContext';
+import { ConfirmModal } from '../shared/ConfirmModal';
 import { api } from '../api/client';
 
 interface LearningData {
@@ -13,6 +14,7 @@ interface LearningData {
 export function SettingsPage() {
   const { setPageContext } = useMaria();
   const [learning, setLearning] = useState<LearningData | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
   useEffect(() => {
     setPageContext({ page: 'settings' });
@@ -25,7 +27,7 @@ export function SettingsPage() {
   }
 
   async function handleReset() {
-    if (!confirm('Reset all of Maria\'s learned preferences? This cannot be undone.')) return;
+    setShowResetConfirm(false);
     setResetting(true);
     await api.delete('/settings/learning');
     setLearning(null);
@@ -132,7 +134,7 @@ export function SettingsPage() {
             <div style={{ marginTop: 8 }}>
               <button
                 className="btn btn-ghost"
-                onClick={handleReset}
+                onClick={() => setShowResetConfirm(true)}
                 disabled={resetting}
                 style={{ color: 'var(--danger)' }}
               >
@@ -142,6 +144,16 @@ export function SettingsPage() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        open={showResetConfirm}
+        title="Reset Maria's Memory?"
+        message="This will clear all of Maria's learned preferences — question calibration, column edit patterns, and correction history. This cannot be undone."
+        confirmLabel="Reset"
+        confirmDanger
+        onConfirm={handleReset}
+        onClose={() => setShowResetConfirm(false)}
+      />
     </div>
   );
 }

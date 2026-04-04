@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import { CellEditor } from './CellEditor';
 import { CellVersionNav } from './CellVersionNav';
 import { InfoTooltip } from '../../shared/InfoTooltip';
+import { ConfirmModal } from '../../shared/ConfirmModal';
 import { useToast } from '../../shared/ToastContext';
 import type { ThreeTierDraft } from '../../types';
 
@@ -72,6 +73,9 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
     const idx = colsWithSuggestions.indexOf(activeReviewCol);
     if (idx > 0) setActiveReviewCol(colsWithSuggestions[idx - 1]);
   }
+  // Conflict confirmation
+  const [showConflict, setShowConflict] = useState(false);
+
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const pendingDeleteRef = useRef<PendingDelete | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -101,7 +105,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
         onUpdate();
       } catch (err: any) {
         if (err?.status === 409) {
-          if (window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.')) onConflict?.();
+          setShowConflict(true);
           return;
         } else { throw err; }
       } finally { setSaving(false); }
@@ -118,7 +122,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
         onUpdate();
       } catch (err: any) {
         if (err?.status === 409) {
-          if (window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.')) onConflict?.();
+          setShowConflict(true);
           return;
         } else { throw err; }
       } finally { setSaving(false); }
@@ -135,7 +139,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
         onUpdate();
       } catch (err: any) {
         if (err?.status === 409) {
-          if (window.confirm('Someone else edited this. OK to reload their version, or Cancel to keep your text.')) onConflict?.();
+          setShowConflict(true);
           return;
         } else { throw err; }
       } finally { setSaving(false); }
@@ -457,6 +461,16 @@ ${t2s.map(t2 => `<div class="tier2-col">
           })}
         </div>
       </div>
+
+      <ConfirmModal
+        open={showConflict}
+        onClose={() => setShowConflict(false)}
+        onConfirm={() => { setShowConflict(false); onConflict?.(); }}
+        title="Editing conflict"
+        message="Someone else edited this cell. Reload their version, or cancel to keep your text."
+        confirmLabel="Reload"
+        confirmDanger={false}
+      />
     </div>
   );
 }

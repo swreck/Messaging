@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
+import { ConfirmModal } from '../shared/ConfirmModal';
 import { DifferentiatorList } from '../shared/DifferentiatorList';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
@@ -26,6 +27,7 @@ export function OfferingDetailPage() {
   const [smeRole, setSmeRole] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => {
@@ -81,7 +83,6 @@ export function OfferingDetailPage() {
 
   async function deleteOffering() {
     if (!offering) return;
-    if (!confirm('Delete this offering and all its Three Tier drafts?')) return;
     await api.delete(`/offerings/${offering.id}`);
     navigate('/offerings');
   }
@@ -111,7 +112,7 @@ export function OfferingDetailPage() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={openEdit}>Edit</button>
-          <button className="btn btn-ghost btn-danger" onClick={deleteOffering}>Delete</button>
+          <button className="btn btn-ghost btn-danger" onClick={() => setConfirmDelete(true)}>Delete</button>
         </div>
       </header>
 
@@ -178,6 +179,16 @@ export function OfferingDetailPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={deleteOffering}
+        title="Delete offering"
+        message="Delete this offering and all its Three Tier drafts?"
+        confirmLabel="Delete"
+        confirmDanger
+      />
     </div>
   );
 }

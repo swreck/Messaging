@@ -7,6 +7,7 @@ import { Spinner } from '../../shared/Spinner';
 import { InfoTooltip } from '../../shared/InfoTooltip';
 import { CompareModal } from '../components/CompareModal';
 import { Modal } from '../../shared/Modal';
+import { ConfirmModal } from '../../shared/ConfirmModal';
 import type { TableVersion, ReviewResponse, DirectionResponse, TableSnapshot } from '../../types';
 
 
@@ -66,6 +67,9 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
   // Restore confirmation
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
+
+  // Regenerate confirmation
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
 
   // Step 5 orientation — show once per draft
   const orientationKey = `step5-oriented-${draft.id}`;
@@ -281,7 +285,6 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   }
 
   async function regenerate() {
-    if (!confirm('Start over? Maria will save a snapshot of your current table, then regenerate from scratch.')) return;
     setRegenerating(true);
     try {
       await api.post(`/tiers/${draft.id}/reset`);
@@ -497,7 +500,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
                   Clear suggestions
                 </button>
               )}
-              <button className="btn btn-ghost btn-sm btn-danger" style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '8px 14px' }} onClick={() => { regenerate(); setShowMoreTools(false); }} disabled={anyBusy}>
+              <button className="btn btn-ghost btn-sm btn-danger" style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '8px 14px' }} onClick={() => { setConfirmRegenerate(true); setShowMoreTools(false); }} disabled={anyBusy}>
                 {regenerating ? 'Regenerating...' : 'Regenerate'}
               </button>
             </div>
@@ -636,6 +639,16 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           <button className="btn btn-primary" onClick={() => restoreTarget && restoreSnapshot(restoreTarget)}>Restore</button>
         </div>
       </Modal>
+
+      <ConfirmModal
+        open={confirmRegenerate}
+        onClose={() => setConfirmRegenerate(false)}
+        onConfirm={regenerate}
+        title="Start over?"
+        message="Maria will save a snapshot of your current table, then regenerate from scratch."
+        confirmLabel="Regenerate"
+        confirmDanger
+      />
     </div>
   );
 }

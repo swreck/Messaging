@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 import { Modal } from '../shared/Modal';
+import { ConfirmModal } from '../shared/ConfirmModal';
 import { InfoTooltip } from '../shared/InfoTooltip';
 
 interface WorkspaceData {
@@ -115,6 +116,9 @@ export function WorkspacesPage() {
   const [globalInviteResult, setGlobalInviteResult] = useState<InviteResult | null>(null);
   const [globalInviteError, setGlobalInviteError] = useState('');
   const [globalInviting, setGlobalInviting] = useState(false);
+
+  // Remove member confirmation
+  const [confirmRemove, setConfirmRemove] = useState<{ wsId: string; userId: string } | null>(null);
 
   // Copied feedback
   const [copied, setCopied] = useState<string | null>(null);
@@ -292,7 +296,6 @@ export function WorkspacesPage() {
   }
 
   async function handleRemoveMember(wsId: string, userId: string) {
-    if (!confirm('Remove this member from the team?')) return;
     await api.delete(`/workspaces/${wsId}/members/${userId}`);
     await loadWorkspaceDetails(wsId);
     await reload();
@@ -408,7 +411,7 @@ export function WorkspacesPage() {
                             {isOwner(ws) && m.userId !== user?.userId && (
                               <button
                                 className="btn btn-ghost btn-sm btn-danger"
-                                onClick={() => handleRemoveMember(ws.id, m.userId)}
+                                onClick={() => setConfirmRemove({ wsId: ws.id, userId: m.userId })}
                               >
                                 Remove
                               </button>
@@ -592,6 +595,16 @@ export function WorkspacesPage() {
           <button className="btn btn-primary" onClick={handleSwitchToNew}>Switch Now</button>
         </div>
       </Modal>
+
+      <ConfirmModal
+        open={!!confirmRemove}
+        onClose={() => setConfirmRemove(null)}
+        onConfirm={() => { if (confirmRemove) handleRemoveMember(confirmRemove.wsId, confirmRemove.userId); setConfirmRemove(null); }}
+        title="Remove member"
+        message="Remove this member from the team?"
+        confirmLabel="Remove"
+        confirmDanger
+      />
 
       {/* Global Invite Modal */}
       <Modal open={showInviteModal} onClose={resetGlobalInvite} title="Invite Someone to Maria">
