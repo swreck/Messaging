@@ -246,8 +246,10 @@ export function ThreeTiersPage() {
     return (
       <div className="page-container">
         <header className="page-header">
-          <h1>3 Tier Messages</h1>
-          <p className="page-description">Your messaging frameworks</p>
+          <div>
+            <h1>3 Tier Messages</h1>
+            <p className="page-description">Your messaging frameworks</p>
+          </div>
         </header>
         <div className="empty-state empty-state-enhanced">
           <div className="empty-icon">💬</div>
