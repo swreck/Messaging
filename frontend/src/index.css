@@ -803,7 +803,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 
 .tier1-row {
-  padding: 16px 24px;
+  padding: 12px 16px 16px;
   text-align: center;
   border-bottom: 2px solid #d1d1d6;
   background: var(--bg-card);
@@ -849,6 +849,13 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .tier1-text:hover { background: var(--bg-hover); border-radius: var(--radius-sm); cursor: text; }
 
+.tier2-section {
+  position: relative;
+}
+.tier2-section-label {
+  padding: 8px 16px 6px;
+  background: var(--bg-card);
+}
 .tier2-row {
   display: flex;
   border-bottom: 1px solid #d1d1d6;
@@ -943,16 +950,19 @@ p { line-height: 1.5; color: var(--text-secondary); }
 
 /* ─── Tier Labels ────────────────────────────────── */
 .tier-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-tertiary);
-  padding: 8px 12px 4px;
+  padding: 4px 16px 4px;
+}
+.tier1-row .tier-label {
+  padding-left: 0;
 }
 .tier-label-small {
-  font-size: 10px;
-  padding: 4px 12px 2px;
+  font-size: 12px;
+  padding: 4px 0 2px;
 }
 .tier-subtitle {
   font-weight: 500;
@@ -1012,10 +1022,10 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  padding: 2px 4px;
-  font-size: 15px;
+  padding: 4px 8px;
+  font-size: 20px;
 }
-.cell-version-label { white-space: nowrap; }
+.cell-version-label { white-space: nowrap; font-size: 13px; }
 .cell-version-source { color: var(--text-tertiary); font-style: italic; }
 
 /* Touch devices: always show version nav (no hover available) */
@@ -1025,6 +1035,19 @@ p { line-height: 1.5; color: var(--text-secondary); }
     opacity: 1;
     padding: 4px 16px;
   }
+}
+/* When previewing a version, expand to show Use/Cancel buttons */
+.cell-version-nav.version-previewing {
+  max-height: none;
+  overflow: visible;
+  opacity: 1;
+  padding: 4px 16px;
+  flex-wrap: wrap;
+}
+.cell-version-nav.version-previewing .cell-version-preview-actions {
+  width: 100%;
+  margin-left: 0;
+  margin-top: 4px;
 }
 .cell-version-preview-actions { margin-left: 6px; }
 .cell-version-use {
@@ -1059,7 +1082,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   clear: both;
 }
 .cell-version-nav button:hover { color: var(--accent); }
-.cell-version-nav span { font-size: 12px; color: var(--text-tertiary); }
+.cell-version-nav span { font-size: 13px; color: var(--text-tertiary); }
 
 /* ─── Unified Version Nav (chapters, blended, cells) ── */
 .version-nav {
@@ -2887,8 +2910,12 @@ p { line-height: 1.5; color: var(--text-secondary); }
   .partner-input-area textarea { font-size: 16px; }
   .btn-copy-table { padding: 8px 12px; min-height: 44px; font-size: 14px; }
   .copy-btn { padding: 8px 14px; min-height: 44px; font-size: 15px; }
-  .tier3-bullet button { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .tier3-bullet button { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
   .expand-icon { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .cell-version-nav button { font-size: 24px; padding: 6px 10px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .cell-version-nav span { font-size: 14px; }
+  .tier-label { font-size: 13px; }
+  .tier-label-small { font-size: 13px; }
   /* iOS zoom prevention: inputs below 16px trigger page zoom on focus */
   .fcs-param-input { font-size: 16px; }
   .fcs-copy-edit input { font-size: 16px; }

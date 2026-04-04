@@ -187,7 +187,7 @@ router.post('/:id/invite', async (req: Request, res: Response) => {
   // Mode 1: Add existing user by username (secondary flow)
   if (req.body.username) {
     const { username, role } = req.body;
-    const targetUser = await prisma.user.findUnique({ where: { username } });
+    const targetUser = await prisma.user.findUnique({ where: { username: username.toLowerCase() } });
     if (!targetUser) {
       res.status(404).json({ error: 'User not found' });
       return;

@@ -78,7 +78,7 @@ export function CellVersionNav({ cellId, cellType, currentText, draftVersion, on
   }
 
   return (
-    <div className="cell-version-nav">
+    <div className={`cell-version-nav${previewing ? ' version-previewing' : ''}`}>
       <button
         onClick={() => startPreview(-1)}
         disabled={displayIdx <= 0}

@@ -20,7 +20,15 @@ export function CellEditor({ text, maxWords, onSave, onCancel }: CellEditorProps
   useEffect(() => {
     if (ref.current) {
       ref.current.focus();
-      ref.current.select();
+      // On touch devices, place cursor at end (select-all fights iOS text selection).
+      // On desktop, select all so user can type to replace.
+      const isTouch = window.matchMedia('(hover: none)').matches;
+      if (isTouch) {
+        const len = ref.current.value.length;
+        ref.current.setSelectionRange(len, len);
+      } else {
+        ref.current.select();
+      }
       // Auto-resize
       ref.current.style.height = 'auto';
       ref.current.style.height = ref.current.scrollHeight + 'px';

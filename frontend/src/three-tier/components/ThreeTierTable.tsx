@@ -207,8 +207,22 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
   .tier2-text { font-size: 15px; line-height: 1.5; margin-bottom: 12px; }
   .tier3-list { list-style: disc; padding-left: 20px; margin: 0; }
   .tier3-list li { font-size: 13px; color: #6e6e73; line-height: 1.6; }
-  @media print { body { margin: 0; } }
+  .export-bar { background: #f5f5f7; border-radius: 8px; padding: 12px 20px; margin-bottom: 20px; font-size: 13px; color: #6e6e73; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .export-bar span { color: #1d1d1f; font-weight: 500; }
+  .save-pdf-btn { background: #007aff; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .save-pdf-btn:hover { background: #0066d6; }
+  .export-fallback { font-size: 12px; color: #aeaeb2; margin-top: 4px; }
+  @media print { body { margin: 0; } .export-bar { display: none; } }
 </style></head><body>
+<div class="export-bar">
+  <div>
+    <button class="save-pdf-btn" onclick="window.print()">Save as PDF</button>
+  </div>
+  <div style="text-align:right;">
+    <div>If the button doesn\u2019t work: <span>Mac</span> \u2318P \u2192 Save as PDF &nbsp; <span>iPad</span> Share \u2192 Print</div>
+    <button onclick="this.closest('.export-bar').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:14px;color:#aeaeb2;margin-top:2px;">Dismiss</button>
+  </div>
+</div>
 <h1>Three Tier Message</h1>
 <div style="font-size:13px;color:#aeaeb2;margin-bottom:16px;">Exported ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
 <div class="tier1">${esc(t1)}</div>
@@ -348,7 +362,8 @@ ${t2s.map(t2 => `<div class="tier2-col">
         </div>
 
         {/* Tier 2 + Tier 3 */}
-        <div className="tier-label">Tier 2 <span className="tier-subtitle">Supporting Values</span> <InfoTooltip text="Each column maps one of your audience's priorities to what you offer." /></div>
+        <div className="tier2-section">
+          <div className="tier-label tier2-section-label">Tier 2 <span className="tier-subtitle">Supporting Values</span> <InfoTooltip text="Each column maps one of your audience's priorities to what you offer." /></div>
         <div className="tier2-row">
           {draft.tier2Statements.map((t2, t2Index) => {
             const t2Key = `tier2-${t2Index}`;
@@ -412,7 +427,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                               <button
                                 className="btn btn-ghost btn-sm btn-danger"
                                 onClick={(e) => { e.stopPropagation(); startDeleteTier3(t3.id, t3.text, t2.id); }}
-                                style={{ padding: '0 4px', fontSize: 12, opacity: 0.4 }}
+                                style={{ padding: '2px 6px', fontSize: 18, opacity: 0.4 }}
                               >
                                 &times;
                               </button>
@@ -459,6 +474,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
               </div>
             );
           })}
+        </div>
         </div>
       </div>
 

@@ -62,8 +62,11 @@ router.post('/register', async (req: Request, res: Response) => {
     return;
   }
 
+  // Normalize username to lowercase (iPad/mobile keyboards capitalize first letter)
+  const normalizedUsername = username.toLowerCase();
+
   // Check username uniqueness
-  const existing = await prisma.user.findUnique({ where: { username } });
+  const existing = await prisma.user.findUnique({ where: { username: normalizedUsername } });
   if (existing) {
     res.status(400).json({ error: 'Username already taken' });
     return;
@@ -72,7 +75,7 @@ router.post('/register', async (req: Request, res: Response) => {
   const passwordHash = await bcryptjs.hash(password, 10);
 
   const user = await prisma.user.create({
-    data: { username, passwordHash, isAdmin: code.role === 'admin' },
+    data: { username: normalizedUsername, passwordHash, isAdmin: code.role === 'admin' },
   });
 
   // Mark invite code as used
@@ -117,7 +120,7 @@ router.post('/login', async (req: Request, res: Response) => {
     return;
   }
 
-  const user = await prisma.user.findUnique({ where: { username } });
+  const user = await prisma.user.findUnique({ where: { username: username.toLowerCase() } });
   if (!user) {
     res.status(401).json({ error: 'Invalid credentials' });
     return;

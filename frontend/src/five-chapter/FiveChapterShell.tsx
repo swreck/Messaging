@@ -11,6 +11,14 @@ import { useToast } from '../shared/ToastContext';
 import type { ThreeTierDraft, FiveChapterStory, ChapterContent, StoryMedium } from '../types';
 import { CHAPTER_CRITERIA, MEDIUM_OPTIONS } from '../types';
 
+/** Light markdown: **bold** → <strong>, *italic* → <em>, HTML-escaped */
+function renderLightMarkdown(text: string): string {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+}
+
 export function FiveChapterShell() {
   const { draftId } = useParams<{ draftId: string }>();
   const navigate = useNavigate();
@@ -378,12 +386,25 @@ export function FiveChapterShell() {
   h1 { font-size: 18px; color: #6e6e73; margin-bottom: 8px; }
   .meta { font-size: 14px; color: #6e6e73; margin-bottom: 24px; }
   .content { font-size: 16px; line-height: 1.7; white-space: pre-wrap; }
-  @media print { body { margin: 0; } }
+  .export-bar { background: #f5f5f7; border-radius: 8px; padding: 12px 20px; margin-bottom: 20px; font-size: 13px; color: #6e6e73; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .export-bar span { color: #1d1d1f; font-weight: 500; }
+  .save-pdf-btn { background: #007aff; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .save-pdf-btn:hover { background: #0066d6; }
+  @media print { body { margin: 0; } .export-bar { display: none; } }
 </style></head><body>
+<div class="export-bar">
+  <div>
+    <button class="save-pdf-btn" onclick="window.print()">Save as PDF</button>
+  </div>
+  <div style="text-align:right;">
+    <div>If the button doesn\u2019t work: <span>Mac</span> \u2318P \u2192 Save as PDF &nbsp; <span>iPad</span> Share \u2192 Print</div>
+    <button onclick="this.closest('.export-bar').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:14px;color:#aeaeb2;margin-top:2px;">Dismiss</button>
+  </div>
+</div>
 <h1>${escHtml(title)}</h1>
 <div class="meta">${escHtml(draft?.audience.name || '')} &middot; CTA: ${escHtml(story.cta)}</div>
 <div style="font-size:13px;color:#aeaeb2;margin-bottom:16px;">Exported ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-<div class="content">${escHtml(content)}</div>
+<div class="content">${renderLightMarkdown(content)}</div>
 </body></html>`;
 
     const win = window.open('', '_blank');
@@ -725,9 +746,8 @@ export function FiveChapterShell() {
                   <div
                     className="fcs-chapter-content"
                     onClick={() => { setEditingChapter(ch.num); setEditText(chapterContent.content); }}
-                  >
-                    {chapterContent.content}
-                  </div>
+                    dangerouslySetInnerHTML={{ __html: renderLightMarkdown(chapterContent.content) }}
+                  />
                 ) : !isGenerating ? (
                   <div className="fcs-chapter-empty">
                     Not yet generated
@@ -819,9 +839,8 @@ export function FiveChapterShell() {
                     <div
                       className="fcs-blended-content"
                       onClick={() => { setEditingBlended(true); setEditContent(story.blendedText); }}
-                    >
-                      {story.blendedText}
-                    </div>
+                      dangerouslySetInnerHTML={{ __html: renderLightMarkdown(story.blendedText) }}
+                    />
                   )}
 
                   {/* Copy edit */}
