@@ -800,10 +800,15 @@ p { line-height: 1.5; color: var(--text-secondary); }
   box-shadow: var(--shadow-md);
   overflow-x: auto;
   border: 1px solid #d1d1d6;
+  /* Break out of max-width container so 6-column layouts use full viewport */
+  width: calc(100vw - 48px);
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .tier1-row {
-  padding: 12px 16px 16px;
+  padding: 6px 16px 12px;
   text-align: center;
   border-bottom: 2px solid #d1d1d6;
   background: var(--bg-card);
@@ -813,7 +818,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .tier-header-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
 }
 .tier-header-actions {
@@ -849,13 +854,6 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .tier1-text:hover { background: var(--bg-hover); border-radius: var(--radius-sm); cursor: text; }
 
-.tier2-section {
-  position: relative;
-}
-.tier2-section-label {
-  padding: 8px 16px 6px;
-  background: var(--bg-card);
-}
 .tier2-row {
   display: flex;
   border-bottom: 1px solid #d1d1d6;

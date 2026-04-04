@@ -362,17 +362,13 @@ ${t2s.map(t2 => `<div class="tier2-col">
         </div>
 
         {/* Tier 2 + Tier 3 */}
-        <div className="tier2-section">
-          <div className="tier-label tier2-section-label">Tier 2 <span className="tier-subtitle">Supporting Values</span> <InfoTooltip text="Each column maps one of your audience's priorities to what you offer." /></div>
         <div className="tier2-row">
           {draft.tier2Statements.map((t2, t2Index) => {
             const t2Key = `tier2-${t2Index}`;
             const isColFocused = focusedCell === t2Key || editingCell === `tier2-${t2.id}`;
             return (
               <div key={t2.id} className={`tier2-col${isColFocused ? ' cell-focused' : ''}`}>
-                {t2.categoryLabel && (
-                  <div className="tier2-category-label">{t2.categoryLabel}</div>
-                )}
+                <div className="tier-label tier-label-small">Tier 2 {t2.categoryLabel && <span className="tier-subtitle">{t2.categoryLabel}</span>}</div>
                 {editingCell === `tier2-${t2.id}` ? (
                   <div style={{ padding: 8 }}>
                     <CellEditor
@@ -474,7 +470,6 @@ ${t2s.map(t2 => `<div class="tier2-col">
               </div>
             );
           })}
-        </div>
         </div>
       </div>
 
