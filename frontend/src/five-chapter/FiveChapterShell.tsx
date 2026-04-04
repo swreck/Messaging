@@ -515,8 +515,10 @@ export function FiveChapterShell() {
                       onClick={() => setStory(s)}
                       onDoubleClick={() => { setRenamingStoryId(s.id); setRenameValue(s.customName || label); }}
                       title="Double-click to rename"
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2, padding: '6px 12px' }}
                     >
-                      {s.customName || label}
+                      <span style={{ fontWeight: 600 }}>{s.customName || label}</span>
+                      <span style={{ fontSize: 10, opacity: 0.7, fontWeight: 400 }}>{baseLabel}</span>
                     </button>
                   )}
                   {stories.length > 1 && (
