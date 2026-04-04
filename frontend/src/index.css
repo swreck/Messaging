@@ -1055,10 +1055,6 @@ p { line-height: 1.5; color: var(--text-secondary); }
   line-height: 1.5;
   font-style: italic;
   border-left: 3px solid var(--accent);
-  position: relative;
-  z-index: 12;
-  clear: both;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .cell-version-nav button:hover { color: var(--accent); }
 .cell-version-nav span { font-size: 13px; color: #999; }
