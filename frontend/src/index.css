@@ -34,7 +34,6 @@ html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: clip;
 }
 
 body {
@@ -227,7 +226,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 
 /* ─── Layout ──────────────────────────────────────── */
 .app-layout { min-height: 100vh; }
-.main-content { max-width: 1200px; margin: 0 auto; padding: 24px; padding-bottom: 40px; }
+.main-content { max-width: 1200px; margin: 0 auto; padding: 24px; padding-bottom: 40px; overflow-x: hidden; }
 
 /* ─── Auth ────────────────────────────────────────── */
 .auth-page {
