@@ -1004,44 +1004,22 @@ p { line-height: 1.5; color: var(--text-secondary); }
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 16px;
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition: max-height 0.15s ease, opacity 0.15s ease, padding 0.15s ease;
-}
-.tier2-col:hover .cell-version-nav,
-.tier1-row:hover .cell-version-nav,
-.cell-focused .cell-version-nav {
-  max-height: 28px;
-  opacity: 1;
   padding: 4px 16px;
+  min-height: 28px;
 }
 .cell-version-nav button {
   background: none;
   border: none;
-  color: var(--text-tertiary);
+  color: #999;
   cursor: pointer;
   padding: 4px 8px;
   font-size: 20px;
 }
-.cell-version-label { white-space: nowrap; font-size: 13px; }
-.cell-version-source { color: var(--text-tertiary); font-style: italic; }
+.cell-version-label { white-space: nowrap; font-size: 13px; color: #999; }
+.cell-version-source { color: #999; font-style: italic; }
 
-/* Touch devices: always show version nav (no hover available) */
-@media (hover: none) {
-  .cell-version-nav {
-    max-height: 28px;
-    opacity: 1;
-    padding: 4px 16px;
-  }
-}
 /* When previewing a version, expand to show Use/Cancel buttons */
 .cell-version-nav.version-previewing {
-  max-height: none;
-  overflow: visible;
-  opacity: 1;
-  padding: 4px 16px;
   flex-wrap: wrap;
 }
 .cell-version-nav.version-previewing .cell-version-preview-actions {
@@ -1083,7 +1061,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .cell-version-nav button:hover { color: var(--accent); }
-.cell-version-nav span { font-size: 13px; color: var(--text-tertiary); }
+.cell-version-nav span { font-size: 13px; color: #999; }
 
 /* ─── Unified Version Nav (chapters, blended, cells) ── */
 .version-nav {
