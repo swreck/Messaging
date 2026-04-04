@@ -514,7 +514,10 @@ export function FiveChapterShell() {
                       className={`btn btn-sm ${story?.id === s.id ? 'btn-primary' : 'btn-secondary'}`}
                       onClick={() => setStory(s)}
                       onDoubleClick={() => { setRenamingStoryId(s.id); setRenameValue(s.customName || label); }}
-                      title="Double-click to rename"
+                      onTouchStart={(e) => { const t = setTimeout(() => { e.preventDefault(); setRenamingStoryId(s.id); setRenameValue(s.customName || label); }, 600); (e.target as any)._lp = t; }}
+                      onTouchEnd={(e) => { if ((e.target as any)._lp) clearTimeout((e.target as any)._lp); }}
+                      onTouchMove={(e) => { if ((e.target as any)._lp) clearTimeout((e.target as any)._lp); }}
+                      title="Double-click or long-press to rename"
                       style={s.customName && s.customName !== label ? { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2, padding: '6px 12px' } : undefined}
                     >
                       {s.customName && s.customName !== label ? (
