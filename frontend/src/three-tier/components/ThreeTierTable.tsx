@@ -368,7 +368,6 @@ ${t2s.map(t2 => `<div class="tier2-col">
             const isColFocused = focusedCell === t2Key || editingCell === `tier2-${t2.id}`;
             return (
               <div key={t2.id} className={`tier2-col${isColFocused ? ' cell-focused' : ''}`}>
-                <div className="tier-label tier-label-small">Tier 2 {t2.categoryLabel && <span className="tier-subtitle">{t2.categoryLabel}</span>}</div>
                 {editingCell === `tier2-${t2.id}` ? (
                   <div style={{ padding: 8 }}>
                     <CellEditor
@@ -400,6 +399,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                   onRestore={() => onUpdate()}
                 />
 
+                <div className="tier-label tier-label-small tier-label-divider">Tier 2 {t2.categoryLabel && <span className="tier-subtitle">{t2.categoryLabel}</span>}{!t2.categoryLabel && <span className="tier-subtitle">Supporting Value</span>}</div>
                 <div className="tier3-area">
                   <div className="tier-label tier-label-small">Tier 3 <span className="tier-subtitle">Proof Points</span> <InfoTooltip text="Brief facts that prove this value is true. If a skeptic couldn\u2019t verify it, it\u2019s not proof." /></div>
                   {t2.tier3Bullets.map((t3, t3Index) => {

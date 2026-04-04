@@ -808,7 +808,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 
 .tier1-row {
-  padding: 6px 16px 12px;
+  padding: 2px 16px 12px;
   text-align: center;
   border-bottom: 2px solid #d1d1d6;
   background: var(--bg-card);
@@ -957,10 +957,16 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .tier1-row .tier-label {
   padding-left: 0;
+  padding-top: 0;
 }
 .tier-label-small {
   font-size: 12px;
   padding: 4px 0 2px;
+}
+.tier-label-divider {
+  border-top: 1px solid var(--border-light);
+  margin: 4px 16px 0;
+  padding: 6px 0 2px;
 }
 .tier-subtitle {
   font-weight: 500;
@@ -1047,6 +1053,17 @@ p { line-height: 1.5; color: var(--text-secondary); }
   margin-left: 0;
   margin-top: 4px;
 }
+/* Inside sticky Tier 1, version preview must layer above Tier 2 content */
+.tier1-row .cell-version-nav.version-previewing {
+  background: var(--bg-card);
+  z-index: 12;
+  position: relative;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  margin-left: -16px;
+  margin-right: -16px;
+  padding: 6px 16px 8px;
+}
 .cell-version-preview-actions { margin-left: 6px; }
 .cell-version-use {
   background: none;
@@ -1068,7 +1085,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .cell-version-preview-text {
   margin-top: 6px;
   padding: 8px 10px;
-  background: rgba(0, 122, 255, 0.06);
+  background: #f0f5ff;
   border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--text-secondary);
@@ -1076,8 +1093,9 @@ p { line-height: 1.5; color: var(--text-secondary); }
   font-style: italic;
   border-left: 3px solid var(--accent);
   position: relative;
-  z-index: 4;
+  z-index: 12;
   clear: both;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .cell-version-nav button:hover { color: var(--accent); }
 .cell-version-nav span { font-size: 13px; color: var(--text-tertiary); }
