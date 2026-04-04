@@ -771,7 +771,7 @@ export function FiveChapterShell() {
               gap: 12,
             }}>
               <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
-                All five chapters are drafted. Click any to edit. <strong>Create Final Draft</strong> blends them into one piece with transitions.
+                All five chapters are drafted. Click any to edit. <strong>Create Complete Draft</strong> blends them into one piece with transitions.
               </p>
               <button onClick={() => setChaptersJustGenerated(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, padding: '0 4px', flexShrink: 0 }}>&times;</button>
             </div>
@@ -788,12 +788,12 @@ export function FiveChapterShell() {
                   style={{ width: '100%' }}
                   title="Combine all chapters into one polished narrative with transitions"
                 >
-                  {blending ? <><Spinner size={14} /> Creating final draft...</> : 'Create Final Draft'}
+                  {blending ? <><Spinner size={14} /> Creating complete draft...</> : 'Create Complete Draft'}
                 </button>
               ) : (
                 <div className="fcs-blended">
                   <div className="fcs-blended-header">
-                    <h3>Final Draft</h3>
+                    <h3>Complete Draft</h3>
                     <BlendedVersionNav storyId={story.id} onRestore={loadData} />
                     <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
                     <button className="copy-btn" onClick={exportStory} title="Open printable version">Export</button>
@@ -893,8 +893,8 @@ export function FiveChapterShell() {
         open={confirmBlendReplace}
         onClose={() => setConfirmBlendReplace(false)}
         onConfirm={doBlendStory}
-        title="Replace final draft?"
-        message="This will replace your current final draft."
+        title="Replace complete draft?"
+        message="This will replace your current complete draft."
         confirmLabel="Replace"
         confirmDanger
       />

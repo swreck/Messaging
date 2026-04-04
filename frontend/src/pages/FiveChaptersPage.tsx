@@ -45,7 +45,7 @@ export function FiveChaptersPage() {
   }
 
   function getStageLabel(stage: string): string {
-    if (stage === 'blended') return 'Final Draft';
+    if (stage === 'blended') return 'Complete Draft';
     if (stage === 'joined') return 'Combined Draft';
     return 'Draft Chapters';
   }
