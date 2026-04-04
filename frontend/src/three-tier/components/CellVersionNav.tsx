@@ -41,10 +41,10 @@ export function CellVersionNav({ cellId, cellType, currentText, draftVersion, on
     }
   }
 
-  // Hide if no versions, or if only one version, or if all versions have the same text
-  if (versions.length <= 1) return null;
+  // Reserve space even when no versions to show (keeps TIER 3 aligned across columns)
+  if (versions.length <= 1) return <div className="cell-version-nav" />;
   const uniqueTexts = new Set(versions.map(v => v.text));
-  if (uniqueTexts.size <= 1) return null;
+  if (uniqueTexts.size <= 1) return <div className="cell-version-nav" />;
 
   const displayIdx = previewing ? previewIdx : currentIdx;
   const displayVersion = versions[displayIdx];
