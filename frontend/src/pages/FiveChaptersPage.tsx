@@ -15,7 +15,7 @@ interface HierarchyOffering {
     id: string;
     name: string;
     threeTier: { id: string; status: string; currentStep: number };
-    deliverables: { id: string; medium: string; stage: string; updatedAt: string }[];
+    deliverables: { id: string; medium: string; customName: string; stage: string; updatedAt: string }[];
   }[];
 }
 
@@ -97,7 +97,7 @@ export function FiveChaptersPage() {
     isComplete: boolean;
     currentStep: number;
     status: string;
-    deliverables: { id: string; medium: string; stage: string; updatedAt: string }[];
+    deliverables: { id: string; medium: string; customName: string; stage: string; updatedAt: string }[];
   }[] = [];
 
   for (const offering of hierarchy) {
@@ -155,9 +155,10 @@ export function FiveChaptersPage() {
                   const count = (mediumCounts.get(del.medium) || 0) + 1;
                   mediumCounts.set(del.medium, count);
                   const total = mediumTotals.get(del.medium) || 1;
-                  const displayName = total > 1
+                  const fallbackName = total > 1
                     ? `${getMediumLabel(del.medium)} #${count}`
                     : getMediumLabel(del.medium);
+                  const displayName = del.customName || fallbackName;
                   return (
                     <div
                       key={del.id}

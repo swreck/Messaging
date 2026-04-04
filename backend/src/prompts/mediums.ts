@@ -97,5 +97,17 @@ export const MEDIUM_SPECS: Record<string, MediumSpec> = {
 export const MEDIUM_IDS = Object.keys(MEDIUM_SPECS) as (keyof typeof MEDIUM_SPECS)[];
 
 export function getMediumSpec(medium: string): MediumSpec {
-  return MEDIUM_SPECS[medium] || MEDIUM_SPECS.email;
+  // Direct match
+  if (MEDIUM_SPECS[medium]) return MEDIUM_SPECS[medium];
+
+  // Fuzzy match: check if any known medium key appears in the custom name
+  const lower = medium.toLowerCase();
+  for (const [key, spec] of Object.entries(MEDIUM_SPECS)) {
+    if (lower.includes(key) || lower.includes(spec.label.toLowerCase())) {
+      return spec;
+    }
+  }
+
+  // Default to blog (general-purpose) rather than email (format-specific)
+  return MEDIUM_SPECS.blog;
 }

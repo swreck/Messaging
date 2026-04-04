@@ -141,6 +141,7 @@ HARD RULES (ALL CHAPTERS):
 4. The tone should be confident but not pushy — like a trusted advisor.
 5. If the format is "In-Person / Verbal," write speaker note bullets — brief triggers, not a verbatim script.
 6. RESPECT CHAPTER BOUNDARIES. Each chapter has a specific job. Do NOT bleed content between chapters — no proof in Ch2, no value claims in Ch4, no credentials in Ch1. If content doesn't match this chapter's goal, leave it out.
+7. "Subject:" lines are ONLY for email format. NEVER include a "Subject:" line in newsletters, blogs, social posts, landing pages, or any other format. If the format is not email, start directly with the content.
 
 ${sourceContent ? `
 CONTENT CONVERSION:

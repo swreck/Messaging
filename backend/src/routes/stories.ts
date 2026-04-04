@@ -71,13 +71,28 @@ router.post('/', requireStoryteller, async (req: Request, res: Response) => {
 
   const { sourceStoryId, customName } = req.body;
 
+  // Auto-generate persistent name if not provided
+  let name = customName || '';
+  if (!name) {
+    const MEDIUM_LABELS: Record<string, string> = {
+      email: 'Email', blog: 'Blog Post', social: 'Social Post', landing_page: 'Landing Page',
+      in_person: 'In-Person', press_release: 'Press Release', newsletter: 'Newsletter',
+      report: 'Report',
+    };
+    const baseLabel = MEDIUM_LABELS[medium] || medium;
+    const existingCount = await prisma.fiveChapterStory.count({
+      where: { draftId, medium },
+    });
+    name = existingCount > 0 ? `${baseLabel} #${existingCount + 1}` : baseLabel;
+  }
+
   const story = await prisma.fiveChapterStory.create({
     data: {
       draftId,
       medium,
       cta,
       emphasis: emphasis || '',
-      customName: customName || '',
+      customName: name,
       sourceStoryId: sourceStoryId || null,
     },
     include: { chapters: true },
