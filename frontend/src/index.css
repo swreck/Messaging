@@ -812,9 +812,6 @@ p { line-height: 1.5; color: var(--text-secondary); }
   text-align: center;
   border-bottom: 2px solid #d1d1d6;
   background: var(--bg-card);
-  position: sticky;
-  top: 56px;
-  z-index: 10;
 }
 .tier-header-row {
   display: flex;
@@ -1052,17 +1049,6 @@ p { line-height: 1.5; color: var(--text-secondary); }
   width: 100%;
   margin-left: 0;
   margin-top: 4px;
-}
-/* Inside sticky Tier 1, version preview must layer above Tier 2 content */
-.tier1-row .cell-version-nav.version-previewing {
-  background: var(--bg-card);
-  z-index: 12;
-  position: relative;
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  margin-left: -16px;
-  margin-right: -16px;
-  padding: 6px 16px 8px;
 }
 .cell-version-preview-actions { margin-left: 6px; }
 .cell-version-use {
