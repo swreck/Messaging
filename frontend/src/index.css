@@ -847,6 +847,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   padding: 8px 16px;
   border-radius: var(--radius-sm);
   transition: background 0.15s ease;
+  overflow-wrap: break-word;
 }
 .tier1-text:hover { background: var(--bg-hover); border-radius: var(--radius-sm); cursor: text; }
 
@@ -864,7 +865,6 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border-right: 1px solid #d1d1d6;
   position: relative;
   transition: box-shadow 0.2s;
-  overflow: hidden;
 }
 .three-tier-table.has-suggestions .tier2-col {
   min-width: 240px;
@@ -910,6 +910,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   cursor: text;
   transition: background 0.15s ease;
   min-height: 80px;
+  overflow-wrap: break-word;
 }
 .tier2-text:hover { background: var(--bg-hover); border-radius: var(--radius-sm); cursor: text; }
 
@@ -1018,6 +1019,16 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .cell-version-label { white-space: nowrap; font-size: 13px; color: #999; }
 .cell-version-source { color: #999; font-style: italic; }
+/* Stack version nav vertically in Tier 3 (narrow space between bullets) */
+.tier3-area .cell-version-nav {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 4px 8px;
+  min-height: auto;
+}
+.tier3-area .cell-version-nav button { padding: 2px 4px; font-size: 16px; }
+.tier3-area .cell-version-label { font-size: 11px; }
 
 /* When previewing a version, expand to show Use/Cancel buttons */
 .cell-version-nav.version-previewing {

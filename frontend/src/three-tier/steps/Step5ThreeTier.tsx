@@ -589,11 +589,14 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           gap: 12,
         }}>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-            Your Three Tier is still in first-draft form. The story will be stronger if you refine the language first.
+            Your Three Tier is still in first-draft form. The story may be stronger if you refine the language first.
           </p>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <button className="btn btn-primary btn-sm" onClick={() => { setShowRefineNudge(false); refineLanguage(); }}>
               Refine now
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowRefineNudge(false)}>
+              Cancel
             </button>
             <button className="btn btn-ghost btn-sm" onClick={() => { setShowRefineNudge(false); navigate(`/five-chapter/${draft.id}`); }}>
               Continue anyway

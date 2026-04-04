@@ -214,7 +214,7 @@ export function MariaPartner() {
         try {
           const { content: pc } = await api.post<{ content: string }>('/partner/page-content', { context: pageContext });
           setMessages(prev => prev.slice(0, -1));
-          setSending(false);
+          // Keep sending=true — don't clear dots between page-content fetch and second send
           send(text, pc);
           return;
         } catch {
