@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Modal } from '../shared/Modal';
+import { ConfirmModal } from '../shared/ConfirmModal';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
 import { useToast } from '../shared/ToastContext';
@@ -30,6 +31,9 @@ export function ThreeTiersPage() {
   const [selectedAudienceId, setSelectedAudienceId] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [archivedHierarchy, setArchivedHierarchy] = useState<HierarchyOffering[]>([]);
+
+  // Archive confirmation
+  const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null);
 
   // Compare
   const [compareSelection, setCompareSelection] = useState<Set<string>>(new Set());
@@ -96,7 +100,7 @@ export function ThreeTiersPage() {
     try {
       await api.put(`/drafts/${draftId}/archive`, {});
       loadData();
-      if (showArchived) loadArchivedData();
+      loadArchivedData();
     } catch (err: any) {
       showToast(err.message || 'Failed to archive draft');
     }
@@ -326,7 +330,7 @@ export function ThreeTiersPage() {
                     </button>
                     <button className="btn btn-ghost btn-sm" onClick={() => duplicateDraft(aud.threeTier.id)}>Duplicate</button>
                     {isComplete && (
-                      <button className="btn btn-ghost btn-sm" onClick={() => archiveDraft(aud.threeTier.id)}>Archive</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setConfirmArchiveId(aud.threeTier.id)}>Archive</button>
                     )}
                   </div>
                 </div>
@@ -525,6 +529,15 @@ export function ThreeTiersPage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmModal
+        open={!!confirmArchiveId}
+        title="Archive this Three Tier?"
+        message="You can find it later in the Archived section and unarchive it anytime."
+        confirmLabel="Archive"
+        onConfirm={() => { if (confirmArchiveId) archiveDraft(confirmArchiveId); setConfirmArchiveId(null); }}
+        onClose={() => setConfirmArchiveId(null)}
+      />
     </div>
   );
 }
