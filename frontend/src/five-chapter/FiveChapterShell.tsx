@@ -49,6 +49,7 @@ export function FiveChapterShell() {
   // Inline editing
   const [editingChapter, setEditingChapter] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
+  const [showCompleteDraft, setShowCompleteDraft] = useState(false);
   const [editingBlended, setEditingBlended] = useState(false);
   const [editContent, setEditContent] = useState('');
 
@@ -734,8 +735,9 @@ export function FiveChapterShell() {
                 {chapterContent && isEditing ? (
                   <div className="fcs-chapter-edit">
                     <textarea
+                      ref={el => { if (el) { el.style.height = 'auto'; el.style.height = Math.max(48, el.scrollHeight) + 'px'; } }}
                       value={editText}
-                      onChange={e => setEditText(e.target.value)}
+                      onChange={e => { setEditText(e.target.value); const t = e.target; t.style.height = 'auto'; t.style.height = Math.max(48, t.scrollHeight) + 'px'; }}
                       onBlur={() => saveChapterEdit(ch.num)}
                     />
                     <div className="fcs-chapter-edit-actions">
@@ -777,16 +779,25 @@ export function FiveChapterShell() {
             </div>
           )}
 
-          {/* Blend section */}
+          {/* Blend section — only show complete draft when user explicitly requests it */}
           {allChaptersGenerated && !generating && (
             <div className="fcs-blend-section">
-              {!story.blendedText ? (
+              {!showCompleteDraft ? (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => { if (story.blendedText) { setShowCompleteDraft(true); } else { blendStory(); setShowCompleteDraft(true); } }}
+                  disabled={blending}
+                  style={{ width: '100%' }}
+                  title="Combine all chapters into one polished narrative with transitions"
+                >
+                  {blending ? <><Spinner size={14} /> Creating complete draft...</> : story.blendedText ? 'View Complete Draft' : 'Create Complete Draft'}
+                </button>
+              ) : !story.blendedText ? (
                 <button
                   className="btn btn-primary"
                   onClick={blendStory}
                   disabled={blending}
                   style={{ width: '100%' }}
-                  title="Combine all chapters into one polished narrative with transitions"
                 >
                   {blending ? <><Spinner size={14} /> Creating complete draft...</> : 'Create Complete Draft'}
                 </button>
@@ -826,10 +837,10 @@ export function FiveChapterShell() {
                   {editingBlended ? (
                     <div className="fcs-chapter-edit">
                       <textarea
+                        ref={el => { if (el) { el.style.height = 'auto'; el.style.height = Math.max(200, el.scrollHeight) + 'px'; } }}
                         value={editContent}
-                        onChange={e => setEditContent(e.target.value)}
+                        onChange={e => { setEditContent(e.target.value); const t = e.target; t.style.height = 'auto'; t.style.height = Math.max(200, t.scrollHeight) + 'px'; }}
                         onBlur={saveBlendedEdit}
-                        style={{ minHeight: 300 }}
                       />
                       <div className="fcs-chapter-edit-actions">
                         <button className="btn btn-ghost btn-sm" onClick={() => setEditingBlended(false)}>Cancel</button>
@@ -864,8 +875,8 @@ export function FiveChapterShell() {
 
       {story && !showCreateForm && (
         <>
-          {/* What's next — only show when story has been blended */}
-          {story.blendedText && (
+          {/* What's next — only show when user has viewed complete draft */}
+          {story.blendedText && showCompleteDraft && (
             <div style={{
               marginTop: 24,
               padding: '16px 20px',

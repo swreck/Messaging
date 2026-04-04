@@ -68,7 +68,7 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
     } else if (emphasisChapter && emphasisChapter !== chapterNum) {
       thisChapterWords = Math.round(thisChapterWords * 0.85);
     }
-    wordGuidance = `TARGET LENGTH: ~${thisChapterWords} words (this chapter's budget of ~${totalWords} total for ${spec.label} format)`;
+    wordGuidance = `HARD LIMIT: ${thisChapterWords} words maximum. This is NOT a suggestion — exceeding this budget means the chapter fails. For short budgets (under 50 words), write 1-2 sentences only. Total story budget is ~${totalWords} words for ${spec.label} format.`;
   }
 
   const chapterRules: Record<number, string> = {
@@ -111,6 +111,7 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
 - Build momentum — once people take a first action, they're more likely to continue.
 - Keep this chapter SHORT. Every sentence must contain action or information — no filler.
 - NEVER write empty closers like "That's it for now," "Simple as that," "That's all there is to it," or any variation. These add zero content. End with the last concrete step or a single direct sentence about what happens next.
+- NEVER open with the recipient's name (e.g., "Amy," or "Ken,"). This is the close of a professional communication — lead with the action, not a greeting.
 - Align the steps with the specified medium and CTA.`,
   };
 
