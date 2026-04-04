@@ -365,37 +365,17 @@ export function MariaPartner() {
 
   // ─── Format helpers ─────────────────────────────────
 
-  function formatLine(line: string, key: number) {
-    const parts: React.ReactNode[] = [];
-    let remaining = line;
-    let partKey = 0;
-    while (remaining.length > 0) {
-      const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
-      const italicMatch = remaining.match(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/);
-      const match = boldMatch && italicMatch
-        ? (boldMatch.index! <= italicMatch.index! ? boldMatch : italicMatch)
-        : boldMatch || italicMatch;
-      if (!match || match.index === undefined) { parts.push(<span key={partKey++}>{remaining}</span>); break; }
-      if (match.index > 0) parts.push(<span key={partKey++}>{remaining.slice(0, match.index)}</span>);
-      if (match[0].startsWith('**')) parts.push(<strong key={partKey++}>{match[1]}</strong>);
-      else parts.push(<em key={partKey++}>{match[1]}</em>);
-      remaining = remaining.slice(match.index + match[0].length);
-    }
-    return <span key={key}>{parts}</span>;
-  }
-
   function formatContent(text: string) {
     const cleaned = text.replace(/\n\n\[.+\]$/, '');
-    const paragraphs = cleaned.split(/\n\n+/);
-    return paragraphs.map((p, i) => {
-      const lines = p.split(/\n/);
-      return (
-        <span key={i}>
-          {i > 0 && <><br /><br /></>}
-          {lines.map((line, j) => (<span key={j}>{j > 0 && <br />}{formatLine(line, j)}</span>))}
-        </span>
-      );
-    });
+    // Apply markdown at full-text level first, then handle line breaks via dangerouslySetInnerHTML
+    let html = cleaned
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>')
+      .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, '<em>$1</em>')
+      .replace(/^(\* )(.+)$/gm, '• $2')
+      .replace(/\n\n+/g, '<br/><br/>')
+      .replace(/\n/g, '<br/>');
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
   }
 
   // ─── Render ─────────────────────────────────────────

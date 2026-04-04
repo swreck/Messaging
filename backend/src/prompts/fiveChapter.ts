@@ -140,8 +140,9 @@ HARD RULES (ALL CHAPTERS):
 3. Transitions between sentences/paragraphs should flow naturally.
 4. The tone should be confident but not pushy — like a trusted advisor.
 5. If the format is "In-Person / Verbal," write speaker note bullets — brief triggers, not a verbatim script.
-6. RESPECT CHAPTER BOUNDARIES. Each chapter has a specific job. Do NOT bleed content between chapters — no proof in Ch2, no value claims in Ch4, no credentials in Ch1. If content doesn't match this chapter's goal, leave it out.
-7. "Subject:" lines are ONLY for email format. NEVER include a "Subject:" line in newsletters, blogs, social posts, landing pages, or any other format. If the format is not email, start directly with the content.
+6. RESPECT CHAPTER BOUNDARIES. Each chapter has a specific job. Do NOT bleed content between chapters — no proof in Ch2, no value claims in Ch4, no credentials in Ch1. If content doesn't match this chapter's goal, leave it out. The CTA belongs ONLY in Chapter 5 — never include a CTA, link, or call to action in Chapters 1-4.
+7. NEVER start a chapter with "..." or a sentence fragment continuing from the previous chapter. Each chapter starts with a complete thought. The reader should be able to read this chapter without having read the one before it. Previous chapters are provided as context only — do NOT continue them.
+8. "Subject:" lines are ONLY for email format, and only in Chapter 1. NEVER include a "Subject:" line in Chapters 2-5, and never in newsletters, blogs, social posts, landing pages, or any other non-email format.
 
 ${sourceContent ? `
 CONTENT CONVERSION:

@@ -1021,9 +1021,12 @@ ${story.draft.tier2Statements.map((t2, i) => `Tier 2 #${i + 1}: "${t2.text}" (Pr
 AUDIENCE PRIORITIES:
 ${story.draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"${p.motivatingFactor ? ` — Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
-${story.chapters.filter((c) => c.chapterNum < chapterNum).map((c) => `CHAPTER ${c.chapterNum} (already written): ${c.content.substring(0, 200)}...`).join('\n')}
-
-Write Chapter ${chapterNum}: "${ch.name}"`;
+${story.chapters.filter((c) => c.chapterNum < chapterNum).length > 0 ? `
+PREVIOUS CHAPTERS (summaries for context — do NOT continue or repeat their content):
+${story.chapters.filter((c) => c.chapterNum < chapterNum).map((c) => `Ch ${c.chapterNum}: ${c.content.substring(0, 150)}`).join('\n')}
+` : ''}
+Write Chapter ${chapterNum}: "${ch.name}"
+IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.`;
 
   let content = await callAI(systemPrompt, userMessage, 'elite');
 

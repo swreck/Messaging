@@ -693,10 +693,10 @@ export function FiveChapterShell() {
       {showMFPanel && (
         <div className="mf-panel">
           <p className="mf-panel-intro">
-            A driver explains <strong>why</strong> a priority matters so much to this specific person. It helps Maria write more persuasive copy.
+            Maria needs one more thing before writing: why does <strong>{draft.audience.priorities[0]?.text}</strong> matter so much to this person? That context shapes the story.
           </p>
           <p className="mf-panel-offer">
-            Your top priority — <strong>{draft.audience.priorities[0]?.text}</strong> — doesn't have one yet.
+            Maria can take her best guess, or you can tell her. You can always change it later.
           </p>
           <div className="mf-panel-actions">
             <button
