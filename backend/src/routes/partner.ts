@@ -532,7 +532,7 @@ router.post('/message', async (req: Request, res: Response) => {
 
     // Check for failures
     const failedResults = dispatch.results.filter(r =>
-      r.startsWith('Could not') || r.startsWith('Action failed') || r.includes('not recognized')
+      r.startsWith('Could not') || r.startsWith('Action failed') || r.includes('not recognized') || r.startsWith("I can't") || r.startsWith("I wasn't able")
     );
 
     actionResult = dispatch.results.length > 0 ? dispatch.results.join(' · ') : null;
@@ -548,9 +548,14 @@ router.post('/message', async (req: Request, res: Response) => {
     ? `${result.response}\n\n[${actionResult}]`
     : result.response;
 
+  // Strip [PAGE CONTENT] prefix from stored message — only keep the user's actual text
+  const userQuestion = message.includes('[USER QUESTION]\n')
+    ? message.split('[USER QUESTION]\n').pop()!
+    : message;
+
   await prisma.assistantMessage.createMany({
     data: [
-      { userId, role: 'user', content: message, context: partnerChannel(workspaceId) },
+      { userId, role: 'user', content: userQuestion, context: partnerChannel(workspaceId) },
       { userId, role: 'assistant', content: storedResponse, context: partnerChannel(workspaceId) },
     ],
   });

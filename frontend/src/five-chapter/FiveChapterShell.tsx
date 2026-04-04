@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { Spinner } from '../shared/Spinner';
 import { InfoTooltip } from '../shared/InfoTooltip';
@@ -22,6 +22,7 @@ function renderLightMarkdown(text: string): string {
 export function FiveChapterShell() {
   const { draftId } = useParams<{ draftId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showToast } = useToast();
   const [draft, setDraft] = useState<ThreeTierDraft | null>(null);
   const [stories, setStories] = useState<FiveChapterStory[]>([]);
@@ -111,7 +112,11 @@ export function FiveChapterShell() {
       setDraft(d);
       const { stories: s } = await api.get<{ stories: FiveChapterStory[] }>(`/stories?draftId=${draftId}`);
       setStories(s);
-      if (s.length > 0 && !story) setStory(s[0]);
+      if (s.length > 0 && !story) {
+        const requestedId = searchParams.get('story');
+        const match = requestedId ? s.find(st => st.id === requestedId) : null;
+        setStory(match || s[0]);
+      }
     } catch {
       navigate('/');
     } finally {

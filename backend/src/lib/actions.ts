@@ -1094,9 +1094,25 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
         if (['create_story', 'edit_tier'].includes(a.type) && !ctx.draftId) {
           missing.push('draftId');
         }
-        actionResult = missing.length > 0
-          ? `Could not execute ${a.type} — missing context: ${missing.join(', ')}. Try navigating to the specific item first.`
-          : `Action ${a.type} was not recognized or could not execute.`;
+        if (missing.length > 0) {
+          const friendlyActions: Record<string, string> = {
+            refine_chapter: 'refine that chapter',
+            blend_story: 'create the complete draft',
+            copy_edit: 'copy-edit',
+            update_story_params: 'update the story settings',
+            regenerate_story: 'regenerate',
+            edit_tier: 'edit the Three Tier',
+            create_story: 'create a story',
+            edit_offering: 'edit the offering',
+            add_capabilities: 'add capabilities',
+            edit_capabilities: 'edit capabilities',
+            delete_capabilities: 'delete capabilities',
+          };
+          const friendly = friendlyActions[a.type] || 'do that';
+          actionResult = `I can't ${friendly} from here. Try navigating to the specific item first.`;
+        } else {
+          actionResult = `I wasn't able to do that. Try telling me more about what you'd like.`;
+        }
       }
     } catch (err: any) {
       actionResult = `Action failed: ${err.message}`;

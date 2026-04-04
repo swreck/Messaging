@@ -163,7 +163,7 @@ export function FiveChaptersPage() {
                     <div
                       key={del.id}
                       className="tt-card"
-                      onClick={() => navigate(`/five-chapter/${group.draftId}`)}
+                      onClick={() => navigate(`/five-chapter/${group.draftId}?story=${del.id}`)}
                     >
                       <div className="tt-card-name">{displayName}</div>
                       <div className="tt-card-progress">
@@ -173,7 +173,7 @@ export function FiveChaptersPage() {
                       </div>
                       <div className="tt-card-updated">{formatUpdatedAt(del.updatedAt)}</div>
                       <div className="tt-card-action" style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost btn-sm">
+                        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/five-chapter/${group.draftId}?story=${del.id}`)}>
                           {del.stage === 'blended' ? 'Open' : 'Continue'}
                         </button>
                         <button

@@ -390,7 +390,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
               This is a first draft of a Three Tier Message for {draft.audience.name}.
             </p>
             <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
-              As a first draft, value statements are largely in the "You get [value] because of [our differentiation]" format for your review and edits. At any time, use <strong>Refine Language</strong> to make the words sound more natural. And, if desired, you can then use <strong>Polish</strong> for final refinement. Polish takes a little longer.
+              As a first draft, value statements are largely in the "You get [value] because of [our differentiation]" format for your review and edits. At any time, use <strong>Refine Language</strong> to make the words sound more natural. And, if desired, you can then use <strong>Polish</strong> for final refinement. Polish take a little longer.
             </p>
           </div>
         </div>
@@ -464,8 +464,8 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={anyBusy} title="Maria reviews your message and tells you what she'd improve">
           {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria to review'}
         </button>
-        <button className="btn btn-secondary btn-sm" onClick={polish} disabled={anyBusy} title="Results are usually better, but takes a little longer">
-          {polishing ? <><Spinner size={12} /> Polishing...</> : <>Polish <InfoTooltip text="Results are usually better, but takes a little longer." /></>}
+        <button className="btn btn-secondary btn-sm" onClick={polish} disabled={anyBusy} title="Results are usually better, but take a little longer">
+          {polishing ? <><Spinner size={12} /> Polishing...</> : <>Polish <InfoTooltip text="Results are usually better, but take a little longer." /></>}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={createSnapshot} title="Save the current state as a checkpoint you can return to">
           {showCheckpointSaved ? 'Checkpoint saved' : 'Save checkpoint'}

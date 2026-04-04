@@ -2577,12 +2577,12 @@ p { line-height: 1.5; color: var(--text-secondary); }
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   right: 24px;
   z-index: 250;
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2615,12 +2615,12 @@ p { line-height: 1.5; color: var(--text-secondary); }
   50% { opacity: 0.4; }
 }
 .partner-glow {
-  box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.15);
-  animation: partner-glow-pulse 3s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.3);
+  animation: partner-glow-pulse 2.5s ease-in-out infinite;
 }
 @keyframes partner-glow-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.15); }
-  50% { box-shadow: 0 0 12px 4px rgba(0, 122, 255, 0.25); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.2); }
+  50% { box-shadow: 0 0 20px 8px rgba(0, 122, 255, 0.4); }
 }
 
 .partner-panel {
