@@ -865,6 +865,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border-right: 1px solid #d1d1d6;
   position: relative;
   transition: box-shadow 0.2s;
+  overflow: hidden;
 }
 .three-tier-table.has-suggestions .tier2-col {
   min-width: 240px;
