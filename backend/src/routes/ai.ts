@@ -54,6 +54,12 @@ async function generateTier(
 
   let result = await callAIWithJSON<TierGenResult>(CONVERT_LINES_SYSTEM, convertMessage + reminder, 'elite');
 
+  // Enforce maximum 6 Tier 2 columns (doctrinal rule: 5 standard + 1 optional overflow)
+  if (result.tier2 && result.tier2.length > 6) {
+    console.log(`[TierGen] AI produced ${result.tier2.length} columns, capping at 6`);
+    result.tier2 = result.tier2.slice(0, 6);
+  }
+
   // Validate: does Tier 1 actually preserve the priority text?
   if (rank1Priority && !priorityPreserved(result.tier1.text, rank1Priority.text)) {
     const correction = `\n\n══ CORRECTION ══\nYour previous Tier 1 was: "${result.tier1.text}"\nThis substitutes a product metric for the audience's priority. The Rank 1 priority is: "${rank1Priority.text}"\nRewrite Tier 1 so it begins with the audience's strategic concern, then "because [specific hook]." Fix any other Tier 2 statements with the same problem.`;
