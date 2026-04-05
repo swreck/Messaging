@@ -180,7 +180,7 @@ RULES — the text must pass ALL of these:
 
 NOTE: These rules are ADAPTED for narrative text. Unlike statement evaluation:
 - Colons are natural punctuation in prose — not flagged
-- Contrast and "but" constructions are sometimes needed in narrative
+- "But" for natural narrative flow is OK. However, CONTRAST CLAUSES that negate ("not X," "instead of X," "no tradeoff," "rather than X," "without the X") after stating the main claim are still violations — they sound like sales copy defending against objections. State the fact and stop.
 - Word count limits don't apply to prose paragraphs
 - Multiple claims per paragraph are expected; one strong claim per sentence is ideal but not rigid
 - Urgency language is acceptable when describing real timelines and stakes

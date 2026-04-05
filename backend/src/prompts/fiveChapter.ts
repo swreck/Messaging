@@ -68,7 +68,7 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
     } else if (emphasisChapter && emphasisChapter !== chapterNum) {
       thisChapterWords = Math.round(thisChapterWords * 0.85);
     }
-    wordGuidance = `HARD LIMIT: ${thisChapterWords} words maximum. This is NOT a suggestion — exceeding this budget means the chapter fails. For short budgets (under 50 words), write 1-2 sentences only. Total story budget is ~${totalWords} words for ${spec.label} format.`;
+    wordGuidance = `WORD BUDGET: ~${thisChapterWords} words for this chapter (~${totalWords} words total for ${spec.label} format). This is proportional guidance, not a hard ceiling. Quality always wins — if the chapter's structural requirements (e.g., problem→solution→result in Ch4) need more words, use them. But be efficient: every word must earn its place. No filler, no padding, no wasted sentences. Ken's Voice demands conversational brevity — say it once, say it well, stop.`;
   }
 
   const chapterRules: Record<number, string> = {
