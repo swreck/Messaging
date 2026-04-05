@@ -86,7 +86,7 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
     return () => {
       if (pendingDeleteRef.current) {
         clearTimeout(pendingDeleteRef.current.timeout);
-        api.delete(`/tiers/${draft.id}/tier3/${pendingDeleteRef.current.id}`).then(() => onUpdate());
+        api.delete(`/tiers/${draft.id}/tier3/${pendingDeleteRef.current.id}`).then(() => onUpdate()).catch(() => {});
       }
     };
   }, [draft.id, onUpdate]);
@@ -149,14 +149,22 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
   }
 
   async function addTier3(tier2Id: string) {
-    await api.post(`/tiers/${draft.id}/tier2/${tier2Id}/tier3`, { text: 'New proof point', changeSource: 'manual' });
-    onUpdate();
+    if (saving) return;
+    setSaving(true);
+    try {
+      await api.post(`/tiers/${draft.id}/tier2/${tier2Id}/tier3`, { text: 'New proof point', changeSource: 'manual' });
+      onUpdate();
+    } catch {
+      showToast('Could not add proof point. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const startDeleteTier3 = useCallback((tier3Id: string, text: string, tier2Id: string) => {
     if (pendingDeleteRef.current) {
       clearTimeout(pendingDeleteRef.current.timeout);
-      api.delete(`/tiers/${draft.id}/tier3/${pendingDeleteRef.current.id}`).then(() => onUpdate());
+      api.delete(`/tiers/${draft.id}/tier3/${pendingDeleteRef.current.id}`).then(() => onUpdate()).catch(() => {});
     }
     const timeout = setTimeout(() => {
       api.delete(`/tiers/${draft.id}/tier3/${tier3Id}`).then(() => {
