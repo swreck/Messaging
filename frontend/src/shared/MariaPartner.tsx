@@ -366,7 +366,9 @@ export function MariaPartner() {
   // ─── Format helpers ─────────────────────────────────
 
   function formatContent(text: string) {
-    const cleaned = text.replace(/\n\n\[.+\]$/, '');
+    // Strip [PAGE CONTENT] blocks from legacy messages
+    let stripped = text.replace(/\[PAGE CONTENT\][\s\S]*?\[USER QUESTION\]\n?/g, '');
+    const cleaned = stripped.replace(/\n\n\[.+\]$/, '');
     // Apply markdown at full-text level first, then handle line breaks via dangerouslySetInnerHTML
     let html = cleaned
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
