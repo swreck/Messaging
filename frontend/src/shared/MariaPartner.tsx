@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useMaria } from './MariaContext';
@@ -25,7 +25,9 @@ const INTRO_DONE = 4;
 export function MariaPartner() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { pageContext, refreshPage } = useMaria();
+  const isAuthPage = ['/login', '/register'].some(p => location.pathname.startsWith(p)) || location.pathname.startsWith('/join/');
 
   // Panel state
   const [open, setOpen] = useState(false);
@@ -382,7 +384,7 @@ export function MariaPartner() {
 
   // ─── Render ─────────────────────────────────────────
 
-  if (!user) return null;
+  if (!user || isAuthPage) return null;
 
   const statusLoaded = introduced !== null;
   const showIntro = statusLoaded && (!introduced || introStep < INTRO_DONE);
