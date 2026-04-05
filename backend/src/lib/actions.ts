@@ -956,6 +956,9 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
                   }
                 }
               }
+              if (applied > 0) {
+                await prisma.threeTierDraft.update({ where: { id: ctx.draftId }, data: { version: { increment: 1 } } });
+              }
               actionResult = applied > 0 ? `Updated ${applied} cell${applied !== 1 ? 's' : ''} based on your direction` : 'Direction processed but no changes were needed';
               refreshNeeded = true;
             }

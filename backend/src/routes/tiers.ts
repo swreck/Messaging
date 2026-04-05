@@ -203,6 +203,9 @@ router.post('/:draftId/tier2/bulk', requireEditor, async (req: Request, res: Res
     })
   );
 
+  // Increment draft version so frontend detects the change
+  await prisma.threeTierDraft.update({ where: { id: param(req.params.draftId) }, data: { version: { increment: 1 } } });
+
   res.status(201).json({ tier2Statements: created });
 });
 

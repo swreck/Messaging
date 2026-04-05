@@ -2577,7 +2577,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   position: fixed;
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   right: 24px;
-  z-index: 250;
+  z-index: 100;
   width: 64px;
   height: 64px;
   border-radius: 50%;
@@ -2628,7 +2628,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   position: fixed;
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   right: 24px;
-  z-index: 250;
+  z-index: 100;
   width: 400px;
   max-height: calc(100vh - 120px);
   background: var(--bg-card);
