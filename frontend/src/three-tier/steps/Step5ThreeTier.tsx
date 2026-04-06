@@ -476,8 +476,8 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           </button>
         )}
         <div style={{ position: 'relative' }} ref={moreToolsRef}>
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowMoreTools(!showMoreTools)}>
-            &middot;&middot;&middot;
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowMoreTools(!showMoreTools)} style={{ fontSize: 28, lineHeight: 1, padding: '4px 10px', letterSpacing: 2 }}>
+            •••
           </button>
           {showMoreTools && (
             <div style={{
