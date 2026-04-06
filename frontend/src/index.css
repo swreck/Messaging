@@ -791,6 +791,12 @@ p { line-height: 1.5; color: var(--text-secondary); }
   gap: 8px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+  position: sticky;
+  top: 56px;
+  z-index: 90;
+  background: var(--bg-page);
+  padding: 10px 0;
+  border-bottom: 1px solid #e5e5ea;
 }
 
 .three-tier-table {
