@@ -56,6 +56,7 @@ export function MariaPartner() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const followUpRef = useRef(false);
 
   // Load status on mount — only if logged in
   useEffect(() => {
@@ -216,7 +217,8 @@ export function MariaPartner() {
         try {
           const { content: pc } = await api.post<{ content: string }>('/partner/page-content', { context: pageContext });
           setMessages(prev => prev.slice(0, -1));
-          // Keep sending=true — don't clear dots between page-content fetch and second send
+          // Recursive send — don't let our finally kill the dots
+          followUpRef.current = true;
           send(text, pc);
           return;
         } catch {
@@ -241,7 +243,11 @@ export function MariaPartner() {
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I had trouble with that. Try again?' }]);
     } finally {
-      setSending(false);
+      if (followUpRef.current) {
+        followUpRef.current = false; // Let the recursive call own the dots
+      } else {
+        setSending(false);
+      }
     }
   }, [input, sending, pageContext, refreshPage]);
 
