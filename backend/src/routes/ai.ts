@@ -1189,7 +1189,16 @@ Write Chapter ${fixChNum}: "${fixCh.name}"${avoidInstruction}`;
     }
   }
 
-  res.json({ chapter });
+  // If dedup ran, tell the frontend to re-fetch all chapters
+  if (chapterNum === 5) {
+    const updatedChapters = await prisma.chapterContent.findMany({
+      where: { storyId },
+      orderBy: { chapterNum: 'asc' },
+    });
+    res.json({ chapter, dedupApplied: true, allChapters: updatedChapters });
+  } else {
+    res.json({ chapter });
+  }
 });
 
 // ─── Refine Chapter ─────────────────────────────────────

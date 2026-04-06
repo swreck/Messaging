@@ -224,17 +224,25 @@ export function FiveChapterShell() {
     try {
       for (let i = 1; i <= 5; i++) {
         setGeneratingChapter(i);
-        const { chapter } = await api.post<{ chapter: ChapterContent }>('/ai/generate-chapter', {
+        const resp = await api.post<{ chapter: ChapterContent; dedupApplied?: boolean; allChapters?: ChapterContent[] }>('/ai/generate-chapter', {
           storyId: story.id,
           chapterNum: i,
         });
-        setStory(prev => {
-          if (!prev) return prev;
-          const chapters = prev.chapters.filter(c => c.chapterNum !== i);
-          chapters.push(chapter);
-          chapters.sort((a, b) => a.chapterNum - b.chapterNum);
-          return { ...prev, chapters };
-        });
+        // If dedup ran after Ch5, update ALL chapters with deduped versions
+        if (resp.dedupApplied && resp.allChapters) {
+          setStory(prev => {
+            if (!prev) return prev;
+            return { ...prev, chapters: resp.allChapters!.sort((a, b) => a.chapterNum - b.chapterNum) };
+          });
+        } else {
+          setStory(prev => {
+            if (!prev) return prev;
+            const chapters = prev.chapters.filter(c => c.chapterNum !== i);
+            chapters.push(resp.chapter);
+            chapters.sort((a, b) => a.chapterNum - b.chapterNum);
+            return { ...prev, chapters };
+          });
+        }
         // Scroll to the chapter that just generated
         setTimeout(() => {
           chapterRefs.current[i - 1]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
