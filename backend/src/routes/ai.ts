@@ -1050,6 +1050,16 @@ IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation
     return match.length < 60 ? '' : match; // Only strip short fragments, not full paragraphs
   }).trim();
 
+  // Strip CTA text from chapters 1-4 — it belongs only in chapter 5
+  if (chapterNum < 5 && story.cta) {
+    const ctaLower = story.cta.toLowerCase().trim();
+    // Remove the CTA if it appears as a standalone sentence or trailing text
+    content = content.split('\n').map(line => {
+      if (line.toLowerCase().trim() === ctaLower) return '';
+      return line;
+    }).filter(line => line.trim()).join('\n').trim();
+  }
+
   // Voice check chapter prose
   if (await isVoiceCheckEnabled(req.user!.userId)) {
     try {
