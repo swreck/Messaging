@@ -110,7 +110,7 @@ export function MariaPartner() {
     if (open) {
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     }
-  }, [messages, open]);
+  }, [messages, open, sending]);
 
   // Focus textarea
   useEffect(() => {
