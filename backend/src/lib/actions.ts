@@ -9,6 +9,68 @@ import {
 } from '../prompts/fiveChapter.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 
+// ─── Cross-chapter repetition detection ───────────────────────
+// After generating all 5 chapters, find phrases repeated across chapters.
+// Returns phrases that appear in 2+ chapters (4-6 word sequences).
+function findCrossChapterRepetition(chapters: { chapterNum: number; content: string }[]): { phrase: string; laterChapter: number }[] {
+  const chapterPhrases = new Map<number, Set<string>>();
+  for (const ch of chapters) {
+    const words = ch.content.toLowerCase().replace(/[^a-z0-9\s']/g, '').split(/\s+/).filter(w => w.length > 0);
+    const phrases = new Set<string>();
+    for (let len = 4; len <= 6; len++) {
+      for (let i = 0; i <= words.length - len; i++) {
+        phrases.add(words.slice(i, i + len).join(' '));
+      }
+    }
+    chapterPhrases.set(ch.chapterNum, phrases);
+  }
+
+  const repeated: { phrase: string; laterChapter: number }[] = [];
+  const sortedNums = [...chapterPhrases.keys()].sort();
+  for (let i = 1; i < sortedNums.length; i++) {
+    const laterNum = sortedNums[i];
+    const laterPhrases = chapterPhrases.get(laterNum)!;
+    for (let j = 0; j < i; j++) {
+      const earlierPhrases = chapterPhrases.get(sortedNums[j])!;
+      for (const p of laterPhrases) {
+        if (earlierPhrases.has(p)) {
+          repeated.push({ phrase: p, laterChapter: laterNum });
+        }
+      }
+    }
+  }
+
+  // Keep only the longest overlapping phrases per chapter
+  const byChapter = new Map<number, string[]>();
+  for (const r of repeated) {
+    const existing = byChapter.get(r.laterChapter) || [];
+    if (!existing.some(e => e.includes(r.phrase))) {
+      // Remove shorter phrases subsumed by this one
+      const filtered = existing.filter(e => !r.phrase.includes(e));
+      filtered.push(r.phrase);
+      byChapter.set(r.laterChapter, filtered);
+    }
+  }
+
+  const result: { phrase: string; laterChapter: number }[] = [];
+  for (const [ch, phrases] of byChapter) {
+    for (const p of phrases) result.push({ phrase: p, laterChapter: ch });
+  }
+  return result;
+}
+
+// Format previous chapters as context (full text for short, truncated at sentence boundary for long)
+function formatPrevChapterContext(chapters: { chapterNum: number; content: string }[]): string {
+  return chapters.map((c) => {
+    const text = c.content;
+    const maxLen = 500;
+    if (text.length <= maxLen) return `Ch ${c.chapterNum} (context — do not repeat these facts): ${text}`;
+    const t = text.substring(0, maxLen);
+    const e = Math.max(t.lastIndexOf('. '), t.lastIndexOf('? '), t.lastIndexOf('! '));
+    return `Ch ${c.chapterNum} (context — do not repeat these facts): ${e > 100 ? t.substring(0, e + 1) : t.substring(0, t.lastIndexOf(' '))}`;
+  }).join('\n');
+}
+
 // ─── Alias map for AI-generated action names ──────────────────
 export const ACTION_ALIASES: Record<string, string> = {
   'add_audience': 'create_audience',
@@ -568,13 +630,7 @@ ${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${
 AUDIENCE PRIORITIES:
 ${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — ${p.motivatingFactor ? `Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
-${prevChapters.length > 0 ? prevChapters.map((c: any) => {
-              const text = c.content; const maxLen = 200;
-              if (text.length <= maxLen) return `Ch ${c.chapterNum} (context only): ${text}`;
-              const t = text.substring(0, maxLen);
-              const e = Math.max(t.lastIndexOf('. '), t.lastIndexOf('? '), t.lastIndexOf('! '));
-              return `Ch ${c.chapterNum} (context only): ${e > 50 ? t.substring(0, e + 1) : t.substring(0, t.lastIndexOf(' '))}`;
-            }).join('\n') : ''}
+${prevChapters.length > 0 ? formatPrevChapterContext(prevChapters) : ''}
 
 Write Chapter ${chNum}: "${ch.name}"
 IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or continue from a previous chapter.`;
@@ -596,6 +652,43 @@ IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or continue from a 
                 changeSource: 'ai_generate',
               },
             });
+          }
+
+          // Cross-chapter dedup check — regenerate chapters that repeat earlier phrases
+          const allChapters = await prisma.chapterContent.findMany({
+            where: { storyId: newStory.id },
+            orderBy: { chapterNum: 'asc' },
+          });
+          const repetitions = findCrossChapterRepetition(allChapters);
+          if (repetitions.length > 0) {
+            const chaptersToFix = [...new Set(repetitions.map(r => r.laterChapter))];
+            for (const chNum of chaptersToFix) {
+              const avoidPhrases = repetitions.filter(r => r.laterChapter === chNum).map(r => r.phrase);
+              const systemPrompt = buildChapterPrompt(chNum, story.medium, emphasisChapter);
+              const ch = CHAPTER_CRITERIA[chNum - 1];
+              const prevChapters = allChapters.filter(c => c.chapterNum < chNum);
+              const avoidInstruction = `\n\nCRITICAL: These phrases already appear in earlier chapters. Do NOT use them — find different words to express the same ideas:\n${avoidPhrases.map(p => `- "${p}"`).join('\n')}`;
+
+              const fixMsg = `OFFERING: ${story.draft.offering.name}
+AUDIENCE: ${story.draft.audience.name}
+CONTENT FORMAT: ${spec.label}
+CTA: ${story.cta}
+
+THREE TIER MESSAGE:
+Tier 1: "${story.draft.tier1Statement?.text || ''}"
+${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}"`).join('\n')}
+
+${formatPrevChapterContext(prevChapters)}
+
+Write Chapter ${chNum}: "${ch.name}"${avoidInstruction}`;
+
+              let content = await callAI(systemPrompt, fixMsg, 'elite');
+              content = content.replace(/^\s*\.{2,}\s*/g, '').trim();
+              await prisma.chapterContent.update({
+                where: { storyId_chapterNum: { storyId: newStory.id, chapterNum: chNum } },
+                data: { content },
+              });
+            }
           }
 
           // Auto-blend
@@ -693,13 +786,7 @@ ${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${
 AUDIENCE PRIORITIES:
 ${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — ${p.motivatingFactor ? `Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
-${prevChapters.length > 0 ? prevChapters.map((c: any) => {
-              const text = c.content; const maxLen = 200;
-              if (text.length <= maxLen) return `Ch ${c.chapterNum} (context only): ${text}`;
-              const t = text.substring(0, maxLen);
-              const e = Math.max(t.lastIndexOf('. '), t.lastIndexOf('? '), t.lastIndexOf('! '));
-              return `Ch ${c.chapterNum} (context only): ${e > 50 ? t.substring(0, e + 1) : t.substring(0, t.lastIndexOf(' '))}`;
-            }).join('\n') : ''}
+${prevChapters.length > 0 ? formatPrevChapterContext(prevChapters) : ''}
 
 Write Chapter ${chNum}: "${ch.name}"
 IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or continue from a previous chapter.`;
@@ -724,6 +811,43 @@ IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or continue from a 
                 changeSource: 'ai_regenerate',
               },
             });
+          }
+
+          // Cross-chapter dedup check
+          const regenAllChapters = await prisma.chapterContent.findMany({
+            where: { storyId: ctx.storyId },
+            orderBy: { chapterNum: 'asc' },
+          });
+          const regenRepetitions = findCrossChapterRepetition(regenAllChapters);
+          if (regenRepetitions.length > 0) {
+            const chaptersToFix = [...new Set(regenRepetitions.map(r => r.laterChapter))];
+            for (const chNum of chaptersToFix) {
+              const avoidPhrases = regenRepetitions.filter(r => r.laterChapter === chNum).map(r => r.phrase);
+              const systemPrompt = buildChapterPrompt(chNum, story.medium, emphasisChapter);
+              const ch = CHAPTER_CRITERIA[chNum - 1];
+              const prevChapters = regenAllChapters.filter(c => c.chapterNum < chNum);
+              const avoidInstruction = `\n\nCRITICAL: These phrases already appear in earlier chapters. Do NOT use them — find different words to express the same ideas:\n${avoidPhrases.map(p => `- "${p}"`).join('\n')}`;
+
+              const fixMsg = `OFFERING: ${story.draft.offering.name}
+AUDIENCE: ${story.draft.audience.name}
+CONTENT FORMAT: ${spec.label}
+CTA: ${story.cta}
+
+THREE TIER MESSAGE:
+Tier 1: "${story.draft.tier1Statement?.text || ''}"
+${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}"`).join('\n')}
+
+${formatPrevChapterContext(prevChapters)}
+
+Write Chapter ${chNum}: "${ch.name}"${avoidInstruction}`;
+
+              let content = await callAI(systemPrompt, fixMsg, 'elite');
+              content = content.replace(/^\s*\.{2,}\s*/g, '').trim();
+              await prisma.chapterContent.update({
+                where: { storyId_chapterNum: { storyId: ctx.storyId, chapterNum: chNum } },
+                data: { content },
+              });
+            }
           }
 
           // Auto-blend after regeneration

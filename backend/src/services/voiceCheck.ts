@@ -178,6 +178,8 @@ RULES — the text must pass ALL of these:
 
 11. COMPLETE VERB PHRASES, not compressed participial shorthand. "Flagging tissue artifacts before review" → "to flag tissue artifacts before the pathologist reviews them."
 
+12. NO AMBIGUOUS ATTRIBUTION. When a sentence describes a problem (status quo) near product benefits, make clear which is which. "Audit prep takes weeks" next to product features could be read as "our audit prep takes weeks" (sounds like a limitation) rather than "audit prep normally takes weeks" (the intended status quo pain). If a sentence could reasonably be read as describing the product's limitation rather than the status quo problem, flag it. The reader must always know: is this what happens WITHOUT the product, or what happens WITH it?
+
 NOTE: These rules are ADAPTED for narrative text. Unlike statement evaluation:
 - Colons are natural punctuation in prose — not flagged
 - "But" for natural narrative flow is OK. However, CONTRAST CLAUSES that negate ("not X," "instead of X," "no tradeoff," "rather than X," "without the X") after stating the main claim are still violations — they sound like sales copy defending against objections. State the fact and stop.

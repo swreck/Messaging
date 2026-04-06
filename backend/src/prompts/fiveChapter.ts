@@ -102,7 +102,8 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
 - Format: problem the similar org had → solution (your offering) → result they achieved.
 - Tailor proof to the desired call to action.
 - If no specific customer stories are available, describe the TYPE of results typical customers see.
-- NEVER invent specific company names, metrics, or quotes.`,
+- NEVER invent specific company names, metrics, or quotes.
+- Describe RESULTS other organizations achieved, not HOW the product works mechanically. "Under 30-minute incident response" is a result — it belongs here. "Working from one screen" is a product mechanism — it belongs in Chapter 2. Social proof answers "what happened for them?" not "how does the product work?"`,
 
     5: `CHAPTER 5 RULES:
 - Call to action: first 1-3 concrete, simple steps ONLY.
