@@ -126,6 +126,7 @@ export function MariaPartner() {
   const interviewQuestionRef = useRef(0); // Tracks which interview question we're on (1-6, 0 = not interviewing)
   // Restore counter from profile on mount in case HMR reset it
   useEffect(() => {
+    if (!user) return;
     api.get<{ profile: { interviewStep: number; observations: any[] } }>('/personalize/profile')
       .then(({ profile }) => {
         if (profile.interviewStep > 0 && profile.interviewStep < 7 && profile.observations.length === 0) {
@@ -133,7 +134,7 @@ export function MariaPartner() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     function onToggle(e: Event) {
