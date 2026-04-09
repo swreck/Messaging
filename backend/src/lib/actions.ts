@@ -8,6 +8,17 @@ import {
   COPY_EDIT_SYSTEM,
 } from '../prompts/fiveChapter.js';
 import { getMediumSpec } from '../prompts/mediums.js';
+import {
+  getPersonalize,
+  updatePersonalize,
+} from './personalize.js';
+import { INTERVIEW_QUESTIONS } from '../prompts/personalize.js';
+import {
+  synthesizeInterviewProfile,
+  analyzeDocument,
+  mergeStyleSignals,
+  generateComparativeQuestion,
+} from '../services/personalizeService.js';
 
 // ─── Cross-chapter repetition detection ───────────────────────
 // After generating all 5 chapters, find phrases repeated across chapters.
@@ -92,6 +103,15 @@ export const ACTION_ALIASES: Record<string, string> = {
   'create_draft': 'start_three_tier',
   'new_draft': 'start_three_tier',
   'begin_three_tier': 'start_three_tier',
+  'analyze_style': 'analyze_personalization_doc',
+  'style_doc': 'analyze_personalization_doc',
+  'personalize_doc': 'analyze_personalization_doc',
+  'start_style_interview': 'start_personalize_interview',
+  'start_interview': 'start_personalize_interview',
+  'interview_answer': 'personalize_interview_answer',
+  'style_answer': 'personalize_interview_answer',
+  'complete_interview': 'personalize_interview_synthesize',
+  'finish_interview': 'personalize_interview_synthesize',
 };
 
 // ─── Audience resolver ─────────────────────────────────────────
@@ -1222,8 +1242,98 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
         }
       }
 
+      // ─── Personalization actions ───────────────────────────────
+      // Action results for personalization are kept minimal or empty.
+      // Maria's system prompt (personalize chat block) guides her response.
+      if (a.type === 'start_personalize_interview') {
+        await updatePersonalize(userId, { interviewStep: 1 });
+        actionResult = '';
+        refreshNeeded = false;
+      }
+
+      if (a.type === 'personalize_interview_answer' && a.params.answer) {
+        const profile = await getPersonalize(userId);
+        const step = profile.interviewStep || 1;
+        const answers = [...profile.interviewAnswers.filter(ans => ans.question !== step), { question: step, answer: a.params.answer }];
+
+        if (step === 5) {
+          // After Q5, generate comparative question for Q6
+          // Store comparative data in profile so Maria's system prompt can include it
+          const comparative = await generateComparativeQuestion(answers);
+          await updatePersonalize(userId, {
+            interviewAnswers: answers,
+            interviewStep: 6,
+            comparativeQ6: comparative,
+          } as any);
+          actionResult = '';
+          refreshNeeded = false;
+        } else if (step >= 6) {
+          // Q6 answered — interview complete, synthesize profile
+          await updatePersonalize(userId, { interviewAnswers: answers, interviewStep: 7 });
+          const synthesized = await synthesizeInterviewProfile(answers);
+          const merged = mergeStyleSignals(profile, synthesized.observations, synthesized.restrictions);
+          await updatePersonalize(userId, {
+            observations: merged.observations,
+            restrictions: merged.restrictions,
+            interviewStep: 7,
+          });
+          // Empty result — Maria's chat block tells her how to respond post-synthesis
+          actionResult = '';
+          refreshNeeded = false;
+        } else {
+          // Steps 1-4: store answer, advance
+          await updatePersonalize(userId, { interviewAnswers: answers, interviewStep: step + 1 });
+          // No visible result — Maria asks the next question from her system prompt
+          actionResult = '';
+          refreshNeeded = false;
+        }
+      }
+
+      if (a.type === 'personalize_interview_synthesize') {
+        const profile = await getPersonalize(userId);
+        if (profile.interviewAnswers.length >= 5) {
+          const synthesized = await synthesizeInterviewProfile(profile.interviewAnswers);
+          const merged = mergeStyleSignals(profile, synthesized.observations, synthesized.restrictions);
+          await updatePersonalize(userId, {
+            observations: merged.observations,
+            restrictions: merged.restrictions,
+            interviewStep: 7,
+          });
+          actionResult = '';
+          refreshNeeded = false;
+        } else {
+          actionResult = 'Need at least 5 interview answers to build a style profile.';
+          refreshNeeded = false;
+        }
+      }
+
+      if (a.type === 'analyze_personalization_doc' && a.params.text) {
+        const docResult = await analyzeDocument(userId, a.params.text);
+        const profile = await getPersonalize(userId);
+        const merged = mergeStyleSignals(profile, docResult.observations, docResult.restrictions);
+        const documents = [...profile.documents, {
+          snippet: a.params.text.substring(0, 200),
+          observationsFound: docResult.observations.length,
+          analyzedAt: new Date().toISOString(),
+        }];
+        await updatePersonalize(userId, {
+          observations: merged.observations,
+          restrictions: merged.restrictions,
+          documents,
+        });
+
+        if (docResult.diverges && docResult.clarifyingQuestion) {
+          actionResult = `Analyzed your writing sample. I noticed some differences from your existing style — ${docResult.clarifyingQuestion}`;
+        } else {
+          actionResult = `Got it. I picked up ${docResult.observations.length} style pattern${docResult.observations.length === 1 ? '' : 's'} from that sample. ${docResult.snippetSummary}`;
+        }
+        refreshNeeded = false;
+      }
+
       // Catch silent failures: action dispatched but no handler ran
-      if (!actionResult) {
+      // Note: actionResult === '' means a handler ran but has no visible output (e.g. personalization).
+      // Only trigger fallback when actionResult is still null (no handler matched).
+      if (actionResult === null) {
         const missing: string[] = [];
         if (['edit_audience'].includes(a.type) && !ctx.audienceId) {
           missing.push('audienceId');
@@ -1475,6 +1585,12 @@ export function buildActionList(context: ActionContext): string {
   // Cross-workspace copy — always included, dispatch handles errors if user has only 1 workspace
   actions.push('- copy_audience_to_workspace: Copy an audience and its priorities to another workspace. Params: { audienceName: string, targetWorkspaceName: string }');
   actions.push('- copy_offering_to_workspace: Copy an offering and its capabilities to another workspace. Params: { offeringName: string, targetWorkspaceName: string }');
+
+  // Personalization actions — always available
+  actions.push('- start_personalize_interview: Begin the style personalization interview (6 questions to discover the user\'s writing voice). Params: {}');
+  actions.push('- personalize_interview_answer: Submit the user\'s answer to the current interview question. Params: { answer: string }');
+  actions.push('- personalize_interview_synthesize: After all interview questions are answered, synthesize the style profile. Params: {}');
+  actions.push('- analyze_personalization_doc: Analyze text the user pasted as a sample of their personal writing style. Params: { text: string }');
 
   return `\nACTIONS YOU CAN TAKE (only if the user's request clearly calls for one):\n${actions.join('\n')}\n`;
 }

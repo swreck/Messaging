@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { resetLearning } from '../lib/learning.js';
+import { resetPersonalize } from '../lib/personalize.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -47,6 +48,12 @@ router.put('/', async (req: Request, res: Response) => {
 // DELETE /api/settings/learning — reset Maria's memory
 router.delete('/learning', async (req: Request, res: Response) => {
   await resetLearning(req.user!.userId);
+  res.json({ success: true });
+});
+
+// DELETE /api/settings/personalize — reset personalization profile
+router.delete('/personalize', async (req: Request, res: Response) => {
+  await resetPersonalize(req.user!.userId);
   res.json({ success: true });
 });
 

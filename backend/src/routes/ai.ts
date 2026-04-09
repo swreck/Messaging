@@ -833,29 +833,106 @@ router.post('/polish-story', requireEditor, async (req: Request, res: Response) 
   if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
 
   const story = await prisma.fiveChapterStory.findFirst({
-    where: { id: storyId },
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
     include: { chapters: { orderBy: { chapterNum: 'asc' } } },
   });
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
 
-  const chapterResults: { chapter: number; title: string; passed: boolean; violations: string[] }[] = [];
+  // Polish means IMPROVE — check for violations, then rewrite to fix them.
+  // The user gets back better text, not a list of problems.
+  const polishedChapters: { chapter: number; improved: boolean }[] = [];
+  let anyImproved = false;
 
-  for (const ch of story.chapters) {
-    if (!ch.content || ch.content.trim().length === 0) continue;
-    const check = await checkProse(ch.content, `Chapter ${ch.chapterNum}: ${ch.title || ''} of a Five Chapter Story (${story.medium} format)`);
-    chapterResults.push({
-      chapter: ch.chapterNum,
-      title: ch.title || `Chapter ${ch.chapterNum}`,
-      passed: check.passed,
-      violations: check.violations,
-    });
+  // If blended text exists, polish the blended text as a whole
+  if (story.blendedText && story.blendedText.trim()) {
+    const check = await checkProse(story.blendedText, `Blended Five Chapter Story (${story.medium} format)`);
+    if (!check.passed && check.violations.length > 0) {
+      const feedback = buildProseViolationFeedback(check.violations);
+      let improved = await callAI(
+        `You are a careful editor. Rewrite this text to fix the specific voice violations listed below. Keep the same content, structure, and approximate length. Only change what needs fixing.${feedback}`,
+        `TEXT TO POLISH:\n${story.blendedText}\n\nReturn ONLY the polished text.`,
+        'elite'
+      );
+      // Verify the rewrite didn't introduce new violations
+      const recheck = await checkProse(improved, `Polished Five Chapter Story (${story.medium} format)`);
+      if (!recheck.passed && recheck.violations.length > 0) {
+        const recheckFeedback = buildProseViolationFeedback(recheck.violations);
+        improved = await callAI(
+          `You are a careful editor. Your previous rewrite introduced new voice violations. Fix them while keeping the content intact.${recheckFeedback}`,
+          `TEXT TO FIX:\n${improved}\n\nReturn ONLY the fixed text.`,
+          'elite'
+        );
+      }
+      // Save polished blended text
+      await prisma.fiveChapterStory.update({
+        where: { id: storyId },
+        data: { blendedText: improved, stage: 'polished', version: { increment: 1 } },
+      });
+      // Snapshot for version history
+      const maxVer = await prisma.storyVersion.aggregate({
+        where: { storyId },
+        _max: { versionNum: true },
+      });
+      await prisma.storyVersion.create({
+        data: {
+          storyId,
+          snapshot: { blendedText: improved, stage: 'blended', medium: story.medium },
+          label: 'Polished',
+          versionNum: (maxVer._max?.versionNum ?? 0) + 1,
+        },
+      });
+      anyImproved = true;
+    }
+  } else {
+    // No blended text — polish individual chapters
+    for (const ch of story.chapters) {
+      if (!ch.content || ch.content.trim().length === 0) continue;
+      const check = await checkProse(ch.content, `Chapter ${ch.chapterNum}: ${ch.title || ''} of a Five Chapter Story (${story.medium} format)`);
+
+      if (!check.passed && check.violations.length > 0) {
+        const feedback = buildProseViolationFeedback(check.violations);
+        const improved = await callAI(
+          `You are a careful editor. Rewrite this chapter to fix the specific voice violations listed below. Keep the same content, structure, and approximate length. Only change what needs fixing.${feedback}`,
+          `CHAPTER TO POLISH:\n${ch.content}\n\nReturn ONLY the polished chapter.`,
+          'elite'
+        );
+        // Update chapter
+        await prisma.chapterContent.update({
+          where: { id: ch.id },
+          data: { content: improved },
+        });
+        // Version record
+        const maxVer = await prisma.chapterVersion.aggregate({
+          where: { chapterContentId: ch.id },
+          _max: { versionNum: true },
+        });
+        await prisma.chapterVersion.create({
+          data: {
+            chapterContentId: ch.id,
+            title: ch.title,
+            content: improved,
+            versionNum: (maxVer._max?.versionNum ?? 0) + 1,
+            changeSource: 'polished',
+          },
+        });
+        polishedChapters.push({ chapter: ch.chapterNum, improved: true });
+        anyImproved = true;
+      } else {
+        polishedChapters.push({ chapter: ch.chapterNum, improved: false });
+      }
+    }
   }
 
-  const allPassed = chapterResults.every(r => r.passed);
+  // Return updated story
+  const updated = await prisma.fiveChapterStory.findUnique({
+    where: { id: storyId },
+    include: { chapters: { orderBy: { chapterNum: 'asc' } } },
+  });
+
   res.json({
-    passed: allPassed,
-    chapters: chapterResults,
-    message: allPassed ? 'All chapters sound natural and conversational.' : undefined,
+    story: updated,
+    improved: anyImproved,
+    chapters: polishedChapters,
   });
 });
 
@@ -1049,6 +1126,20 @@ IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation
     // If the chapter starts with a lowercase word followed by a period, it's a continuation fragment — strip it
     return match.length < 60 ? '' : match; // Only strip short fragments, not full paragraphs
   }).trim();
+
+  // Enforce word budget — if chapter is more than 2x the budget, rewrite shorter
+  const mediumSpec = getMediumSpec(story.medium);
+  if (mediumSpec) {
+    const budget = mediumSpec.chapterBudgets[chapterNum - 1];
+    const wordCount = content.split(/\s+/).length;
+    if (budget && wordCount > budget * 2) {
+      content = await callAI(
+        `You are an editor. The text below is ${wordCount} words but must be approximately ${budget} words for a ${mediumSpec.label} format. Rewrite it to fit the budget. Keep the same message and tone. Cut ruthlessly — every word must earn its place.`,
+        `TEXT TO SHORTEN:\n${content}\n\nRewrite in approximately ${budget} words. Return ONLY the shortened text.`,
+        'elite'
+      );
+    }
+  }
 
   // Strip CTA text from chapters 1-4 — it belongs only in chapter 5
   if (chapterNum < 5 && story.cta) {
@@ -1391,6 +1482,15 @@ ${sourceText}
 Polish this into a final, cohesive ${spec.label.toLowerCase()}.`;
 
   let blendedText = await callAI(BLEND_SYSTEM, userMessage, 'elite');
+
+  // Strip markdown artifacts the AI may generate despite "plain text" instruction
+  blendedText = blendedText
+    .replace(/^#{1,6}\s+/gm, '')          // remove markdown headers (# ## ### ####)
+    .replace(/\*\*(.+?)\*\*/g, '$1')      // remove bold markers
+    .replace(/\*(.+?)\*/g, '$1')          // remove italic markers
+    .replace(/^[\-\*]\s+/gm, '')          // remove bullet markers
+    .replace(/^\d+\.\s+/gm, '')           // remove numbered list markers
+    .replace(/\n{3,}/g, '\n\n');           // collapse excessive blank lines
 
   // Voice check blended text
   if (await isVoiceCheckEnabled(req.user!.userId)) {

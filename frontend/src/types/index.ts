@@ -198,6 +198,39 @@ export interface StoryVersion {
   createdAt: string;
 }
 
+// ─── Personalization ─────────────────────────────────
+
+export interface StyleObservation {
+  text: string;
+  source: 'interview' | 'document' | 'chat';
+  confidence: number;
+  createdAt: string;
+}
+
+export interface StyleRestriction {
+  text: string;
+  source: 'interview' | 'document' | 'chat';
+  createdAt: string;
+}
+
+export interface DocumentAnalysis {
+  snippet: string;
+  observationsFound: number;
+  analyzedAt: string;
+}
+
+export interface PersonalizeProfile {
+  observations: StyleObservation[];
+  restrictions: StyleRestriction[];
+  interviewStep: number;
+  interviewAnswers: { question: number; answer: string }[];
+  documents: DocumentAnalysis[];
+  profileVersion: number;
+  lastUpdatedAt: string;
+  enabled: boolean;
+  offered: boolean;
+}
+
 // ─── AI Responses ────────────────────────────────────
 
 export interface MappingSuggestion {

@@ -23,7 +23,7 @@ export function InfoTooltip({ text }: InfoTooltipProps) {
         className="info-icon"
         onMouseEnter={() => setShow(true)}
         onMouseLeave={() => setShow(false)}
-        onClick={() => setShow(!show)}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShow(!show); }}
         type="button"
         aria-label="More info"
       >

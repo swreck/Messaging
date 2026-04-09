@@ -4,16 +4,17 @@ import type { StoryVersion } from '../types';
 
 interface BlendedVersionNavProps {
   storyId: string;
+  storyVersion?: number;
   onRestore: () => void;
 }
 
-export function BlendedVersionNav({ storyId, onRestore }: BlendedVersionNavProps) {
+export function BlendedVersionNav({ storyId, storyVersion, onRestore }: BlendedVersionNavProps) {
   const [versions, setVersions] = useState<StoryVersion[]>([]);
   const [currentIdx, setCurrentIdx] = useState(-1);
 
   useEffect(() => {
     loadVersions();
-  }, [storyId]);
+  }, [storyId, storyVersion]);
 
   async function loadVersions() {
     try {
@@ -38,10 +39,16 @@ export function BlendedVersionNav({ storyId, onRestore }: BlendedVersionNavProps
     onRestore();
   }
 
+  const currentLabel = versions[currentIdx]?.label?.toLowerCase() || '';
+  const labelText = currentLabel.includes('personalize') ? 'personalized'
+    : currentLabel.includes('polish') ? 'polished'
+    : currentLabel.includes('blend') || currentLabel.includes('before blend') ? 'blended'
+    : currentLabel || '';
+
   return (
     <div className="version-nav">
       <button onClick={() => navigate(-1)} disabled={currentIdx <= 0}>&lsaquo;</button>
-      <span>v{currentIdx + 1}/{versions.length}</span>
+      <span>v{currentIdx + 1}/{versions.length}{labelText ? ` (${labelText})` : ''}</span>
       <button onClick={() => navigate(1)} disabled={currentIdx >= versions.length - 1}>&rsaquo;</button>
     </div>
   );

@@ -1,0 +1,20 @@
+{
+  "name": "Maria (Local)",
+  "short_name": "Maria L",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f7",
+  "theme_color": "#0071e3",
+  "icons": [
+    {
+      "src": "/icon-192-local.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512-local.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

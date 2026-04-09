@@ -5,6 +5,7 @@ import { requireWorkspace } from '../middleware/workspace.js';
 import { callAIWithJSON } from '../services/ai.js';
 import { buildPartnerPrompt } from '../prompts/partner.js';
 import { ACTION_ALIASES, dispatchActions, readPageContent, type ActionContext } from '../lib/actions.js';
+import { getPersonalize, updatePersonalize, buildPersonalizeChatBlock } from '../lib/personalize.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -173,7 +174,7 @@ async function buildReturnContext(workspaceId: string): Promise<ReturnContext | 
   };
 }
 
-async function buildSurfacingHint(workspaceId: string): Promise<string | undefined> {
+async function buildSurfacingHint(workspaceId: string, userId?: string): Promise<string | undefined> {
   const drafts = await prisma.threeTierDraft.findMany({
     where: { offering: { workspaceId } },
     include: {
@@ -209,6 +210,17 @@ async function buildSurfacingHint(workspaceId: string): Promise<string | undefin
   });
   if (audiencesNoMF.length > 0) {
     return `The audience "${audiencesNoMF[0].name}" has a top priority with no motivating factor. You could offer to draft it — you understand the offering well enough to connect the stakes.`;
+  }
+
+  // Check if user has a Five Chapter Story but no personalization profile
+  const hasStory = drafts.some(d => d.stories.length > 0);
+  if (hasStory && userId) {
+    const personalizeProfile = await getPersonalize(userId);
+    if (personalizeProfile.observations.length === 0 && !personalizeProfile.offered) {
+      // Mark as offered so this doesn't nag every session
+      await updatePersonalize(userId, { offered: true });
+      return `I can now try to get closer to your personal writing style. I call it "Personalization" and you'll see a new button for that on your Five Chapter Story page next to "Polish." If you personalize, you'll still get the best Five Chapter Stories I can write, but now, they'll sound more like you. I'll have to ask some questions, so we can do that now or whenever you like.`;
+    }
   }
 
   return undefined;
@@ -456,7 +468,7 @@ router.post('/message', async (req: Request, res: Response) => {
   // Build work summary and context
   const [workSummary, surfacingHint, offeringCount, audienceCount, membership] = await Promise.all([
     buildWorkSummary(workspaceId),
-    history.length === 0 ? buildSurfacingHint(workspaceId) : Promise.resolve(undefined),
+    history.length === 0 ? buildSurfacingHint(workspaceId, userId) : Promise.resolve(undefined),
     prisma.offering.count({ where: { workspaceId } }),
     prisma.audience.count({ where: { workspaceId } }),
     prisma.workspaceMember.findUnique({
@@ -469,7 +481,7 @@ router.post('/message', async (req: Request, res: Response) => {
   const isNewUser = offeringCount === 0 && audienceCount === 0;
   const userRole = req.user?.isAdmin ? 'owner' : (membership?.role || 'collaborator');
 
-  const systemPrompt = buildPartnerPrompt({
+  let systemPrompt = buildPartnerPrompt({
     displayName,
     workSummary,
     currentContext,
@@ -479,6 +491,17 @@ router.post('/message', async (req: Request, res: Response) => {
     isNewUser,
     userRole,
   });
+
+  // Personalization context — interview questions PREPEND to override conversational tone
+  const personalizeProfile = await getPersonalize(userId);
+  if (personalizeProfile.interviewStep > 0 && personalizeProfile.interviewStep < 7) {
+    // Interview in progress — prepend the mandatory question so Opus sees it FIRST
+    const interviewBlock = buildPersonalizeChatBlock(personalizeProfile);
+    systemPrompt = interviewBlock + '\n\n' + systemPrompt;
+  } else if (personalizeProfile.observations.length > 0 || personalizeProfile.interviewStep > 0) {
+    // Profile exists or interview complete — append as context
+    systemPrompt += buildPersonalizeChatBlock(personalizeProfile);
+  }
 
   // Build conversation history for the AI
   const conversationHistory = history.map(m => ({

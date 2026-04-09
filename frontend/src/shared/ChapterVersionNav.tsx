@@ -36,10 +36,22 @@ export function ChapterVersionNav({ chapterContentId, onRestore }: ChapterVersio
     onRestore(versions[newIdx].content);
   }
 
+  const SOURCE_LABELS: Record<string, string> = {
+    ai_generate: 'generated',
+    manual: 'your edit',
+    refine: 'refined',
+    personalized: 'personalized',
+    poetry_pass: 'polished',
+    magic_hour: 'magic hour',
+  };
+
+  const currentSource = versions[currentIdx]?.changeSource;
+  const sourceLabel = currentSource ? SOURCE_LABELS[currentSource] || currentSource : '';
+
   return (
     <div className="version-nav">
       <button onClick={() => navigate(-1)} disabled={currentIdx <= 0}>&lsaquo;</button>
-      <span>v{currentIdx + 1}/{versions.length}</span>
+      <span>v{currentIdx + 1}/{versions.length}{sourceLabel ? ` (${sourceLabel})` : ''}</span>
       <button onClick={() => navigate(1)} disabled={currentIdx >= versions.length - 1}>&rsaquo;</button>
     </div>
   );

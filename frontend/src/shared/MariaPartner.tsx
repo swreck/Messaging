@@ -121,10 +121,34 @@ export function MariaPartner() {
   }, [open, introStep]);
 
   // Keyboard shortcut events
+  // Ref to hold a pending auto-send message (set by maria-toggle with message detail)
+  const pendingMessageRef = useRef<string | null>(null);
+  const interviewQuestionRef = useRef(0); // Tracks which interview question we're on (1-6, 0 = not interviewing)
+  // Restore counter from profile on mount in case HMR reset it
+  useEffect(() => {
+    api.get<{ profile: { interviewStep: number; observations: any[] } }>('/personalize/profile')
+      .then(({ profile }) => {
+        if (profile.interviewStep > 0 && profile.interviewStep < 7 && profile.observations.length === 0) {
+          interviewQuestionRef.current = profile.interviewStep;
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     function onToggle(e: Event) {
       const detail = (e as CustomEvent).detail;
-      if (detail?.open) { setOpen(true); setShowDot(false); setShowGlow(false); }
+      if (detail?.open) {
+        setOpen(true);
+        setShowDot(false);
+        setShowGlow(false);
+        if (detail.message) {
+          pendingMessageRef.current = detail.message;
+          // Suppress proactive offer when a pending message is queued
+          setShowProactiveCard(false);
+          setShowReturnCard(false);
+        }
+      }
       else setOpen(false);
     }
     document.addEventListener('maria-toggle', onToggle);
@@ -232,7 +256,49 @@ export function MariaPartner() {
         }
       }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: result.response, actionResult: result.actionResult }]);
+      // Interview question injection — frontend controls all questions, Maria only acknowledges
+      const INTERVIEW_QUESTIONS = [
+        "How would you describe your communication style to someone who's never heard you speak?",
+        "If your team got an email from you with no name on it, what would tip them off it was you?",
+        "Think of something you wrote recently that you were happy with. What did you like about it — or just paste it in and I'll tell you what I notice.",
+        "Are there any words, phrases, or habits in your writing that are just... you? Things people might tease you about or immediately associate with you?",
+        "What's something about how you communicate that breaks conventional writing advice but works for you?",
+      ];
+
+      if (text.includes('personal writing style')) {
+        // Interview just started — show intro + Q1, set local tracker
+        interviewQuestionRef.current = 1;
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Great — six quick questions about how you write. Here\'s the first one.\n\nHow would you describe your communication style to someone who\'s never heard you speak?' }]);
+      } else if (interviewQuestionRef.current >= 1 && interviewQuestionRef.current <= 4) {
+        console.log('[INTERVIEW] Counter before increment:', interviewQuestionRef.current, 'Will inject Q' + (interviewQuestionRef.current + 1));
+        // Q2-Q5: extract brief acknowledgment from Opus, append the correct next question
+        interviewQuestionRef.current++;
+        const nextQ = INTERVIEW_QUESTIONS[interviewQuestionRef.current - 1];
+        // Take first sentence of Opus's response as acknowledgment
+        const firstSentence = result.response.match(/^[^.!?]*[.!?]/)?.[0] || 'Got it.';
+        setMessages(prev => [...prev, { role: 'assistant', content: `${firstSentence}\n\n${nextQ}` }]);
+      } else if (interviewQuestionRef.current === 5) {
+        console.log('[INTERVIEW] Counter is 5 — Q6 comparative path');
+        // After Q5 answer → Q6 is comparative. Fetch the versions from the profile and inject them.
+        interviewQuestionRef.current = 6;
+        const firstSentence = result.response.match(/^[^.!?]*[.!?]/)?.[0] || 'Got it.';
+        try {
+          const { profile: p } = await api.get<{ profile: { comparativeQ6?: { versionA: string; versionB: string } } }>('/personalize/profile');
+          if (p.comparativeQ6) {
+            setMessages(prev => [...prev, { role: 'assistant', content: `${firstSentence}\n\nLast question — here are two versions of the same paragraph. Which one sounds more like something you'd say?\n\n**Version A:**\n${p.comparativeQ6!.versionA}\n\n**Version B:**\n${p.comparativeQ6!.versionB}` }]);
+          } else {
+            setMessages(prev => [...prev, { role: 'assistant', content: result.response, actionResult: result.actionResult }]);
+          }
+        } catch {
+          setMessages(prev => [...prev, { role: 'assistant', content: result.response, actionResult: result.actionResult }]);
+        }
+      } else if (interviewQuestionRef.current === 6) {
+        // Q6 answered — interview done. Replace Opus's response with a definitive confirmation.
+        interviewQuestionRef.current = 0;
+        setMessages(prev => [...prev, { role: 'assistant', content: "I've got it. From now on when you hit Personalize, I'll adjust the story to sound more like you. If you want to change this later, just tell me you want to adjust your personal style. Or paste in any document you like and I'll analyze it." }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: result.response, actionResult: result.actionResult }]);
+      }
 
       if (result.actionResult) {
         const navMatch = result.actionResult.match(/\[NAVIGATE:([^\]]+)\]/);
@@ -251,7 +317,16 @@ export function MariaPartner() {
     }
   }, [input, sending, pageContext, refreshPage]);
 
-  // ─── Context message for Phase 3 ───────────────────
+  // Auto-send pending message after panel opens
+  useEffect(() => {
+    if (open && loaded && pendingMessageRef.current && !sending) {
+      const msg = pendingMessageRef.current;
+      pendingMessageRef.current = null;
+      setTimeout(() => send(msg), 300);
+    }
+  }, [open, loaded, sending, send]);
+
+  // ─── Context message for Phase 3 ───────────────���───
 
   function getContextMessage(): string {
     if (returnContext) {

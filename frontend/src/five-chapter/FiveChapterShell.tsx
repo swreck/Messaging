@@ -8,12 +8,13 @@ import { BlendedVersionNav } from '../shared/BlendedVersionNav';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { useMaria } from '../shared/MariaContext';
 import { useToast } from '../shared/ToastContext';
-import type { ThreeTierDraft, FiveChapterStory, ChapterContent, StoryMedium } from '../types';
+import type { ThreeTierDraft, FiveChapterStory, ChapterContent, StoryMedium, PersonalizeProfile } from '../types';
 import { CHAPTER_CRITERIA, MEDIUM_OPTIONS } from '../types';
 
-/** Light markdown: **bold** → <strong>, *italic* → <em>, HTML-escaped */
+/** Light markdown: **bold** → <strong>, *italic* → <em>, HTML-escaped. Strips markdown headers. */
 function renderLightMarkdown(text: string): string {
   return text
+    .replace(/^#{1,6}\s+/gm, '')  // strip markdown headers
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
@@ -49,14 +50,26 @@ export function FiveChapterShell() {
 
   // Polish
   const [polishing, setPolishing] = useState(false);
-  const [polishResults, setPolishResults] = useState<{ passed: boolean; chapters: { chapter: number; title: string; passed: boolean; violations: string[] }[] } | null>(null);
+  const [polishImproved, setPolishImproved] = useState(false);
+
+  // Track the refinement stage of the blended text for heading display
+  const [blendedStage, setBlendedStage] = useState<'blended' | 'polished' | 'personalized'>('blended');
+  // Previous stage snapshots — ordered list of user actions, each collapsible
+  const [stageSnapshots, setStageSnapshots] = useState<{ label: string; text: string; collapsed: boolean }[]>([]);
+
+  // Personalize
+  const [personalizing, setPersonalizing] = useState(false);
+  const [personalizeResults, setPersonalizeResults] = useState<{ chapters: { chapter: number; passed: boolean; attempts: number }[] } | null>(null);
+  const [, setPersonalizeProfile] = useState<PersonalizeProfile | null>(null);
 
   // Inline editing
   const [editingChapter, setEditingChapter] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
   const [showCompleteDraft, setShowCompleteDraft] = useState(false);
-  // Auto-show complete draft if it already exists (user created it previously)
-  useEffect(() => { if (story?.blendedText) setShowCompleteDraft(true); }, [story?.id]);
+  const [chaptersCollapsed, setChaptersCollapsed] = useState(false);
+  const [combinedCollapsed, setCombinedCollapsed] = useState(false);
+  // Auto-show complete draft and collapse chapters/combined if blended text already exists
+  useEffect(() => { if (story?.blendedText) { setShowCompleteDraft(true); setChaptersCollapsed(true); setCombinedCollapsed(true); } }, [story?.id]);
   const [editingBlended, setEditingBlended] = useState(false);
   const [editContent, setEditContent] = useState('');
 
@@ -80,8 +93,12 @@ export function FiveChapterShell() {
   const [conflictConfirm, setConflictConfirm] = useState<{ onDiscard: () => void } | null>(null);
 
   // Post-generation orientation messages
-  const [chaptersJustGenerated, setChaptersJustGenerated] = useState(false);
-  const [blendJustGenerated, setBlendJustGenerated] = useState(false);
+  const [, setChaptersJustGenerated] = useState(false);
+  const [, setCombineJustCompleted] = useState(false);
+  const [, setBlendJustGenerated] = useState(false);
+
+  // All completed drafts for audience/offering pickers on create form
+  const [allDrafts, setAllDrafts] = useState<{ id: string; audienceId: string; audienceName: string; offeringId: string; offeringName: string }[]>([]);
 
   // Editable params
   const [editingParam, setEditingParam] = useState<'medium' | 'cta' | 'emphasis' | null>(null);
@@ -110,12 +127,67 @@ export function FiveChapterShell() {
     try {
       const { draft: d } = await api.get<{ draft: ThreeTierDraft }>(`/drafts/${draftId}`);
       setDraft(d);
+      // Fetch all completed drafts for audience/offering pickers
+      try {
+        const { drafts: fetchedDrafts } = await api.get<{ drafts: { id: string; offeringId: string; audienceId: string; currentStep: number; status: string; offering: { name: string }; audience: { id: string; name: string } }[] }>('/drafts');
+        setAllDrafts(
+          fetchedDrafts
+            .filter(dr => dr.status === 'complete' || dr.currentStep === 5)
+            .map(dr => ({ id: dr.id, audienceId: dr.audienceId, audienceName: dr.audience.name, offeringId: dr.offeringId, offeringName: dr.offering.name }))
+        );
+      } catch {}
       const { stories: s } = await api.get<{ stories: FiveChapterStory[] }>(`/stories?draftId=${draftId}`);
       setStories(s);
       if (s.length > 0 && !story) {
         const requestedId = searchParams.get('story');
-        const match = requestedId ? s.find(st => st.id === requestedId) : null;
-        setStory(match || s[0]);
+        if (requestedId) {
+          // User clicked on a specific existing story — open it
+          const match = s.find(st => st.id === requestedId);
+          const selected = match || s[0];
+          setStory(selected);
+          // Check version history to determine blended stage and populate snapshots
+          if (selected.blendedText) {
+            try {
+              const { versions } = await api.get<{ versions: { label: string; snapshot: any }[] }>(`/versions/story/${selected.id}`);
+              if (versions.length > 0) {
+                const latestLabel = versions[0].label.toLowerCase();
+                if (latestLabel.includes('personalize')) {
+                  setBlendedStage('personalized');
+                } else if (latestLabel.includes('polish')) {
+                  setBlendedStage('polished');
+                } else {
+                  setBlendedStage('blended');
+                }
+                // Build stage snapshots from version history for disclosure rows
+                // Keep only the LATEST snapshot per stage label (dedup)
+                const stageMap = new Map<string, string>();
+                for (const v of versions) { // newest-first from API
+                  const lbl = v.label.toLowerCase();
+                  if (lbl.includes('before blend') && v.snapshot?.blendedText && !stageMap.has('Blended')) {
+                    stageMap.set('Blended', v.snapshot.blendedText);
+                  } else if (lbl.includes('polish') && v.snapshot?.blendedText && !stageMap.has('Polished')) {
+                    stageMap.set('Polished', v.snapshot.blendedText);
+                  } else if (lbl.includes('personalize') && v.snapshot?.blendedText && !stageMap.has('Personalized')) {
+                    stageMap.set('Personalized', v.snapshot.blendedText);
+                  }
+                }
+                // Order: Blended first, then Polished, then Personalized
+                // Only include stages BEFORE the current active stage — the active stage is the live view, not a disclosure row
+                const currentStage = latestLabel.includes('personalize') ? 'Personalized'
+                  : latestLabel.includes('polish') ? 'Polished' : 'Blended';
+                const snapshots: { label: string; text: string; collapsed: boolean }[] = [];
+                if (stageMap.has('Blended') && currentStage !== 'Blended') snapshots.push({ label: 'Blended', text: stageMap.get('Blended')!, collapsed: true });
+                if (stageMap.has('Polished') && currentStage !== 'Polished') snapshots.push({ label: 'Polished', text: stageMap.get('Polished')!, collapsed: true });
+                if (stageMap.has('Personalized') && currentStage !== 'Personalized') snapshots.push({ label: 'Personalized', text: stageMap.get('Personalized')!, collapsed: true });
+                if (snapshots.length > 0) setStageSnapshots(snapshots);
+              }
+            } catch {}
+          }
+        } else if (s.length > 0) {
+          // No story param — user clicked "+ New Deliverable"
+          // Show create form instead of auto-selecting existing story
+          setShowCreateForm(true);
+        }
       }
     } catch {
       navigate('/');
@@ -123,6 +195,13 @@ export function FiveChapterShell() {
       setLoading(false);
     }
   }
+
+  // Load personalization profile
+  useEffect(() => {
+    api.get<{ profile: PersonalizeProfile }>('/personalize/profile')
+      .then(({ profile }) => setPersonalizeProfile(profile))
+      .catch(() => {});
+  }, []);
 
   function topPriorityHasMF(): boolean {
     if (!draft) return false;
@@ -199,16 +278,91 @@ export function FiveChapterShell() {
 
   async function polishStory() {
     if (!story) return;
+    // Capture current text as snapshot of whatever stage we're leaving
+    if (story.blendedText) {
+      const label = blendedStage === 'personalized' ? 'Personalized'
+        : blendedStage === 'polished' ? 'Polished'
+        : 'Blended';
+      setStageSnapshots(prev => [...prev, { label, text: story.blendedText, collapsed: true }]);
+    }
     setPolishing(true);
-    setPolishResults(null);
+    setPolishImproved(false);
     try {
-      const result = await api.post<{ passed: boolean; chapters: { chapter: number; title: string; passed: boolean; violations: string[] }[]; message?: string }>('/ai/polish-story', { storyId: story.id });
-      setPolishResults(result);
-    } catch {
-      setPolishResults(null);
+      const result = await api.post<{ story: FiveChapterStory; improved: boolean }>('/ai/polish-story', { storyId: story.id });
+      setStory(result.story);
+      setPolishImproved(result.improved);
+      if (result.improved) setBlendedStage('polished');
+      if (result.story.blendedText) {
+        setShowCompleteDraft(true);
+        setChaptersCollapsed(true);
+        setCombinedCollapsed(true);
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Polish failed');
     } finally {
       setPolishing(false);
     }
+  }
+
+  async function handlePersonalize() {
+    // Re-fetch profile in case interview was completed during this session
+    try {
+      const { profile } = await api.get<{ profile: PersonalizeProfile }>('/personalize/profile');
+      setPersonalizeProfile(profile);
+      if (!profile || profile.observations.length === 0) {
+        document.dispatchEvent(new CustomEvent('maria-toggle', {
+          detail: { open: true, message: "I'd like to set up my personal writing style. Ask me the first question." },
+        }));
+        return;
+      }
+    } catch {
+      document.dispatchEvent(new CustomEvent('maria-toggle', {
+        detail: { open: true, message: "I'd like to set up my personal writing style. Ask me the first question." },
+      }));
+      return;
+    }
+    if (!story?.blendedText) {
+      showToast('Blend into a story first, then personalize.');
+      return;
+    }
+    personalizeStory();
+  }
+
+  async function personalizeStory() {
+    if (!story?.blendedText) return;
+    // Capture current text as snapshot of whatever stage we're leaving
+    const label = blendedStage === 'polished' ? 'Polished'
+      : blendedStage === 'personalized' ? 'Personalized'
+      : 'Blended';
+    setStageSnapshots(prev => [...prev, { label, text: story.blendedText, collapsed: true }]);
+    setPersonalizing(true);
+    setPersonalizeResults(null);
+    try {
+      const resp = await api.post<{ story: FiveChapterStory; passed: boolean; attempts: number }>(
+        '/personalize/apply-all', { storyId: story.id }
+      );
+      setStory(resp.story);
+      setPersonalizeResults({ chapters: [{ chapter: 0, passed: resp.passed, attempts: resp.attempts }] });
+      setBlendedStage('personalized');
+      // Ensure blended view stays visible
+      setShowCompleteDraft(true);
+      setChaptersCollapsed(true);
+      setCombinedCollapsed(true);
+    } catch (err: any) {
+      showToast(err?.message || 'Personalization failed');
+    } finally {
+      setPersonalizing(false);
+    }
+  }
+
+  // Maria guidance — opens Maria with contextual message the first time through each stage
+  function mariaGuide(stage: string, message: string) {
+    const key = `maria-guided-${stage}`;
+    if (localStorage.getItem(key)) return; // Already guided for this stage
+    localStorage.setItem(key, 'true');
+    setTimeout(() => {
+      document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true, message } }));
+    }, 500);
   }
 
   async function generateAllChapters(skipMFCheck = false) {
@@ -249,6 +403,7 @@ export function FiveChapterShell() {
         }, 100);
       }
       setChaptersJustGenerated(true);
+      mariaGuide('chapters-generated', 'All five chapters are drafted. You can edit any of them by tapping the text. When you\'re ready, Combine Chapters puts them together as-is, or Blend into Story rewrites them as one flowing piece.');
     } catch (err: any) {
       showToast(err.message);
     } finally {
@@ -295,11 +450,40 @@ export function FiveChapterShell() {
       });
       setStory(updated);
       setBlendJustGenerated(true);
+      mariaGuide('story-blended', 'Your story is blended into one piece. You can tap the text to edit directly, or type a change instruction at the bottom. When you\'re happy with it, Polish improves the tone, and Personalize adjusts it to sound like you.');
       setChaptersJustGenerated(false);
+      setShowCompleteDraft(true);
+      setChaptersCollapsed(true);
+      setCombinedCollapsed(true);
     } catch (err: any) {
       showToast(err.message);
     } finally {
       setBlending(false);
+    }
+  }
+
+  async function combineChapters() {
+    if (!story) return;
+    // Concatenate chapters in order — no AI, no titles, no dividers, just the copy
+    const combined = story.chapters
+      .sort((a, b) => a.chapterNum - b.chapterNum)
+      .map(ch => ch.content)
+      .join('\n\n');
+
+    // Save to joinedText via API
+    try {
+      const { story: updated } = await api.put<{ story: FiveChapterStory }>(`/stories/${story.id}`, {
+        joinedText: combined,
+        stage: 'joined',
+        version: story.version,
+      });
+      setStory(updated);
+      setShowCompleteDraft(true);
+      setChaptersCollapsed(true);
+      setChaptersJustGenerated(false);
+      setCombineJustCompleted(true);
+    } catch (err: any) {
+      showToast(err?.message || 'Could not combine chapters');
     }
   }
 
@@ -650,7 +834,42 @@ export function FiveChapterShell() {
       {/* Create form — inline, not modal */}
       {(!story || showCreateForm) && (
         <div className="story-input-form">
-          <h2>{stories.length > 0 ? 'New Deliverable' : 'Turn Your Three Tier Into Something'}</h2>
+          <h2>New Deliverable</h2>
+          {draft && allDrafts.length > 0 && (() => {
+            // Unique audiences that have completed Three Tiers
+            const audiences = [...new Map(allDrafts.map(d => [d.audienceId, { id: d.audienceId, name: d.audienceName }])).values()];
+            // Offerings available for the current audience
+            const offeringsForAudience = allDrafts.filter(d => d.audienceId === draft.audienceId);
+            return (
+              <div style={{ marginBottom: 20 }}>
+                <div className="form-group" style={{ marginBottom: 12 }}>
+                  <label>Audience</label>
+                  <select
+                    value={draft.audienceId}
+                    onChange={e => {
+                      const firstDraft = allDrafts.find(d => d.audienceId === e.target.value);
+                      if (firstDraft) navigate(`/five-chapter/${firstDraft.id}`);
+                    }}
+                  >
+                    {audiences.map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group" style={{ marginBottom: 12 }}>
+                  <label>Offering</label>
+                  <select
+                    value={draftId}
+                    onChange={e => navigate(`/five-chapter/${e.target.value}`)}
+                  >
+                    {offeringsForAudience.map(o => (
+                      <option key={o.id} value={o.id}>{o.offeringName}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            );
+          })()}
           <p className="step-description">Pick a format. Maria writes the Five Chapter story to fit.</p>
           <form onSubmit={createStory}>
             <div className="form-group">
@@ -736,50 +955,141 @@ export function FiveChapterShell() {
       {/* All 5 chapters */}
       {story && !showCreateForm && (
         <div className="fcs-chapters">
+          {/* Progressive toolbar — buttons appear based on story stage */}
           <div className="fcs-chapters-header">
+            {/* Stage 1: Generate / Regenerate */}
             <button
               className="btn btn-primary btn-sm"
               onClick={() => {
                 if (allChaptersGenerated) { setConfirmRegenerateAll(true); return; }
                 generateAllChapters();
               }}
-              disabled={generating || polishing}
+              disabled={generating || blending || polishing || personalizing}
             >
               {generating ? <><Spinner size={12} /> Generating...</> : allChaptersGenerated ? 'Regenerate All' : 'Generate All Chapters'}
             </button>
+
+            {/* Combine Chapters — instant, no AI. Available once chapters exist, hidden once blended */}
+            {allChaptersGenerated && !story.blendedText && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={combineChapters}
+                disabled={generating || blending || polishing || personalizing}
+              >
+                {story.joinedText
+                  ? <>View Combined <InfoTooltip text="The five chapters joined together as-is. Nothing rewritten." /></>
+                  : <>Combine Chapters <InfoTooltip text="Joins your five chapters into one document so you can read them together. Nothing is rewritten." /></>
+                }
+              </button>
+            )}
+
+            {/* Blend into Story — AI rewrite with transitions. Available once chapters exist */}
             {allChaptersGenerated && (
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={polishStory}
-                disabled={generating || polishing}
+                onClick={() => { if (story.blendedText) { setShowCompleteDraft(true); setChaptersCollapsed(true); } else { blendStory(); } }}
+                disabled={generating || blending || polishing || personalizing}
               >
-                {polishing ? <><Spinner size={12} /> Polishing...</> : <>Polish <InfoTooltip text="Checks your story against Table for Two guidelines. Takes a moment." /></>}
+                {blending
+                  ? <><Spinner size={12} /> Blending...</>
+                  : story.blendedText
+                    ? <>View Blended Story <InfoTooltip text="Shows the blended version of your story — chapters rewritten as one flowing piece." /></>
+                    : <>Blend into Story <InfoTooltip text="Rewrites your chapters into one flowing piece with transitions between ideas. This is your draft to edit. Takes a moment." /></>
+                }
+              </button>
+            )}
+
+            {/* Polish — available after blending */}
+            {story.blendedText && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={polishStory}
+                disabled={generating || blending || polishing || personalizing}
+              >
+                {polishing ? <><Spinner size={12} /> Polishing...</> : <>Polish <InfoTooltip text="Takes the time to improve flow and tone. A little longer, but usually results in a better deliverable." /></>}
+              </button>
+            )}
+
+            {/* Stage 4: Personalize — available after blending */}
+            {story.blendedText && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handlePersonalize}
+                disabled={generating || blending || polishing || personalizing}
+              >
+                {personalizing
+                  ? <><Spinner size={12} /> Personalizing...</>
+                  : <>Personalize <InfoTooltip text="Revises the text, including applying your personal style." /></>
+                }
               </button>
             )}
           </div>
-          {polishResults && (
-            <div style={{ padding: '12px 16px', marginBottom: 16, background: polishResults.passed ? 'var(--success-light, #e8f5e9)' : 'var(--warning-light, #fff8e1)', borderRadius: 'var(--radius)', fontSize: 14, lineHeight: 1.6 }}>
-              {polishResults.passed ? (
-                <span>All chapters sound natural and conversational.</span>
-              ) : (
-                <>
-                  <strong style={{ display: 'block', marginBottom: 8 }}>Table for Two found a few things to look at:</strong>
-                  {polishResults.chapters.filter(c => !c.passed).map(c => (
-                    <div key={c.chapter} style={{ marginBottom: 8 }}>
-                      <strong>Chapter {c.chapter}: {c.title}</strong>
-                      <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
-                        {c.violations.map((v, i) => <li key={i} style={{ marginBottom: 2 }}>{v}</li>)}
-                      </ul>
-                    </div>
-                  ))}
-                  <p style={{ marginTop: 8, color: 'var(--text-secondary)', fontSize: 13 }}>Use "Ask Maria to edit" below each chapter to address these.</p>
-                </>
-              )}
-              <button className="btn btn-ghost btn-sm" onClick={() => setPolishResults(null)} style={{ marginTop: 4 }}>Dismiss</button>
+
+          {/* Result banners — brief, dismissable */}
+          {polishImproved && (
+            <div style={{ padding: '10px 16px', marginBottom: 12, background: 'var(--success-light, #e8f5e9)', borderRadius: 'var(--radius)', fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Polished. Use the version history to compare before and after.</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setPolishImproved(false)} style={{ flexShrink: 0 }}>&times;</button>
             </div>
           )}
 
-          {CHAPTER_CRITERIA.map((ch, idx) => {
+          {personalizeResults && (
+            <div style={{ padding: '10px 16px', marginBottom: 12, background: 'var(--info-light, #e3f2fd)', borderRadius: 'var(--radius)', fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Personalized. Use the version history to compare before and after.</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setPersonalizeResults(null)} style={{ flexShrink: 0 }}>&times;</button>
+            </div>
+          )}
+
+          {/* Chapter disclosure — one thin row when collapsed, full cards when expanded */}
+          {chaptersCollapsed && allChaptersGenerated && (
+            <button
+              onClick={() => setChaptersCollapsed(false)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '10px 16px',
+                marginBottom: 16,
+                background: 'var(--bg-secondary, #f8f8fa)',
+                borderRadius: 'var(--radius-sm, 6px)',
+                border: '1px solid var(--border-light, #e5e5ea)',
+                cursor: 'pointer',
+                fontSize: 14,
+                color: 'var(--text-primary)',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)', transition: 'transform 0.15s' }}>▶</span>
+              <span style={{ fontWeight: 500 }}>Chapters</span>
+            </button>
+          )}
+
+          {!chaptersCollapsed && (story.joinedText || story.blendedText) && allChaptersGenerated && (
+            <button
+              onClick={() => setChaptersCollapsed(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '10px 16px',
+                marginBottom: 12,
+                background: 'var(--bg-secondary, #f8f8fa)',
+                borderRadius: 'var(--radius-sm, 6px)',
+                border: '1px solid var(--border-light, #e5e5ea)',
+                cursor: 'pointer',
+                fontSize: 14,
+                color: 'var(--text-primary)',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>▼</span>
+              <span style={{ fontWeight: 500 }}>Chapters</span>
+            </button>
+          )}
+
+          {!chaptersCollapsed && CHAPTER_CRITERIA.map((ch, idx) => {
             const chapterContent = story.chapters.find(c => c.chapterNum === ch.num);
             const isGenerating = generatingChapter === ch.num;
             const isEditing = editingChapter === ch.num;
@@ -854,74 +1164,83 @@ export function FiveChapterShell() {
             );
           })}
 
-          {/* Post-generation orientation: chapters */}
-          {chaptersJustGenerated && allChaptersGenerated && !story.blendedText && (
-            <div style={{
-              padding: '14px 18px',
-              marginBottom: 12,
-              background: 'var(--bg-secondary, #f8f8fa)',
-              borderRadius: 'var(--radius-sm, 6px)',
-              border: '1px solid var(--border-light, #e5e5ea)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              gap: 12,
-            }}>
-              <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
-                All five chapters are drafted. Click any to edit. <strong>Create Complete Draft</strong> blends them into one piece with transitions.
-              </p>
-              <button onClick={() => setChaptersJustGenerated(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, padding: '0 4px', flexShrink: 0 }}>&times;</button>
+          {/* Combined text — full view when no blend yet, collapsible disclosure after blend */}
+          {story.joinedText && story.blendedText && (
+            <button
+              onClick={() => setCombinedCollapsed(!combinedCollapsed)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '10px 16px',
+                marginBottom: 12,
+                background: 'var(--bg-secondary, #f8f8fa)',
+                borderRadius: 'var(--radius-sm, 6px)',
+                border: '1px solid var(--border-light, #e5e5ea)',
+                cursor: 'pointer',
+                fontSize: 14,
+                color: 'var(--text-primary)',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{combinedCollapsed ? '▶' : '▼'}</span>
+              <span style={{ fontWeight: 500 }}>Combined</span>
+            </button>
+          )}
+
+          {story.joinedText && !combinedCollapsed && (
+            <div className="fcs-blended" style={{ marginBottom: 16 }}>
+              {!story.blendedText && (
+                <div className="fcs-blended-header">
+                  <h3>Combined Chapters</h3>
+                  <button className="copy-btn" onClick={() => copyToClipboard(story.joinedText)}>Copy</button>
+                </div>
+              )}
+              <div
+                className="fcs-blended-content"
+                style={{ cursor: 'default' }}
+                dangerouslySetInnerHTML={{ __html: renderLightMarkdown(story.joinedText) }}
+              />
             </div>
           )}
 
-          {/* Blend section — only show complete draft when user explicitly requests it */}
-          {allChaptersGenerated && !generating && (
-            <div className="fcs-blend-section">
-              {!showCompleteDraft ? (
-                <button
-                  className="btn btn-primary"
-                  onClick={() => { if (story.blendedText) { setShowCompleteDraft(true); } else { blendStory(); setShowCompleteDraft(true); } }}
-                  disabled={blending}
-                  style={{ width: '100%' }}
-                  title="Combine all chapters into one polished narrative with transitions"
-                >
-                  {blending ? <><Spinner size={14} /> Creating complete draft...</> : story.blendedText ? 'View Complete Draft' : 'Create Complete Draft'}
-                </button>
-              ) : !story.blendedText ? (
-                <button
-                  className="btn btn-primary"
-                  onClick={blendStory}
-                  disabled={blending}
-                  style={{ width: '100%' }}
-                >
-                  {blending ? <><Spinner size={14} /> Creating complete draft...</> : 'Create Complete Draft'}
-                </button>
-              ) : (
-                <div className="fcs-blended">
-                  <div className="fcs-blended-header">
-                    <h3>Complete Draft</h3>
-                    <BlendedVersionNav storyId={story.id} onRestore={loadData} />
-                    <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
-                    <button className="copy-btn" onClick={exportStory} title="Open printable version">Export</button>
-                    <button className="copy-btn" onClick={shareStory} title="Create shareable read-only link">Share</button>
-                  </div>
-                  {blendJustGenerated && (
-                    <div style={{
-                      padding: '12px 16px',
-                      marginBottom: 8,
-                      background: 'var(--bg-secondary, #f8f8fa)',
-                      borderRadius: 'var(--radius-sm, 6px)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      gap: 12,
-                    }}>
-                      <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
-                        Blended into one {mediumLabel?.toLowerCase() || 'piece'}. Click to edit directly, or use the box below to tell Maria what to change.
-                      </p>
-                      <button onClick={() => setBlendJustGenerated(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, padding: '0 4px', flexShrink: 0 }}>&times;</button>
-                    </div>
-                  )}
+          {/* Stage snapshot disclosure rows — one for each user action (Blended, Polished, Personalized) */}
+          {stageSnapshots.map((snap, idx) => (
+            <div key={`${snap.label}-${idx}`}>
+              <button
+                onClick={() => setStageSnapshots(prev => prev.map((s, i) => i === idx ? { ...s, collapsed: !s.collapsed } : s))}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                  padding: '10px 16px', marginBottom: snap.collapsed ? 12 : 0,
+                  background: 'var(--bg-secondary, #f8f8fa)', borderRadius: 'var(--radius-sm, 6px)',
+                  border: '1px solid var(--border-light, #e5e5ea)', cursor: 'pointer',
+                  fontSize: 14, color: 'var(--text-primary)', textAlign: 'left',
+                }}
+              >
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{snap.collapsed ? '▶' : '▼'}</span>
+                <span style={{ fontWeight: 500 }}>{snap.label}</span>
+              </button>
+              {!snap.collapsed && (
+                <div className="fcs-blended" style={{ marginBottom: 16, marginTop: 4 }}>
+                  <div className="fcs-blended-content" style={{ cursor: 'default' }}
+                    dangerouslySetInnerHTML={{ __html: renderLightMarkdown(snap.text) }}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Active story text */}
+          {showCompleteDraft && story.blendedText && (
+            <div className="fcs-blended">
+              <div className="fcs-blended-header">
+                <h3>{blendedStage === 'personalized' ? 'Personalized Story' : blendedStage === 'polished' ? 'Polished Story' : 'Blended Story'}</h3>
+                <BlendedVersionNav storyId={story.id} storyVersion={story.version} onRestore={loadData} />
+                <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
+                <button className="copy-btn" onClick={exportStory} title="Open printable version">Export</button>
+                <button className="copy-btn" onClick={shareStory} title="Create shareable read-only link">Share</button>
+              </div>
                   {shareUrl && (
                     <div style={{ padding: '6px 12px', fontSize: 14, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span>Link copied!</span>
@@ -954,7 +1273,7 @@ export function FiveChapterShell() {
                     <input
                       value={copyEditInput}
                       onChange={e => setCopyEditInput(e.target.value)}
-                      placeholder="Ask Maria to edit... e.g. 'Make it shorter' or 'More emphasis on security'"
+                      placeholder="Tell Maria what to change — e.g. 'Make it shorter' or 'More emphasis on security'"
                       onKeyDown={e => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && copyEdit()}
                     />
                     <button className="btn btn-secondary btn-sm" onClick={copyEdit} disabled={copyEditing || !copyEditInput.trim()}>
@@ -962,8 +1281,6 @@ export function FiveChapterShell() {
                     </button>
                   </div>
                 </div>
-              )}
-            </div>
           )}
         </div>
       )}

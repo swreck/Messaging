@@ -52,27 +52,16 @@ export function FiveChaptersPage() {
   function getMediumLabel(medium: string): string {
     const standard = MEDIUM_OPTIONS.find(m => m.id === medium);
     if (standard) return standard.label;
-    // Custom deliverable — truncate at first em-dash, period, or 35 chars
     const short = medium.split(/\s*[—.]\s*/)[0].trim();
     return short.length > 35 ? short.substring(0, 32) + '...' : short;
   }
 
   function getStageLabel(stage: string): string {
-    if (stage === 'blended') return 'Complete Draft';
-    if (stage === 'joined') return 'Combined Draft';
-    return 'Draft Chapters';
-  }
-
-  function getStageDescription(stage: string): string {
-    if (stage === 'blended') return 'Automatically revised with transitions and smooth language for a strong first draft of your message.';
-    if (stage === 'joined') return 'Chapters put together without further automated edits, so you can see how they hold together. You can edit here too.';
-    return 'Each of the 5 chapters created individually, so you can review and edit before combining.';
-  }
-
-  function getStageIcon(stage: string): string {
-    if (stage === 'blended') return '\u2713';
-    if (stage === 'joined') return '\u25D0';
-    return '\u25CB';
+    if (stage === 'personalized') return 'Personalized';
+    if (stage === 'polished') return 'Polished';
+    if (stage === 'blended') return 'Blended';
+    if (stage === 'joined') return 'Combined';
+    return 'Chapters';
   }
 
   function formatUpdatedAt(dateStr: string): string {
@@ -89,24 +78,38 @@ export function FiveChaptersPage() {
 
   if (loading) return <div className="loading-screen"><Spinner size={32} /></div>;
 
-  // Flatten hierarchy into offering → audience groups
-  const groups: {
-    offeringName: string;
+  // Reorganize: audience → offering pairs with ready Three Tiers
+  // An audience may appear under multiple offerings
+  interface AudienceGroup {
     audienceName: string;
-    draftId: string;
-    isComplete: boolean;
-    currentStep: number;
-    status: string;
-    deliverables: { id: string; medium: string; customName: string; stage: string; updatedAt: string }[];
-  }[] = [];
+    audienceId: string;
+    offerings: {
+      offeringName: string;
+      offeringId: string;
+      draftId: string;
+      isReady: boolean;
+      currentStep: number;
+      status: string;
+      deliverables: { id: string; medium: string; customName: string; stage: string; updatedAt: string }[];
+    }[];
+  }
+
+  const audienceMap = new Map<string, AudienceGroup>();
 
   for (const offering of hierarchy) {
     for (const aud of offering.audiences) {
-      groups.push({
+      if (!audienceMap.has(aud.id)) {
+        audienceMap.set(aud.id, {
+          audienceName: aud.name,
+          audienceId: aud.id,
+          offerings: [],
+        });
+      }
+      audienceMap.get(aud.id)!.offerings.push({
         offeringName: offering.name,
-        audienceName: aud.name,
+        offeringId: offering.id,
         draftId: aud.threeTier.id,
-        isComplete: aud.threeTier.status === 'complete' || aud.threeTier.currentStep === 5,
+        isReady: aud.threeTier.status === 'complete' || aud.threeTier.currentStep === 5,
         currentStep: aud.threeTier.currentStep,
         status: aud.threeTier.status,
         deliverables: aud.deliverables,
@@ -114,92 +117,104 @@ export function FiveChaptersPage() {
     }
   }
 
-  const hasAnyContent = groups.length > 0;
+  const audienceGroups = Array.from(audienceMap.values());
+  const hasAnyContent = audienceGroups.length > 0;
 
   return (
     <div className="page-container">
       <header className="page-header">
         <div>
           <h1>5 Chapter Stories</h1>
-          <p className="page-description">Stories built from your Three Tiers</p>
+          <p className="page-description">Pick an audience and offering, then create deliverables.</p>
         </div>
       </header>
 
       {!hasAnyContent && (
         <div className="empty-state empty-state-enhanced">
           <div className="empty-icon">📖</div>
-          <h3>Stories come from your Three Tier</h3>
-          <p>Once you've built a Three Tier message, Maria can turn it into an email, a pitch, a blog post — whatever you need. Start there first.</p>
+          <h3>No audience-offering pairs yet</h3>
+          <p>Create an audience and an offering, then build a Three Tier to connect them. Once a Three Tier is ready, you can generate stories here.</p>
           <button className="btn btn-primary" onClick={() => navigate('/three-tiers')} style={{ marginTop: 16 }}>Go to Three Tiers</button>
         </div>
       )}
 
-      {groups.map(group => (
-        <section key={`${group.offeringName}-${group.audienceName}`} className="fcs-group">
+      {audienceGroups.map(group => (
+        <section key={group.audienceId} className="fcs-group" style={{ marginBottom: 32 }}>
           <h2 className="fcs-group-audience">{group.audienceName}</h2>
-          <h3 className="fcs-group-offering">{group.offeringName}</h3>
 
-          {!group.isComplete ? (
-            <div className="fcs-hint" style={{ cursor: 'pointer' }} onClick={() => navigate(`/three-tier/${group.draftId}`)}>
-              Three Tier {group.status === 'in_progress' ? `in progress (Step ${group.currentStep})` : 'not yet started'} — <span style={{ color: 'var(--accent)', textDecoration: 'underline' }}>finish it</span> to generate stories.
-            </div>
-          ) : (
-            <div className="tt-card-grid">
-              {(() => {
-                const mediumCounts = new Map<string, number>();
-                const mediumTotals = new Map<string, number>();
-                for (const d of group.deliverables) {
-                  mediumTotals.set(d.medium, (mediumTotals.get(d.medium) || 0) + 1);
-                }
-                return group.deliverables.map(del => {
-                  const count = (mediumCounts.get(del.medium) || 0) + 1;
-                  mediumCounts.set(del.medium, count);
-                  const total = mediumTotals.get(del.medium) || 1;
-                  const fallbackName = total > 1
-                    ? `${getMediumLabel(del.medium)} #${count}`
-                    : getMediumLabel(del.medium);
-                  const displayName = del.customName || fallbackName;
-                  return (
-                    <div
-                      key={del.id}
-                      className="tt-card"
-                      onClick={() => navigate(`/five-chapter/${group.draftId}?story=${del.id}`)}
-                    >
-                      <div className="tt-card-name">{displayName}</div>
-                      <div className="tt-card-progress">
-                        <span className="fcs-stage-icon">{getStageIcon(del.stage)}</span>
-                        <span className="tt-card-status">{getStageLabel(del.stage)}</span>
-                        <InfoTooltip text={getStageDescription(del.stage)} />
-                      </div>
-                      <div className="tt-card-updated">{formatUpdatedAt(del.updatedAt)}</div>
-                      <div className="tt-card-action" style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/five-chapter/${group.draftId}?story=${del.id}`)}>
-                          {del.stage === 'blended' ? 'Open' : 'Continue'}
-                        </button>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ color: 'var(--danger)' }}
-                          onClick={(e) => { e.stopPropagation(); setDeleteStoryId(del.id); }}
+          {group.offerings.map(off => (
+            <div key={off.draftId} style={{ marginBottom: 20, marginLeft: 4 }}>
+              <h3 className="fcs-group-offering" style={{ marginBottom: 8 }}>{off.offeringName}</h3>
+
+              {!off.isReady ? (
+                <div className="fcs-hint" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <span>Three Tier {off.status === 'in_progress' ? `in progress (Step ${off.currentStep})` : 'needs to be built first'}.</span>
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }} onClick={() => navigate(`/three-tier/${off.draftId}`)}>
+                    {off.status === 'in_progress' ? 'Continue building' : 'Start building'}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }} onClick={() => document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true, message: `I want to build a Three Tier for ${off.offeringName} targeting ${group.audienceName}. Can you help?` } }))}>
+                    Ask Maria to help
+                  </button>
+                </div>
+              ) : (
+                <div className="tt-card-grid">
+                  {(() => {
+                    const mediumCounts = new Map<string, number>();
+                    const mediumTotals = new Map<string, number>();
+                    for (const d of off.deliverables) {
+                      mediumTotals.set(d.medium, (mediumTotals.get(d.medium) || 0) + 1);
+                    }
+                    return off.deliverables.map(del => {
+                      const count = (mediumCounts.get(del.medium) || 0) + 1;
+                      mediumCounts.set(del.medium, count);
+                      const total = mediumTotals.get(del.medium) || 1;
+                      const fallbackName = total > 1
+                        ? `${getMediumLabel(del.medium)} #${count}`
+                        : getMediumLabel(del.medium);
+                      const displayName = del.customName || fallbackName;
+                      return (
+                        <div
+                          key={del.id}
+                          className="tt-card"
+                          onClick={() => navigate(`/five-chapter/${off.draftId}?story=${del.id}`)}
                         >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
+                          <div className="tt-card-name">{displayName}</div>
+                          <div className="tt-card-progress">
+                            <span className="tt-card-status">{getStageLabel(del.stage)}</span>
+                            <InfoTooltip text={del.stage === 'personalized' ? 'Story personalized with your writing style.' : del.stage === 'polished' ? 'Story polished for tone and flow.' : del.stage === 'blended' ? 'Chapters blended into one flowing piece.' : del.stage === 'joined' ? 'Chapters combined but not yet blended.' : 'Individual chapters generated.'} />
+                          </div>
+                          <div className="tt-card-updated">{formatUpdatedAt(del.updatedAt)}</div>
+                          <div className="tt-card-action" style={{ display: 'flex', gap: 8 }}>
+                            <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/five-chapter/${off.draftId}?story=${del.id}`)}>
+                              {del.stage === 'blended' ? 'Open' : 'Continue'}
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ color: 'var(--danger)' }}
+                              onClick={(e) => { e.stopPropagation(); setDeleteStoryId(del.id); }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
 
-              <div
-                className="tt-card tt-card-new"
-                onClick={() => navigate(`/five-chapter/${group.draftId}`)}
-              >
-                <span className="tt-card-new-icon">+</span>
-                <span className="tt-card-new-label">New Deliverable</span>
-              </div>
+                  <div
+                    className="tt-card tt-card-new"
+                    onClick={() => navigate(`/five-chapter/${off.draftId}`)}
+                  >
+                    <span className="tt-card-new-icon">+</span>
+                    <span className="tt-card-new-label">New Deliverable</span>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </section>
       ))}
+
       <ConfirmModal
         open={!!deleteStoryId}
         onClose={() => setDeleteStoryId(null)}
