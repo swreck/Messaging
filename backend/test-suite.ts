@@ -86,9 +86,9 @@ async function run() {
   assert('Bulk create audiences', Array.isArray(bulkAud.audiences) && bulkAud.audiences.length === 2);
 
   // Add priorities
-  const pri1 = await req('POST', `/audiences/${AUDIENCE_ID}/priorities`, { text: 'Reduce downtime', rank: 1, motivatingFactor: 'Board pressure' });
+  const pri1 = await req('POST', `/audiences/${AUDIENCE_ID}/priorities`, { text: 'Reduce downtime', rank: 1, driver: 'Board pressure' });
   assert('Add priority', !!pri1.priority?.id);
-  const pri2 = await req('POST', `/audiences/${AUDIENCE_ID}/priorities`, { text: 'Cut costs by 20%', rank: 2, motivatingFactor: 'Budget constraints' });
+  const pri2 = await req('POST', `/audiences/${AUDIENCE_ID}/priorities`, { text: 'Cut costs by 20%', rank: 2, driver: 'Budget constraints' });
   assert('Add second priority', !!pri2.priority?.id);
 
   // ─── Drafts ───────────────────────────────────────

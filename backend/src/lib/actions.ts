@@ -240,7 +240,7 @@ export async function dispatchActions(
               if (idx >= 0 && idx < audience.priorities.length) {
                 const updateData: Record<string, any> = {};
                 if (edit.text !== undefined) updateData.text = edit.text;
-                if (edit.motivatingFactor !== undefined) updateData.motivatingFactor = edit.motivatingFactor;
+                if (edit.driver !== undefined) updateData.driver = edit.driver;
                 await prisma.priority.update({
                   where: { id: audience.priorities[idx].id },
                   data: updateData,
@@ -644,11 +644,11 @@ ${story.emphasis ? `EMPHASIS: ${story.emphasis}` : ''}
 
 THREE TIER MESSAGE:
 Tier 1: "${story.draft.tier1Statement?.text || ''}"
-${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}", ${t2.priority?.motivatingFactor ? `Driver: "${t2.priority.motivatingFactor}"` : ''})
+${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}", ${t2.priority?.driver ? `Driver: "${t2.priority.driver}"` : ''})
   Proof: ${t2.tier3Bullets.map((t3: any) => t3.text).join(', ')}`).join('\n')}
 
 AUDIENCE PRIORITIES:
-${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — ${p.motivatingFactor ? `Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
+${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — ${p.driver ? `Driver: "${p.driver}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
 ${prevChapters.length > 0 ? formatPrevChapterContext(prevChapters) : ''}
 
@@ -800,11 +800,11 @@ ${story.emphasis ? `EMPHASIS: ${story.emphasis}` : ''}
 
 THREE TIER MESSAGE:
 Tier 1: "${story.draft.tier1Statement?.text || ''}"
-${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}", ${t2.priority?.motivatingFactor ? `Driver: "${t2.priority.motivatingFactor}"` : ''})
+${story.draft.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}", ${t2.priority?.driver ? `Driver: "${t2.priority.driver}"` : ''})
   Proof: ${t2.tier3Bullets.map((t3: any) => t3.text).join(', ')}`).join('\n')}
 
 AUDIENCE PRIORITIES:
-${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — ${p.motivatingFactor ? `Driver: "${p.motivatingFactor}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
+${story.draft.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}" — ${p.driver ? `Driver: "${p.driver}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
 
 ${prevChapters.length > 0 ? formatPrevChapterContext(prevChapters) : ''}
 
@@ -1204,7 +1204,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
                     text: p.text,
                     rank: p.rank,
                     isSpoken: p.isSpoken,
-                    motivatingFactor: p.motivatingFactor,
+                    driver: p.driver,
                     whatAudienceThinks: p.whatAudienceThinks,
                     sortOrder: p.sortOrder,
                   })),
@@ -1414,7 +1414,7 @@ export async function readPageContent(
         if (a.description) lines.push(`  Description: ${a.description}`);
         lines.push(`  Priorities (${a.priorities.length}):`);
         for (const p of a.priorities) {
-          lines.push(`    ${p.sortOrder + 1}. "${p.text}" (rank ${p.rank})${p.motivatingFactor ? ` — Why: "${p.motivatingFactor}"` : ''}`);
+          lines.push(`    ${p.sortOrder + 1}. "${p.text}" (rank ${p.rank})${p.driver ? ` — Driver: "${p.driver}"` : ''}`);
         }
       }
     }
@@ -1430,7 +1430,7 @@ export async function readPageContent(
         if (audience.description) lines.push(`Description: ${audience.description}`);
         lines.push(`Priorities (${audience.priorities.length}):`);
         for (const p of audience.priorities) {
-          lines.push(`  ${p.sortOrder + 1}. "${p.text}" (rank ${p.rank})${p.motivatingFactor ? ` — Why: "${p.motivatingFactor}"` : ''}`);
+          lines.push(`  ${p.sortOrder + 1}. "${p.text}" (rank ${p.rank})${p.driver ? ` — Driver: "${p.driver}"` : ''}`);
         }
       }
     }
@@ -1490,7 +1490,7 @@ export async function readPageContent(
         }
         lines.push(`\nAudience priorities:`);
         for (const p of draft.audience.priorities) {
-          lines.push(`  ${p.sortOrder + 1}. "${p.text}"${p.motivatingFactor ? ` — Why: "${p.motivatingFactor}"` : ''}`);
+          lines.push(`  ${p.sortOrder + 1}. "${p.text}"${p.driver ? ` — Driver: "${p.driver}"` : ''}`);
         }
       }
     }
@@ -1553,7 +1553,7 @@ export function buildActionList(context: ActionContext): string {
     actions.push('- edit_audience: Update the current audience name or description. Params: { name?: string, description?: string }');
   }
   actions.push('- add_priorities: Add priorities to an audience. Params: { texts: string[], audienceName?: string } — audienceName targets a specific audience by name (partial match OK). Required if not on an audience page.');
-  actions.push('- edit_priorities: Update priority text or motivatingFactor. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }], audienceName?: string } — position is 1-based.');
+  actions.push('- edit_priorities: Update priority text or driver. Params: { edits: [{ position: number, text?: string, driver?: string }], audienceName?: string } — position is 1-based. "driver" is the persona-specific reason this priority matters to this audience.');
   actions.push('- delete_priorities: Remove priorities by position. Params: { positions: number[], audienceName?: string } — 1-based positions.');
   actions.push('- reorder_priorities: Reorder priorities. Params: { order: number[], audienceName?: string } — array of current positions in desired new order.');
 

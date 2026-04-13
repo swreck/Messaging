@@ -103,7 +103,7 @@ RESPOND WITH JSON:
 export interface ThreeTierInput {
   tier1Text: string;
   tier2Statements: { text: string; categoryLabel: string; priorityText?: string; tier3Bullets: string[] }[];
-  topPriority: { text: string; rank: number; motivatingFactor?: string };
+  topPriority: { text: string; rank: number; driver?: string };
   allPriorities: { text: string; rank: number }[];
   isRefined: boolean;
 }
@@ -122,8 +122,8 @@ export async function checkThreeTier(input: ThreeTierInput): Promise<ThreeTierCh
   // Build the input description
   const lines: string[] = [];
   lines.push(`AUDIENCE'S TOP PRIORITY (Rank 1): "${input.topPriority.text}"`);
-  if (input.topPriority.motivatingFactor) {
-    lines.push(`  Motivating factor: "${input.topPriority.motivatingFactor}"`);
+  if (input.topPriority.driver) {
+    lines.push(`  Driver: "${input.topPriority.driver}"`);
   }
   lines.push('');
   lines.push('ALL AUDIENCE PRIORITIES (ranked):');

@@ -103,7 +103,7 @@ async function run() {
   const priTexts = ['Reduce downtime', 'Lower TCO', 'Faster deployment', 'Better compliance', 'Team productivity'];
   for (let i = 0; i < priTexts.length; i++) {
     const p = await req('POST', `/audiences/${AUDIENCE_1_ID}/priorities`, {
-      text: priTexts[i], rank: i + 1, motivatingFactor: `Reason for ${priTexts[i]}`,
+      text: priTexts[i], rank: i + 1, driver: `Reason for ${priTexts[i]}`,
     });
     assert(`Add priority ${i + 1}: "${priTexts[i]}"`, !!p.priority?.id);
     PRI_IDS.push(p.priority?.id);
@@ -145,7 +145,7 @@ async function run() {
   assert('Audience has priorities array', Array.isArray(testAud?.priorities));
   assert('Audience 1 has 5 priorities', testAud?.priorities?.length === 5, `got ${testAud?.priorities?.length}`);
   assert('Priorities have sortOrder field', testAud?.priorities?.every((p: any) => typeof p.sortOrder === 'number'));
-  assert('Priorities have motivatingFactor', testAud?.priorities?.every((p: any) => typeof p.motivatingFactor === 'string'));
+  assert('Priorities have driver', testAud?.priorities?.every((p: any) => typeof p.driver === 'string'));
   assert('Priorities ordered by sortOrder', (() => {
     const orders = testAud?.priorities?.map((p: any) => p.sortOrder);
     return orders?.every((v: number, i: number) => i === 0 || v >= orders[i - 1]);
@@ -199,8 +199,8 @@ async function run() {
   const NEW_PRI_ID = newPri.priority?.id;
 
   // Update motivating factor
-  const mfUpdate = await req('PUT', `/audiences/${AUDIENCE_1_ID}/priorities/${NEW_PRI_ID}`, { motivatingFactor: 'Regulatory requirement' });
-  assert('Update motivating factor', mfUpdate.priority?.motivatingFactor === 'Regulatory requirement');
+  const mfUpdate = await req('PUT', `/audiences/${AUDIENCE_1_ID}/priorities/${NEW_PRI_ID}`, { driver: 'Regulatory requirement' });
+  assert('Update motivating factor', mfUpdate.priority?.driver === 'Regulatory requirement');
 
   // Delete the new priority
   const delPri = await req('DELETE', `/audiences/${AUDIENCE_1_ID}/priorities/${NEW_PRI_ID}`);
@@ -472,7 +472,7 @@ async function run() {
     const orders = draftDetail.draft?.audience?.priorities?.map((p: any) => p.sortOrder);
     return orders?.every((v: number, i: number) => i === 0 || v >= orders[i - 1]);
   })());
-  assert('Priorities have motivatingFactor in draft detail', draftDetail.draft?.audience?.priorities?.every((p: any) => typeof p.motivatingFactor === 'string'));
+  assert('Priorities have driver in draft detail', draftDetail.draft?.audience?.priorities?.every((p: any) => typeof p.driver === 'string'));
 
   // ═══════════════════════════════════════════════════
   // SECTION 12: Edge cases & error handling

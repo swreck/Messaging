@@ -116,14 +116,14 @@ async function main() {
     }
   });
 
-  // ─── MF Derive Flow ──────────────────────────────────
-  await test('MF: Derive motivation for top priority', async () => {
+  // ─── Driver Derive Flow ──────────────────────────────────
+  await test('Driver: Derive for top priority', async () => {
     const result = await req('POST', '/ai/derive-motivation', {
       priorityId: PRI_TOP_ID,
       audienceId: AUDIENCE_ID,
       offeringId: OFFERING_ID,
     });
-    assert(!!result.motivatingFactor, 'Got motivating factor', result.motivatingFactor?.substring(0, 60));
+    assert(!!result.driver, 'Got driver', result.driver?.substring(0, 60));
   });
 
   // ─── Story CRUD ───────────────────────────────────────

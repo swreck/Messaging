@@ -67,7 +67,7 @@ interface Scenario {
   offering: { name: string; description: string };
   elements: string[];
   audience: { name: string; description: string };
-  priorities: { text: string; rank: number; motivatingFactor: string }[];
+  priorities: { text: string; rank: number; driver: string }[];
 }
 
 const SCENARIOS: Scenario[] = [
@@ -88,10 +88,10 @@ const SCENARIOS: Scenario[] = [
     ],
     audience: { name: 'Hospital Administrators', description: 'Budget and operations decision-makers at mid-size hospitals' },
     priorities: [
-      { text: 'Protecting the financial health of our hospital', rank: 1, motivatingFactor: 'Every dollar saved goes directly to patient care' },
-      { text: 'Better outcomes for our cancer patients', rank: 2, motivatingFactor: 'Treatment delays from slow pathology cost lives' },
-      { text: 'Reducing our exposure to malpractice risk', rank: 3, motivatingFactor: 'One missed diagnosis can cost millions and end careers' },
-      { text: 'Keeping our best pathologists engaged and productive', rank: 4, motivatingFactor: 'Recruiting a replacement takes 18 months minimum' },
+      { text: 'Protecting the financial health of our hospital', rank: 1, driver: 'Every dollar saved goes directly to patient care' },
+      { text: 'Better outcomes for our cancer patients', rank: 2, driver: 'Treatment delays from slow pathology cost lives' },
+      { text: 'Reducing our exposure to malpractice risk', rank: 3, driver: 'One missed diagnosis can cost millions and end careers' },
+      { text: 'Keeping our best pathologists engaged and productive', rank: 4, driver: 'Recruiting a replacement takes 18 months minimum' },
     ],
   },
   {
@@ -111,10 +111,10 @@ const SCENARIOS: Scenario[] = [
     ],
     audience: { name: 'General Contractors (VP-level)', description: 'Construction executives managing multiple concurrent projects' },
     priorities: [
-      { text: 'Keeping every project on schedule and on budget', rank: 1, motivatingFactor: 'One overrun can sink quarterly numbers' },
-      { text: 'Seeing problems across all our sites before they become crises', rank: 2, motivatingFactor: 'We manage 30 projects — surprises are unacceptable' },
-      { text: 'Protecting our reputation with building owners', rank: 3, motivatingFactor: 'Repeat business is 60% of our revenue' },
-      { text: 'Retaining our best project managers', rank: 4, motivatingFactor: 'Burnout from firefighting drives our best people to competitors' },
+      { text: 'Keeping every project on schedule and on budget', rank: 1, driver: 'One overrun can sink quarterly numbers' },
+      { text: 'Seeing problems across all our sites before they become crises', rank: 2, driver: 'We manage 30 projects — surprises are unacceptable' },
+      { text: 'Protecting our reputation with building owners', rank: 3, driver: 'Repeat business is 60% of our revenue' },
+      { text: 'Retaining our best project managers', rank: 4, driver: 'Burnout from firefighting drives our best people to competitors' },
     ],
   },
   {
@@ -134,10 +134,10 @@ const SCENARIOS: Scenario[] = [
     ],
     audience: { name: 'Community Bank CEOs', description: 'Leaders of banks with $500M-$5B in assets' },
     priorities: [
-      { text: 'Protecting our institution from a data breach', rank: 1, motivatingFactor: 'A breach could end depositor trust permanently' },
-      { text: 'Proving compliance without drowning in audit prep', rank: 2, motivatingFactor: 'My compliance officer spends 3 months a year just preparing for exams' },
-      { text: 'Recruiting and keeping cybersecurity talent at community bank pay', rank: 3, motivatingFactor: 'We cannot compete with big bank salaries' },
-      { text: 'Not disrupting our team during implementation', rank: 4, motivatingFactor: 'Our IT department is 3 people' },
+      { text: 'Protecting our institution from a data breach', rank: 1, driver: 'A breach could end depositor trust permanently' },
+      { text: 'Proving compliance without drowning in audit prep', rank: 2, driver: 'My compliance officer spends 3 months a year just preparing for exams' },
+      { text: 'Recruiting and keeping cybersecurity talent at community bank pay', rank: 3, driver: 'We cannot compete with big bank salaries' },
+      { text: 'Not disrupting our team during implementation', rank: 4, driver: 'Our IT department is 3 people' },
     ],
   },
 ];

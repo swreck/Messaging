@@ -71,7 +71,7 @@ export function PriorityList({
       text,
       rank: localPriorities.length + 1,
       sortOrder: localPriorities.length,
-      motivatingFactor: '',
+      driver: '',
       whatAudienceThinks: '',
       isSpoken: false,
     };
@@ -91,8 +91,8 @@ export function PriorityList({
     onUpdate();
   }
 
-  async function updateMotivatingFactor(id: string, value: string) {
-    await api.put(`/audiences/${audienceId}/priorities/${id}`, { motivatingFactor: value });
+  async function updateDriver(id: string, value: string) {
+    await api.put(`/audiences/${audienceId}/priorities/${id}`, { driver: value });
     onUpdate();
   }
 
@@ -124,7 +124,7 @@ export function PriorityList({
 
   function renderPriority(item: Priority, index: number, { listeners, attributes }: DragHandleProps) {
     const isFirst = index === 0;
-    const showMF = isFirst || expandedMF.has(item.id) || !!item.motivatingFactor;
+    const showDriver = isFirst || expandedMF.has(item.id) || !!item.driver;
     return (
       <div className={`priority-item ${isFirst ? 'priority-top' : ''}`}>
         <div className="priority-item-row">
@@ -156,35 +156,35 @@ export function PriorityList({
         </div>
         {showMotivatingFactor && isFirst && (
           <div className="priority-mf-wrapper">
-            <div className={`driver-field ${item.motivatingFactor ? 'driver-drafted' : 'driver-ready'}`}>
+            <div className={`driver-field ${item.driver ? 'driver-drafted' : 'driver-ready'}`}>
               <textarea
                 className="driver-input"
                 placeholder="Why is this so important to them?"
-                defaultValue={item.motivatingFactor}
-                onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
+                defaultValue={item.driver}
+                onBlur={e => updateDriver(item.id, e.target.value)}
                 rows={2}
               />
             </div>
             <span className="priority-mf-label">Drives Chapter 1 of your stories</span>
           </div>
         )}
-        {showMotivatingFactor && !isFirst && showMF && (
-          <div className={`driver-field ${item.motivatingFactor ? 'driver-drafted' : 'driver-ready'}`}>
+        {showMotivatingFactor && !isFirst && showDriver && (
+          <div className={`driver-field ${item.driver ? 'driver-drafted' : 'driver-ready'}`}>
             <textarea
               className="driver-input"
               placeholder="Why is this important to them?"
-              defaultValue={item.motivatingFactor}
-              onBlur={e => updateMotivatingFactor(item.id, e.target.value)}
+              defaultValue={item.driver}
+              onBlur={e => updateDriver(item.id, e.target.value)}
               rows={2}
             />
-            {!item.motivatingFactor && (
+            {!item.driver && (
               <svg className="driver-maria-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c06070" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
               </svg>
             )}
           </div>
         )}
-        {showMotivatingFactor && !isFirst && !showMF && (
+        {showMotivatingFactor && !isFirst && !showDriver && (
           <button
             className="priority-mf-expand"
             onClick={() => toggleMF(item.id)}

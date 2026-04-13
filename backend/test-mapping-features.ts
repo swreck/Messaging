@@ -104,10 +104,10 @@ async function main() {
     assert(!!AUDIENCE_ID, 'Created audience');
 
     const priorities = [
-      { text: 'Protecting the financial health of our hospital', rank: 1, motivatingFactor: 'Every dollar saved goes directly to patient care' },
-      { text: 'Better outcomes for our cancer patients', rank: 2, motivatingFactor: 'Treatment delays from slow pathology cost lives' },
-      { text: 'Reducing risk of regulatory issues', rank: 3, motivatingFactor: 'One compliance failure can shut down a department' },
-      { text: 'Keeping our best pathologists from burning out', rank: 4, motivatingFactor: 'Recruiting replacements takes 18 months' },
+      { text: 'Protecting the financial health of our hospital', rank: 1, driver: 'Every dollar saved goes directly to patient care' },
+      { text: 'Better outcomes for our cancer patients', rank: 2, driver: 'Treatment delays from slow pathology cost lives' },
+      { text: 'Reducing risk of regulatory issues', rank: 3, driver: 'One compliance failure can shut down a department' },
+      { text: 'Keeping our best pathologists from burning out', rank: 4, driver: 'Recruiting replacements takes 18 months' },
     ];
     for (const p of priorities) {
       const { priority } = await req('POST', `/audiences/${AUDIENCE_ID}/priorities`, p);

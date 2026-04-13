@@ -44,15 +44,15 @@ YOUR APPROACH:
 - After each answer, extract the priority, then ask ONE follow-up to dig deeper.
 - Start with spoken priorities — the ones they'd say out loud: cost, quality, speed, reliability.
 - Then shift to unspoken priorities — the private ones: job security, looking good to the board, fear of failure, wanting control. Say something like: "Those are the priorities they'd tell you in a meeting. What about the ones they'd only say after a drink?"
-- For EVERY priority, ask: "Why is that so important to them?" — this gets the motivating factor. A motivating factor is WHY a priority matters — the deeper business or personal reason behind it. This is critical for strong messaging later.
-- Focus especially on the TOP priorities. For the #1 priority, dig deep: "You said [priority] matters most. Help me understand — what's really at stake for them if they don't get this right?" The motivating factor for the top priority directly shapes the most important messaging output.
-- If you've captured 3+ priorities and the top ones lack motivating factors, circle back: "We've got a great list. Before we move on, I want to make sure I understand the WHY behind the biggest ones. For [top priority] — what makes that so important to them?"
+- For EVERY priority, ask: "Why is that so important to them?" — this gets the driver. A driver is WHY a priority matters to THIS specific persona — the deeper business or personal stakes behind it. This is critical for strong messaging later.
+- Focus especially on the TOP priorities. For the #1 priority, dig deep: "You said [priority] matters most. Help me understand — what's really at stake for them if they don't get this right?" The driver for the top priority directly shapes the most important messaging output.
+- If you've captured 3+ priorities and the top ones lack drivers, circle back: "We've got a great list. Before we move on, I want to make sure I understand the WHY behind the biggest ones. For [top priority] — what makes that so important to them?"
 - Help them rank: "Of everything we've captured, which single priority would keep them up at night?"
 - You're looking for 4-7 priorities. Don't mention the target.
 
 EXTRACTION:
 - When you identify a priority, put it on its own line prefixed with "* "
-- When someone explains WHY a priority matters, capture it as: "* [MF] [priority text]: [motivating factor text]"
+- When someone explains WHY a priority matters, capture it as: "* [DRIVER] [priority text]: [driver text]"
 - Use their words. Don't polish.
 - Never invent priorities they haven't confirmed.`;
 
@@ -64,7 +64,7 @@ export function buildCoachingUserContext(
   offeringName: string,
   smeRole: string,
   existingElements: string[],
-  existingPriorities: { text: string; rank: number; motivatingFactor: string }[]
+  existingPriorities: { text: string; rank: number; driver: string }[]
 ): string {
   let context = `Offering: "${offeringName}"`;
   if (smeRole) context += `\nSME Role: ${smeRole}`;
@@ -74,7 +74,7 @@ export function buildCoachingUserContext(
   }
 
   if (existingPriorities.length > 0) {
-    context += `\n\nPriorities already identified:\n${existingPriorities.map((p) => `* [Rank ${p.rank}] ${p.text}${p.motivatingFactor ? ` (Why: ${p.motivatingFactor})` : ''}`).join('\n')}`;
+    context += `\n\nPriorities already identified:\n${existingPriorities.map((p) => `* [Rank ${p.rank}] ${p.text}${p.driver ? ` (Driver: ${p.driver})` : ''}`).join('\n')}`;
   }
 
   return context;

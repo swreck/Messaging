@@ -107,7 +107,7 @@ router.post('/:id/duplicate', requireEditor, async (req: Request, res: Response)
           text: p.text,
           rank: p.rank,
           isSpoken: p.isSpoken,
-          motivatingFactor: p.motivatingFactor,
+          driver: p.driver,
           whatAudienceThinks: p.whatAudienceThinks,
           sortOrder: p.sortOrder,
         })),
@@ -130,7 +130,7 @@ router.post('/:id/priorities', requireEditor, async (req: Request, res: Response
     return;
   }
 
-  const { text, rank, isSpoken, motivatingFactor, whatAudienceThinks } = req.body;
+  const { text, rank, isSpoken, driver, whatAudienceThinks } = req.body;
   if (!text) {
     res.status(400).json({ error: 'Text is required' });
     return;
@@ -147,7 +147,7 @@ router.post('/:id/priorities', requireEditor, async (req: Request, res: Response
       text,
       rank: rank ?? 0,
       isSpoken: isSpoken ?? true,
-      motivatingFactor: motivatingFactor || '',
+      driver: driver || '',
       whatAudienceThinks: whatAudienceThinks || '',
       sortOrder: (maxOrder._max?.sortOrder ?? -1) + 1,
     },
@@ -193,14 +193,14 @@ router.put('/:audienceId/priorities/:priorityId', requireEditor, async (req: Req
     return;
   }
 
-  const { text, rank, isSpoken, motivatingFactor, whatAudienceThinks } = req.body;
+  const { text, rank, isSpoken, driver, whatAudienceThinks } = req.body;
   const updated = await prisma.priority.update({
     where: { id: param(req.params.priorityId) },
     data: {
       text: text ?? priority.text,
       rank: rank ?? priority.rank,
       isSpoken: isSpoken ?? priority.isSpoken,
-      motivatingFactor: motivatingFactor ?? priority.motivatingFactor,
+      driver: driver ?? priority.driver,
       whatAudienceThinks: whatAudienceThinks ?? priority.whatAudienceThinks,
     },
   });

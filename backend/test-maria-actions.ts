@@ -231,32 +231,32 @@ async function testOfferingActions() {
   }
 }
 
-// ──── PRIORITY WITH MOTIVATING FACTOR ────────────────────────
+// ──── PRIORITY WITH DRIVER ────────────────────────
 
-async function testPriorityMF() {
-  await test('Priority: set motivating factor via Maria', async () => {
+async function testPriorityDriver() {
+  await test('Priority: set driver via Maria', async () => {
     const r = await maria(
-      'Set the motivating factor for the first priority to "Lab directors are measured on turnaround time — slow results mean lost referrals"',
+      'Set the driver for the first priority to "Lab directors are measured on turnaround time — slow results mean lost referrals"',
       { page: 'audiences', audienceId: AUDIENCE_ID }
     );
     assert(r.action?.type === 'edit_priorities', 'Action type is edit_priorities', `got ${r.action?.type}`);
     const edit = r.action?.params?.edits?.[0];
     assert(edit?.position === 1, 'Targets position 1', JSON.stringify(r.action?.params));
-    assert(edit?.motivatingFactor != null && edit.motivatingFactor.length > 10,
-      'Has motivating factor text', JSON.stringify(edit));
+    assert(edit?.driver != null && edit.driver.length > 10,
+      'Has driver text', JSON.stringify(edit));
     assert(r.refreshNeeded === true, 'Refresh needed');
   });
 
-  await test('Priority: edit text AND motivating factor together', async () => {
+  await test('Priority: edit text AND driver together', async () => {
     const r = await maria(
-      'Change the second priority to "Affordable per-test cost" and set its motivating factor to "Budget pressure from hospital CFO"',
+      'Change the second priority to "Affordable per-test cost" and set its driver to "Budget pressure from hospital CFO"',
       { page: 'audiences', audienceId: AUDIENCE_ID }
     );
     assert(r.action?.type === 'edit_priorities', 'Action type is edit_priorities', `got ${r.action?.type}`);
     const edit = r.action?.params?.edits?.[0];
     assert(edit?.position === 2, 'Targets position 2', JSON.stringify(r.action?.params));
     assert(edit?.text != null, 'Has text update', JSON.stringify(edit));
-    assert(edit?.motivatingFactor != null, 'Has motivating factor update', JSON.stringify(edit));
+    assert(edit?.driver != null, 'Has driver update', JSON.stringify(edit));
   });
 }
 
@@ -494,7 +494,7 @@ async function main() {
 
   await testAudienceActions();
   await testOfferingActions();
-  await testPriorityMF();
+  await testPriorityDriver();
   await testStoryOps();
   await testCreateStory();
   await testGuardrails();

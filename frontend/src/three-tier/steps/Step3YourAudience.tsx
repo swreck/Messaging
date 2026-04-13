@@ -75,7 +75,7 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
     await loadDraft();
   }
 
-  async function addPriority(text: string, motivatingFactor?: string) {
+  async function addPriority(text: string, driver?: string) {
     if (!text.trim()) return;
     if (draft.audience.priorities.find(p => p.text === text.trim())) return;
 
@@ -83,8 +83,8 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
       text: text.trim(),
       rank: draft.audience.priorities.length + 1,
     };
-    if (motivatingFactor) {
-      data.motivatingFactor = motivatingFactor;
+    if (driver) {
+      data.driver = driver;
     }
     await api.post(`/audiences/${draft.audienceId}/priorities`, data);
     await loadDraft();
@@ -124,8 +124,8 @@ export function Step3YourAudience({ draft, loadDraft, nextStep, prevStep }: Step
                 ) : (
                   <span onClick={() => { setEditingId(p.id); setEditText(p.text); }}>{p.text}</span>
                 )}
-                {p.motivatingFactor && editingId !== p.id && (
-                  <span className="confirm-list-mf">{p.motivatingFactor}</span>
+                {p.driver && editingId !== p.id && (
+                  <span className="confirm-list-mf">{p.driver}</span>
                 )}
               </li>
             ))}

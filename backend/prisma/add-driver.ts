@@ -17,7 +17,7 @@ async function main() {
   if (top && !top.driver) {
     await p.priority.update({
       where: { id: top.id },
-      data: { motivatingFactor: 'Every unplanned vacancy costs overtime, hurts morale, and makes the next person more likely to leave — turnover compounds.' }
+      data: { driver: 'Every unplanned vacancy costs overtime, hurts morale, and makes the next person more likely to leave — turnover compounds.' }
     })
     console.log('\nAdded driver to top priority:', top.id)
   }

@@ -118,7 +118,7 @@ model Priority {
   text               String
   rank               Int      @default(0)
   isSpoken           Boolean  @default(true)
-  motivatingFactor   String   @default("")
+  driver             String   @default("")
   whatAudienceThinks String   @default("")
   sortOrder          Int      @default(0)
 

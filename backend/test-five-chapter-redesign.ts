@@ -145,7 +145,7 @@ async function run() {
   assert('Missing priority is our #1', genNoMF.missingTopPriority?.id === PRI_TOP_ID);
 
   // Add MF to priority #2 only — should still fail (top priority matters)
-  await req('PUT', `/audiences/${AUDIENCE_ID}/priorities/${PRI_2_ID}`, { motivatingFactor: 'Budget matters' });
+  await req('PUT', `/audiences/${AUDIENCE_ID}/priorities/${PRI_2_ID}`, { driver: 'Budget matters' });
   const genMF2Only = await req('POST', '/ai/generate-chapter', { storyId: STORY_ID, chapterNum: 1 });
   assert('Generate still fails with MF only on #2', genMF2Only.status === 400);
 
@@ -161,14 +161,14 @@ async function run() {
     offeringId: OFFERING_ID,
   });
   assert('Derive motivation returns 200', deriveMF.status === 200);
-  assert('Returns motivatingFactor string', typeof deriveMF.motivatingFactor === 'string' && deriveMF.motivatingFactor.length > 10);
-  console.log(`    AI-derived MF: "${deriveMF.motivatingFactor?.substring(0, 80)}..."`);
+  assert('Returns driver string', typeof deriveMF.driver === 'string' && deriveMF.driver.length > 10);
+  console.log(`    AI-derived MF: "${deriveMF.driver?.substring(0, 80)}..."`);
 
   // Verify it was saved to the priority
   const audCheck = await req('GET', '/audiences');
   const testAud = audCheck.audiences?.find((a: any) => a.id === AUDIENCE_ID);
   const topPri = testAud?.priorities?.find((p: any) => p.id === PRI_TOP_ID);
-  assert('MF was persisted to priority', !!topPri?.motivatingFactor && topPri.motivatingFactor.length > 10);
+  assert('MF was persisted to priority', !!topPri?.driver && topPri.driver.length > 10);
 
   // Test derive-motivation validation
   const deriveBadPri = await req('POST', '/ai/derive-motivation', { priorityId: 'fake-id', audienceId: AUDIENCE_ID });
@@ -210,7 +210,7 @@ async function run() {
   // Test that priority #2 and #3 NOT having MF is fine (only top matters)
   // (We already proved this works because generation succeeded)
   const pri3Check = testAud?.priorities?.find((p: any) => p.id === PRI_3_ID);
-  assert('Priority #3 has no MF (and that is OK)', !pri3Check?.motivatingFactor);
+  assert('Priority #3 has no MF (and that is OK)', !pri3Check?.driver);
 
   // ═══════════════════════════════════════════════════
   // SECTION 6: Chapter editing
@@ -365,7 +365,7 @@ async function run() {
     audienceId: AUDIENCE_ID,
     offeringId: OFFERING_ID,
   });
-  assert('Derive MF for new #1 succeeds', deriveMF3.status === 200 && !!deriveMF3.motivatingFactor);
+  assert('Derive MF for new #1 succeeds', deriveMF3.status === 200 && !!deriveMF3.driver);
 
   // Now generation should work
   const genAfterDerive = await req('POST', '/ai/generate-chapter', { storyId: STORY_ID, chapterNum: 1 });

@@ -43,7 +43,7 @@ async function buildWorkSummary(workspaceId: string): Promise<string> {
       where: { workspaceId },
       include: {
         priorities: {
-          select: { text: true, rank: true, motivatingFactor: true },
+          select: { text: true, rank: true, driver: true },
           orderBy: { sortOrder: 'asc' },
         },
       },
@@ -80,8 +80,8 @@ async function buildWorkSummary(workspaceId: string): Promise<string> {
   for (const a of audiences) {
     const prioSummary = a.priorities.length > 0
       ? a.priorities.map((p, i) => {
-          const mf = p.motivatingFactor ? ' (has motivating factor)' : '';
-          return `  ${i + 1}. ${p.text}${mf}`;
+          const hasDriver = p.driver ? ' (has driver)' : '';
+          return `  ${i + 1}. ${p.text}${hasDriver}`;
         }).join('\n')
       : '  (no priorities defined yet)';
     lines.push(`- "${a.name}"${a.description ? ` — ${a.description}` : ''}`);
@@ -200,16 +200,16 @@ async function buildSurfacingHint(workspaceId: string, userId?: string): Promise
     return `The audience "${emptyAudiences[0].name}" has no priorities yet. You could offer to draft them if the user tells you the persona — you know what most roles care about.`;
   }
 
-  // Check for audiences where the top priority has no motivating factor
-  const audiencesNoMF = await prisma.audience.findMany({
+  // Check for audiences where the top priority has no driver
+  const audiencesNoDriver = await prisma.audience.findMany({
     where: {
       workspaceId,
-      priorities: { some: { rank: 1, motivatingFactor: { equals: '' } } },
+      priorities: { some: { rank: 1, driver: { equals: '' } } },
     },
     select: { name: true },
   });
-  if (audiencesNoMF.length > 0) {
-    return `The audience "${audiencesNoMF[0].name}" has a top priority with no motivating factor. You could offer to draft it — you understand the offering well enough to connect the stakes.`;
+  if (audiencesNoDriver.length > 0) {
+    return `The audience "${audiencesNoDriver[0].name}" has a top priority with no driver. You could offer to draft it — you understand the offering well enough to connect the stakes.`;
   }
 
   // Check if user has a Five Chapter Story but no personalization profile
@@ -268,18 +268,18 @@ router.get('/status', async (req: Request, res: Response) => {
         proactiveOffer = `I know what ${emptyAudience.name} typically cares about. Want me to draft the priorities?`;
       }
 
-      // Audiences where the TOP priority has no motivating factor, AND an offering exists
+      // Audiences where the TOP priority has no driver, AND an offering exists
       if (!proactiveOffer) {
-        const audNoMF = await prisma.audience.findFirst({
+        const audNoDriver = await prisma.audience.findFirst({
           where: {
             workspaceId: wsId,
-            priorities: { some: { rank: 1, motivatingFactor: { equals: '' } } },
+            priorities: { some: { rank: 1, driver: { equals: '' } } },
           },
           select: { name: true },
         });
         const hasOffering = await prisma.offering.count({ where: { workspaceId: wsId } });
-        if (audNoMF && hasOffering > 0) {
-          proactiveOffer = `${audNoMF.name}'s top priority doesn't have a motivating factor yet. I can draft it — I understand the offering.`;
+        if (audNoDriver && hasOffering > 0) {
+          proactiveOffer = `${audNoDriver.name}'s top priority doesn't have a driver yet. I can draft it — I understand the offering.`;
         }
       }
 

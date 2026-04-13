@@ -41,7 +41,7 @@ export interface Priority {
   text: string;
   rank: number;
   isSpoken: boolean;
-  motivatingFactor: string;
+  driver: string;
   whatAudienceThinks: string;
   sortOrder: number;
 }

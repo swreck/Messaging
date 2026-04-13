@@ -1,10 +1,11 @@
 /**
- * Data migration: Move motivating factors from priorities to their mapped differentiators.
+ * HISTORICAL MIGRATION (already run April 2026). Kept for reference and compilation.
  *
- * For each priority that has a motivating factor AND has mappings to offering elements,
- * copy the motivating factor to each mapped element (if the element doesn't already have one).
+ * Original purpose: back when MFs lived on priorities, copy them to the mapped offering
+ * elements so the MF lived in its correct home (differentiator side). After this script ran,
+ * Priority.motivatingFactor was later renamed to Priority.driver to reflect its true meaning.
  *
- * Run: npx tsx prisma/migrate-mf-to-elements.ts
+ * Do not re-run this — it is here to compile against the current schema.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -12,11 +13,11 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Migrating motivating factors from priorities to offering elements...\n');
+  console.log('Historical migration (already run). Copying priority drivers to mapped element MFs where empty...\n');
 
-  // Find all priorities with motivating factors
+  // Find all priorities with drivers (formerly "motivating factors" when they lived here)
   const priorities = await prisma.priority.findMany({
-    where: { motivatingFactor: { not: '' } },
+    where: { driver: { not: '' } },
     include: {
       mappings: {
         include: { element: true },
@@ -29,7 +30,7 @@ async function main() {
 
   for (const p of priorities) {
     if (p.mappings.length === 0) {
-      console.log(`  Priority "${p.text}" has MF but no mappings — skipping`);
+      console.log(`  Priority "${p.text}" has driver but no mappings — skipping`);
       skipped++;
       continue;
     }
@@ -43,15 +44,14 @@ async function main() {
 
       await prisma.offeringElement.update({
         where: { id: m.element.id },
-        data: { motivatingFactor: p.motivatingFactor },
+        data: { motivatingFactor: p.driver },
       });
-      console.log(`  ✓ "${m.element.text}" ← MF: "${p.motivatingFactor.substring(0, 60)}..."`);
+      console.log(`  ✓ "${m.element.text}" ← MF: "${p.driver.substring(0, 60)}..."`);
       migrated++;
     }
   }
 
   console.log(`\nDone. Migrated: ${migrated}, Skipped: ${skipped}`);
-  console.log('\nNote: Priority.motivatingFactor fields are preserved for now (not deleted).');
 }
 
 main()

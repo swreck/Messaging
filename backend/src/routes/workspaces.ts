@@ -372,7 +372,7 @@ router.post('/:id/copy-audience', async (req: Request, res: Response) => {
           text: p.text,
           rank: p.rank,
           isSpoken: p.isSpoken,
-          motivatingFactor: p.motivatingFactor,
+          driver: p.driver,
           whatAudienceThinks: p.whatAudienceThinks,
           sortOrder: p.sortOrder,
         })),

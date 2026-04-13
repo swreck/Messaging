@@ -41,7 +41,7 @@ async function main() {
       workspaceId: workspace.id,
       priorities: {
         create: [
-          { text: 'Improving lead response time to increase conversion rates', rank: 1, motivatingFactor: 'Every minute a hot lead waits drops conversion by 10%. The CEO sees this number weekly.' },
+          { text: 'Improving lead response time to increase conversion rates', rank: 1, driver: 'Every minute a hot lead waits drops conversion by 10%. The CEO sees this number weekly.' },
           { text: 'Reducing time reps spend on administrative routing and assignment tasks', rank: 2 },
           { text: 'Getting accurate pipeline forecasts to report to leadership', rank: 3 },
           { text: 'Ensuring fair lead distribution that reps trust', rank: 4 },
@@ -62,7 +62,7 @@ async function main() {
       workspaceId: workspace.id,
       priorities: {
         create: [
-          { text: 'Increasing win rates on enterprise deals', rank: 1, motivatingFactor: 'Board measures the CRO on bookings growth. Win rate is the only lever that scales without adding headcount.' },
+          { text: 'Increasing win rates on enterprise deals', rank: 1, driver: 'Board measures the CRO on bookings growth. Win rate is the only lever that scales without adding headcount.' },
           { text: 'Reducing sales cycle length', rank: 2 },
           { text: 'Improving forecast accuracy for board reporting', rank: 3 },
           { text: 'Scaling the sales team without proportionally scaling costs', rank: 4 },

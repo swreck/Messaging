@@ -203,10 +203,10 @@ export function FiveChapterShell() {
       .catch(() => {});
   }, []);
 
-  function topPriorityHasMF(): boolean {
+  function topPriorityHasDriver(): boolean {
     if (!draft) return false;
     const top = draft.audience.priorities[0];
-    return !!top?.motivatingFactor;
+    return !!top?.driver;
   }
 
   async function createStory(e: React.FormEvent) {
@@ -389,7 +389,7 @@ export function FiveChapterShell() {
     if (!story) return;
 
     // Check MF first (skip if we just derived it, or if user chose to continue without)
-    if (!skipMFCheck && !bypassMF && !topPriorityHasMF()) {
+    if (!skipMFCheck && !bypassMF && !topPriorityHasDriver()) {
       setShowMFPanel(true);
       return;
     }
@@ -968,7 +968,7 @@ export function FiveChapterShell() {
               onClick={() => {
                 setShowMFPanel(false);
                 document.dispatchEvent(new CustomEvent('maria-toggle', {
-                  detail: { open: true, message: `Let's talk about why "${draft.audience.priorities[0]?.text}" matters so much to ${draft.audience.name}. I'll add what I learn to the motivating factor.` },
+                  detail: { open: true, message: `Let's talk about why "${draft.audience.priorities[0]?.text}" matters so much to ${draft.audience.name}. I'll add what I learn to the driver.` },
                 }));
               }}
               disabled={derivingMF}

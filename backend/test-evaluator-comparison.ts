@@ -88,7 +88,7 @@ async function run() {
 
   console.log('\nPRIORITIES:');
   for (const p of draft.audience.priorities) {
-    console.log(`  [Rank ${p.rank}] "${p.text}"${p.motivatingFactor ? ` (MF: ${p.motivatingFactor})` : ''}`);
+    console.log(`  [Rank ${p.rank}] "${p.text}"${p.driver ? ` (Driver: ${p.driver})` : ''}`);
   }
 
   // Now we need to test generation. Since we can't call build-message on an existing draft,

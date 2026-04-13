@@ -110,7 +110,7 @@ async function run() {
 
     if (aud.priorities?.length > 0) {
       test('Priorities have text', !!aud.priorities[0].text)
-      test('Priorities have motivatingFactor (driver)', typeof aud.priorities[0].motivatingFactor === 'string')
+      test('Priorities have driver field', typeof aud.priorities[0].driver === 'string')
     }
   }
 
