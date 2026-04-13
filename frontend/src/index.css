@@ -623,6 +623,29 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .progress-connector.completed { background: var(--success); }
 
+/* Mobile: compress the progress bar so the full 5-step sequence fits without overflow.
+   Hide all labels except the current step's, and shrink connectors so the dots+one label fit. */
+@media (max-width: 600px) {
+  .progress-bar {
+    padding: 12px 4px;
+    gap: 0;
+    justify-content: space-between;
+    overflow-x: visible;
+  }
+  .progress-step { gap: 2px; min-width: 0; }
+  .progress-label { display: none; font-size: 12px; }
+  .progress-step .progress-label.current {
+    display: inline;
+    margin-left: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 110px;
+  }
+  .progress-connector { width: 8px; }
+  .progress-dot { width: 24px; height: 24px; font-size: 12px; }
+}
+
 /* ─── Coaching Chat ───────────────────────────────── */
 .coaching-chat {
   display: flex;
@@ -824,11 +847,28 @@ p { line-height: 1.5; color: var(--text-secondary); }
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .tier-header-actions {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: wrap;
+}
+@media (max-width: 600px) {
+  .tier-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 8px 12px 0;
+  }
+  .tier-header-actions {
+    align-self: flex-end;
+  }
+  .tier-header-actions .btn-copy-table {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
 }
 .btn-copy-table {
   display: flex;
