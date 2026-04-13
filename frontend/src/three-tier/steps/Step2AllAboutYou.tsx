@@ -75,6 +75,7 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
   }
 
   if (mode === 'confirm') {
+    const hasAnyMf = draft.offering.elements.some(e => e.motivatingFactor);
     return (
       <div className="step-panel">
         <div className="confirm-panel">
@@ -83,9 +84,15 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
             {draft.offering.elements.map(el => (
               <li key={el.id} className="confirm-list-item">
                 <span>{el.text}</span>
+                {el.motivatingFactor && (
+                  <span className="confirm-list-mf">{el.motivatingFactor}</span>
+                )}
               </li>
             ))}
           </ol>
+          {hasAnyMf && (
+            <p className="confirm-hint" style={{ marginTop: 4 }}>The italic text below each differentiator is its motivating factor — why someone would crave it.</p>
+          )}
 
           <div className="confirm-actions">
             <button className="btn btn-primary" onClick={nextStep}>Use this list</button>
