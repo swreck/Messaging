@@ -804,6 +804,8 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid #d1d1d6;
   /* Break out of max-width container so 6-column layouts use full viewport */
   width: calc(100vw - 48px);
@@ -871,10 +873,34 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border-right: 1px solid #d1d1d6;
   position: relative;
   transition: box-shadow 0.2s;
-  overflow: hidden;
+  overflow: visible;
 }
 .three-tier-table.has-suggestions .tier2-col {
   min-width: 240px;
+}
+/* Mobile: stack tier2 columns vertically so content is always readable and scrolling is simple */
+@media (max-width: 600px) {
+  .three-tier-table {
+    width: 100%;
+    overflow-x: visible;
+  }
+  .tier2-row {
+    display: flex;
+    flex-direction: column;
+  }
+  .tier2-col {
+    min-width: 0;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #d1d1d6;
+    display: block;
+  }
+  .tier2-col:last-child { border-bottom: none; }
+  .three-tier-table.has-suggestions .tier2-col {
+    min-width: 0;
+  }
+  .tier1-row { text-align: left; }
+  .tier1-text { padding: 8px 16px 12px; }
 }
 .three-tier-table.has-suggestions .cell-version-nav {
   display: none;
@@ -996,6 +1022,17 @@ p { line-height: 1.5; color: var(--text-secondary); }
   resize: none;
   outline: none;
   background: white;
+}
+.cell-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  gap: 8px;
+}
+.cell-editor-actions {
+  display: flex;
+  gap: 6px;
 }
 .cell-word-count {
   position: absolute;
@@ -1451,8 +1488,10 @@ p { line-height: 1.5; color: var(--text-secondary); }
   gap: 8px;
   padding: 12px 20px 16px;
   border-top: 1px solid var(--border-light);
+  align-items: flex-end;
 }
-.fcs-copy-edit input {
+.fcs-copy-edit input,
+.fcs-copy-edit textarea {
   flex: 1;
   padding: 8px 12px;
   border: 1px solid var(--border);
@@ -1460,7 +1499,39 @@ p { line-height: 1.5; color: var(--text-secondary); }
   font-size: 15px;
   font-family: var(--font);
 }
-.fcs-copy-edit input:focus { outline: none; border-color: var(--accent); }
+.fcs-copy-edit input:focus,
+.fcs-copy-edit textarea:focus { outline: none; border-color: var(--accent); }
+
+/* 5CS layout: give breathing room, keep params and chapters readable on phone */
+@media (max-width: 600px) {
+  .five-chapter-shell { padding: 0 12px; }
+  .fcs-params-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 12px 14px;
+  }
+  .fcs-params-bar .fcs-param-sep { display: none; }
+  .fcs-chapters-header {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 4px 0 12px;
+  }
+  .fcs-story-selector { gap: 6px; }
+  .fcs-chapter-header {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+  .fcs-blended-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  .fcs-blended-content { padding: 14px; font-size: 15px; }
+  .fcs-copy-edit { padding: 10px 14px 14px; }
+}
 
 .story-input-form {
   background: var(--bg-card);
@@ -2638,7 +2709,6 @@ p { line-height: 1.5; color: var(--text-secondary); }
   right: 24px;
   z-index: 100;
   width: 400px;
-  max-height: calc(100vh - 120px);
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
@@ -2647,6 +2717,42 @@ p { line-height: 1.5; color: var(--text-secondary); }
   flex-direction: column;
   overflow: hidden;
   animation: partner-slide-up 0.2s ease-out;
+}
+/* Desktop sizes */
+.partner-panel-compact { height: 360px; max-height: calc(100vh - 120px); }
+.partner-panel-medium  { height: 560px; max-height: calc(100vh - 120px); }
+.partner-panel-full    { height: calc(100vh - 80px); max-height: calc(100vh - 80px); }
+.partner-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.partner-size-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-hover);
+  border-radius: 6px;
+}
+.partner-size-btn {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.partner-size-btn:hover {
+  color: var(--text-secondary);
+}
+.partner-size-btn.active {
+  background: var(--bg-card);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
 @keyframes partner-slide-up {
   from {
@@ -2751,8 +2857,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 200px;
-  max-height: calc(100vh - 280px);
+  min-height: 0;
 }
 
 .partner-empty {
@@ -2869,26 +2974,35 @@ p { line-height: 1.5; color: var(--text-secondary); }
   font-style: italic;
 }
 
-@media (max-width: 440px) {
+/* Phone — bottom sheet */
+@media (max-width: 600px) {
   .partner-panel {
-    width: calc(100vw - 16px);
-    right: 8px;
-    bottom: 8px;
+    width: 100vw;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
   }
+  .partner-panel-compact { height: 42vh; max-height: 42vh; }
+  .partner-panel-medium  { height: 68vh; max-height: 68vh; }
+  .partner-panel-full    { height: 92vh; max-height: 92vh; }
   .partner-bubble {
-    bottom: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     right: 16px;
   }
 }
 
 /* ─── Large Desktop (1200px+) ────────────────────── */
 @media (min-width: 1200px) {
-  .partner-panel { width: 420px; }
+  .partner-panel { width: 440px; }
 }
 
-/* ─── Tablet Portrait (768px) ────────────────────── */
-@media (max-width: 768px) {
-  .partner-panel { width: calc(100vw - 32px); max-width: 400px; right: 16px; }
+/* ─── Tablet Portrait (601-768px) ────────────────────── */
+@media (min-width: 601px) and (max-width: 768px) {
+  .partner-panel { width: calc(100vw - 32px); max-width: 420px; right: 16px; }
   .partner-bubble { right: 16px; }
   .entity-card { padding: 16px; }
   .draft-card { padding: 16px; }

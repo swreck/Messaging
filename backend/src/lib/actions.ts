@@ -896,33 +896,49 @@ Write Chapter ${chNum}: "${ch.name}"${avoidInstruction}`;
           include: { chapters: { orderBy: { chapterNum: 'asc' } } },
         });
         if (story && story.blendedText) {
-          // Snapshot before edit so user can undo
-          const maxSnapVer = await prisma.storyVersion.aggregate({
-            where: { storyId: ctx.storyId },
-            _max: { versionNum: true },
-          });
-          await prisma.storyVersion.create({
-            data: {
-              storyId: ctx.storyId,
-              snapshot: {
-                medium: story.medium, cta: story.cta, emphasis: story.emphasis,
-                stage: story.stage, joinedText: story.joinedText, blendedText: story.blendedText,
-                chapters: story.chapters.map((c: any) => ({ chapterNum: c.chapterNum, title: c.title, content: c.content })),
-              },
-              label: 'Before copy edit (via Maria)',
-              versionNum: (maxSnapVer._max?.versionNum ?? 0) + 1,
-            },
-          });
+          const normalize = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+          const originalNorm = normalize(story.blendedText);
 
           const spec = getMediumSpec(story.medium);
           const userMessage = `CONTENT FORMAT: ${spec.label}\nUSER'S REQUEST: ${a.params.instruction}\n\nCURRENT CONTENT:\n${story.blendedText}\n\nApply the requested changes.`;
-          const revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'fast');
-          await prisma.fiveChapterStory.update({
-            where: { id: ctx.storyId },
-            data: { blendedText: revised },
-          });
-          actionResult = 'Applied copy edit';
-          refreshNeeded = true;
+          let revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'fast');
+
+          // Verify the edit actually changed something — AI sometimes returns identical text
+          // when the instruction is subtle. Retry once with a stronger nudge if so.
+          if (normalize(revised) === originalNorm) {
+            const retryMessage = `CONTENT FORMAT: ${spec.label}\nUSER'S REQUEST: ${a.params.instruction}\n\nCURRENT CONTENT:\n${story.blendedText}\n\nCRITICAL: Your previous attempt returned text identical to the original. You MUST actually apply the requested change. If the request is about rewording a specific sentence or opening, rewrite that sentence. Return the FULL content with the change applied.`;
+            revised = await callAI(COPY_EDIT_SYSTEM, retryMessage, 'fast');
+          }
+
+          // If it STILL hasn't changed, don't pretend — tell the user honestly
+          if (normalize(revised) === originalNorm) {
+            actionResult = "I tried but the text came back unchanged — can you tell me more specifically what to change?";
+            // refreshNeeded stays false
+          } else {
+            // Snapshot only after we know we're actually going to write a change
+            const maxSnapVer = await prisma.storyVersion.aggregate({
+              where: { storyId: ctx.storyId },
+              _max: { versionNum: true },
+            });
+            await prisma.storyVersion.create({
+              data: {
+                storyId: ctx.storyId,
+                snapshot: {
+                  medium: story.medium, cta: story.cta, emphasis: story.emphasis,
+                  stage: story.stage, joinedText: story.joinedText, blendedText: story.blendedText,
+                  chapters: story.chapters.map((c: any) => ({ chapterNum: c.chapterNum, title: c.title, content: c.content })),
+                },
+                label: 'Before copy edit (via Maria)',
+                versionNum: (maxSnapVer._max?.versionNum ?? 0) + 1,
+              },
+            });
+            await prisma.fiveChapterStory.update({
+              where: { id: ctx.storyId },
+              data: { blendedText: revised },
+            });
+            actionResult = 'Applied copy edit';
+            refreshNeeded = true;
+          }
         }
       }
 

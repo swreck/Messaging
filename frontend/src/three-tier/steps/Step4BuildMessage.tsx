@@ -173,6 +173,9 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
           <p className="step-description">
             Connecting your capabilities to what {draft.audience.name} cares about...
           </p>
+          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 12, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
+            This usually takes about a minute. Maria is thinking through the full mapping and drafting every statement.
+          </p>
           {error && (
             <div style={{ marginTop: 24 }}>
               <p style={{ color: 'var(--danger)' }}>{error}</p>

@@ -27,6 +27,93 @@ const router = Router();
 router.use(requireAuth);
 router.use(requireWorkspace);
 
+// ─── Suggestion filtering: drop suggestions that don't add material value ──
+
+/**
+ * Normalize text for comparison: lowercase, strip punctuation, collapse whitespace.
+ */
+function normalizeForCompare(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Token-overlap similarity (Jaccard on content words).
+ * Returns 0..1. 1 = identical token bags, 0 = nothing in common.
+ */
+function similarity(a: string, b: string): number {
+  const stop = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'at', 'for', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'that', 'this', 'these', 'those', 'it', 'its']);
+  const toks = (s: string) => new Set(normalizeForCompare(s).split(' ').filter(w => w.length > 2 && !stop.has(w)));
+  const as = toks(a);
+  const bs = toks(b);
+  if (as.size === 0 && bs.size === 0) return 1;
+  if (as.size === 0 || bs.size === 0) return 0;
+  let inter = 0;
+  for (const t of as) if (bs.has(t)) inter++;
+  return inter / new Set([...as, ...bs]).size;
+}
+
+/**
+ * Check if a suggestion adds material improvement over the current text.
+ * Rejects: exact match, normalized match, or >=0.85 token-overlap similarity.
+ * Ken's rule: Maria must add value or do nothing.
+ */
+function isMaterialImprovement(suggested: string, current: string, threshold = 0.85): boolean {
+  if (!suggested || !current) return !!suggested;
+  if (suggested.trim() === current.trim()) return false;
+  if (normalizeForCompare(suggested) === normalizeForCompare(current)) return false;
+  return similarity(suggested, current) < threshold;
+}
+
+/**
+ * Filter suggestions coming back from Maria against the current draft state.
+ * Drops any that don't materially change their target cell, and any tier3-add
+ * that duplicates an existing bullet in that column.
+ */
+function filterMaterialSuggestions(
+  suggestions: { cell: string; suggested: string }[],
+  draft: {
+    tier1Statement?: { text: string } | null;
+    tier2Statements: { text: string; tier3Bullets: { text: string }[] }[];
+  },
+): { cell: string; suggested: string }[] {
+  const kept: { cell: string; suggested: string }[] = [];
+  for (const s of suggestions) {
+    if (!s.suggested || !s.suggested.trim()) continue;
+    if (s.cell === 'tier1') {
+      const current = draft.tier1Statement?.text || '';
+      if (isMaterialImprovement(s.suggested, current)) kept.push(s);
+      continue;
+    }
+    const t2Match = s.cell.match(/^tier2-(\d+)$/);
+    if (t2Match) {
+      const idx = parseInt(t2Match[1]);
+      const current = draft.tier2Statements[idx]?.text || '';
+      if (isMaterialImprovement(s.suggested, current)) kept.push(s);
+      continue;
+    }
+    const t3Match = s.cell.match(/^tier3-(\d+)-(\d+)$/);
+    if (t3Match) {
+      const t2idx = parseInt(t3Match[1]);
+      const t3idx = parseInt(t3Match[2]);
+      const current = draft.tier2Statements[t2idx]?.tier3Bullets[t3idx]?.text || '';
+      if (isMaterialImprovement(s.suggested, current)) kept.push(s);
+      continue;
+    }
+    const t3AddMatch = s.cell.match(/^tier3-(\d+)-add$/);
+    if (t3AddMatch) {
+      const t2idx = parseInt(t3AddMatch[1]);
+      const existing = draft.tier2Statements[t2idx]?.tier3Bullets.map(b => b.text) || [];
+      // Drop add-suggestion if it's already in the column (exact, normalized, or highly similar)
+      const isDup = existing.some(e => !isMaterialImprovement(s.suggested, e));
+      if (!isDup) kept.push(s);
+      continue;
+    }
+    // Unknown cell type — keep it
+    kept.push(s);
+  }
+  return kept;
+}
+
 // ─── Generation helper: pin priority text + validate ─────
 
 interface TierGenResult {
@@ -666,6 +753,9 @@ ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n'
       }
       return s;
     }).filter((s): s is { cell: string; suggested: string } => s !== null);
+
+    // Drop suggestions that don't materially improve on what's already there.
+    result.suggestions = filterMaterialSuggestions(result.suggestions, draft);
   }
 
   res.json(result);
@@ -758,6 +848,10 @@ ${draft.tier2Statements.map((t2, i) => `[cell: tier2-${i}] "${t2.text}"
   Tier 3: ${t2.tier3Bullets.map((t3, j) => `[cell: tier3-${i}-${j}] "${t3.text}"`).join(', ') || '(none)'}`).join('\n')}`;
 
   const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(REVISE_FROM_EDITS_SYSTEM, userMessage, 'elite');
+  // Drop suggestions that don't materially improve on what's already there
+  if (result.suggestions) {
+    result.suggestions = filterMaterialSuggestions(result.suggestions, draft);
+  }
   res.json(result);
 });
 
@@ -823,6 +917,22 @@ OFFERING CAPABILITIES:
 ${draft.offering.elements.map(e => `"${e.text}"`).join('\n')}`;
 
   const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
+
+  // Drop suggestions that don't materially improve on what's already there.
+  // Maria's job is to add value or do nothing — identical or near-identical suggestions are noise.
+  if (result.suggestions) {
+    const before = result.suggestions.length;
+    result.suggestions = filterMaterialSuggestions(result.suggestions, draft);
+    if (result.suggestions.length !== before) {
+      console.log(`[Polish] Filtered ${before - result.suggestions.length}/${before} non-material suggestions`);
+    }
+  }
+
+  // If every suggestion was filtered out, tell the user nothing meaningful is to be improved
+  if (!result.suggestions || result.suggestions.length === 0) {
+    res.json({ suggestions: [], message: 'Nothing meaningful to improve right now.' });
+    return;
+  }
 
   res.json(result);
 });
@@ -969,6 +1079,10 @@ OFFERING CAPABILITIES:
 ${draft.offering.elements.map((e) => `"${e.text}"`).join('\n')}`;
 
   const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, userMessage, 'elite');
+  // Drop suggestions that don't materially improve — Maria's job is to add value or do nothing
+  if (result.suggestions) {
+    result.suggestions = filterMaterialSuggestions(result.suggestions, draft);
+  }
   res.json(result);
 });
 
@@ -1149,6 +1263,31 @@ IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation
       if (line.toLowerCase().trim() === ctaLower) return '';
       return line;
     }).filter(line => line.trim()).join('\n').trim();
+  }
+
+  // Chapter 2 boundary safety net: trim trailing Chapter-3-style sentences
+  // (support / setup / hand-holding content). Fixes the observed bleed where Ch2
+  // ends with "We handle the full setup..." which belongs to Ch3. This is a surgical
+  // post-processor — it only inspects the LAST 1-2 sentences and only trims if they
+  // look clearly like Ch3 content. It does NOT modify the prompt (fiveChapter.ts is locked).
+  if (chapterNum === 2) {
+    const ch3Patterns = /\b(we'?ll (handle|hold|take care|manage|guide)|we handle|full setup|full installation|installation and (configuration|integration|training)|set(ting)? you up|onboard(ing)?|hand[\s-]?hold|hand[\s-]?holding|stay focused on your|fit into whatever|work(ing)? with your it|ongoing support|post[-\s]?launch support|behind every (customer|client))\b/i;
+    const sentences = content.split(/(?<=[.!?])\s+(?=[A-Z"'])/);
+    // Remove up to 2 trailing sentences if they match Ch3 patterns and the chapter still has >2 sentences
+    let trimmed = 0;
+    while (sentences.length > 3 && trimmed < 2) {
+      const last = sentences[sentences.length - 1];
+      if (ch3Patterns.test(last)) {
+        sentences.pop();
+        trimmed++;
+      } else {
+        break;
+      }
+    }
+    if (trimmed > 0) {
+      console.log(`[ChapterBleed] Trimmed ${trimmed} Ch3-style trailing sentences from Ch2`);
+      content = sentences.join(' ').trim();
+    }
   }
 
   // Voice check chapter prose
@@ -1532,6 +1671,8 @@ router.post('/copy-edit', requireStoryteller, async (req: Request, res: Response
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
 
   const spec = getMediumSpec(story.medium);
+  const normalize = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const originalNorm = normalize(content);
   const userMessage = `CONTENT FORMAT: ${spec.label}
 USER'S REQUEST: ${editRequest}
 
@@ -1541,6 +1682,19 @@ ${content}
 Apply the requested changes.`;
 
   let revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'fast');
+
+  // If the AI returned identical text, retry once with a stronger nudge.
+  if (normalize(revised) === originalNorm) {
+    console.log('[CopyEdit] First pass returned identical text — retrying with stronger instruction');
+    const retryMessage = `CONTENT FORMAT: ${spec.label}
+USER'S REQUEST: ${editRequest}
+
+CURRENT CONTENT:
+${content}
+
+CRITICAL: Your previous attempt returned text identical to the original. You MUST actually apply the requested change. If the request is about rewording a specific sentence or opening, rewrite that sentence. Return the FULL content with the change applied.`;
+    revised = await callAI(COPY_EDIT_SYSTEM, retryMessage, 'fast');
+  }
 
   // Voice check copy-edited text
   if (await isVoiceCheckEnabled(req.user!.userId)) {
@@ -1558,7 +1712,9 @@ Apply the requested changes.`;
     }
   }
 
-  res.json({ content: revised });
+  // If we STILL have identical text, signal that to the caller so the UI can say so honestly.
+  const unchanged = normalize(revised) === originalNorm;
+  res.json({ content: revised, unchanged });
 });
 
 // ─── Audience Discovery ────────────────────────────────
