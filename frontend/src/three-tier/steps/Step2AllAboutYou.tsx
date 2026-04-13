@@ -38,7 +38,18 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [showMappingModal, setShowMappingModal] = useState(false);
   const [elements, setElements] = useState(draft.offering.elements.map(e => e.text));
+  const [draftingMfs, setDraftingMfs] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+
+  async function draftMfs() {
+    setDraftingMfs(true);
+    try {
+      await api.post('/ai/draft-mfs', { offeringId: draft.offeringId });
+      await loadDraft();
+    } finally {
+      setDraftingMfs(false);
+    }
+  }
 
   useEffect(() => {
     function handleExtracted() {
@@ -75,23 +86,30 @@ export function Step2AllAboutYou({ draft, loadDraft, nextStep, prevStep }: StepP
   }
 
   if (mode === 'confirm') {
-    const hasAnyMf = draft.offering.elements.some(e => e.motivatingFactor);
+    const missingMfCount = draft.offering.elements.filter(e => !e.motivatingFactor).length;
     return (
       <div className="step-panel">
         <div className="confirm-panel">
           <h2>Your Offering's Differentiators</h2>
-          <ol className="confirm-list">
-            {draft.offering.elements.map(el => (
-              <li key={el.id} className="confirm-list-item">
-                <span>{el.text}</span>
-                {el.motivatingFactor && (
-                  <span className="confirm-list-mf">{el.motivatingFactor}</span>
-                )}
-              </li>
-            ))}
-          </ol>
-          {hasAnyMf && (
-            <p className="confirm-hint" style={{ marginTop: 4 }}>The italic text below each differentiator is its motivating factor — why someone would crave it.</p>
+          <DifferentiatorList
+            offeringId={draft.offeringId}
+            elements={draft.offering.elements}
+            onUpdate={loadDraft}
+            readOnly
+          />
+          {missingMfCount > 0 && (
+            <div className="confirm-mf-hint">
+              <p style={{ margin: '0 0 8px 0' }}>
+                {missingMfCount === draft.offering.elements.length ? 'None' : missingMfCount} of your differentiators {missingMfCount === 1 ? 'is missing a motivating factor' : 'are missing motivating factors'}. Maria can write them — it takes a few extra seconds, one-time.
+              </p>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={draftMfs}
+                disabled={draftingMfs}
+              >
+                {draftingMfs ? 'Maria is writing them…' : 'Ask Maria to draft motivating factors'}
+              </button>
+            </div>
           )}
 
           <div className="confirm-actions">

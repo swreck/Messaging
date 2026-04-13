@@ -475,6 +475,41 @@ export async function dispatchActions(
         }
       }
 
+      if (a.type === 'draft_mfs') {
+        const targetOfferingId = await resolveOfferingId(a.params, userId, ctx.offeringId, workspaceId);
+        if (!targetOfferingId) {
+          actionResult = 'Could not draft motivating factors — no offering specified or found. Try mentioning the offering by name.';
+        } else {
+          const offering = await prisma.offering.findFirst({
+            where: { id: targetOfferingId, ...(workspaceId ? { workspaceId } : { userId }) },
+            include: { elements: { orderBy: { sortOrder: 'asc' } } },
+          });
+          if (offering) {
+            const targets = offering.elements.filter(e => !e.motivatingFactor);
+            if (targets.length === 0) {
+              actionResult = `Every differentiator on "${offering.name}" already has a motivating factor — nothing to draft.`;
+            } else {
+              try {
+                const { draftMfsForOffering } = await import('./draftMfs.js');
+                const drafted = await draftMfsForOffering(offering, targets);
+                for (const d of drafted) {
+                  if (d.elementId && d.mf) {
+                    await prisma.offeringElement.update({
+                      where: { id: d.elementId },
+                      data: { motivatingFactor: d.mf },
+                    });
+                  }
+                }
+                actionResult = `Drafted motivating factors for ${drafted.length} differentiator${drafted.length === 1 ? '' : 's'} on "${offering.name}". Each one names multiple audience types so the same offering can speak to different audiences.`;
+                refreshNeeded = true;
+              } catch (err: any) {
+                actionResult = `I tried to draft them but ran into an error: ${err.message || 'unknown'}. You can also use the "Ask Maria to draft motivating factors" button on the offering page.`;
+              }
+            }
+          }
+        }
+      }
+
       if (a.type === 'delete_capabilities' && a.params.positions) {
         const targetOfferingId = await resolveOfferingId(a.params, userId, ctx.offeringId, workspaceId);
         if (!targetOfferingId) {
@@ -1564,6 +1599,7 @@ export function buildActionList(context: ActionContext): string {
   actions.push('- add_capabilities: Add capabilities to an offering. Params: { texts: string[], offeringName?: string } — offeringName targets a specific offering by name (partial match OK). Required if not on an offering page.');
   actions.push('- edit_capabilities: Update capabilities — rename text or set motivating factor. Params: { edits: [{ position: number, text?: string, motivatingFactor?: string }], offeringName?: string } — position is 1-based.');
   actions.push('- delete_capabilities: Remove capabilities by position. Params: { positions: number[], offeringName?: string } — 1-based positions.');
+  actions.push('- draft_mfs: Have Maria draft motivating factors for ALL differentiators on an offering that lack one, in a single batch. Params: { offeringName?: string } — offeringName targets a specific offering by partial match. If omitted, uses the current page\'s offering. PREFERRED over edit_capabilities one-at-a-time when the user asks "draft motivating factors" or similar — single call, audience-portable standard, mfCheck quality gate built in.');
 
   // Create offering — available from any page (for quick-start and flexibility)
   actions.push('- create_offering: Create a new offering, optionally with initial capabilities. Params: { name: string, description?: string, capabilities?: string[] }');

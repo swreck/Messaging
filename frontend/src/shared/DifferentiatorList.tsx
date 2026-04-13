@@ -10,6 +10,7 @@ interface DifferentiatorListProps {
   onUpdate: () => void;
   allowAdd?: boolean;
   allowRemove?: boolean;
+  readOnly?: boolean;
 }
 
 export function DifferentiatorList({
@@ -18,7 +19,38 @@ export function DifferentiatorList({
   onUpdate,
   allowAdd = true,
   allowRemove = true,
+  readOnly = false,
 }: DifferentiatorListProps) {
+  // Read-only fork: same visual language (bar/wash, mf-drafted/mf-ready),
+  // but no drag handle, no remove button, no editable input. Used inside
+  // the Step 2 confirm view so the user sees the FULL state of the offering
+  // without being given affordances for action they didn't ask for.
+  if (readOnly) {
+    return (
+      <div className="differentiator-list">
+        <ol className="differentiator-readonly-list">
+          {elements.map((item) => {
+            const hasMF = !!item.motivatingFactor;
+            return (
+              <li key={item.id} className="differentiator-item differentiator-item-readonly">
+                <div style={{ flex: 1 }}>
+                  <span className="differentiator-text">{item.text}</span>
+                  <div className={`mf-field ${hasMF ? 'mf-drafted' : 'mf-ready'}`}>
+                    {hasMF ? (
+                      <p className="mf-readonly">{item.motivatingFactor}</p>
+                    ) : (
+                      <p className="mf-readonly mf-readonly-empty">No motivating factor yet — Maria can draft this.</p>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    );
+  }
+
   const [newItem, setNewItem] = useState('');
   const [showBanner, setShowBanner] = useState(false);
 
