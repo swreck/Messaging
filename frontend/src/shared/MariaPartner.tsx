@@ -22,6 +22,18 @@ interface ReturnContext {
 // Intro steps: 0=name, 1=phase1, 2=phase2, 3=phase3, 4=done
 const INTRO_DONE = 4;
 
+type PanelSize = 'compact' | 'medium' | 'full';
+
+function getInitialPanelSize(): PanelSize {
+  try {
+    const saved = localStorage.getItem('maria-panel-size') as PanelSize | null;
+    if (saved === 'compact' || saved === 'medium' || saved === 'full') return saved;
+  } catch {}
+  // Default: compact on phone, medium elsewhere
+  if (typeof window !== 'undefined' && window.innerWidth <= 600) return 'compact';
+  return 'medium';
+}
+
 export function MariaPartner() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -31,6 +43,12 @@ export function MariaPartner() {
 
   // Panel state
   const [open, setOpen] = useState(false);
+  const [panelSize, setPanelSize] = useState<PanelSize>(getInitialPanelSize);
+
+  function changePanelSize(size: PanelSize) {
+    setPanelSize(size);
+    try { localStorage.setItem('maria-panel-size', size); } catch {}
+  }
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -136,14 +154,28 @@ export function MariaPartner() {
       .catch(() => {});
   }, [user]);
 
+  // Stashed hint message (assistant-authored) to be appended when the user opens the panel
+  const pendingHintRef = useRef<string | null>(null);
+
   useEffect(() => {
     function onToggle(e: Event) {
       const detail = (e as CustomEvent).detail;
+      if (detail?.glow && !detail?.open) {
+        // Non-blocking hint: glow the bubble so the user notices Maria has something to say
+        setShowGlow(true);
+        if (detail.message) {
+          pendingHintRef.current = detail.message;
+        }
+        return;
+      }
       if (detail?.open) {
         setOpen(true);
         setShowDot(false);
         setShowGlow(false);
-        if (detail.message) {
+        if (detail.hint && detail.message) {
+          // Proactive hint: inject as an assistant message, no user message, no backend call
+          pendingHintRef.current = detail.message;
+        } else if (detail.message) {
           pendingMessageRef.current = detail.message;
           // Suppress proactive offer when a pending message is queued
           setShowProactiveCard(false);
@@ -155,6 +187,15 @@ export function MariaPartner() {
     document.addEventListener('maria-toggle', onToggle);
     return () => document.removeEventListener('maria-toggle', onToggle);
   }, []);
+
+  // When the panel opens with a stashed hint, append it as an assistant message.
+  useEffect(() => {
+    if (open && loaded && pendingHintRef.current) {
+      const hint = pendingHintRef.current;
+      pendingHintRef.current = null;
+      setMessages(prev => [...prev, { role: 'assistant', content: hint }]);
+    }
+  }, [open, loaded]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -217,6 +258,31 @@ export function MariaPartner() {
 
     setShowReturnCard(false);
     setShowProactiveCard(false);
+
+    // Local "stop jumping in" intercept — user can opt out of proactive help without a backend call
+    const lower = text.toLowerCase();
+    if (/\bstop\s+jumping\s+in\b/.test(lower) || /\b(turn off|disable|stop)\b.*\bproactive\b/.test(lower)) {
+      try { localStorage.setItem('maria-proactive-help-off', '1'); } catch {}
+      if (!overrideText) {
+        setInput('');
+        setMessages(prev => [...prev, { role: 'user', content: text }, {
+          role: 'assistant',
+          content: "Got it. I'll stay in the bubble unless you open me. If you change your mind, say \"start jumping in\" and I'll help out again.",
+        }]);
+      }
+      return;
+    }
+    if (/\bstart\s+jumping\s+in\b/.test(lower)) {
+      try { localStorage.removeItem('maria-proactive-help-off'); } catch {}
+      if (!overrideText) {
+        setInput('');
+        setMessages(prev => [...prev, { role: 'user', content: text }, {
+          role: 'assistant',
+          content: "Okay, I'll jump in with tips when you hit new stages.",
+        }]);
+      }
+      return;
+    }
 
     if (!overrideText) {
       setInput('');
@@ -490,14 +556,48 @@ export function MariaPartner() {
 
       {/* Chat panel */}
       {open && (
-        <div className="partner-panel" ref={panelRef}>
+        <div className={`partner-panel partner-panel-${panelSize}`} ref={panelRef}>
           <div className="partner-header">
             <span className="partner-header-name">Maria</span>
-            <button className="partner-close" onClick={handleClose} aria-label="Close">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="partner-header-actions">
+              <div className="partner-size-toggle" role="group" aria-label="Panel size">
+                <button
+                  className={`partner-size-btn ${panelSize === 'compact' ? 'active' : ''}`}
+                  onClick={() => changePanelSize('compact')}
+                  aria-label="Compact"
+                  title="Compact"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="14" width="16" height="6" rx="1" />
+                  </svg>
+                </button>
+                <button
+                  className={`partner-size-btn ${panelSize === 'medium' ? 'active' : ''}`}
+                  onClick={() => changePanelSize('medium')}
+                  aria-label="Medium"
+                  title="Medium"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="9" width="16" height="11" rx="1" />
+                  </svg>
+                </button>
+                <button
+                  className={`partner-size-btn ${panelSize === 'full' ? 'active' : ''}`}
+                  onClick={() => changePanelSize('full')}
+                  aria-label="Full"
+                  title="Full"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="4" width="16" height="16" rx="1" />
+                  </svg>
+                </button>
+              </div>
+              <button className="partner-close" onClick={handleClose} aria-label="Minimize" title="Minimize — Maria stays in the bubble">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="partner-body">

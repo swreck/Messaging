@@ -19,7 +19,6 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   const [revising, setRevising] = useState(false);
   const [refining, setRefining] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
-  const [snapshotLabel, setSnapshotLabel] = useState('');
   const [hasEdited, setHasEdited] = useState(false);
   const [hasRefined, setHasRefined] = useState(false);
   const [showRefineNudge, setShowRefineNudge] = useState(false);
@@ -297,13 +296,27 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   }
 
   const [showCheckpointSaved, setShowCheckpointSaved] = useState(false);
+  const [renamingCheckpointId, setRenamingCheckpointId] = useState<string | null>(null);
+  const [renameCheckpointValue, setRenameCheckpointValue] = useState('');
 
   async function createSnapshot() {
-    await api.post(`/versions/table/${draft.id}`, { label: snapshotLabel || undefined });
-    setSnapshotLabel('');
+    await api.post(`/versions/table/${draft.id}`, {});
     setShowCheckpointSaved(true);
     setTimeout(() => setShowCheckpointSaved(false), 2000);
     await refreshDraft();
+  }
+
+  async function renameCheckpoint(versionId: string, newLabel: string) {
+    const trimmed = newLabel.trim();
+    if (!trimmed) { setRenamingCheckpointId(null); return; }
+    try {
+      await api.patch(`/versions/table/${versionId}`, { label: trimmed });
+      await refreshDraft();
+    } catch {
+      // silent
+    }
+    setRenamingCheckpointId(null);
+    setRenameCheckpointValue('');
   }
 
   async function restoreSnapshot(versionId: string) {
@@ -390,7 +403,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
               This is a first draft of a Three Tier Message for {draft.audience.name}.
             </p>
             <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
-              As a first draft, value statements are largely in the "You get [value] because of [our differentiation]" format for your review and edits. At any time, use <strong>Refine Language</strong> to make the words sound more natural. And, if desired, you can then use <strong>Polish</strong> for final refinement. Polish take a little longer.
+              As a first draft, value statements are largely in the "You get [value] because of [our differentiation]" format for your review and edits. At any time, use <strong>Refine Language</strong> to make the words sound more natural. And, if desired, you can then use <strong>Polish</strong> for final refinement. Polish takes a little longer.
             </p>
           </div>
         </div>
@@ -546,14 +559,10 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Checkpoints</h3>
             <button className="btn btn-ghost btn-sm" onClick={() => setVersionsOpen(false)}>&times;</button>
           </div>
-          <div style={{ padding: '12px 20px', borderBottom: '1px solid #d1d1d6', display: 'flex', gap: 8 }}>
-            <input
-              value={snapshotLabel}
-              onChange={e => setSnapshotLabel(e.target.value)}
-              placeholder="Label (optional)"
-              style={{ flex: 1, padding: '6px 10px', border: '1px solid #d1d1d6', borderRadius: 'var(--radius-sm)', fontSize: 14 }}
-            />
-            <button className="btn btn-secondary btn-sm" onClick={createSnapshot}>Save</button>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid #d1d1d6' }}>
+            <button className="btn btn-primary btn-sm" onClick={createSnapshot} style={{ width: '100%' }}>
+              {showCheckpointSaved ? 'Checkpoint saved' : '+ Save a new checkpoint'}
+            </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
             {(draft.tableVersions?.length || 0) === 0 && (
@@ -563,15 +572,31 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
             )}
             {(draft.tableVersions || []).map((v: TableVersion) => {
               const timeAgo = formatTimeAgo(v.createdAt);
+              const isRenaming = renamingCheckpointId === v.id;
               return (
                 <div key={v.id} style={{ padding: '10px 20px', borderBottom: '1px solid var(--bg-secondary)', cursor: 'default' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <strong style={{ fontSize: 14 }}>{v.label}</strong>
-                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{timeAgo}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                    {isRenaming ? (
+                      <input
+                        autoFocus
+                        value={renameCheckpointValue}
+                        onChange={e => setRenameCheckpointValue(e.target.value)}
+                        onBlur={() => renameCheckpoint(v.id, renameCheckpointValue)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') renameCheckpoint(v.id, renameCheckpointValue);
+                          if (e.key === 'Escape') { setRenamingCheckpointId(null); setRenameCheckpointValue(''); }
+                        }}
+                        style={{ flex: 1, padding: '4px 8px', border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', fontSize: 14 }}
+                      />
+                    ) : (
+                      <strong style={{ fontSize: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.label}</strong>
+                    )}
+                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)', flexShrink: 0 }}>{timeAgo}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
                     <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setCompareSnapshot({ snapshot: v.snapshot, label: v.label })}>Compare</button>
                     <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setRestoreTarget(v.id)}>Restore</button>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => { setRenamingCheckpointId(v.id); setRenameCheckpointValue(v.label); }}>Rename</button>
                   </div>
                 </div>
               );

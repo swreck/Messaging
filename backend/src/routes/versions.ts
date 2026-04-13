@@ -126,6 +126,27 @@ router.post('/table/:draftId', async (req: Request, res: Response) => {
   res.status(201).json({ version });
 });
 
+// PATCH /api/versions/table/:versionId — rename a checkpoint
+router.patch('/table/:versionId', async (req: Request, res: Response) => {
+  const { label } = req.body;
+  if (typeof label !== 'string' || !label.trim()) {
+    res.status(400).json({ error: 'label required' });
+    return;
+  }
+  const version = await prisma.tableVersion.findFirst({
+    where: { id: param(req.params.versionId), draft: { offering: { workspaceId: req.workspaceId } } },
+  });
+  if (!version) {
+    res.status(404).json({ error: 'Version not found' });
+    return;
+  }
+  const updated = await prisma.tableVersion.update({
+    where: { id: version.id },
+    data: { label: label.trim() },
+  });
+  res.json({ version: updated });
+});
+
 // POST /api/versions/table/:draftId/restore/:versionId
 router.post('/table/:draftId/restore/:versionId', async (req: Request, res: Response) => {
   const draft = await prisma.threeTierDraft.findFirst({

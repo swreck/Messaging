@@ -355,13 +355,33 @@ export function FiveChapterShell() {
     }
   }
 
-  // Maria guidance — opens Maria with contextual message the first time through each stage
+  // Maria guidance — opens Maria with contextual message the first time through each stage.
+  // After the first time, checks a global opt-in flag. If the user has chosen to turn off
+  // proactive help, Maria stays in the bubble. Mobile users default to a gentler "glow only"
+  // hint so the help doesn't occlude the chapter they're looking at.
   function mariaGuide(stage: string, message: string) {
     const key = `maria-guided-${stage}`;
     if (localStorage.getItem(key)) return; // Already guided for this stage
     localStorage.setItem(key, 'true');
+
+    // Global off-switch — user dismissed proactive help in a previous guide
+    if (localStorage.getItem('maria-proactive-help-off') === '1') return;
+
+    const isNarrow = typeof window !== 'undefined' && window.innerWidth <= 600;
+    // On phone: glow the bubble + stash the message as a HINT (injected as assistant line
+    //   when the user opens the panel — no backend call, no user message in history).
+    // On larger screens: open the panel and show the hint.
+    // Either way, the hint has an opt-out line so the user can turn this off.
+    const augmented = `${message}\n\nIf you'd rather I stay quiet, say "stop jumping in" and I won't pop up unless you open me.`;
     setTimeout(() => {
-      document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true, message } }));
+      document.dispatchEvent(new CustomEvent('maria-toggle', {
+        detail: {
+          open: !isNarrow,
+          message: augmented,
+          hint: true,
+          glow: isNarrow,
+        },
+      }));
     }, 500);
   }
 
@@ -532,16 +552,19 @@ export function FiveChapterShell() {
     setCopyEditing(true);
     try {
       const content = story.blendedText || story.chapters.map(c => c.content).join('\n\n');
-      const { content: revised } = await api.post<{ content: string }>('/ai/copy-edit', {
+      const { content: revised, unchanged } = await api.post<{ content: string; unchanged?: boolean }>('/ai/copy-edit', {
         storyId: story.id,
         content,
         request: copyEditInput.trim(),
       });
-      if (story.blendedText) {
+      if (unchanged) {
+        showToast("Maria tried but the text came back unchanged. Try phrasing your request differently.", 'info');
+        // Keep the input so the user can adjust it
+      } else if (story.blendedText) {
         const { story: updated } = await api.put<{ story: FiveChapterStory }>(`/stories/${story.id}`, { blendedText: revised, version: story.version });
         setStory(updated);
+        setCopyEditInput('');
       }
-      setCopyEditInput('');
     } catch (err: any) {
       showToast(err.message);
     } finally {
@@ -890,7 +913,16 @@ export function FiveChapterShell() {
             </div>
             <div className="form-group">
               <label>Call to Action <InfoTooltip text="What you want your audience to do after reading — like scheduling a demo or starting a trial." /></label>
-              <input value={cta} onChange={e => setCta(e.target.value)} placeholder="e.g. Schedule a demo, Start a free trial, Visit our website" required />
+              <textarea
+                value={cta}
+                onChange={e => setCta(e.target.value)}
+                placeholder="e.g. Schedule a demo, Start a free trial, Visit our website"
+                required
+                rows={1}
+                ref={el => { if (el) { el.style.height = 'auto'; el.style.height = Math.max(44, el.scrollHeight) + 'px'; } }}
+                onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.max(44, t.scrollHeight) + 'px'; }}
+                style={{ resize: 'none', minHeight: 44, lineHeight: 1.4, fontFamily: 'inherit' }}
+              />
             </div>
             <div className="form-group">
               <label>Chapter Emphasis (optional)</label>
@@ -928,26 +960,31 @@ export function FiveChapterShell() {
             Maria needs one more thing before writing: why does <strong>{draft.audience.priorities[0]?.text}</strong> matter so much to this person? That context shapes the story.
           </p>
           <p className="mf-panel-offer">
-            Maria can take her best guess, or you can tell her. You can always change it later.
+            You can explain it yourself, or let Maria take her best informed guess from what she knows about this kind of audience. You can always change it later.
           </p>
           <div className="mf-panel-actions">
             <button
               className="btn btn-primary"
-              onClick={deriveMotivation}
+              onClick={() => {
+                setShowMFPanel(false);
+                document.dispatchEvent(new CustomEvent('maria-toggle', {
+                  detail: { open: true, message: `Let's talk about why "${draft.audience.priorities[0]?.text}" matters so much to ${draft.audience.name}. I'll add what I learn to the motivating factor.` },
+                }));
+              }}
               disabled={derivingMF}
             >
-              {derivingMF ? <><Spinner size={14} /> Thinking...</> : 'Go ahead and guess'}
+              I'll explain it
             </button>
             <button
               className="btn btn-secondary"
               onClick={deriveMotivation}
               disabled={derivingMF}
             >
-              {derivingMF ? <><Spinner size={14} /> Working on it...</> : 'Just guess and go'}
+              {derivingMF ? <><Spinner size={14} /> Researching...</> : 'Let Maria take an informed guess'}
             </button>
           </div>
           <p className="mf-panel-note">
-            Maria can make her best guess, but she might miss something important. You can always refine it later.
+            Maria's guess is based on what she knows about this kind of audience and offering. If she misses the mark, you can refine it.
           </p>
         </div>
       )}
@@ -1099,6 +1136,7 @@ export function FiveChapterShell() {
                 key={ch.num}
                 className={`fcs-chapter-card ${chapterContent ? 'has-content' : ''} ${isGenerating ? 'generating' : ''}`}
                 ref={el => { chapterRefs.current[idx] = el; }}
+                style={isGenerating ? { position: 'relative' } : undefined}
               >
                 <div className="fcs-chapter-header">
                   <span className="fcs-chapter-num">{ch.num}</span>
@@ -1123,12 +1161,33 @@ export function FiveChapterShell() {
                     <button
                       className="btn btn-ghost btn-sm"
                       onClick={() => regenerateChapter(ch.num)}
-                      disabled={!!generatingChapter}
+                      disabled={isGenerating}
+                      title={`Rewrite chapter ${ch.num} only`}
                     >
-                      Regenerate
+                      {isGenerating ? <><Spinner size={12} /> Rewriting chapter {ch.num}...</> : `Regenerate Ch ${ch.num}`}
                     </button>
                   )}
                 </div>
+
+                {isGenerating && chapterContent && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(255,255,255,0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    fontSize: 13,
+                    color: 'var(--text-secondary)',
+                    zIndex: 2,
+                    borderRadius: 'var(--radius-md)',
+                    pointerEvents: 'none',
+                  }}>
+                    <Spinner size={16} />
+                    <span>Rewriting chapter {ch.num} only — other chapters unchanged</span>
+                  </div>
+                )}
 
                 {isGenerating && !chapterContent && (
                   <div className="fcs-chapter-loading">
@@ -1270,11 +1329,23 @@ export function FiveChapterShell() {
 
                   {/* Copy edit */}
                   <div className="fcs-copy-edit">
-                    <input
+                    <textarea
                       value={copyEditInput}
-                      onChange={e => setCopyEditInput(e.target.value)}
+                      onChange={e => {
+                        setCopyEditInput(e.target.value);
+                        const t = e.currentTarget;
+                        t.style.height = 'auto';
+                        t.style.height = Math.min(Math.max(44, t.scrollHeight), 160) + 'px';
+                      }}
                       placeholder="Tell Maria what to change — e.g. 'Make it shorter' or 'More emphasis on security'"
-                      onKeyDown={e => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && copyEdit()}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault();
+                          copyEdit();
+                        }
+                      }}
+                      rows={1}
+                      style={{ resize: 'none', minHeight: 44, fontFamily: 'inherit', lineHeight: 1.4 }}
                     />
                     <button className="btn btn-secondary btn-sm" onClick={copyEdit} disabled={copyEditing || !copyEditInput.trim()}>
                       {copyEditing ? <Spinner size={12} /> : 'Edit'}

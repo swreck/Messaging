@@ -59,9 +59,27 @@ export function CellEditor({ text, maxWords, onSave, onCancel }: CellEditorProps
         onKeyDown={handleKeyDown}
         rows={2}
       />
-      <span className={`cell-word-count ${pct >= 1 ? 'over' : pct >= 0.8 ? 'warning' : 'ok'}`}>
-        {words}/{maxWords}
-      </span>
+      <div className="cell-editor-footer">
+        <span className={`cell-word-count ${pct >= 1 ? 'over' : pct >= 0.8 ? 'warning' : 'ok'}`}>
+          {words}/{maxWords}
+        </span>
+        <div className="cell-editor-actions">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onMouseDown={e => e.preventDefault()}
+            onClick={onCancel}
+            aria-label="Cancel edit"
+          >Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => onSave(value.trim())}
+            aria-label="Save edit"
+          >Done</button>
+        </div>
+      </div>
     </div>
   );
 }

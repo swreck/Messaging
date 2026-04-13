@@ -94,6 +94,11 @@ export function DashboardPage() {
   const completed = allDrafts.filter(d => d.status === 'complete' || d.currentStep === 5);
   const mostRecent = inProgress[0] || null;
 
+  // First Three Tier prompt — user has an offering and audience set up but no draft yet.
+  // This closes the gap Ken hit: new users arrive on the dashboard and don't know where to start.
+  const hasSetup = offerings.length > 0 && audiences.length > 0;
+  const needsFirstThreeTier = hasSetup && allDrafts.length === 0;
+
   function getStepLabel(step: number): string {
     const labels = ['Confirm', 'Your Offering', 'Your Audience', 'Building', 'Your Three Tier'];
     return labels[step - 1] || `Step ${step}`;
@@ -134,6 +139,33 @@ export function DashboardPage() {
           <div className="dashboard-welcome-actions">
             <button className="btn btn-secondary" onClick={() => navigate('/audiences')}>Create an Audience</button>
             <button className="btn btn-secondary" onClick={() => navigate('/offerings')}>Create an Offering</button>
+          </div>
+        </div>
+      )}
+
+      {/* First Three Tier prompt — setup is done, but no draft exists yet */}
+      {needsFirstThreeTier && (
+        <div
+          className="dashboard-continue"
+          onClick={() => navigate('/three-tiers')}
+          style={{
+            padding: '20px 22px',
+            marginBottom: 20,
+            background: 'var(--accent-light, #eaf4ff)',
+            borderRadius: 'var(--radius-md, 10px)',
+            border: '1px solid var(--accent, #007aff)',
+            cursor: 'pointer',
+            transition: 'box-shadow 0.15s',
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent, #007aff)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Start here
+          </div>
+          <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+            Build your first Three Tier message
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            You've got {offerings.length === 1 ? 'an offering' : `${offerings.length} offerings`} and {audiences.length === 1 ? 'an audience' : `${audiences.length} audiences`} set up. Tap here to pair one with another and let Maria draft the message.
           </div>
         </div>
       )}
