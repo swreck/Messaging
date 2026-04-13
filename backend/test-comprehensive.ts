@@ -118,7 +118,7 @@ async function main() {
 
   // ─── Driver Derive Flow ──────────────────────────────────
   await test('Driver: Derive for top priority', async () => {
-    const result = await req('POST', '/ai/derive-motivation', {
+    const result = await req('POST', '/ai/derive-driver', {
       priorityId: PRI_TOP_ID,
       audienceId: AUDIENCE_ID,
       offeringId: OFFERING_ID,

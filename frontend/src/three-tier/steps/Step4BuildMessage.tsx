@@ -16,7 +16,7 @@ interface TierResult {
 }
 
 export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: StepProps) {
-  const [phase, setPhase] = useState<'building' | 'questions' | 'applying' | 'done'>('building');
+  const [phase, setPhase] = useState<'offer-mfs' | 'drafting-mfs' | 'building' | 'questions' | 'applying' | 'done'>('building');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<number, boolean>>({});
   const [explanations, setExplanations] = useState<Record<number, string>>({});
@@ -24,6 +24,7 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
   const [explainText, setExplainText] = useState('');
   const [currentQ, setCurrentQ] = useState(0);
   const [error, setError] = useState('');
+  const [missingMfCount, setMissingMfCount] = useState(0);
 
   useEffect(() => {
     // Check if we already have tier statements (resuming)
@@ -31,8 +32,31 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
       setPhase('done');
       return;
     }
+
+    // Check if any differentiator on the offering is missing a motivating factor.
+    // If so, offer to draft them first — otherwise proceed straight to building.
+    const missing = draft.offering.elements.filter(e => !e.motivatingFactor).length;
+    setMissingMfCount(missing);
+    if (missing > 0) {
+      setPhase('offer-mfs');
+      return;
+    }
+
     buildMessage();
   }, []);
+
+  async function draftMfsThenBuild() {
+    setPhase('drafting-mfs');
+    setError('');
+    try {
+      await api.post('/ai/draft-mfs', { offeringId: draft.offering.id });
+      await loadDraft();
+      buildMessage();
+    } catch (err: any) {
+      setError(err.message || 'Could not draft motivating factors. You can still build the message without them.');
+      setPhase('offer-mfs');
+    }
+  }
 
   async function buildMessage() {
     setPhase('building');
@@ -166,6 +190,49 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
 
   return (
     <div className="step-panel" style={{ maxWidth: 700, textAlign: 'center' }}>
+      {phase === 'offer-mfs' && (
+        <div style={{ padding: '40px 0', textAlign: 'left' }}>
+          <h2 style={{ textAlign: 'center', marginBottom: 20 }}>One thing first</h2>
+          <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', padding: 24, marginBottom: 20 }}>
+            <p style={{ fontSize: 16, lineHeight: 1.6, marginBottom: 16 }}>
+              These differentiators are clear and I can make you a Three Tier directly.
+            </p>
+            <p style={{ fontSize: 16, lineHeight: 1.6, marginBottom: 16 }}>
+              I can also fill in what I call <strong>motivating factors</strong> next to each differentiator first, so it's clear why I connected your offering to the audience priorities. You'll have them as a reference for the future too.
+            </p>
+            <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)', marginBottom: 0 }}>
+              If I create the motivating factors first, it'll take a few extra seconds — but that's a one-time delay. After that they're saved on the offering.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button className="btn btn-primary" onClick={draftMfsThenBuild}>
+              Yes — add motivating factors first
+            </button>
+            <button className="btn btn-secondary" onClick={() => buildMessage()}>
+              No — just give me the Three Tier now
+            </button>
+          </div>
+          {missingMfCount > 0 && (
+            <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 16, textAlign: 'center' }}>
+              {missingMfCount} of {draft.offering.elements.length} differentiators don't have a motivating factor yet.
+            </p>
+          )}
+          {error && (
+            <p style={{ color: 'var(--danger)', marginTop: 16, textAlign: 'center' }}>{error}</p>
+          )}
+        </div>
+      )}
+
+      {phase === 'drafting-mfs' && (
+        <div style={{ padding: '60px 0' }}>
+          <Spinner size={32} />
+          <h2 style={{ marginTop: 24 }}>Maria is writing the motivating factors</h2>
+          <p className="step-description">
+            One per differentiator. She'll start building your Three Tier as soon as they're done.
+          </p>
+        </div>
+      )}
+
       {phase === 'building' && (
         <div style={{ padding: '60px 0' }}>
           <Spinner size={32} />

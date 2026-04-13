@@ -1,6 +1,6 @@
 /**
  * Comprehensive test suite for the Five Chapter Story redesign.
- * Tests: derive-motivation endpoint, MF validation (top priority only),
+ * Tests: derive-driver endpoint, driver validation (top priority only),
  * story CRUD, chapter generation, blend (no join), chapter editing,
  * copy edit, and cleanup.
  *
@@ -155,7 +155,7 @@ async function run() {
   console.log('\n── Derive Motivation Endpoint ──');
 
   // Derive motivation for top priority
-  const deriveMF = await req('POST', '/ai/derive-motivation', {
+  const deriveMF = await req('POST', '/ai/derive-driver', {
     priorityId: PRI_TOP_ID,
     audienceId: AUDIENCE_ID,
     offeringId: OFFERING_ID,
@@ -170,11 +170,11 @@ async function run() {
   const topPri = testAud?.priorities?.find((p: any) => p.id === PRI_TOP_ID);
   assert('MF was persisted to priority', !!topPri?.driver && topPri.driver.length > 10);
 
-  // Test derive-motivation validation
-  const deriveBadPri = await req('POST', '/ai/derive-motivation', { priorityId: 'fake-id', audienceId: AUDIENCE_ID });
+  // Test derive-driver validation
+  const deriveBadPri = await req('POST', '/ai/derive-driver', { priorityId: 'fake-id', audienceId: AUDIENCE_ID });
   assert('Derive with fake priorityId returns 404', deriveBadPri.status === 404);
 
-  const deriveMissingParams = await req('POST', '/ai/derive-motivation', { priorityId: PRI_TOP_ID });
+  const deriveMissingParams = await req('POST', '/ai/derive-driver', { priorityId: PRI_TOP_ID });
   assert('Derive without audienceId returns 400', deriveMissingParams.status === 400);
 
   // ═══════════════════════════════════════════════════
@@ -360,7 +360,7 @@ async function run() {
   assert('Error points to correct priority', genAfterReorder.missingTopPriority?.id === PRI_3_ID);
 
   // Derive motivation for new top priority
-  const deriveMF3 = await req('POST', '/ai/derive-motivation', {
+  const deriveMF3 = await req('POST', '/ai/derive-driver', {
     priorityId: PRI_3_ID,
     audienceId: AUDIENCE_ID,
     offeringId: OFFERING_ID,

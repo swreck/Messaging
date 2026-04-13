@@ -331,7 +331,7 @@ ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"${e.motivatingF
 MAPPING GUIDE: A differentiator's "why someone would care" is its motivating factor. When that MF aligns with an audience priority, that's the connection — the Driver on the priority adds persona-specific context for how hard they'll push on it.`;
 
   const result = await callAIWithJSON<{
-    mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string }[];
+    mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string; mfRationale?: string }[];
     orphanElements: string[];
     priorityGaps: string[];
     clarifyingQuestions: string[];
@@ -368,7 +368,7 @@ CAPABILITIES/DIFFERENTIATORS:
 ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`;
 
   const mappingResult = await callAIWithJSON<{
-    mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string }[];
+    mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string; mfRationale?: string }[];
     orphanElements: string[];
     priorityGaps: string[];
     clarifyingQuestions: string[];
@@ -433,7 +433,7 @@ CAPABILITIES/DIFFERENTIATORS:
 ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`;
 
   const mappingResult = await callAIWithJSON<{
-    mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string }[];
+    mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string; mfRationale?: string }[];
     orphanElements: string[];
     priorityGaps: string[];
     clarifyingQuestions: string[];
@@ -457,16 +457,16 @@ ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`
   const validOrphans = (mappingResult.orphanElements || []).filter(id => validElementIds.has(id));
   const validGaps = (mappingResult.priorityGaps || []).filter(id => validPriorityIds.has(id));
 
-  // Save all mappings
+  // Save all mappings, including the per-mapping mfRationale Maria wrote
   await prisma.mapping.deleteMany({ where: { draftId, status: 'suggested' } });
   for (const m of highConfidence) {
     await prisma.mapping.create({
-      data: { draftId, priorityId: m.priorityId, elementId: m.elementId, confidence: m.confidence, status: 'confirmed' },
+      data: { draftId, priorityId: m.priorityId, elementId: m.elementId, confidence: m.confidence, status: 'confirmed', mfRationale: m.mfRationale || '' },
     });
   }
   for (const m of lowConfidence) {
     await prisma.mapping.create({
-      data: { draftId, priorityId: m.priorityId, elementId: m.elementId, confidence: m.confidence, status: 'suggested' },
+      data: { draftId, priorityId: m.priorityId, elementId: m.elementId, confidence: m.confidence, status: 'suggested', mfRationale: m.mfRationale || '' },
     });
   }
 
@@ -1086,9 +1086,9 @@ ${draft.offering.elements.map((e) => `"${e.text}"`).join('\n')}`;
   res.json(result);
 });
 
-// ─── Derive Motivating Factor ───────────────────────────
+// ─── Derive Driver for a Priority ───────────────────────
 
-router.post('/derive-motivation', requireEditor, async (req: Request, res: Response) => {
+router.post('/derive-driver', requireEditor, async (req: Request, res: Response) => {
   const { priorityId, audienceId, offeringId } = req.body;
   if (!priorityId || !audienceId) {
     res.status(400).json({ error: 'priorityId and audienceId are required' });
@@ -1116,7 +1116,9 @@ router.post('/derive-motivation', requireEditor, async (req: Request, res: Respo
     }
   }
 
-  const systemPrompt = `You are a messaging strategist. Given an audience and their top priority, derive WHY this priority matters so deeply to them. Go beyond the surface — understand the domain, the stakes, the human impact. Write one clear, specific sentence that captures the real motivation.
+  const systemPrompt = `You are a messaging strategist. Given an audience and their top priority, derive the DRIVER — why this priority matters so deeply to THIS specific persona. Go beyond the surface: understand the domain, the stakes, the personal and business consequences. Write one clear, specific sentence that captures the real stake.
+
+A driver is persona-specific. It explains why the named audience cares about this priority in a way that another audience would not. Lean into the specific context of this persona.
 
 Do NOT write "Because you want X" or narrate. Write from the perspective of understanding the business reality.
 
@@ -1124,22 +1126,155 @@ GOOD: "Reliable pathology results in minutes means clinicians can begin targeted
 BAD: "Because you want faster results."
 BAD: "Getting results quickly is important to clinical leads."
 
-Return ONLY the motivating factor sentence, nothing else.`;
+Return ONLY the driver sentence, nothing else.`;
 
   const userMessage = `AUDIENCE: ${priority.audience.name}
 TOP PRIORITY: "${priority.text}"${offeringContext}
 
-Derive the motivating factor for this priority.`;
+Derive the driver for this priority.`;
 
-  const motivation = await callAI(systemPrompt, userMessage, 'fast');
+  const driverText = await callAI(systemPrompt, userMessage, 'fast');
 
   // Save it to the priority
   await prisma.priority.update({
     where: { id: priorityId },
-    data: { driver: motivation.trim() },
+    data: { driver: driverText.trim() },
   });
 
-  res.json({ driver: motivation.trim() });
+  res.json({ driver: driverText.trim() });
+});
+
+// ─── Draft MFs for differentiators on an offering ──────────
+//
+// Used by the "Maria, draft MFs for me" affordance. Drafts MFs to the
+// audience-portable standard (general principle + 2-4 example audience
+// types). Runs mfCheck.ts evaluator, retries once if violations found.
+// Saves results to OfferingElement.motivatingFactor and returns the new
+// MFs so the UI can refresh.
+
+router.post('/draft-mfs', requireEditor, async (req: Request, res: Response) => {
+  const { offeringId, elementIds } = req.body as { offeringId: string; elementIds?: string[] };
+  if (!offeringId) {
+    res.status(400).json({ error: 'offeringId is required' });
+    return;
+  }
+
+  const offering = await prisma.offering.findFirst({
+    where: { id: offeringId, workspaceId: req.workspaceId },
+    include: { elements: { orderBy: { sortOrder: 'asc' } } },
+  });
+  if (!offering) {
+    res.status(404).json({ error: 'Offering not found' });
+    return;
+  }
+
+  // Targets: explicit elementIds if given, otherwise every element with no MF
+  const targets = elementIds
+    ? offering.elements.filter(e => elementIds.includes(e.id))
+    : offering.elements.filter(e => !e.motivatingFactor);
+
+  if (targets.length === 0) {
+    res.json({ drafted: [], skipped: 'no eligible differentiators' });
+    return;
+  }
+
+  const draftSystem = `You are a messaging strategist drafting Motivating Factors for an offering's differentiators.
+
+A Motivating Factor (MF) answers: "Why would someone crave this differentiator?"
+It is a property of the differentiator, NOT of any one audience. The MF is the
+bridge that makes the differentiator legible to mapping: when the MF principle
+aligns with what an audience cares about, that's the connection.
+
+═══ THE AUDIENCE-PORTABLE STANDARD ═══
+
+A great MF does THREE things:
+
+1. STATES THE GENERAL BENEFIT PRINCIPLE.
+   The underlying reason the differentiator matters — what it actually does for
+   anyone who would benefit from it. Not one application; the principle.
+
+2. NAMES 2-4 CONCRETE AUDIENCE TYPES OR USE CASES THAT CRAVE IT.
+   The examples must span DIFFERENT worlds — different industries, different roles,
+   different jobs-to-be-done. The bar is: would someone in any of these examples,
+   AND someone in a similar but unnamed audience, read it and feel seen?
+
+3. STAYS LITERAL.
+   No marketing buzzwords (leverage, seamless, cutting-edge, robust, end-to-end,
+   game-changing, holistic). No metaphorical verbs (unlocks, fuels, drives,
+   powers, transforms). State plainly what the differentiator does for the people
+   who want it.
+
+═══ EXAMPLES ═══
+
+Differentiator: "5x I/O throughput improvement on small data units"
+GOOD MF: "I/O is what feeds servers of any sort with the data they need to operate, so faster I/O directly speeds operations — for compute servers running scientific simulations, for transaction systems serving high-volume customer requests, for archival systems catching up on overnight batches."
+BAD MF: "Faster simulations for pharma researchers." (Single audience, jumps past the principle.)
+BAD MF: "Unlocks blazing-fast performance with seamless integration." (Buzzwords, metaphorical, no principle, no audiences.)
+
+Differentiator: "60-second whole-slide pathology analysis"
+GOOD MF: "Faster slide analysis means faster decisions about what to do next, regardless of who is making the decision — for an oncologist deciding on a treatment plan, for a hospital lab director sequencing a high-volume queue, for a research team running batch screens overnight."
+BAD MF: "Helps oncologists treat cancer faster." (Single audience, narrow.)
+
+Differentiator: "Hardware sale with full setup, configuration, and integration support"
+GOOD MF: "Buying complex hardware without an integration team usually means months of setup risk; bundling that work removes the hidden cost and the timeline uncertainty — important for any organization that cannot afford a long ramp, whether a research lab on a grant clock, a regional bank under audit, or a logistics firm staging a peak season."
+
+═══
+
+You will be given a list of differentiators. For each one, write an MF that meets
+the audience-portable standard above. Stay grounded in what the differentiator
+ACTUALLY does. If you genuinely cannot think of multiple audiences that would
+crave this differentiator, return a single-audience MF and flag it — that's a
+signal the differentiator may be too narrow.
+
+Return JSON only:
+{
+  "mfs": [
+    { "index": 0, "differentiator": "...", "mf": "..." },
+    { "index": 1, "differentiator": "...", "mf": "..." }
+  ]
+}`;
+
+  const offeringContext = `OFFERING: ${offering.name}
+${offering.description ? `DESCRIPTION: ${offering.description}` : ''}
+
+DIFFERENTIATORS TO DRAFT MFs FOR:
+${targets.map((e, i) => `[${i}] "${e.text}"`).join('\n')}`;
+
+  let drafted: { index: number; differentiator: string; mf: string }[];
+
+  // First pass
+  let result = await callAIWithJSON<{ mfs: { index: number; differentiator: string; mf: string }[] }>(
+    draftSystem,
+    offeringContext,
+    'elite',
+  );
+  drafted = result.mfs || [];
+
+  // Run mfCheck and retry once if violations found
+  const { checkMfs, buildMfViolationFeedback } = await import('../services/mfCheck.js');
+  const check = await checkMfs(drafted.map(d => ({ differentiator: d.differentiator, mf: d.mf })));
+
+  if (!check.passed && check.violations.length > 0) {
+    const feedback = buildMfViolationFeedback(check.violations);
+    result = await callAIWithJSON<{ mfs: { index: number; differentiator: string; mf: string }[] }>(
+      draftSystem,
+      offeringContext + feedback,
+      'elite',
+    );
+    drafted = result.mfs || [];
+  }
+
+  // Save to OfferingElement.motivatingFactor
+  for (const d of drafted) {
+    const target = targets[d.index];
+    if (!target) continue;
+    await prisma.offeringElement.update({
+      where: { id: target.id },
+      data: { motivatingFactor: d.mf.trim() },
+    });
+  }
+
+  res.json({ drafted: drafted.map((d, i) => ({ id: targets[i]?.id, mf: d.mf.trim() })) });
 });
 
 // ─── Five Chapter Story ─────────────────────────────────

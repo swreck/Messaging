@@ -150,16 +150,17 @@ model ThreeTierDraft {
 }
 
 model Mapping {
-  id         String          @id @default(cuid())
-  draftId    String
-  draft      ThreeTierDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  priorityId String
-  priority   Priority        @relation(fields: [priorityId], references: [id], onDelete: Cascade)
-  elementId  String
-  element    OfferingElement @relation(fields: [elementId], references: [id], onDelete: Cascade)
-  confidence Float           @default(0.0)
-  status     String          @default("suggested") // suggested | confirmed | rejected
-  createdAt  DateTime        @default(now())
+  id          String          @id @default(cuid())
+  draftId     String
+  draft       ThreeTierDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  priorityId  String
+  priority    Priority        @relation(fields: [priorityId], references: [id], onDelete: Cascade)
+  elementId   String
+  element     OfferingElement @relation(fields: [elementId], references: [id], onDelete: Cascade)
+  confidence  Float           @default(0.0)
+  status      String          @default("suggested") // suggested | confirmed | rejected
+  mfRationale String          @default("") // Maria's per-mapping reasoning: how the differentiator's MF principle applies to this specific audience priority
+  createdAt   DateTime        @default(now())
 }
 
 // ─── Tier Statements ────────────────────────────────────

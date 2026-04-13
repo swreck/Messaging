@@ -578,7 +578,7 @@ export function FiveChapterShell() {
     if (!top) return;
     setDerivingMF(true);
     try {
-      await api.post('/ai/derive-motivation', {
+      await api.post('/ai/derive-driver', {
         priorityId: top.id,
         audienceId: draft.audience.id,
         offeringId: draft.offering.id,
