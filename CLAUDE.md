@@ -123,6 +123,7 @@ The user tests on their phone. Keep these in mind:
 - **Railway** nixpacks builder — keep `railway.toml` in the backend directory
 - **Optimistic concurrency** — use a `version` field on mutable records to prevent stale writes (return 409 on conflict)
 - **Date timezone** — dates stored as UTC can appear one day off in UTC-negative timezones. Be aware of this when displaying dates.
+- **Global components + API calls = login flicker loop.** `MariaPartner` renders on ALL pages including `/login`. Any `useEffect` that makes an API call MUST guard with `if (!user) return`, because the 401 handler in `client.ts` does `window.location.href = '/login'` — causing a full page reload that clears the login form. This has broken login TWICE (April 2 and April 9, 2026), both times from a new `useEffect` missing the guard. When adding ANY `useEffect` with an API call to a globally-rendered component, always add the `user` guard.
 
 ## AI integration patterns
 
