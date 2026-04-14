@@ -19,6 +19,7 @@ import settingsRoutes from './routes/settings.js';
 import workspaceRoutes from './routes/workspaces.js';
 import shareRoutes from './routes/share.js';
 import personalizeRoutes from './routes/personalize.js';
+import expressFlowRoutes from './routes/express.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -45,6 +46,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/share', shareRoutes);
 app.use('/api/personalize', personalizeRoutes);
+app.use('/api/express', expressFlowRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

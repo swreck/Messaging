@@ -3693,3 +3693,300 @@ p { line-height: 1.5; color: var(--text-secondary); }
   overflow: hidden;
   transition: max-height 0.2s ease-out;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Maria 3.0 — Express Flow
+   Self-contained styles for the new Express Flow surface.
+   Does not modify any existing 2.5 styles.
+   ═══════════════════════════════════════════════════════════ */
+
+.express-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+.express-header {
+  margin-bottom: 32px;
+}
+
+.express-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+
+.express-page-hint {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  margin: 0;
+  font-style: italic;
+}
+
+.express-preview {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  padding: 0;
+}
+
+.express-preview-voice {
+  background: #fef8f4;
+  border-left: 3px solid #c06070;
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  margin-bottom: 28px;
+}
+
+.express-preview-voice p {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.express-section {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.express-section-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+
+.express-section-hint {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0 0 16px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.express-field {
+  margin-top: 16px;
+}
+
+.express-field:first-of-type {
+  margin-top: 8px;
+}
+
+.express-field-inferred {
+  position: relative;
+  padding-left: 12px;
+  border-left: 3px solid #c06070;
+}
+
+.express-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.express-hint {
+  text-transform: none;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--text-tertiary);
+  letter-spacing: 0;
+}
+
+.express-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: white;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 15px;
+  color: var(--text-primary);
+  font-family: inherit;
+  line-height: 1.5;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.express-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+}
+
+.express-input-lg {
+  font-size: 17px;
+  font-weight: 500;
+  padding: 12px 16px;
+}
+
+.express-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: white;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 15px;
+  color: var(--text-primary);
+  font-family: inherit;
+  line-height: 1.55;
+  box-sizing: border-box;
+  resize: vertical;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.express-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+}
+
+.express-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.express-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-left: 0;
+}
+
+.express-list li.express-field-inferred {
+  padding-left: 12px;
+}
+
+.express-list li .express-input {
+  flex: 1;
+}
+
+.express-remove {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.express-remove:hover {
+  background: #fff0f0;
+  color: var(--danger);
+}
+
+.express-add {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--accent);
+  cursor: pointer;
+  margin-top: 4px;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.express-add:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  border-style: solid;
+}
+
+.express-select {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: white;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 15px;
+  color: var(--text-primary);
+  font-family: inherit;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.express-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+}
+
+.express-note {
+  background: transparent;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.express-note-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 0 0 8px;
+}
+
+.express-note-text {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0;
+  font-style: italic;
+}
+
+.express-actions {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.express-primary {
+  font-size: 17px;
+  padding: 16px 32px;
+  min-width: 320px;
+  font-weight: 500;
+}
+
+.express-wizard-link {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 16px;
+  font-family: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.express-wizard-link:hover {
+  color: var(--accent);
+}
+
+/* Responsive — mobile */
+@media (max-width: 600px) {
+  .express-page { padding: 24px 16px 64px; }
+  .express-header h1 { font-size: 22px; }
+  .express-section { padding: 20px 16px; }
+  .express-section-title { font-size: 18px; }
+  .express-primary { min-width: 0; width: 100%; }
+  .express-preview-voice { padding: 14px 16px; }
+  .express-preview-voice p { font-size: 15px; }
+}
+
