@@ -72,7 +72,15 @@ app.use(express.static(publicDir, { index: false }));
 
 function isMariaThreeHost(hostname: string): boolean {
   if (process.env.MARIA_3_HOST && hostname === process.env.MARIA_3_HOST) return true;
-  return hostname.includes('maria-messaging-3') || hostname.includes('maria3');
+  // Match common naming variants for the Maria 3 Railway service URL:
+  //   - mariamessaging3.up.railway.app           (current Railway-generated)
+  //   - maria-messaging-3-production.up.railway.app  (alternate naming)
+  //   - any host containing the "maria3" token
+  return (
+    hostname.includes('mariamessaging3') ||
+    hostname.includes('maria-messaging-3') ||
+    hostname.includes('maria3.')
+  );
 }
 
 function transformToMaria3(html: string): string {
