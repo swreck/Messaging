@@ -61,6 +61,8 @@ const MOCK_INTERPRETATION: ExpressInterpretation = {
     source: 'stated',
     reasoning: 'You mentioned wanting to reach potential customers with an outreach note.',
   },
+  situation:
+    'You need a first outreach email to restaurants that have never bought from GreenLeaf. The email should establish the sourcing story, the delivery guarantee, and open a conversation — not push a close.',
   confidenceNotes:
     'The offering details were all clearly stated. I had to guess at the audience — you mentioned restaurants, but not which role inside the restaurant buys produce. I went with an owner or executive chef since that is typical for independent kitchens, but if you are targeting a different role inside the restaurant, change it here and the email will read right.',
 };
