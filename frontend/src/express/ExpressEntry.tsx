@@ -115,6 +115,32 @@ interface StatusResponse {
   } | null;
 }
 
+// Variant tab labels need to fit inside ~320px of tab width without
+// truncating the distinguishing word. Audience names coming from the
+// extractor can be long ("Compliance officer at a regional or community
+// bank", "Founding Members (eleven members, members since 1987)"), so
+// trim them to the first meaningful phrase: split on the first of
+//   — ( : , "at" "for" "who" "with"
+// and cap at 28 characters. Falls back to the raw name if the trim
+// produces an empty string.
+function shortenAudienceLabel(raw: string): string {
+  if (!raw) return 'Draft';
+  const trimmed = raw.trim();
+  if (trimmed.length <= 28) return trimmed;
+  // Split on the first separator that gives a reasonable prefix.
+  const separators = [' — ', ' – ', ' - ', ' (', ':', ',', ' at ', ' for ', ' who ', ' with '];
+  let best = trimmed;
+  for (const sep of separators) {
+    const idx = trimmed.indexOf(sep);
+    if (idx > 4 && idx < best.length) {
+      best = trimmed.slice(0, idx).trim();
+    }
+  }
+  if (best.length <= 28) return best;
+  // Last resort: truncate to 26 chars + ellipsis
+  return best.slice(0, 26).trim() + '…';
+}
+
 // Fallback labels if the user's original extracted medium label is not
 // available (e.g. page reload during polling). Covers every internal 2.5
 // medium key and the Maria 3 pitch_deck addition.
@@ -468,14 +494,20 @@ export function ExpressEntry() {
                     i === phase.activeVariant ? ' express-variant-tab-active' : ''
                   }`}
                   onClick={() => setActiveVariant(i)}
+                  title={v.audienceName}
                 >
-                  {v.audienceName || `Draft ${i + 1}`}
+                  {shortenAudienceLabel(v.audienceName) || `Draft ${i + 1}`}
                 </button>
               ))}
             </div>
           )}
 
           <div className="express-entry-draft">
+            {variants.length > 1 && active.audienceName && (
+              <p className="express-variant-audience">
+                <span>Writing to:</span> {active.audienceName}
+              </p>
+            )}
             {paragraphs.length === 0 ? (
               <p>(The draft came back empty. Try again with a bit more detail.)</p>
             ) : (

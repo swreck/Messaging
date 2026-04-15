@@ -4266,6 +4266,21 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border-top-left-radius: 0;
 }
 
+.express-variant-audience {
+  margin: -12px -8px 22px;
+  padding: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary, #515154);
+  border-bottom: 1px solid var(--border-light, #e5e5ea);
+}
+
+.express-variant-audience span {
+  font-weight: 600;
+  color: var(--text-primary, #1d1d1f);
+  margin-right: 4px;
+}
+
 .express-entry-draft p {
   margin: 0 0 18px;
 }
