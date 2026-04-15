@@ -889,7 +889,7 @@ ${draftForStory.tier2Statements
           .map(p => `[Rank ${p.rank}] "${p.text}"`)
           .join('\n');
         const cumulativeViolations: string[] = [];
-        let lastViolations: string[] = [];
+        let brokeClean = false;
         for (let attempt = 0; attempt < 2; attempt++) {
           const fabCheck = await checkChapterFabrication({
             situation,
@@ -903,7 +903,7 @@ ${draftForStory.tier2Statements
                 `[ExpressPipeline] ${jobId} chapter ${chapterNum} fabrication cleared after ${attempt} retry(s)`,
               );
             }
-            lastViolations = [];
+            brokeClean = true;
             break;
           }
           console.log(
@@ -913,27 +913,30 @@ ${draftForStory.tier2Statements
           // that was flagged, not just the current attempt. This prevents the
           // LLM from fixing one invention and introducing a new one.
           for (const v of fabCheck.violations) cumulativeViolations.push(v);
-          lastViolations = fabCheck.violations;
           const feedback = buildFabricationFeedback(cumulativeViolations);
           content = await callAI(systemPrompt, userMessage + feedback, 'elite');
         }
-        // Surgical redaction pass. After the 2-retry loop, if fabrication
-        // still hasn't cleared, ask Opus to EDIT the last draft — removing
-        // exactly the flagged sentences — instead of re-GENERATING from the
-        // chapter system prompt (which keeps re-inventing to fill mandated
-        // topic slots). The redaction prompt forbids new content, so the
-        // output can only shrink or stay the same. After redaction, run
-        // one more fabrication check to confirm it worked; if violations
-        // STILL remain, log and ship the redacted version anyway (honest
-        // shortness beats a regenerated fabrication).
-        if (lastViolations.length > 0) {
+        // Surgical redaction pass. When the 2-retry loop did NOT break
+        // cleanly, the current content is the result of a post-failure
+        // regeneration that has never been checked. Always run one final
+        // check on it. If it still has violations, switch to EDIT mode
+        // and ask Opus to remove exactly those flagged sentences — no new
+        // content, shorter is fine. This is how we defeat the regenerate-
+        // reinvent loop: the chapter system prompt keeps pressuring Opus
+        // toward a mandated topic, so regeneration keeps producing new
+        // inventions. Redaction takes the current text and only subtracts.
+        if (!brokeClean) {
           const finalCheck = await checkChapterFabrication({
             situation,
             tierText: tierTextForCheck,
             prioritiesText: prioritiesTextForCheck,
             chapterContent: content,
           });
-          if (!finalCheck.passed && finalCheck.violations.length > 0) {
+          if (finalCheck.passed || finalCheck.violations.length === 0) {
+            console.log(
+              `[ExpressPipeline] ${jobId} chapter ${chapterNum} post-retry regeneration was already clean`,
+            );
+          } else {
             console.log(
               `[ExpressPipeline] ${jobId} chapter ${chapterNum} redacting ${finalCheck.violations.length} surviving claims surgically`,
             );
@@ -1089,7 +1092,7 @@ ${draftForStory.tier2Statements
         .map(p => `[Rank ${p.rank}] "${p.text}"`)
         .join('\n');
       const cumulativeBlendViolations: string[] = [];
-      let lastBlendViolations: string[] = [];
+      let blendBrokeClean = false;
       for (let attempt = 0; attempt < 2; attempt++) {
         const blendFabCheck = await checkChapterFabrication({
           situation: blendSituation,
@@ -1103,29 +1106,32 @@ ${draftForStory.tier2Statements
               `[ExpressPipeline] ${jobId} blend fabrication cleared after ${attempt} retry(s)`,
             );
           }
-          lastBlendViolations = [];
+          blendBrokeClean = true;
           break;
         }
         console.log(
           `[ExpressPipeline] ${jobId} blend fabrication attempt ${attempt + 1}: ${blendFabCheck.violations.length} unsupported claims, retrying`,
         );
         for (const v of blendFabCheck.violations) cumulativeBlendViolations.push(v);
-        lastBlendViolations = blendFabCheck.violations;
         const feedback = buildFabricationFeedback(cumulativeBlendViolations);
         blendedText = await callAI(BLEND_SYSTEM, blendMessage + feedback, 'elite');
       }
-      // Blend-level surgical redaction. Same logic as the per-chapter pass —
-      // after 2 regeneration retries, switch to EDIT mode and ask Opus to
-      // remove exactly the surviving flagged sentences without adding
-      // anything new.
-      if (lastBlendViolations.length > 0) {
+      // Blend-level surgical redaction. When the retry loop did not break
+      // cleanly, the current blendedText was generated AFTER a failed
+      // check and has never been evaluated. Always run one final check;
+      // if it still has violations, redact in EDIT mode.
+      if (!blendBrokeClean) {
         const finalCheck = await checkChapterFabrication({
           situation: blendSituation,
           tierText: blendTierTextForCheck,
           prioritiesText: blendPrioritiesForCheck,
           chapterContent: blendedText,
         });
-        if (!finalCheck.passed && finalCheck.violations.length > 0) {
+        if (finalCheck.passed || finalCheck.violations.length === 0) {
+          console.log(
+            `[ExpressPipeline] ${jobId} blend post-retry regeneration was already clean`,
+          );
+        } else {
           console.log(
             `[ExpressPipeline] ${jobId} blend redacting ${finalCheck.violations.length} surviving claims surgically`,
           );
