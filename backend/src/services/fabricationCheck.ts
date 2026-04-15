@@ -127,6 +127,10 @@ MUST be flagged as fabrication unless the source literally names them:
   name an action log or timestamping capability.
 - "Examiner-ready reports available on demand" — flag. The source did not
   name an examiner-report feature.
+- "Audit-ready reporting" — flag. This is synonymous with "examiner-ready
+  reports". Any "[X]-ready reporting" phrase where X is auditors,
+  examiners, regulators, boards, management, or stakeholders is a
+  FABRICATED FEATURE NAME unless the source literally coined it.
 - "Full audit trail" / "exportable audit trail" — flag. The source did
   not name an audit trail.
 - "Board-ready reporting is built in" — flag. The source did not name
@@ -136,11 +140,33 @@ MUST be flagged as fabrication unless the source literally names them:
 - "Real-time status across all controls" — flag IF the source did not
   explicitly say real-time. "Single dashboard" is not the same as
   "real-time status."
-- "Pre-linked controls before new guidance drops" — flag. The source
-  said auto-flows, not pre-linking.
+- "Pre-linked controls" / "pre-mapped controls" / "pre-mapped obligations"
+  — flag. Any "pre-[verb]ed" claim adds a technical capability the
+  source did not name. "Auto-flows" in source ≠ "pre-mapped" in draft.
 - "Automated notifications when a control drifts" — flag.
 - "Version history" / "change logs" / "approval workflow" — flag any of
   these unless the source names them.
+- "Pull a report directly from your live workflows" — flag. Both "pull
+  a report" and "live workflows" are invented product verbs/nouns.
+- "Every obligation is visible" / "all obligations at a glance" / "full
+  visibility across obligations" — flag as fabricated capability unless
+  the source uses that framing.
+- "Fits inside your current budget cycle" — flag. This is an invented
+  commercial/pricing claim not in source.
+- Any sentence that uses "reporting" as a named product feature ("the
+  reporting", "reporting is ready for X", "reporting gives you Y") is
+  suspect — unless the source explicitly says the product does reporting,
+  flag it. A product with a "dashboard" does not automatically have
+  "reporting" as a named feature.
+
+CATEGORICAL RULE FOR SYNTHESIS/SUFFIX CAPABILITIES. Any phrase matching
+"[X]-ready" (audit-ready, examiner-ready, board-ready, investor-ready,
+compliance-ready, regulator-ready) that names a product output is
+fabrication unless the source coined it. Same for "[X]-grade" (audit-
+grade, enterprise-grade). Same for "comes pre-[verb]ed" constructions
+(pre-mapped, pre-linked, pre-configured, pre-populated, pre-built).
+These sentence patterns sound professional but they are where the
+writer's instinct to polish slips into inventing. Flag them on sight.
 
 The pattern to watch for: the draft is describing a compliance or
 regulatory product and the writer's instinct is to list "and of course
