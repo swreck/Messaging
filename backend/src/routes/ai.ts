@@ -1290,6 +1290,16 @@ IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation
     return match.length < 60 ? '' : match; // Only strip short fragments, not full paragraphs
   }).trim();
 
+  // Strip leading "Subject: ..." lines from chapters 2-5. In email stories the
+  // LLM tends to re-emit a subject line for every chapter because each one is
+  // asked to honor the email CONTENT FORMAT. The subject belongs only in Ch1.
+  // Observed in Brad's Cy Clinical Lead story (April 2026): ch1, ch4, and ch5
+  // each opened with "Subject: A question about your pathology read times"
+  // which made the blended output show the subject three times.
+  if (chapterNum > 1) {
+    content = content.replace(/^\s*Subject:[^\n]*\n+/i, '').trim();
+  }
+
   // Enforce word budget — if chapter is more than 2x the budget, rewrite shorter
   const mediumSpec = getMediumSpec(story.medium);
   if (mediumSpec) {

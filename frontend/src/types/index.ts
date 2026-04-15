@@ -129,15 +129,16 @@ export interface ChapterContent {
   content: string;
 }
 
-export type StoryMedium = 'email' | 'blog' | 'social' | 'landing_page' | 'in_person' | 'press_release' | 'newsletter' | 'report';
+export type StoryMedium = 'email' | 'blog' | 'social' | 'landing_page' | 'in_person' | 'press_release' | 'newsletter' | 'report' | 'pitch_deck';
 export type StoryStage = 'chapters' | 'joined' | 'blended';
 
 export const MEDIUM_OPTIONS: { id: StoryMedium; label: string; description: string }[] = [
   { id: 'email', label: 'Email', description: 'Professional outreach email' },
+  { id: 'pitch_deck', label: 'Pitch Deck', description: 'Slide-by-slide narrative for an in-person or remote pitch' },
   { id: 'blog', label: 'Blog Post', description: 'Long-form educational content' },
   { id: 'social', label: 'Social Post', description: 'LinkedIn or social media post' },
   { id: 'landing_page', label: 'Landing Page', description: 'Web page with a single conversion goal' },
-  { id: 'in_person', label: 'In-Person / Verbal', description: 'Speaking notes for a conversation or presentation' },
+  { id: 'in_person', label: 'Talking Points', description: 'Speaking notes for an in-person meeting or presentation' },
   { id: 'press_release', label: 'Press Release', description: 'Formal announcement for media' },
   { id: 'newsletter', label: 'Newsletter', description: 'Regular audience update or feature' },
   { id: 'report', label: 'Report / White Paper', description: 'Detailed analytical content' },
