@@ -342,8 +342,12 @@ export function InterpretationPreview({ initial, onConfirm, onSwitchToWizard }: 
         </section>
       )}
 
-      {/* ─── Actions ──────────────────────────────────────── */}
-      <div className="express-actions">
+      {/* ─── Spacer so sticky action bar doesn't cover content ─ */}
+      <div className="express-actions-spacer" aria-hidden="true" />
+
+      {/* ─── Actions — sticky to viewport bottom so the user can
+             confirm without scrolling back down through a long form ── */}
+      <div className="express-actions express-actions-sticky">
         <button
           type="button"
           className="btn btn-primary express-primary"

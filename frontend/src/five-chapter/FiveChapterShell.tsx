@@ -706,18 +706,57 @@ export function FiveChapterShell() {
       {stories.length > 1 && !showCreateForm && (
         <div className="fcs-story-selector">
           {(() => {
-            const mediumCounts = new Map<string, number>();
+            // Group by medium and pre-compute a short distinguishing label
+            // per story. Never "#1 / #2 / #3" — that is opaque for a human
+            // looking at a row of nine tiles. Use the date the draft was
+            // created, or the CTA when it's distinctive. customName always
+            // wins when set.
+            const formatShortDate = (iso?: string) => {
+              if (!iso) return '';
+              const d = new Date(iso);
+              if (isNaN(d.getTime())) return '';
+              return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            };
+            const formatShortCta = (cta?: string) => {
+              if (!cta) return '';
+              const trimmed = cta.trim();
+              if (trimmed.length === 0) return '';
+              return trimmed.length > 28 ? trimmed.substring(0, 25) + '...' : trimmed;
+            };
             const mediumTotals = new Map<string, number>();
             for (const st of stories) {
               mediumTotals.set(st.medium, (mediumTotals.get(st.medium) || 0) + 1);
             }
+            // Build a map of how many stories of the same medium share the
+            // same CTA, so we know whether a CTA is actually distinctive.
+            const ctaCollisionsByMedium = new Map<string, Map<string, number>>();
+            for (const st of stories) {
+              if (!ctaCollisionsByMedium.has(st.medium)) {
+                ctaCollisionsByMedium.set(st.medium, new Map());
+              }
+              const ctaKey = (st.cta || '').trim().toLowerCase();
+              if (ctaKey.length === 0) continue;
+              const m = ctaCollisionsByMedium.get(st.medium)!;
+              m.set(ctaKey, (m.get(ctaKey) || 0) + 1);
+            }
             return stories.map(s => {
-              const count = (mediumCounts.get(s.medium) || 0) + 1;
-              mediumCounts.set(s.medium, count);
               const total = mediumTotals.get(s.medium) || 1;
               const stdLabel = MEDIUM_OPTIONS.find(m => m.id === s.medium);
-              const baseLabel = stdLabel ? stdLabel.label : (() => { const sh = s.medium.split(/\s*[—.]\s*/)[0].trim(); return sh.length > 35 ? sh.substring(0, 32) + '...' : sh; })();
-              const label = total > 1 ? `${baseLabel} #${count}` : baseLabel;
+              const baseLabel = stdLabel ? stdLabel.label : (() => { const sh = s.medium.split(/\s*[—.]\s*/)[0].trim(); return sh.length > 28 ? sh.substring(0, 25) + '...' : sh; })();
+              // Pick the distinguishing subtitle when there's more than one
+              // of this medium. Preference order: unique short CTA, date.
+              let label = baseLabel;
+              if (total > 1) {
+                const ctaKey = (s.cta || '').trim().toLowerCase();
+                const ctaCount = ctaKey ? (ctaCollisionsByMedium.get(s.medium)?.get(ctaKey) || 0) : 0;
+                const ctaIsDistinctive = ctaKey.length > 0 && ctaCount === 1;
+                if (ctaIsDistinctive) {
+                  label = `${baseLabel} · ${formatShortCta(s.cta)}`;
+                } else {
+                  const d = formatShortDate(s.createdAt) || formatShortDate(s.updatedAt);
+                  label = d ? `${baseLabel} · ${d}` : baseLabel;
+                }
+              }
               return (
                 <div key={s.id} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                   {renamingStoryId === s.id ? (

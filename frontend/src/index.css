@@ -3956,6 +3956,32 @@ p { line-height: 1.5; color: var(--text-secondary); }
   gap: 16px;
 }
 
+/* Sticky version anchored to the bottom of the viewport. The review form
+   can be 4+ screens tall on a long interpretation — scrolling all the
+   way down to find the confirm button is a tax on a professional user.
+   The sticky bar keeps it one tap away at all times. */
+.express-actions-sticky {
+  position: sticky;
+  bottom: 0;
+  margin-top: 48px;
+  padding: 20px 16px 24px;
+  background: linear-gradient(
+    180deg,
+    rgba(250, 250, 248, 0) 0%,
+    rgba(250, 250, 248, 0.95) 30%,
+    rgba(250, 250, 248, 1) 60%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 5;
+}
+
+/* Keeps the document tall enough that the last real section isn't hidden
+   behind the sticky bar as the user scrolls to the end. */
+.express-actions-spacer {
+  height: 48px;
+}
+
 .express-primary {
   font-size: 17px;
   padding: 16px 32px;

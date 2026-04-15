@@ -406,11 +406,44 @@ AUDIENCE: ${draftWithElements.audience.name}`;
     const mediumKey = pickInternalMedium(interpretation.primaryMedium.value);
     const mediumSpec = getMediumSpec(mediumKey);
 
+    // Build a meaningful customName so multiple Express drafts in the same
+    // workspace are distinguishable at a glance in the deliverables list.
+    // "Pitch deck · Regional CFO Roundtable" is usable; "Pitch Deck Narrative"
+    // repeated six times is not. Prefer a short phrase from the situation,
+    // fall back to the medium label + a today's date stamp.
+    function buildCustomName(): string {
+      const mediumLabel = interpretation.primaryMedium.value || mediumSpec.label;
+      const situation = interpretation.situation?.trim() || '';
+      if (situation.length > 0) {
+        // Strip leading "You need a ..." / "You need to ..." boilerplate so
+        // the hint reads as a hook, not a restatement of the Express frame.
+        const cleaned = situation
+          .replace(/^you (?:need|want|are|have|require) (?:a |an |the |to |some )?/i, '')
+          .replace(/^you'?re\s+/i, '');
+        // Take the shortest meaningful span — up to the first period, comma,
+        // em-dash, or 40 characters.
+        const stopMatch = cleaned.match(/^([^.,\u2014—]{5,40})/);
+        const snippet = (stopMatch ? stopMatch[1] : cleaned.slice(0, 40)).trim();
+        if (snippet.length > 0) {
+          // Sentence-case the first letter; keep the rest as extracted.
+          const hook = snippet[0].toUpperCase() + snippet.slice(1);
+          return `${mediumLabel} · ${hook}`;
+        }
+      }
+      // Last resort: medium + short date stamp.
+      const d = new Date();
+      const dateLabel = d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
+      return `${mediumLabel} · ${dateLabel}`;
+    }
+
     const story = await prisma.fiveChapterStory.create({
       data: {
         draftId: draftWithElements.id,
         medium: mediumKey,
-        customName: mediumSpec.label,
+        customName: buildCustomName(),
         cta: `Get started with ${interpretation.offering.name || 'us'}`,
       },
     });
@@ -435,6 +468,114 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       return;
     }
 
+    // Detect which content is actually available in the Three Tier so we can
+    // write chapter-specific anti-fabrication guardrails below. Each chapter
+    // of a Five Chapter Story has a mandatory topic (Ch3 support, Ch4 social
+    // proof, Ch5 direction). When the source doesn't cover that topic, the
+    // LLM's natural instinct is to invent onboarding teams, dedicated contacts,
+    // customer quantities, and pilot programs to fill the slot. Explicit per-
+    // chapter guardrails tell it what to do instead.
+    const tier2Labels = draftForStory.tier2Statements
+      .map(t => (t.categoryLabel || '').toLowerCase())
+      .filter(l => l.length > 0);
+    const hasSupportColumn = tier2Labels.some(l =>
+      /support|onboard|service|help|success|implement/.test(l),
+    );
+    const hasSocialProofColumn = tier2Labels.some(l =>
+      /social|proof|recognition|customer|testimonial|reference/.test(l),
+    );
+    const namedCustomers = new Set<string>();
+    for (const t2 of draftForStory.tier2Statements) {
+      for (const b of t2.tier3Bullets) {
+        const m = b.text.match(/\b([A-Z][a-zA-Z&']*(?:\s+(?:[A-Z][a-zA-Z&']*|of|the|and|at|for)){0,4})\s+(?:Bank|Hospital|Clinic|Health|Medical|Regional|Community|Inc|LLC|Ltd|Co|Corporation|University|College|School|Center)\b/);
+        if (m) namedCustomers.add(m[0].trim());
+      }
+    }
+
+    function buildChapterGuardrails(chapterNum: number): string {
+      // Ch3 — We'll Hold Your Hand (support/reassurance)
+      if (chapterNum === 3) {
+        if (!hasSupportColumn) {
+          return `
+CHAPTER 3 GUARDRAIL — THE SOURCE HAS NO SUPPORT CONTENT.
+
+The Three Tier above does not describe any onboarding, migration, training,
+implementation, or customer success program. You may NOT invent one.
+
+Forbidden phrases and claims for this chapter, regardless of how natural they
+feel structurally:
+- "dedicated contact", "dedicated support", "dedicated account manager",
+  "customer success manager", "onboarding lead", "implementation team"
+- "48-hour migration", "structured onboarding", "migration in X days",
+  "typical onboarding", "we handle the setup", "we walk you through"
+- "one person, and you know who they are", "single point of contact"
+- Any invented timeline for how long anything takes
+- Any invented team role working on behalf of the customer
+
+Instead, write reassurance that comes from the PRODUCT ITSELF, using only
+facts from the Three Tier. The product removes risk because of how it is
+built, not because a services layer catches mistakes. Good directions:
+- "The system assumes your team is small — that is the starting point."
+- "You are not learning a new framework. The guidelines you already follow
+  map to the workflows you already have."
+- "When the next update comes out, the change lands in the workflow you
+  already use. There is nothing new to roll out."
+
+A short, honest Chapter 3 is required. Half the word target is fine. Zero
+invented services is non-negotiable.`;
+        }
+      }
+      // Ch4 — You're Not Alone (social proof / customer references)
+      if (chapterNum === 4) {
+        const customerList = [...namedCustomers];
+        if (customerList.length === 0 && !hasSocialProofColumn) {
+          return `
+CHAPTER 4 GUARDRAIL — THE SOURCE HAS NO CUSTOMER REFERENCES.
+
+The Three Tier above names no customers and has no social-proof column. You
+may NOT invent any. Forbidden:
+- "banks like yours are using the platform"
+- "multiple community banks", "several regional institutions", "pilot
+  partners", "beta customers", "early adopters"
+- Any count ("over twenty banks", "dozens of hospitals")
+- Any composite fiction ("a bank roughly your size")
+
+Instead, re-anchor Chapter 4 in what the reader already knows: their OWN
+situation. Write about the pressure they are under, the shape of the decision
+they are making, the risk of inaction. You are giving them confidence that
+they are not being sold into something exotic — you are doing that WITHOUT
+naming other customers you don't have. A short chapter is fine.`;
+        }
+        if (customerList.length > 0) {
+          return `
+CHAPTER 4 GUARDRAIL — THE SOURCE NAMES ${customerList.length} CUSTOMER${customerList.length === 1 ? '' : 'S'}.
+
+The only customer${customerList.length === 1 ? '' : 's'} you may name in this chapter: ${customerList.join(', ')}.
+
+You may NOT use phrases like "banks like yours are already using it",
+"multiple regional banks", "several community banks", "pilot partners",
+"beta customers", or any count or plural reference that implies more
+customers than are named above. If you want to reinforce credibility beyond
+the named customer, do it through the SPECIFIC results in the Three Tier
+proof bullets — not through manufactured customer quantities.`;
+        }
+      }
+      // Ch5 — Let's Get Started (direction)
+      if (chapterNum === 5) {
+        return `
+CHAPTER 5 GUARDRAIL — DIRECTION MUST BE REAL.
+
+Your CTA is: "${story.cta}". That is the only action you may direct the
+reader to take. You may NOT invent trial options, sandbox environments,
+workshops, assessments, pilot programs, free audits, or any other offer
+that does not appear explicitly in the Three Tier or the Situation. If the
+CTA is "get a demo", the chapter lands on "get a demo" — not on
+"pick one workflow and run it in our sandbox". If the honest ending is
+thin, make the chapter short and direct.`;
+      }
+      return '';
+    }
+
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
         status: `chapter_${chapterNum}`,
@@ -444,6 +585,7 @@ AUDIENCE: ${draftWithElements.audience.name}`;
 
       const systemPrompt = buildChapterPrompt(chapterNum, mediumKey);
       const ch = CHAPTER_CRITERIA[chapterNum - 1];
+      const chapterGuardrail = buildChapterGuardrails(chapterNum);
       const prevChapters = await prisma.chapterContent.findMany({
         where: { storyId: story.id, chapterNum: { lt: chapterNum } },
         orderBy: { chapterNum: 'asc' },
@@ -562,7 +704,8 @@ If the SITUATION describes an announcement, a policy change, or a specific
 occasion, the chapter must be ABOUT that thing, at its center, from the
 first sentence. A chapter that opens with generic framing about the
 offering and ignores the occasion is a failure — regenerate before
-returning.`;
+returning.
+${chapterGuardrail}`;
 
       let content = await callAI(systemPrompt, userMessage, 'elite');
 
@@ -588,11 +731,19 @@ returning.`;
         );
       }
 
-      // Fabrication check with one retry. This is separate from voice check:
-      // voice check evaluates HOW things are said, fabrication check evaluates
-      // WHETHER things are true. Catches invented customers, metrics, pricing,
-      // processes, and professional services that the chapter prompt rules
-      // don't always prevent on their own.
+      // Fabrication check with up to TWO retries. This is separate from
+      // voice check: voice check evaluates HOW things are said, fabrication
+      // check evaluates WHETHER things are true. Catches invented customers,
+      // metrics, pricing, processes, and professional services that the
+      // chapter prompt rules don't always prevent on their own.
+      //
+      // Why two retries instead of one: empirically one retry isn't enough.
+      // The LLM's first draft typically invents several claims, the retry
+      // removes some but introduces new ones (especially for Chapter 3
+      // support / Chapter 4 social proof). The second retry, with cumulative
+      // feedback listing every flagged claim from both earlier attempts,
+      // usually converges on an honest draft. Latency cost: ~30 sec per extra
+      // retry, worth it for output integrity.
       try {
         const tierTextForCheck = `Tier 1: "${draftForStory.tier1Statement?.text || ''}"
 ${draftForStory.tier2Statements
@@ -604,17 +755,30 @@ ${draftForStory.tier2Statements
         const prioritiesTextForCheck = draftForStory.audience.priorities
           .map(p => `[Rank ${p.rank}] "${p.text}"`)
           .join('\n');
-        const fabCheck = await checkChapterFabrication({
-          situation,
-          tierText: tierTextForCheck,
-          prioritiesText: prioritiesTextForCheck,
-          chapterContent: content,
-        });
-        if (!fabCheck.passed && fabCheck.violations.length > 0) {
+        const cumulativeViolations: string[] = [];
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const fabCheck = await checkChapterFabrication({
+            situation,
+            tierText: tierTextForCheck,
+            prioritiesText: prioritiesTextForCheck,
+            chapterContent: content,
+          });
+          if (fabCheck.passed || fabCheck.violations.length === 0) {
+            if (attempt > 0) {
+              console.log(
+                `[ExpressPipeline] ${jobId} chapter ${chapterNum} fabrication cleared after ${attempt} retry(s)`,
+              );
+            }
+            break;
+          }
           console.log(
-            `[ExpressPipeline] ${jobId} chapter ${chapterNum} fabrication: ${fabCheck.violations.length} unsupported claims, retrying`,
+            `[ExpressPipeline] ${jobId} chapter ${chapterNum} fabrication attempt ${attempt + 1}: ${fabCheck.violations.length} unsupported claims, retrying`,
           );
-          const feedback = buildFabricationFeedback(fabCheck.violations);
+          // Accumulate violations across attempts so the retry sees everything
+          // that was flagged, not just the current attempt. This prevents the
+          // LLM from fixing one invention and introducing a new one.
+          for (const v of fabCheck.violations) cumulativeViolations.push(v);
+          const feedback = buildFabricationFeedback(cumulativeViolations);
           content = await callAI(systemPrompt, userMessage + feedback, 'elite');
         }
       } catch (err) {
@@ -736,6 +900,7 @@ content to fill the gap.`;
     // "support team", adding examiner behavior, etc). Run the check again
     // on the final blended output. Treat the entire blended draft as the
     // "chapter" and pass the full Three Tier + priorities as the source.
+    // Up to two retries with cumulative feedback.
     try {
       const blendTierTextForCheck = `Tier 1: "${draftForStory.tier1Statement?.text || ''}"
 ${draftForStory.tier2Statements
@@ -747,17 +912,27 @@ ${draftForStory.tier2Statements
       const blendPrioritiesForCheck = draftForStory.audience.priorities
         .map(p => `[Rank ${p.rank}] "${p.text}"`)
         .join('\n');
-      const blendFabCheck = await checkChapterFabrication({
-        situation: blendSituation,
-        tierText: blendTierTextForCheck,
-        prioritiesText: blendPrioritiesForCheck,
-        chapterContent: blendedText,
-      });
-      if (!blendFabCheck.passed && blendFabCheck.violations.length > 0) {
+      const cumulativeBlendViolations: string[] = [];
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const blendFabCheck = await checkChapterFabrication({
+          situation: blendSituation,
+          tierText: blendTierTextForCheck,
+          prioritiesText: blendPrioritiesForCheck,
+          chapterContent: blendedText,
+        });
+        if (blendFabCheck.passed || blendFabCheck.violations.length === 0) {
+          if (attempt > 0) {
+            console.log(
+              `[ExpressPipeline] ${jobId} blend fabrication cleared after ${attempt} retry(s)`,
+            );
+          }
+          break;
+        }
         console.log(
-          `[ExpressPipeline] ${jobId} blend fabrication: ${blendFabCheck.violations.length} unsupported claims, retrying`,
+          `[ExpressPipeline] ${jobId} blend fabrication attempt ${attempt + 1}: ${blendFabCheck.violations.length} unsupported claims, retrying`,
         );
-        const feedback = buildFabricationFeedback(blendFabCheck.violations);
+        for (const v of blendFabCheck.violations) cumulativeBlendViolations.push(v);
+        const feedback = buildFabricationFeedback(cumulativeBlendViolations);
         blendedText = await callAI(BLEND_SYSTEM, blendMessage + feedback, 'elite');
       }
     } catch (err) {

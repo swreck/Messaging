@@ -307,10 +307,18 @@ export function ExpressEntry() {
   }
 
   if (phase.name === 'extracting') {
+    // Show a compact preview of what the user sent — never the full message.
+    // A 1500-character input rendered verbatim pushes Maria's thinking
+    // indicator below the fold, which makes the send feel unanswered.
+    const previewLimit = 220;
+    const preview =
+      phase.message.length > previewLimit
+        ? phase.message.slice(0, previewLimit).trim() + '…'
+        : phase.message;
     return wrap(
       <div className="express-entry">
         <div className="express-entry-message-sent">
-          <p className="express-entry-user-bubble">{phase.message}</p>
+          <p className="express-entry-user-bubble">{preview}</p>
         </div>
         <div className="express-entry-thinking">
           <div className="express-entry-thinking-dot" />
