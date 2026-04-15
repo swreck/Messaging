@@ -159,18 +159,26 @@ export function FiveChaptersPage() {
               ) : (
                 <div className="tt-card-grid">
                   {(() => {
-                    const mediumCounts = new Map<string, number>();
+                    // Distinguish multiple deliverables of the same medium
+                    // by updated date, not by "#N" — humans cannot tell a
+                    // row of "newsletter article #1/#2/#3" apart. customName
+                    // (if meaningful) always wins.
                     const mediumTotals = new Map<string, number>();
                     for (const d of off.deliverables) {
                       mediumTotals.set(d.medium, (mediumTotals.get(d.medium) || 0) + 1);
                     }
+                    const shortDate = (iso?: string) => {
+                      if (!iso) return '';
+                      const dt = new Date(iso);
+                      if (isNaN(dt.getTime())) return '';
+                      return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                    };
                     return off.deliverables.map(del => {
-                      const count = (mediumCounts.get(del.medium) || 0) + 1;
-                      mediumCounts.set(del.medium, count);
                       const total = mediumTotals.get(del.medium) || 1;
+                      const baseMedium = getMediumLabel(del.medium);
                       const fallbackName = total > 1
-                        ? `${getMediumLabel(del.medium)} #${count}`
-                        : getMediumLabel(del.medium);
+                        ? `${baseMedium} · ${shortDate(del.updatedAt) || 'draft'}`
+                        : baseMedium;
                       const displayName = del.customName || fallbackName;
                       return (
                         <div
