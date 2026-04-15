@@ -4244,3 +4244,69 @@ p { line-height: 1.5; color: var(--text-secondary); }
   .express-entry-complete-actions .btn { width: 100%; }
 }
 
+/* Maria 3 standalone shell — rendered when /express runs without the 2.5
+   Layout wrapper. Minimal top chrome, no nav links, no brand tagline. */
+.express-shell {
+  min-height: 100vh;
+  background: #fafaf8;
+  display: flex;
+  flex-direction: column;
+}
+
+.express-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 32px;
+  background: #ffffff;
+  border-bottom: 1px solid #eceae5;
+}
+
+.express-chrome-brand {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1a1a1a;
+  letter-spacing: -0.01em;
+}
+
+.express-chrome-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.express-chrome-workspace {
+  font-size: 13px;
+  color: #555;
+  background: #f3f1ec;
+  padding: 5px 11px;
+  border-radius: 999px;
+}
+
+.express-chrome-user {
+  font-size: 13px;
+  color: #666;
+}
+
+.express-shell-main {
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 600px) {
+  .express-chrome {
+    padding: 12px 16px;
+  }
+  .express-chrome-brand {
+    font-size: 19px;
+  }
+  .express-chrome-user {
+    display: none;
+  }
+  .express-chrome-workspace {
+    font-size: 12px;
+    padding: 4px 9px;
+  }
+}
+

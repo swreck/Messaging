@@ -262,7 +262,7 @@ ${draftWithElements.offering.elements
     // ─── Stage 2: Three Tier generation ──────────────
     await update({
       status: 'tier_generation',
-      stage: 'Building your message',
+      stage: 'Shaping the Three Tier message',
       progress: 25,
     });
 
@@ -728,6 +728,43 @@ content to fill the gap.`;
       }
     } catch (err) {
       console.error(`[ExpressPipeline] ${jobId} blend voice check error (fail-open):`, err);
+    }
+
+    // Blend-level fabrication check. The per-chapter fabrication check runs
+    // on each chapter in isolation, but the blend LLM can still reintroduce
+    // invented material while polishing (rewording a founder reference as a
+    // "support team", adding examiner behavior, etc). Run the check again
+    // on the final blended output. Treat the entire blended draft as the
+    // "chapter" and pass the full Three Tier + priorities as the source.
+    try {
+      const blendTierTextForCheck = `Tier 1: "${draftForStory.tier1Statement?.text || ''}"
+${draftForStory.tier2Statements
+  .map(
+    (t2, i) => `Tier 2 #${i + 1} [${t2.categoryLabel || 'unlabeled'}]: "${t2.text}"
+  Proof: ${t2.tier3Bullets.map(b => b.text).join(', ') || '(no proof)'}`,
+  )
+  .join('\n')}`;
+      const blendPrioritiesForCheck = draftForStory.audience.priorities
+        .map(p => `[Rank ${p.rank}] "${p.text}"`)
+        .join('\n');
+      const blendFabCheck = await checkChapterFabrication({
+        situation: blendSituation,
+        tierText: blendTierTextForCheck,
+        prioritiesText: blendPrioritiesForCheck,
+        chapterContent: blendedText,
+      });
+      if (!blendFabCheck.passed && blendFabCheck.violations.length > 0) {
+        console.log(
+          `[ExpressPipeline] ${jobId} blend fabrication: ${blendFabCheck.violations.length} unsupported claims, retrying`,
+        );
+        const feedback = buildFabricationFeedback(blendFabCheck.violations);
+        blendedText = await callAI(BLEND_SYSTEM, blendMessage + feedback, 'elite');
+      }
+    } catch (err) {
+      console.error(
+        `[ExpressPipeline] ${jobId} blend fabrication check error (fail-open):`,
+        err,
+      );
     }
 
     // Strip markdown artifacts. Same safety net as 2.5 blend-story, plus the

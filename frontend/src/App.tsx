@@ -59,7 +59,21 @@ function App() {
               )
             }
           />
-          <Route path="/express" element={<ProtectedRoute><Layout><ExpressEntry /></Layout></ProtectedRoute>} />
+          <Route
+            path="/express"
+            element={
+              isMariaThreeHost ? (
+                // Maria 3: render ExpressEntry standalone. It draws its own
+                // minimal top chrome so the page feels like a dedicated chat
+                // surface, not a route inside the 2.5 navigation shell.
+                <ProtectedRoute><ExpressEntry /></ProtectedRoute>
+              ) : (
+                // Maria 2.5: keep the full Layout. Users who navigated here
+                // directly still see the 2.5 nav.
+                <ProtectedRoute><Layout><ExpressEntry /></Layout></ProtectedRoute>
+              )
+            }
+          />
           <Route path="/audiences" element={<ProtectedRoute><Layout><AudiencesPage /></Layout></ProtectedRoute>} />
           <Route path="/offerings" element={<ProtectedRoute><Layout><OfferingsPage /></Layout></ProtectedRoute>} />
           <Route path="/offerings/:id" element={<ProtectedRoute><Layout><OfferingDetailPage /></Layout></ProtectedRoute>} />

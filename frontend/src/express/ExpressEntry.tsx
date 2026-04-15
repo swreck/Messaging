@@ -19,6 +19,49 @@ import { api } from '../api/client';
 import { InterpretationPreview } from './InterpretationPreview';
 import type { ExpressInterpretation } from './types';
 import { useToast } from '../shared/ToastContext';
+import { useAuth } from '../auth/AuthContext';
+import { useWorkspace } from '../shared/WorkspaceContext';
+
+// Maria 3 runs this route without the 2.5 Layout wrapper (see App.tsx). In
+// that standalone mode we render our own minimal chrome so the page doesn't
+// feel nav-less. On 2.5 URLs, Layout still wraps ExpressEntry, so the chrome
+// is hidden to avoid a duplicate header.
+function isMariaThreeHostname(): boolean {
+  if (typeof window === 'undefined') return false;
+  const h = window.location.hostname;
+  return (
+    h.includes('mariamessaging3') ||
+    h.includes('maria-messaging-3') ||
+    h.includes('maria3.')
+  );
+}
+
+function Maria3Chrome() {
+  const { user, logout } = useAuth();
+  const { activeWorkspace } = useWorkspace();
+  return (
+    <header className="express-chrome">
+      <div className="express-chrome-brand">Maria</div>
+      <div className="express-chrome-right">
+        {activeWorkspace && (
+          <span className="express-chrome-workspace">{activeWorkspace.name}</span>
+        )}
+        {user && (
+          <>
+            <span className="express-chrome-user">{user.username}</span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={logout}
+            >
+              Sign Out
+            </button>
+          </>
+        )}
+      </div>
+    </header>
+  );
+}
 
 type Phase =
   | { name: 'greeting' }
@@ -75,6 +118,7 @@ export function ExpressEntry() {
   const [input, setInput] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { showToast } = useToast();
+  const standalone = isMariaThreeHostname();
 
   useEffect(() => {
     return () => {
@@ -215,9 +259,19 @@ export function ExpressEntry() {
 
   // ─── Render ─────────────────────────────────────────
 
+  function wrap(children: React.ReactNode) {
+    if (!standalone) return children;
+    return (
+      <div className="express-shell">
+        <Maria3Chrome />
+        <div className="express-shell-main">{children}</div>
+      </div>
+    );
+  }
+
   if (phase.name === 'greeting') {
     const canSend = input.trim().length >= 20;
-    return (
+    return wrap(
       <div className="express-entry">
         <div className="express-entry-greeting">
           <h1 className="express-entry-title">Hi, I'm Maria.</h1>
@@ -248,12 +302,12 @@ export function ExpressEntry() {
             </button>
           </div>
         </div>
-      </div>
+      </div>,
     );
   }
 
   if (phase.name === 'extracting') {
-    return (
+    return wrap(
       <div className="express-entry">
         <div className="express-entry-message-sent">
           <p className="express-entry-user-bubble">{phase.message}</p>
@@ -264,25 +318,25 @@ export function ExpressEntry() {
           <div className="express-entry-thinking-dot" />
           <p>I'm reading what you wrote.</p>
         </div>
-      </div>
+      </div>,
     );
   }
 
   if (phase.name === 'reviewing') {
-    return (
+    return wrap(
       <div className="express-entry express-entry-reviewing">
         <InterpretationPreview
           initial={phase.interpretation}
           onConfirm={handleConfirm}
           onSwitchToWizard={handleSwitchToWizard}
         />
-      </div>
+      </div>,
     );
   }
 
   if (phase.name === 'building') {
     const pct = Math.max(3, Math.min(100, phase.progress));
-    return (
+    return wrap(
       <div className="express-entry">
         <div className="express-entry-building">
           <h2 className="express-entry-building-title">
@@ -296,7 +350,7 @@ export function ExpressEntry() {
           </div>
           <p className="express-entry-stage">{phase.stage}</p>
         </div>
-      </div>
+      </div>,
     );
   }
 
@@ -306,7 +360,7 @@ export function ExpressEntry() {
       .map(p => p.trim())
       .filter(p => p.length > 0);
 
-    return (
+    return wrap(
       <div className="express-entry">
         <div className="express-entry-complete">
           <p className="express-entry-complete-intro">
@@ -333,12 +387,12 @@ export function ExpressEntry() {
             </button>
           </div>
         </div>
-      </div>
+      </div>,
     );
   }
 
   if (phase.name === 'error') {
-    return (
+    return wrap(
       <div className="express-entry">
         <div className="express-entry-error">
           <p>{phase.message}</p>
@@ -346,7 +400,7 @@ export function ExpressEntry() {
             Try again
           </button>
         </div>
-      </div>
+      </div>,
     );
   }
 
