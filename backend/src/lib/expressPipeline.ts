@@ -509,28 +509,56 @@ Write Chapter ${chapterNum}: "${ch.name}"
 
 IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.
 
-CRITICAL — NO FABRICATION:
-You may only assert claims that are explicitly supported by the THREE TIER MESSAGE,
-the AUDIENCE PRIORITIES, or the SITUATION above. This means:
-- No invented customer references. No "Banks like yours are already on the platform"
-  unless Tier 3 contains a specific, named customer. No "Community banks are running
-  Claris in production today" unless that is in Tier 3.
-- No invented metrics. No percentages, no dollar figures, no timelines, no case-study
-  results unless they are explicitly in Tier 3.
-- No invented pricing. No "flat monthly subscription", no "per-seat", no "starting at".
-- No invented professional services. No "dedicated onboarding lead", no "quarterly
-  check-ins", no "typically done in days" unless stated.
-- No invented product features. Only features listed in the Three Tier exist.
-- No invented processes, no "member forum", no "help desk", no "escalation path"
-  unless stated.
+CRITICAL — NO FABRICATION. Read this carefully, because it is what will
+cause a draft to fail or succeed:
 
-If the chapter target length requires more content than the Three Tier supports,
-write less. A shorter draft that is entirely honest is better than a longer draft
-that fabricates. Trust the reader to notice the gap and fill it themselves.
+You may only assert claims that are explicitly supported by the THREE TIER
+MESSAGE, the AUDIENCE PRIORITIES, or the SITUATION above. If the fact is not
+in one of those three places, you may not write it as a claim. Period.
 
-If the SITUATION describes an announcement, a policy change, or a specific occasion,
-the chapter must be ABOUT that thing. A chapter about the offering in general that
-ignores the occasion is a failure — regenerate before returning.`;
+Specifically forbidden unless explicitly supported above:
+- Customer references. "Banks like yours are already on the platform." "We
+  are working with community banks today." Unless Tier 3 names the customer,
+  do not mention them.
+- Metrics. No percentages, dollar figures, timelines, reduction claims, case
+  study outcomes unless they appear as proof in Tier 3.
+- Pricing. No "flat monthly subscription", no "dining is included in dues",
+  no "per-seat", no dollar amounts of any kind.
+- Professional services. No "dedicated onboarding lead", no "quarterly
+  check-ins", no "implementation team", no "typically done in days", no
+  "we handle the setup" unless stated.
+- Product features. Only features listed in the Three Tier exist. Do not
+  infer adjacent features the product "probably has."
+- Processes, programs, and events the user did not describe. No "open comment
+  period", no "written rationale to every member", no "member forum", no
+  "town hall", no "Q&A session", no "feedback session", no "review board",
+  no "quarterly review". If the user mentioned "send them directly to the
+  board" that IS the process; do not elaborate into a formal program.
+- Governance artifacts the user did not describe. No "the board published
+  its reasoning in writing", no "formal vote", no "ratification session".
+- Audience actions beyond what the user described. If the user said "members
+  need to make reservations three days ahead", do NOT tell readers to "mark
+  their calendars" or "set a reminder in your phone app" — those are
+  invented specifics.
+
+The discipline: after you write each sentence, ask yourself "is this fact
+in the Three Tier, the Priorities, or the Situation?" If the answer is no
+or uncertain, cut the sentence. A three-paragraph honest draft is better
+than a five-paragraph draft with one fabricated line, because the reader
+will copy the whole thing and ship the fabrication along with the truth.
+
+Length discipline. If the chapter word budget requires more content than
+you can honestly produce from the Three Tier, produce a shorter chapter.
+Never inflate the word count by adding invented content to reach a target.
+
+The test: if you are about to write something, and you are not sure whether
+it is true, it is not true for this user — so cut it.
+
+If the SITUATION describes an announcement, a policy change, or a specific
+occasion, the chapter must be ABOUT that thing, at its center, from the
+first sentence. A chapter that opens with generic framing about the
+offering and ignores the occasion is a failure — regenerate before
+returning.`;
 
       let content = await callAI(systemPrompt, userMessage, 'elite');
 

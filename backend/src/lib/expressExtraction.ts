@@ -77,19 +77,28 @@ user will rename it in the review step.
    reader needs to walk away knowing or feeling. This is the single most
    important thing you extract — it is the difference between a generic
    "about the product" draft and a draft that actually does the user's job.
-     Example A: "Rosa needs to announce a new dining policy to the full
-     membership — dinner now requires three days advance notice instead of
-     walk-in booking. The board approved it last week. The email needs to
-     land softly without starting a revolt, especially with long-tenured
-     founding members."
-     Example B: "Dina needs a pitch deck narrative for a regional bank CFO
-     conference on Friday. The audience is community bank CFOs dealing with
-     compliance workload and 2026 FFIEC updates on shrinking budgets. The
-     goal is to make Claris the obvious pick for their compliance burden."
+
+   WRITE IN SECOND PERSON. Address the user directly as "you". Never use
+   their name or refer to them in third person ("the user", "Dina", "Rosa").
+   This block gets passed into the generation prompts downstream — third
+   person framing would leak into the draft.
+
+     Example A (second-person, correct): "You need to announce a new dining
+     policy to the full membership — dinner now requires three days advance
+     notice instead of walk-in booking. Your board approved it last week.
+     The email needs to land softly without starting a revolt, especially
+     with your long-tenured founding members."
+
+     Example B (second-person, correct): "You need a pitch deck narrative
+     for a regional bank CFO conference on Friday. The room will be full of
+     community and regional bank CFOs being squeezed by 2026 FFIEC updates
+     on shrinking budgets. The deck has to make your offering the obvious
+     answer to that specific pressure, and the deadline is Thursday."
+
    Include the user's goal, the audience, the constraints, and anything
    specific about the occasion. If the user gave you a deadline, a venue,
    or a specific scenario, include it verbatim. Never generalize this to
-   "write a pitch deck about Claris" — that loses the situation.
+   "write a pitch deck about the offering" — that loses the situation.
 
 ═══ RULES ═══
 
