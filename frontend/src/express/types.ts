@@ -33,5 +33,12 @@ export interface ExpressInterpretation {
     source: FactSource;
     reasoning: string;
   };
+  // The specific thing the user needs this deliverable to do. Captures the
+  // situation / occasion / announcement so the generation pipeline produces
+  // a draft ABOUT that thing, not a generic value story about the offering.
+  // Without this, Rosa's "announce the dining policy change" becomes a
+  // generic "about the club" email, and Dina's "pitch deck for the Friday
+  // CFO conference" becomes a generic "about Claris" deck.
+  situation: string;
   confidenceNotes: string;
 }

@@ -72,6 +72,25 @@ user will rename it in the review step.
    email | pitch deck | landing page | blog post | press release |
    talking points (in-person meeting) | newsletter | one-pager | report
 
+4. SITUATION — the specific thing the user needs THIS deliverable to do.
+   Two to four sentences. Captures the occasion, the trigger, and what the
+   reader needs to walk away knowing or feeling. This is the single most
+   important thing you extract — it is the difference between a generic
+   "about the product" draft and a draft that actually does the user's job.
+     Example A: "Rosa needs to announce a new dining policy to the full
+     membership — dinner now requires three days advance notice instead of
+     walk-in booking. The board approved it last week. The email needs to
+     land softly without starting a revolt, especially with long-tenured
+     founding members."
+     Example B: "Dina needs a pitch deck narrative for a regional bank CFO
+     conference on Friday. The audience is community bank CFOs dealing with
+     compliance workload and 2026 FFIEC updates on shrinking budgets. The
+     goal is to make Claris the obvious pick for their compliance burden."
+   Include the user's goal, the audience, the constraints, and anything
+   specific about the occasion. If the user gave you a deadline, a venue,
+   or a specific scenario, include it verbatim. Never generalize this to
+   "write a pitch deck about Claris" — that loses the situation.
+
 ═══ RULES ═══
 
 - Use the user's own words when you can. Do not polish or marketing-ify.
@@ -120,6 +139,7 @@ Return ONLY valid JSON in this exact shape (no markdown, no code fences):
     "source": "stated" | "inferred",
     "reasoning": "one short sentence on why this medium"
   },
+  "situation": "two to four sentences capturing the specific thing this deliverable needs to do — the occasion, the trigger, the audience reaction you're aiming for, any constraint or deadline. See Example A and Example B above.",
   "confidenceNotes": "one sentence on overall confidence — were you mostly reading stated facts, or mostly inferring? Flag any place where you felt the description was too thin to extract reliably."
 }`;
 
@@ -156,6 +176,7 @@ export interface ExpressInterpretation {
     source: FactSource;
     reasoning: string;
   };
+  situation: string;
   confidenceNotes: string;
 }
 

@@ -146,6 +146,10 @@ export function InterpretationPreview({ initial, onConfirm, onSwitchToWizard }: 
     }));
   }
 
+  function updateSituation(situation: string) {
+    setState(s => ({ ...s, situation }));
+  }
+
   // ─── Render helpers ─────────────────────────────────────────
 
   function inferredClass(source: FactSource): string {
@@ -162,6 +166,24 @@ export function InterpretationPreview({ initial, onConfirm, onSwitchToWizard }: 
           editable. When you're ready, tell me to go and I'll put together your first draft.
         </p>
       </div>
+
+      {/* ─── What you need this to do ─────────────────────── */}
+      <section className="express-section">
+        <h2 className="express-section-title">What you need this to do</h2>
+        <p className="express-section-hint">
+          This is the most important thing I extracted. The first draft will be written for
+          this specific situation — so if I got it wrong, fix it here before the rest.
+        </p>
+        <div className="express-field">
+          <textarea
+            className="express-textarea"
+            value={state.situation || ''}
+            onChange={e => updateSituation(e.target.value)}
+            rows={4}
+            placeholder="The specific thing you need this draft to do — the occasion, the audience reaction you're aiming for, any deadline or constraint."
+          />
+        </div>
+      </section>
 
       {/* ─── Offering ─────────────────────────────────────── */}
       <section className="express-section">

@@ -445,7 +445,19 @@ AUDIENCE: ${draftWithElements.audience.name}`;
         orderBy: { chapterNum: 'asc' },
       });
 
-      const userMessage = `OFFERING: ${draftForStory.offering.name}
+      const situation = interpretation.situation?.trim() || '';
+      const situationBlock = situation
+        ? `SITUATION — THIS IS WHAT THE DRAFT MUST DO:
+${situation}
+
+The draft must serve this specific situation. A generic value story about the
+offering is not acceptable. The reader must recognize this as a draft written
+FOR them, FOR this occasion, not a recycled template.
+
+`
+        : '';
+
+      const userMessage = `${situationBlock}OFFERING: ${draftForStory.offering.name}
 AUDIENCE: ${draftForStory.audience.name}
 CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
 CTA: ${story.cta}
@@ -494,7 +506,31 @@ ${prevChapters
     : ''
 }
 Write Chapter ${chapterNum}: "${ch.name}"
-IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.`;
+
+IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.
+
+CRITICAL — NO FABRICATION:
+You may only assert claims that are explicitly supported by the THREE TIER MESSAGE,
+the AUDIENCE PRIORITIES, or the SITUATION above. This means:
+- No invented customer references. No "Banks like yours are already on the platform"
+  unless Tier 3 contains a specific, named customer. No "Community banks are running
+  Claris in production today" unless that is in Tier 3.
+- No invented metrics. No percentages, no dollar figures, no timelines, no case-study
+  results unless they are explicitly in Tier 3.
+- No invented pricing. No "flat monthly subscription", no "per-seat", no "starting at".
+- No invented professional services. No "dedicated onboarding lead", no "quarterly
+  check-ins", no "typically done in days" unless stated.
+- No invented product features. Only features listed in the Three Tier exist.
+- No invented processes, no "member forum", no "help desk", no "escalation path"
+  unless stated.
+
+If the chapter target length requires more content than the Three Tier supports,
+write less. A shorter draft that is entirely honest is better than a longer draft
+that fabricates. Trust the reader to notice the gap and fill it themselves.
+
+If the SITUATION describes an announcement, a policy change, or a specific occasion,
+the chapter must be ABOUT that thing. A chapter about the offering in general that
+ignores the occasion is a failure — regenerate before returning.`;
 
       let content = await callAI(systemPrompt, userMessage, 'elite');
 
@@ -589,13 +625,26 @@ IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation
       .map(ch => ch.content)
       .join('\n\n');
 
-    const blendMessage = `CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words)
+    const blendSituation = interpretation.situation?.trim() || '';
+    const blendMessage = `${blendSituation ? `SITUATION — WHAT THIS DRAFT MUST DO:
+${blendSituation}
+
+Do not drift away from this. If the source chapters below stray into generic
+territory, pull them back toward the situation. Every paragraph must serve it.
+
+` : ''}CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words)
 FORMAT RULES: ${mediumSpec.format}
 TONE: ${mediumSpec.tone}
 
 ${sourceText}
 
-Polish this into a final, cohesive ${mediumSpec.label.toLowerCase()}.`;
+Polish this into a final, cohesive ${mediumSpec.label.toLowerCase()}.
+
+CRITICAL — NO FABRICATION. The blend may only use claims present in the source
+chapters above. Do not add customer references, pricing, metrics, features,
+processes, or services that are not already in the source. If the source is
+thinner than the word target, produce a shorter draft rather than invent
+content to fill the gap.`;
 
     let blendedText = await callAI(BLEND_SYSTEM, blendMessage, 'elite');
 
