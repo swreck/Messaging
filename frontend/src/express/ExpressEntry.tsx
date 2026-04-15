@@ -42,6 +42,9 @@ function Maria3Chrome() {
   return (
     <header className="express-chrome">
       <div className="express-chrome-brand">Maria</div>
+      <nav className="express-chrome-nav">
+        <a className="express-chrome-nav-link" href="/three-tiers">My work</a>
+      </nav>
       <div className="express-chrome-right">
         {activeWorkspace && (
           <span className="express-chrome-workspace">{activeWorkspace.name}</span>
@@ -231,11 +234,15 @@ export function ExpressEntry() {
   }
 
   function handleSwitchToWizard(_interpretation: ExpressInterpretation) {
-    // Full step-by-step wizard handoff lands in a later slice. For now,
-    // acknowledge the request and keep the user in Express mode.
-    showToast(
-      "Step-by-step mode is coming soon. For now, 'Looks right' will put together a first draft you can edit.",
-    );
+    // Real handoff to the Full Flow wizard is in a later slice. The ideal
+    // flow is commit-interpretation → navigate to /three-tier/{id}?step=1 so
+    // the user keeps everything they just edited. For now the minimum
+    // viable escape is to drop them on their drafts list so a power user
+    // (Brad in V6) can pick up with an existing draft or start a new one.
+    showToast('Opening step-by-step mode.');
+    setTimeout(() => {
+      window.location.href = '/three-tiers';
+    }, 400);
   }
 
   function handleReset() {

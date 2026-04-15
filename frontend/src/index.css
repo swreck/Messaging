@@ -4296,6 +4296,28 @@ p { line-height: 1.5; color: var(--text-secondary); }
   letter-spacing: -0.01em;
 }
 
+.express-chrome-nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  justify-content: center;
+}
+
+.express-chrome-nav-link {
+  color: #555;
+  text-decoration: none;
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: color 0.15s ease;
+}
+
+.express-chrome-nav-link:hover {
+  color: #1a1a1a;
+  background: #f3f1ec;
+}
+
 .express-chrome-right {
   display: flex;
   align-items: center;
