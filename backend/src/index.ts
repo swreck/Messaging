@@ -53,14 +53,51 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Serve static frontend
+// Serve static frontend assets (icons, JS bundle, manifest.json, etc.)
+// We disable express.static's automatic index.html so the SPA fallback below
+// can transform the HTML per Host header for the Maria 3.0 dual deployment.
 const publicDir = path.join(__dirname, '..', 'public');
-app.use(express.static(publicDir));
+app.use(express.static(publicDir, { index: false }));
+
+// ─── Maria 2.5 / Maria 3.0 dual deployment ─────────────────
+// Both versions run from this same codebase on `main`. Two Railway services
+// point their URLs at the same running image. We serve differentiated HTML
+// (title + icons + manifest) based on the incoming Host header so iPhone/iPad
+// PWA installs show the correct icon and title for each version.
+//
+// The underlying data is the same (shared Neon database, same users, same
+// offerings/audiences/drafts). Only the HTML wrapper differs. Maria 3 icons
+// and manifest-maria3.json live in public/ alongside their 2.5 counterparts
+// and are served by express.static above when referenced by the 3.0 HTML.
+
+function isMariaThreeHost(hostname: string): boolean {
+  if (process.env.MARIA_3_HOST && hostname === process.env.MARIA_3_HOST) return true;
+  return hostname.includes('maria-messaging-3') || hostname.includes('maria3');
+}
+
+function transformToMaria3(html: string): string {
+  return html
+    .replace(/href="\/icon-32\.png"/g, 'href="/icon-32-maria3.png"')
+    .replace(/href="\/apple-touch-icon\.png"/g, 'href="/apple-touch-icon-maria3.png"')
+    .replace(/href="\/manifest\.json"/g, 'href="/manifest-maria3.json"')
+    .replace(/content="Maria"/g, 'content="Maria 3"')
+    .replace(/<title>Maria<\/title>/g, '<title>Maria 3</title>');
+}
 
 // SPA fallback — Express 5 doesn't support app.get('*', ...)
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api')) {
-    res.sendFile(path.join(publicDir, 'index.html'));
+    try {
+      const fs = await import('fs/promises');
+      let html = await fs.readFile(path.join(publicDir, 'index.html'), 'utf-8');
+      if (isMariaThreeHost(req.hostname)) {
+        html = transformToMaria3(html);
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(html);
+    } catch (err) {
+      next(err);
+    }
   } else {
     next();
   }

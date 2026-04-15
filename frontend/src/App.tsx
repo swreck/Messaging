@@ -22,6 +22,16 @@ import { WorkspacesPage } from './pages/WorkspacesPage';
 import { MappingPage } from './pages/MappingPage';
 import { SharedView } from './pages/SharedView';
 import { ExpressPreviewDemo } from './express/ExpressPreviewDemo';
+import { ExpressEntry } from './express/ExpressEntry';
+
+// Maria 3.0 dual deployment: detect which branded URL is serving this bundle.
+// When running on the 3.0 service hostname, "/" redirects to "/express" so
+// Maria 3 users land on the chat entry by default. On the 2.5 URL, "/" stays
+// the dashboard — 2.5 users see no change.
+const isMariaThreeHost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname.includes('maria-messaging-3') ||
+    window.location.hostname.includes('maria3'));
 
 function App() {
   return (
@@ -34,7 +44,17 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/join/:code" element={<JoinPage />} />
-          <Route path="/" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
+          <Route
+            path="/"
+            element={
+              isMariaThreeHost ? (
+                <Navigate to="/express" replace />
+              ) : (
+                <ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>
+              )
+            }
+          />
+          <Route path="/express" element={<ProtectedRoute><Layout><ExpressEntry /></Layout></ProtectedRoute>} />
           <Route path="/audiences" element={<ProtectedRoute><Layout><AudiencesPage /></Layout></ProtectedRoute>} />
           <Route path="/offerings" element={<ProtectedRoute><Layout><OfferingsPage /></Layout></ProtectedRoute>} />
           <Route path="/offerings/:id" element={<ProtectedRoute><Layout><OfferingDetailPage /></Layout></ProtectedRoute>} />

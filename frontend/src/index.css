@@ -3990,3 +3990,257 @@ p { line-height: 1.5; color: var(--text-secondary); }
   .express-preview-voice p { font-size: 15px; }
 }
 
+/* ─────────────────────────────────────────────────────────
+   Express Entry — Maria 3.0 chat-first front door
+   Lives at /express and is the default home on the 3.0
+   Railway service. Quiet entry → extraction wait → inline
+   preview → silent build progress → finished draft.
+   ───────────────────────────────────────────────────────── */
+
+.express-entry {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+.express-entry-greeting {
+  text-align: center;
+  padding: 48px 0 24px;
+}
+
+.express-entry-title {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 16px;
+  color: var(--text-primary, #1d1d1f);
+}
+
+.express-entry-subtitle {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-secondary, #515154);
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+.express-entry-input {
+  margin-top: 24px;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid var(--border, #d2d2d7);
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.express-entry-input:focus-within {
+  border-color: var(--accent, #0071e3);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.12);
+}
+
+.express-entry-textarea {
+  width: 100%;
+  border: none;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.55;
+  background: transparent;
+  min-height: 180px;
+  padding: 0;
+  color: var(--text-primary, #1d1d1f);
+}
+
+.express-entry-textarea:focus {
+  outline: none;
+}
+
+.express-entry-textarea::placeholder {
+  color: var(--text-tertiary, #86868b);
+}
+
+.express-entry-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light, #f0f0f2);
+}
+
+.express-entry-send {
+  min-width: 120px;
+  min-height: 44px;
+}
+
+.express-entry-message-sent {
+  background: var(--accent, #0071e3);
+  color: #ffffff;
+  padding: 16px 20px;
+  border-radius: 18px;
+  margin-left: auto;
+  max-width: 560px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.12);
+}
+
+.express-entry-user-bubble {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  margin: 0;
+  font-size: 15px;
+}
+
+.express-entry-thinking {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 4px;
+  color: var(--text-secondary, #515154);
+}
+
+.express-entry-thinking-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary, #86868b);
+  animation: express-entry-thinking 1.4s infinite ease-in-out;
+}
+
+.express-entry-thinking-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.express-entry-thinking-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes express-entry-thinking {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
+  40%          { opacity: 1;   transform: scale(1); }
+}
+
+.express-entry-thinking p {
+  margin: 0 0 0 10px;
+  color: var(--text-secondary, #515154);
+  font-size: 15px;
+}
+
+.express-entry-reviewing {
+  padding: 16px 0;
+}
+
+.express-entry-building {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 48px 32px;
+  text-align: center;
+  border: 1px solid var(--border-light, #e5e5ea);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.05);
+}
+
+.express-entry-building-title {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0 0 28px;
+  color: var(--text-primary, #1d1d1f);
+}
+
+.express-entry-progress-bar {
+  width: 100%;
+  max-width: 420px;
+  height: 6px;
+  background: var(--border-light, #f0f0f2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 0 auto 16px;
+}
+
+.express-entry-progress-fill {
+  height: 100%;
+  background: var(--accent, #0071e3);
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+.express-entry-stage {
+  font-size: 15px;
+  color: var(--text-secondary, #515154);
+  margin: 0;
+  font-style: italic;
+  min-height: 22px;
+}
+
+.express-entry-complete {
+  padding: 16px 0;
+}
+
+.express-entry-complete-intro {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-secondary, #515154);
+  margin: 0 0 20px;
+  padding: 0 4px;
+}
+
+.express-entry-draft {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 36px 40px;
+  border: 1px solid var(--border-light, #e5e5ea);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.05);
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--text-primary, #1d1d1f);
+}
+
+.express-entry-draft p {
+  margin: 0 0 18px;
+}
+
+.express-entry-draft p:last-child {
+  margin-bottom: 0;
+}
+
+.express-entry-complete-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.express-entry-complete-actions .btn {
+  min-height: 44px;
+}
+
+.express-entry-error {
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  border-radius: 16px;
+  padding: 32px;
+  text-align: center;
+}
+
+.express-entry-error p {
+  margin: 0 0 16px;
+  color: #7f1d1d;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* Responsive — mobile */
+@media (max-width: 600px) {
+  .express-entry { padding: 24px 16px 56px; }
+  .express-entry-greeting { padding: 32px 0 16px; }
+  .express-entry-title { font-size: 26px; }
+  .express-entry-subtitle { font-size: 15px; }
+  .express-entry-input { padding: 14px; border-radius: 14px; }
+  .express-entry-textarea { min-height: 200px; font-size: 16px; }
+  .express-entry-building { padding: 32px 20px; border-radius: 14px; }
+  .express-entry-building-title { font-size: 18px; }
+  .express-entry-draft { padding: 24px 20px; font-size: 15px; line-height: 1.7; border-radius: 14px; }
+  .express-entry-complete-actions { flex-direction: column-reverse; }
+  .express-entry-complete-actions .btn { width: 100%; }
+}
+

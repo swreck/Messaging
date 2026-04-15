@@ -318,3 +318,22 @@ model ChapterVersion {
   changeSource     String         @default("manual")
   createdAt        DateTime       @default(now())
 }
+
+// ─── Express Flow Jobs (Maria 3.0) ─────────────────────
+// Additive to 2.5. Stores the async pipeline state for Express Flow commits.
+// The frontend polls GET /api/express/status/:jobId to show progress, and the
+// resultStoryId points at the finished FiveChapterStory when status === 'complete'.
+model ExpressJob {
+  id             String   @id @default(cuid())
+  userId         String
+  workspaceId    String
+  draftId        String?
+  status         String   @default("pending")
+  stage          String   @default("")
+  progress       Int      @default(0)
+  error          String   @default("")
+  interpretation Json
+  resultStoryId  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
