@@ -31,6 +31,7 @@ import {
 import {
   checkChapterFabrication,
   buildFabricationFeedback,
+  redactChapterViolations,
 } from '../services/fabricationCheck.js';
 import type { ExpressInterpretation } from './expressExtraction.js';
 
@@ -59,6 +60,7 @@ export interface CommitResult {
   draftId: string;
   offeringId: string;
   audienceId: string;
+  variantCount: number;
 }
 
 export async function commitInterpretation(
@@ -66,8 +68,7 @@ export async function commitInterpretation(
   userId: string,
   workspaceId: string,
 ): Promise<CommitResult> {
-  const primaryAudience = interpretation.audiences[0];
-  if (!primaryAudience) {
+  if (!interpretation.audiences || interpretation.audiences.length === 0) {
     throw new Error('Express interpretation needs at least one audience.');
   }
 
@@ -75,18 +76,26 @@ export async function commitInterpretation(
     .map(d => ({ text: d.text.trim(), source: d.source }))
     .filter(d => d.text.length > 0);
 
-  const cleanedPriorities = primaryAudience.priorities
-    .map(p => ({ text: p.text.trim(), source: p.source }))
-    .filter(p => p.text.length > 0);
-
   if (cleanedDifferentiators.length === 0) {
     throw new Error('Interpretation needs at least one differentiator.');
   }
-  if (cleanedPriorities.length === 0) {
-    throw new Error('Interpretation needs at least one priority.');
+
+  // Clean each audience's priorities in parallel. Reject audiences that have
+  // zero valid priorities after trim — they cannot drive a Three Tier.
+  const cleanedAudiences = interpretation.audiences
+    .map(a => ({
+      raw: a,
+      cleanedPriorities: a.priorities
+        .map(p => ({ text: p.text.trim(), source: p.source }))
+        .filter(p => p.text.length > 0),
+    }))
+    .filter(a => a.cleanedPriorities.length > 0);
+
+  if (cleanedAudiences.length === 0) {
+    throw new Error('Interpretation needs at least one audience with priorities.');
   }
 
-  // Offering + elements
+  // Single Offering shared across every audience variant.
   const offering = await prisma.offering.create({
     data: {
       userId,
@@ -104,7 +113,115 @@ export async function commitInterpretation(
     include: { elements: true },
   });
 
-  // Audience + priorities (rank 1 is the top priority)
+  // One Audience + ThreeTierDraft per variant. Drafts land at Step 5 since
+  // the silent pipeline will fill the whole table. Draft IDs are collected
+  // in audience order so the pipeline can iterate variants deterministically.
+  const draftIds: string[] = [];
+  let primaryAudienceId = '';
+  for (const { raw: aud, cleanedPriorities } of cleanedAudiences) {
+    const audience = await prisma.audience.create({
+      data: {
+        userId,
+        workspaceId,
+        name: aud.name.trim() || 'My audience',
+        description: aud.description.trim(),
+        priorities: {
+          create: cleanedPriorities.map((p, i) => ({
+            text: p.text,
+            rank: i + 1,
+            sortOrder: i,
+          })),
+        },
+      },
+    });
+    const draft = await prisma.threeTierDraft.create({
+      data: {
+        offeringId: offering.id,
+        audienceId: audience.id,
+        currentStep: 5,
+      },
+    });
+    draftIds.push(draft.id);
+    if (!primaryAudienceId) primaryAudienceId = audience.id;
+  }
+
+  // Job record — primary draft + explicit variant list (null when single).
+  const job = await prisma.expressJob.create({
+    data: {
+      userId,
+      workspaceId,
+      draftId: draftIds[0],
+      status: 'pending',
+      stage: 'Setting things up',
+      progress: 3,
+      interpretation: interpretation as unknown as object,
+      variantDraftIds: draftIds.length > 1 ? (draftIds as unknown as object) : undefined,
+    },
+  });
+
+  return {
+    jobId: job.id,
+    draftId: draftIds[0],
+    offeringId: offering.id,
+    audienceId: primaryAudienceId,
+    variantCount: draftIds.length,
+  };
+}
+
+// ─── Commit for wizard (no async pipeline) ─────────────
+// Used when the user clicks "Take me through it step by step instead" on the
+// Interpretation preview. Creates the same Offering + Audience + Priorities +
+// ThreeTierDraft rows as commitInterpretation but without creating an
+// ExpressJob or firing the silent pipeline. The draft lands at Step 4
+// (Build Message) since the interpretation has already collected everything
+// Steps 1-3 would ask for. The user can still navigate backward from there.
+export interface WizardCommitResult {
+  draftId: string;
+  offeringId: string;
+  audienceId: string;
+}
+
+export async function commitInterpretationForWizard(
+  interpretation: ExpressInterpretation,
+  userId: string,
+  workspaceId: string,
+): Promise<WizardCommitResult> {
+  const primaryAudience = interpretation.audiences[0];
+  if (!primaryAudience) {
+    throw new Error('Interpretation needs at least one audience.');
+  }
+
+  const cleanedDifferentiators = interpretation.offering.differentiators
+    .map(d => ({ text: d.text.trim(), source: d.source }))
+    .filter(d => d.text.length > 0);
+
+  const cleanedPriorities = primaryAudience.priorities
+    .map(p => ({ text: p.text.trim(), source: p.source }))
+    .filter(p => p.text.length > 0);
+
+  if (cleanedDifferentiators.length === 0) {
+    throw new Error('Interpretation needs at least one differentiator.');
+  }
+  if (cleanedPriorities.length === 0) {
+    throw new Error('Interpretation needs at least one priority.');
+  }
+
+  const offering = await prisma.offering.create({
+    data: {
+      userId,
+      workspaceId,
+      name: interpretation.offering.name.trim() || 'My offering',
+      description: interpretation.offering.description.trim(),
+      elements: {
+        create: cleanedDifferentiators.map((d, i) => ({
+          text: d.text,
+          source: d.source === 'stated' ? 'manual' : 'ai_extracted',
+          sortOrder: i,
+        })),
+      },
+    },
+  });
+
   const audience = await prisma.audience.create({
     data: {
       userId,
@@ -119,33 +236,21 @@ export async function commitInterpretation(
         })),
       },
     },
-    include: { priorities: true },
   });
 
-  // Three Tier draft — land at Step 5 since the silent pipeline will fill the whole table
+  // Start the user at Step 4 — offering, audience, and priorities are already
+  // captured by the interpretation, so Steps 1-3 become review screens the
+  // user can navigate backward into if they want to revise. Step 4 is where
+  // actual new work (mapping priorities to capabilities) begins.
   const draft = await prisma.threeTierDraft.create({
     data: {
       offeringId: offering.id,
       audienceId: audience.id,
-      currentStep: 5,
-    },
-  });
-
-  // Job record
-  const job = await prisma.expressJob.create({
-    data: {
-      userId,
-      workspaceId,
-      draftId: draft.id,
-      status: 'pending',
-      stage: 'Setting things up',
-      progress: 3,
-      interpretation: interpretation as unknown as object,
+      currentStep: 4,
     },
   });
 
   return {
-    jobId: job.id,
     draftId: draft.id,
     offeringId: offering.id,
     audienceId: audience.id,
@@ -188,15 +293,43 @@ export async function runPipeline(jobId: string): Promise<void> {
 
     const interpretation = job.interpretation as unknown as ExpressInterpretation;
 
+    // Multi-audience variants. When the interpretation returned 2+ audiences,
+    // commitInterpretation stored the full ordered list of draft IDs in
+    // job.variantDraftIds. The pipeline then runs the whole mapping → tier →
+    // story → blend flow once per draft, collecting one FiveChapterStory per
+    // audience. The primary story (first audience) lands at resultStoryId so
+    // single-variant behavior is unchanged for existing frontends.
+    const variantDraftIds: string[] = Array.isArray(job.variantDraftIds)
+      ? (job.variantDraftIds as unknown as string[])
+      : [job.draftId];
+    const variantCount = variantDraftIds.length;
+    const storyIds: string[] = [];
+
+    for (let variantIndex = 0; variantIndex < variantCount; variantIndex++) {
+      const currentDraftId = variantDraftIds[variantIndex];
+
+      // Scale per-variant progress into an even slot between 3 and 98.
+      // Existing hardcoded progress values range from 10 (mapping start) to
+      // 92 (pre-blend) and are treated as percentages inside the slot. The
+      // outer-loop "First draft ready / 100" is written after the loop.
+      const slotStart = 3 + Math.floor((variantIndex / variantCount) * 95);
+      const slotEnd = 3 + Math.floor(((variantIndex + 1) / variantCount) * 95);
+      const scaledProgress = (p: number): number => {
+        const local = Math.max(0, Math.min(1, (p - 3) / (95 - 3)));
+        return Math.round(slotStart + local * (slotEnd - slotStart));
+      };
+      const variantStageSuffix =
+        variantCount > 1 ? ` (variant ${variantIndex + 1} of ${variantCount})` : '';
+
     // ─── Stage 1: Mapping ─────────────────────────────
     await update({
       status: 'mapping',
-      stage: 'Reading between the lines',
-      progress: 10,
+      stage: `Reading between the lines${variantStageSuffix}`,
+      progress: scaledProgress(10),
     });
 
     const draftWithElements = await prisma.threeTierDraft.findFirst({
-      where: { id: job.draftId },
+      where: { id: currentDraftId },
       include: {
         offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
         audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
@@ -262,8 +395,8 @@ ${draftWithElements.offering.elements
     // ─── Stage 2: Three Tier generation ──────────────
     await update({
       status: 'tier_generation',
-      stage: 'Shaping the Three Tier message',
-      progress: 25,
+      stage: `Shaping the Three Tier message${variantStageSuffix}`,
+      progress: scaledProgress(25),
     });
 
     const confirmedMappings = await prisma.mapping.findMany({
@@ -400,7 +533,7 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       }
     }
 
-    await update({ progress: 45 });
+    await update({ progress: scaledProgress(45) });
 
     // ─── Stage 3: Five Chapter Story ─────────────────
     const mediumKey = pickInternalMedium(interpretation.primaryMedium.value);
@@ -579,8 +712,8 @@ thin, make the chapter short and direct.`;
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
         status: `chapter_${chapterNum}`,
-        stage: `Drafting chapter ${chapterNum} of 5`,
-        progress: 45 + chapterNum * 8,
+        stage: `Drafting chapter ${chapterNum} of 5${variantStageSuffix}`,
+        progress: scaledProgress(45 + chapterNum * 8),
       });
 
       const systemPrompt = buildChapterPrompt(chapterNum, mediumKey);
@@ -756,6 +889,7 @@ ${draftForStory.tier2Statements
           .map(p => `[Rank ${p.rank}] "${p.text}"`)
           .join('\n');
         const cumulativeViolations: string[] = [];
+        let lastViolations: string[] = [];
         for (let attempt = 0; attempt < 2; attempt++) {
           const fabCheck = await checkChapterFabrication({
             situation,
@@ -769,6 +903,7 @@ ${draftForStory.tier2Statements
                 `[ExpressPipeline] ${jobId} chapter ${chapterNum} fabrication cleared after ${attempt} retry(s)`,
               );
             }
+            lastViolations = [];
             break;
           }
           console.log(
@@ -778,8 +913,49 @@ ${draftForStory.tier2Statements
           // that was flagged, not just the current attempt. This prevents the
           // LLM from fixing one invention and introducing a new one.
           for (const v of fabCheck.violations) cumulativeViolations.push(v);
+          lastViolations = fabCheck.violations;
           const feedback = buildFabricationFeedback(cumulativeViolations);
           content = await callAI(systemPrompt, userMessage + feedback, 'elite');
+        }
+        // Surgical redaction pass. After the 2-retry loop, if fabrication
+        // still hasn't cleared, ask Opus to EDIT the last draft — removing
+        // exactly the flagged sentences — instead of re-GENERATING from the
+        // chapter system prompt (which keeps re-inventing to fill mandated
+        // topic slots). The redaction prompt forbids new content, so the
+        // output can only shrink or stay the same. After redaction, run
+        // one more fabrication check to confirm it worked; if violations
+        // STILL remain, log and ship the redacted version anyway (honest
+        // shortness beats a regenerated fabrication).
+        if (lastViolations.length > 0) {
+          const finalCheck = await checkChapterFabrication({
+            situation,
+            tierText: tierTextForCheck,
+            prioritiesText: prioritiesTextForCheck,
+            chapterContent: content,
+          });
+          if (!finalCheck.passed && finalCheck.violations.length > 0) {
+            console.log(
+              `[ExpressPipeline] ${jobId} chapter ${chapterNum} redacting ${finalCheck.violations.length} surviving claims surgically`,
+            );
+            const redacted = await redactChapterViolations({
+              chapterContent: content,
+              violations: finalCheck.violations,
+            });
+            if (redacted && redacted.length > 0) content = redacted;
+            const postCheck = await checkChapterFabrication({
+              situation,
+              tierText: tierTextForCheck,
+              prioritiesText: prioritiesTextForCheck,
+              chapterContent: content,
+            });
+            console.log(
+              `[ExpressPipeline] ${jobId} chapter ${chapterNum} redaction result: ${
+                postCheck.passed
+                  ? 'clean'
+                  : `${postCheck.violations.length} surviving`
+              }`,
+            );
+          }
         }
       } catch (err) {
         console.error(
@@ -835,8 +1011,8 @@ ${draftForStory.tier2Statements
     // ─── Stage 4: Blend into final draft ─────────────
     await update({
       status: 'blending',
-      stage: 'Polishing the draft',
-      progress: 92,
+      stage: `Polishing the draft${variantStageSuffix}`,
+      progress: scaledProgress(92),
     });
 
     const storyWithChapters = await prisma.fiveChapterStory.findFirst({
@@ -913,6 +1089,7 @@ ${draftForStory.tier2Statements
         .map(p => `[Rank ${p.rank}] "${p.text}"`)
         .join('\n');
       const cumulativeBlendViolations: string[] = [];
+      let lastBlendViolations: string[] = [];
       for (let attempt = 0; attempt < 2; attempt++) {
         const blendFabCheck = await checkChapterFabrication({
           situation: blendSituation,
@@ -926,14 +1103,51 @@ ${draftForStory.tier2Statements
               `[ExpressPipeline] ${jobId} blend fabrication cleared after ${attempt} retry(s)`,
             );
           }
+          lastBlendViolations = [];
           break;
         }
         console.log(
           `[ExpressPipeline] ${jobId} blend fabrication attempt ${attempt + 1}: ${blendFabCheck.violations.length} unsupported claims, retrying`,
         );
         for (const v of blendFabCheck.violations) cumulativeBlendViolations.push(v);
+        lastBlendViolations = blendFabCheck.violations;
         const feedback = buildFabricationFeedback(cumulativeBlendViolations);
         blendedText = await callAI(BLEND_SYSTEM, blendMessage + feedback, 'elite');
+      }
+      // Blend-level surgical redaction. Same logic as the per-chapter pass —
+      // after 2 regeneration retries, switch to EDIT mode and ask Opus to
+      // remove exactly the surviving flagged sentences without adding
+      // anything new.
+      if (lastBlendViolations.length > 0) {
+        const finalCheck = await checkChapterFabrication({
+          situation: blendSituation,
+          tierText: blendTierTextForCheck,
+          prioritiesText: blendPrioritiesForCheck,
+          chapterContent: blendedText,
+        });
+        if (!finalCheck.passed && finalCheck.violations.length > 0) {
+          console.log(
+            `[ExpressPipeline] ${jobId} blend redacting ${finalCheck.violations.length} surviving claims surgically`,
+          );
+          const redacted = await redactChapterViolations({
+            chapterContent: blendedText,
+            violations: finalCheck.violations,
+          });
+          if (redacted && redacted.length > 0) blendedText = redacted;
+          const postCheck = await checkChapterFabrication({
+            situation: blendSituation,
+            tierText: blendTierTextForCheck,
+            prioritiesText: blendPrioritiesForCheck,
+            chapterContent: blendedText,
+          });
+          console.log(
+            `[ExpressPipeline] ${jobId} blend redaction result: ${
+              postCheck.passed
+                ? 'clean'
+                : `${postCheck.violations.length} surviving`
+            }`,
+          );
+        }
       }
     } catch (err) {
       console.error(
@@ -971,15 +1185,32 @@ ${draftForStory.tier2Statements
       },
     });
 
+    storyIds.push(story.id);
+    } // ─── end variant loop ─────────────────────────────
+
     // ─── Done ────────────────────────────────────────
+    // Persist the full variant list (when multi) plus the primary story id.
+    // Single-variant jobs only set resultStoryId, matching the old contract.
+    await prisma.expressJob.update({
+      where: { id: jobId },
+      data: {
+        resultStoryId: storyIds[0],
+        variantStoryIds:
+          storyIds.length > 1 ? (storyIds as unknown as object) : undefined,
+      },
+    });
+
     await update({
       status: 'complete',
       stage: 'First draft ready',
       progress: 100,
-      resultStoryId: story.id,
     });
 
-    console.log(`[ExpressPipeline] ${jobId} complete (story ${story.id})`);
+    console.log(
+      `[ExpressPipeline] ${jobId} complete (${storyIds.length} variant${
+        storyIds.length === 1 ? '' : 's'
+      }: ${storyIds.join(', ')})`,
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await fail(message);

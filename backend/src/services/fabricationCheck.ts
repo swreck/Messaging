@@ -14,7 +14,7 @@
 // Situation. If not, it returns the specific violating claims so the
 // chapter can be regenerated with targeted feedback.
 
-import { callAIWithJSON } from './ai.js';
+import { callAIWithJSON, callAI } from './ai.js';
 
 const FABRICATION_EVALUATOR_SYSTEM = `You are a factual gatekeeper for generated
 marketing chapters.
@@ -246,4 +246,74 @@ ${violations.map((v, i) => `${i + 1}. ${v}`).join('\n')}
 When you regenerate, ensure no claim resembles the flagged items above. If
 you cannot replace a flagged claim with a supported one, simply remove the
 sentence. Length is not a target — accuracy is.`;
+}
+
+// ─── Surgical redaction pass ───────────────────────────
+// When the 2-retry fabrication loop has not cleared all violations, asking
+// the chapter prompt to regenerate tends to introduce NEW fabrications
+// (Opus has infinite surface area to invent from and the chapter system
+// prompt still pressures it toward a topic that isn't in the source). The
+// surgical pass avoids this by switching modes: instead of asking the LLM
+// to GENERATE with the chapter system prompt, we ask it to EDIT — remove
+// or soften exactly the flagged sentences from the last draft, preserving
+// everything else. Shorter output is fine. Zero new claims is the goal.
+
+const REDACTION_SYSTEM = `You are a surgical editor. A drafted chapter has
+specific sentences flagged as unsupported by the source material. Your
+ONLY job is to remove or soften those specific flagged sentences while
+preserving everything else in the draft verbatim.
+
+Rules, in order of priority:
+1. Never add new content. Not a single clause. If a sentence needs to go,
+   cut it. Do not replace it with a new claim.
+2. Every flagged claim must disappear from the output. The flagged text
+   may be the whole sentence or a phrase inside a sentence. In either
+   case, the output must not contain the flagged claim, paraphrased or
+   otherwise.
+3. Sentences that were NOT flagged must remain verbatim. Do not rephrase
+   them. Do not polish them. Do not restructure the chapter.
+4. If removing a flagged sentence leaves a paragraph awkwardly short or
+   stranded, that is acceptable. A short honest paragraph is better than
+   a smooth fabricated one.
+5. If a sentence is PARTIALLY flagged — one claim is invented but the rest
+   is supported — you may remove only the invented clause and keep the
+   supported portion, as long as the remaining text still reads cleanly.
+6. The output is the rewritten chapter only. No commentary, no markdown,
+   no explanation.
+7. If the entire chapter consisted of flagged content and you have nothing
+   left to emit, return a single short honest sentence grounded in the
+   source material — something like "This is the first draft of the
+   [chapter topic]." Do not invent to fill space.
+
+Return ONLY the rewritten chapter text. No JSON, no headers, no fences.`;
+
+export interface RedactionInput {
+  chapterContent: string;
+  violations: string[];
+}
+
+export async function redactChapterViolations(
+  input: RedactionInput,
+): Promise<string> {
+  if (input.violations.length === 0) return input.chapterContent;
+
+  const userMessage = `DRAFTED CHAPTER:
+${input.chapterContent}
+
+FLAGGED CLAIMS (each one is unsupported and must be removed or softened;
+do not add replacement content):
+
+${input.violations.map((v, i) => `${i + 1}. ${v}`).join('\n')}
+
+Now return the rewritten chapter with every flagged claim removed. Keep
+all other sentences verbatim. Shorter is fine. Do not introduce anything
+new.`;
+
+  const redacted = await callAI(REDACTION_SYSTEM, userMessage, 'elite');
+
+  // Strip any accidental markdown fencing or preamble the LLM may add.
+  return redacted
+    .replace(/^```[a-z]*\s*/i, '')
+    .replace(/\s*```\s*$/i, '')
+    .trim();
 }

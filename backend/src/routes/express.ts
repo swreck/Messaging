@@ -18,7 +18,11 @@ import {
   extractExpressInterpretation,
   type ExpressInterpretation,
 } from '../lib/expressExtraction.js';
-import { commitInterpretation, runPipeline } from '../lib/expressPipeline.js';
+import {
+  commitInterpretation,
+  commitInterpretationForWizard,
+  runPipeline,
+} from '../lib/expressPipeline.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -111,6 +115,48 @@ router.post('/commit', requireWorkspace, async (req: Request, res: Response) => 
   }
 });
 
+// ─── POST /api/express/commit-for-wizard ────────────────────
+//
+// Same interpretation input as /commit but does NOT run the silent pipeline.
+// Used when the user clicks "Take me through it step by step instead" on the
+// Interpretation preview. Creates the DB rows and returns the draftId so the
+// frontend can navigate to /three-tier/{draftId}. The user lands in Step 4
+// since the interpretation already covers Steps 1-3.
+
+router.post('/commit-for-wizard', requireWorkspace, async (req: Request, res: Response) => {
+  const { interpretation } = req.body as { interpretation?: ExpressInterpretation };
+
+  if (!interpretation) {
+    res.status(400).json({ error: 'An interpretation is required.' });
+    return;
+  }
+
+  if (!interpretation.offering || !interpretation.offering.name) {
+    res.status(400).json({ error: "The offering needs a name — change it in the preview before confirming." });
+    return;
+  }
+
+  if (!interpretation.audiences || interpretation.audiences.length === 0) {
+    res.status(400).json({ error: "I need at least one audience to write for." });
+    return;
+  }
+
+  try {
+    const result = await commitInterpretationForWizard(
+      interpretation,
+      req.user!.userId,
+      req.workspaceId!,
+    );
+    res.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error('[ExpressCommitForWizard] error:', message);
+    res.status(500).json({
+      error: `Had trouble setting that up: ${message}`,
+    });
+  }
+});
+
 // ─── GET /api/express/status/:jobId ────────────────────────
 //
 // Returns current pipeline stage, progress (0-100), and — once complete —
@@ -126,12 +172,53 @@ router.get('/status/:jobId', requireWorkspace, async (req: Request, res: Respons
     return;
   }
 
+  // Collect every variant story the pipeline produced. Single-audience jobs
+  // leave variantStoryIds null and only resultStoryId is set, so the list
+  // collapses to one story — the frontend sees a single-element variants
+  // array either way.
+  const variantIds: string[] = Array.isArray(job.variantStoryIds)
+    ? (job.variantStoryIds as unknown as string[])
+    : job.resultStoryId
+      ? [job.resultStoryId]
+      : [];
+
   let story = null;
-  if (job.resultStoryId) {
-    story = await prisma.fiveChapterStory.findFirst({
-      where: { id: job.resultStoryId },
-      include: { chapters: { orderBy: { chapterNum: 'asc' } } },
+  const variants: Array<{
+    storyId: string;
+    audienceName: string;
+    medium: string;
+    customName: string;
+    blendedText: string;
+  }> = [];
+
+  if (variantIds.length > 0) {
+    const stories = await prisma.fiveChapterStory.findMany({
+      where: { id: { in: variantIds } },
+      include: {
+        chapters: { orderBy: { chapterNum: 'asc' } },
+        draft: {
+          include: { audience: true },
+        },
+      },
     });
+    // Preserve job-stored variant order (stories come back unordered).
+    const byId = new Map(stories.map(s => [s.id, s]));
+    for (const id of variantIds) {
+      const s = byId.get(id);
+      if (!s) continue;
+      variants.push({
+        storyId: s.id,
+        audienceName: s.draft?.audience?.name || 'Audience',
+        medium: s.medium,
+        customName: s.customName || '',
+        blendedText: s.blendedText || '',
+      });
+    }
+    // Preserve the legacy `story` field for the primary variant — the
+    // existing frontend polling loop uses story.blendedText as its source
+    // of truth. For multi-variant jobs the frontend should read `variants`.
+    const primary = byId.get(variantIds[0]);
+    if (primary) story = primary;
   }
 
   res.json({
@@ -142,6 +229,8 @@ router.get('/status/:jobId', requireWorkspace, async (req: Request, res: Respons
     error: job.error || null,
     draftId: job.draftId,
     resultStoryId: job.resultStoryId,
+    variantCount: variants.length,
+    variants,
     story,
   });
 });

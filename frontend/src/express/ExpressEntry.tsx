@@ -66,12 +66,18 @@ function Maria3Chrome() {
   );
 }
 
+interface DraftVariant {
+  storyId: string;
+  audienceName: string;
+  blendedText: string;
+}
+
 type Phase =
   | { name: 'greeting' }
   | { name: 'extracting'; message: string }
   | { name: 'reviewing'; interpretation: ExpressInterpretation }
   | { name: 'building'; jobId: string; stage: string; progress: number; mediumLabel: string }
-  | { name: 'complete'; blendedText: string; mediumLabel: string }
+  | { name: 'complete'; blendedText: string; mediumLabel: string; variants: DraftVariant[]; activeVariant: number }
   | { name: 'error'; message: string };
 
 interface ExtractResponse {
@@ -93,6 +99,14 @@ interface StatusResponse {
   error: string | null;
   draftId: string | null;
   resultStoryId: string | null;
+  variantCount: number;
+  variants: {
+    storyId: string;
+    audienceName: string;
+    medium: string;
+    customName: string;
+    blendedText: string;
+  }[];
   story: {
     medium: string;
     customName: string;
@@ -162,15 +176,41 @@ export function ExpressEntry() {
       const status = await api.get<StatusResponse>(`/express/status/${jobId}`);
       if (status.status === 'complete') {
         stopPolling();
-        const blendedText = status.story?.blendedText || '';
-        // Prefer the user's original extracted medium label. Fall back to the
-        // internal 2.5 medium key if that somehow got lost.
+        // Variant-aware completion. When the pipeline produced multiple
+        // audience variants, show them as tabs. When there's only one, the
+        // variants array collapses to a single element and the UI renders
+        // exactly as before.
+        const rawVariants = status.variants && status.variants.length > 0
+          ? status.variants
+          : status.story
+            ? [
+                {
+                  storyId: status.resultStoryId || '',
+                  audienceName: 'Audience',
+                  medium: status.story.medium,
+                  customName: status.story.customName,
+                  blendedText: status.story.blendedText,
+                },
+              ]
+            : [];
+        const variants: DraftVariant[] = rawVariants.map(v => ({
+          storyId: v.storyId,
+          audienceName: v.audienceName,
+          blendedText: v.blendedText,
+        }));
+        const blendedText = variants[0]?.blendedText || '';
         const mediumLabel =
           preservedMediumLabel ||
           (status.story
             ? INTERNAL_MEDIUM_FALLBACK[status.story.medium] || status.story.customName
             : 'first draft');
-        setPhase({ name: 'complete', blendedText, mediumLabel });
+        setPhase({
+          name: 'complete',
+          blendedText,
+          mediumLabel,
+          variants,
+          activeVariant: 0,
+        });
       } else if (status.status === 'error') {
         stopPolling();
         setPhase({
@@ -233,16 +273,25 @@ export function ExpressEntry() {
     }
   }
 
-  function handleSwitchToWizard(_interpretation: ExpressInterpretation) {
-    // Real handoff to the Full Flow wizard is in a later slice. The ideal
-    // flow is commit-interpretation → navigate to /three-tier/{id}?step=1 so
-    // the user keeps everything they just edited. For now the minimum
-    // viable escape is to drop them on their drafts list so a power user
-    // (Brad in V6) can pick up with an existing draft or start a new one.
+  async function handleSwitchToWizard(interpretation: ExpressInterpretation) {
+    // Commit the interpretation (offering, audience, priorities) as Three
+    // Tier DB rows and drop the user into the wizard at Step 4 — where
+    // actual new work begins. The wizard lets them navigate backward to
+    // Steps 1-3 to review anything they wrote in the Express entry.
     showToast('Opening step-by-step mode.');
-    setTimeout(() => {
-      window.location.href = '/three-tiers';
-    }, 400);
+    try {
+      const res = await api.post<{ draftId: string }>(
+        '/express/commit-for-wizard',
+        { interpretation },
+      );
+      window.location.href = `/three-tier/${res.draftId}`;
+    } catch (err) {
+      const errMsg =
+        err instanceof Error
+          ? err.message
+          : 'Could not open step-by-step mode.';
+      setPhase({ name: 'error', message: errMsg });
+    }
   }
 
   function handleReset() {
@@ -370,18 +419,62 @@ export function ExpressEntry() {
   }
 
   if (phase.name === 'complete') {
-    const paragraphs = phase.blendedText
+    // Pick the active variant (or the single draft if only one was generated)
+    // and render the blended text as paragraphs. Multi-variant completions
+    // show a tab bar above the draft so the user can flip between audiences.
+    const variants = phase.variants.length > 0
+      ? phase.variants
+      : [{ storyId: '', audienceName: 'Audience', blendedText: phase.blendedText }];
+    const active = variants[phase.activeVariant] || variants[0];
+    const paragraphs = active.blendedText
       .split(/\n\n+/)
       .map(p => p.trim())
       .filter(p => p.length > 0);
+
+    const setActiveVariant = (index: number) => {
+      setPhase(curr => {
+        if (curr.name !== 'complete') return curr;
+        return { ...curr, activeVariant: index };
+      });
+    };
 
     return wrap(
       <div className="express-entry">
         <div className="express-entry-complete">
           <p className="express-entry-complete-intro">
-            Here's a first draft of your {phase.mediumLabel}. Read it, change anything that
-            doesn't sound like you, then copy it wherever you need it.
+            {variants.length > 1 ? (
+              <>
+                Here are your {variants.length} first drafts — one per audience. Switch
+                between them with the tabs, change anything that doesn't sound like you,
+                then copy whichever one you need.
+              </>
+            ) : (
+              <>
+                Here's a first draft of your {phase.mediumLabel}. Read it, change anything
+                that doesn't sound like you, then copy it wherever you need it.
+              </>
+            )}
           </p>
+
+          {variants.length > 1 && (
+            <div className="express-variant-tabs" role="tablist">
+              {variants.map((v, i) => (
+                <button
+                  key={v.storyId || i}
+                  type="button"
+                  role="tab"
+                  aria-selected={i === phase.activeVariant}
+                  className={`express-variant-tab${
+                    i === phase.activeVariant ? ' express-variant-tab-active' : ''
+                  }`}
+                  onClick={() => setActiveVariant(i)}
+                >
+                  {v.audienceName || `Draft ${i + 1}`}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="express-entry-draft">
             {paragraphs.length === 0 ? (
               <p>(The draft came back empty. Try again with a bit more detail.)</p>
@@ -393,7 +486,7 @@ export function ExpressEntry() {
             <button
               type="button"
               className="btn"
-              onClick={() => handleCopy(phase.blendedText)}
+              onClick={() => handleCopy(active.blendedText)}
             >
               Copy
             </button>

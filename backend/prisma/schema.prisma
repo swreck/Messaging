@@ -324,16 +324,25 @@ model ChapterVersion {
 // The frontend polls GET /api/express/status/:jobId to show progress, and the
 // resultStoryId points at the finished FiveChapterStory when status === 'complete'.
 model ExpressJob {
-  id             String   @id @default(cuid())
-  userId         String
-  workspaceId    String
-  draftId        String?
-  status         String   @default("pending")
-  stage          String   @default("")
-  progress       Int      @default(0)
-  error          String   @default("")
-  interpretation Json
-  resultStoryId  String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              String   @id @default(cuid())
+  userId          String
+  workspaceId     String
+  draftId         String?
+  status          String   @default("pending")
+  stage           String   @default("")
+  progress        Int      @default(0)
+  error           String   @default("")
+  interpretation  Json
+  resultStoryId   String?
+  // V4 multi-audience variants. When the interpretation returns 2+ audiences,
+  // commitInterpretation creates a ThreeTierDraft per audience (all sharing
+  // the same Offering) and the pipeline generates one FiveChapterStory per
+  // draft. draftId + resultStoryId still point at the primary (first
+  // audience) so the single-variant code path is untouched; variantDraftIds
+  // and variantStoryIds hold the full list in audience order. Single-audience
+  // jobs leave these null.
+  variantDraftIds Json?
+  variantStoryIds Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
