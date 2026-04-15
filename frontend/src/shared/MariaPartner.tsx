@@ -39,7 +39,12 @@ export function MariaPartner() {
   const navigate = useNavigate();
   const location = useLocation();
   const { pageContext, refreshPage } = useMaria();
-  const isAuthPage = ['/login', '/register'].some(p => location.pathname.startsWith(p)) || location.pathname.startsWith('/join/');
+  // Hide on auth pages AND on /express — Express Flow IS a chat, the global
+  // partner bubble would be redundant and visually cluttered.
+  const isAuthPage =
+    ['/login', '/register'].some(p => location.pathname.startsWith(p)) ||
+    location.pathname.startsWith('/join/') ||
+    location.pathname.startsWith('/express');
 
   // Panel state
   const [open, setOpen] = useState(false);

@@ -28,10 +28,15 @@ import { ExpressEntry } from './express/ExpressEntry';
 // When running on the 3.0 service hostname, "/" redirects to "/express" so
 // Maria 3 users land on the chat entry by default. On the 2.5 URL, "/" stays
 // the dashboard — 2.5 users see no change.
+// Must match the backend's isMariaThreeHost in backend/src/index.ts. The Railway-
+// generated hostname is `mariamessaging3.up.railway.app` (no dashes) which does
+// NOT contain the substring "maria3" — so we must check for "mariamessaging3"
+// explicitly.
 const isMariaThreeHost =
   typeof window !== 'undefined' &&
-  (window.location.hostname.includes('maria-messaging-3') ||
-    window.location.hostname.includes('maria3'));
+  (window.location.hostname.includes('mariamessaging3') ||
+    window.location.hostname.includes('maria-messaging-3') ||
+    window.location.hostname.includes('maria3.'));
 
 function App() {
   return (

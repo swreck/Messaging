@@ -21,6 +21,13 @@ import {
   CHAPTER_NAMES,
 } from '../prompts/fiveChapter.js';
 import { getMediumSpec } from '../prompts/mediums.js';
+import {
+  checkStatements,
+  checkProse,
+  buildViolationFeedback,
+  buildProseViolationFeedback,
+  type StatementInput,
+} from '../services/voiceCheck.js';
 import type { ExpressInterpretation } from './expressExtraction.js';
 
 // ─── Medium translation ────────────────────────────────
@@ -310,11 +317,55 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       }[];
     };
 
-    const tierResult = await callAIWithJSON<TierResult>(
-      CONVERT_LINES_SYSTEM,
-      convertMessage,
-      'elite',
-    );
+    // Voice check with one retry. Matches the 2.5 build-message pattern in
+    // backend/src/routes/ai.ts. Fails open on evaluator errors so the pipeline
+    // still completes if the checker service hiccups.
+    // Capture a non-null alias so the closure keeps TS's narrowing.
+    const draftForCheck = draftWithElements;
+    async function generateTierWithVoiceCheck(): Promise<TierResult> {
+      const first = await callAIWithJSON<TierResult>(
+        CONVERT_LINES_SYSTEM,
+        convertMessage,
+        'elite',
+      );
+      try {
+        const priorityById = new Map(
+          draftForCheck.audience.priorities.map(p => [p.id, p]),
+        );
+        const statements: StatementInput[] = [];
+        if (first.tier1?.text) {
+          statements.push({
+            text: first.tier1.text,
+            column: 'Tier 1',
+            priorityText: priorityById.get(first.tier1.priorityId)?.text,
+          });
+        }
+        for (const t2 of first.tier2 || []) {
+          statements.push({
+            text: t2.text,
+            column: t2.categoryLabel || '',
+            priorityText: t2.priorityId ? priorityById.get(t2.priorityId)?.text : undefined,
+          });
+        }
+        const check = await checkStatements(statements);
+        if (!check.passed) {
+          console.log(
+            `[ExpressPipeline] ${jobId} voice check found ${check.violations.length} tier violations, retrying`,
+          );
+          const feedback = buildViolationFeedback(check.violations);
+          return await callAIWithJSON<TierResult>(
+            CONVERT_LINES_SYSTEM,
+            convertMessage + feedback,
+            'elite',
+          );
+        }
+      } catch (err) {
+        console.error(`[ExpressPipeline] ${jobId} voice check error (fail-open):`, err);
+      }
+      return first;
+    }
+
+    const tierResult = await generateTierWithVoiceCheck();
 
     if (tierResult.tier1?.text) {
       await prisma.tier1Statement.create({
@@ -447,6 +498,28 @@ IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation
 
       let content = await callAI(systemPrompt, userMessage, 'elite');
 
+      // Voice check with one retry. Matches 2.5 generate-chapter behavior in
+      // backend/src/routes/ai.ts:1345. Fails open so pipeline continues on
+      // evaluator errors.
+      try {
+        const proseCheck = await checkProse(
+          content,
+          `Chapter ${chapterNum}: ${ch.name} of a Five Chapter Story (${mediumSpec.label} format)`,
+        );
+        if (!proseCheck.passed && proseCheck.violations.length > 0) {
+          console.log(
+            `[ExpressPipeline] ${jobId} chapter ${chapterNum} voice violations: ${proseCheck.violations.length}, retrying`,
+          );
+          const feedback = buildProseViolationFeedback(proseCheck.violations);
+          content = await callAI(systemPrompt, userMessage + feedback, 'elite');
+        }
+      } catch (err) {
+        console.error(
+          `[ExpressPipeline] ${jobId} chapter ${chapterNum} voice check error (fail-open):`,
+          err,
+        );
+      }
+
       // Same post-processing as the 2.5 generate-chapter route
       content = content.replace(/^\s*\.{2,}\s*/g, '').trim();
 
@@ -525,6 +598,20 @@ ${sourceText}
 Polish this into a final, cohesive ${mediumSpec.label.toLowerCase()}.`;
 
     let blendedText = await callAI(BLEND_SYSTEM, blendMessage, 'elite');
+
+    // Blend-level voice check with one retry. Matches 2.5 blend-story behavior.
+    try {
+      const blendCheck = await checkProse(blendedText, `Blended ${mediumSpec.label}`);
+      if (!blendCheck.passed && blendCheck.violations.length > 0) {
+        console.log(
+          `[ExpressPipeline] ${jobId} blend voice violations: ${blendCheck.violations.length}, retrying`,
+        );
+        const feedback = buildProseViolationFeedback(blendCheck.violations);
+        blendedText = await callAI(BLEND_SYSTEM, blendMessage + feedback, 'elite');
+      }
+    } catch (err) {
+      console.error(`[ExpressPipeline] ${jobId} blend voice check error (fail-open):`, err);
+    }
 
     // Strip markdown artifacts. Same safety net as 2.5 blend-story, plus the
     // additional cases observed in Express pipeline output during the first

@@ -20,10 +20,45 @@ want to communicate. Your job is to extract structured facts so the downstream
 pipeline (Three Tier builder, Five Chapter Story generator) can run without
 asking any follow-up questions.
 
+═══ THE KEY DISTINCTION — READ TWICE ═══
+
+User messages in Express Flow fall into two shapes. You must recognize which one
+you're reading before you extract anything.
+
+SHAPE A — PRODUCT DESCRIPTION. The user leads with "we make X" or "our product
+does Y" or "my company builds Z". The offering IS the thing they described. The
+medium is something downstream they want to write about it.
+  Example: "We build compliance software for regional banks. Need a pitch deck."
+  → OFFERING: the compliance software. MEDIUM: pitch deck.
+
+SHAPE B — SITUATIONAL REQUEST. The user leads with "I need to announce X" or
+"I have to write Y" or "we're launching Z". The thing they need to communicate
+is a TASK. The offering behind the task is their UNDERLYING BUSINESS — their
+club, their company, their practice, the service they run. It is almost never
+the deliverable they asked for. A "chef announcement" is not an offering; the
+club is. A "product launch email" is not an offering; the product (or the
+company) is.
+  Example: "I need to send members an announcement about our new dining policy."
+  → OFFERING: the club (its dining experience, its member relationships).
+              NOT "Dining Policy Announcement."
+     MEDIUM: email or newsletter (the announcement).
+  Example: "I have to write a board update on Q3."
+  → OFFERING: the company being reported on.
+              NOT "Board Update."
+     MEDIUM: report (or whatever format fits).
+
+When you cannot identify an obvious underlying business, extract the most
+plausible one from context and mark it inferred. Never name the offering after
+the deliverable. If the only name you can think of is the task itself, invent
+a short placeholder like "My company" or "The club" and mark it inferred — the
+user will rename it in the review step.
+
 ═══ WHAT TO EXTRACT ═══
 
-1. OFFERING
-   - name (or a plausible short name if not stated)
+1. OFFERING — the underlying business, product, service, or organization the
+   user offers. NOT the deliverable. See SHAPE A vs SHAPE B above.
+   - name (or a plausible short name if not stated — never name it after the
+     task the user asked for)
    - one-paragraph description written in the user's own terms
    - 4-10 differentiators/capabilities — things the offering actually does or is
 
@@ -51,6 +86,11 @@ asking any follow-up questions.
   audience and mark it inferred.
 - If the user said what medium they need, use it (stated). If they didn't, infer
   from context and mark it inferred.
+- The deliverable the user asked for is the MEDIUM, not the OFFERING. Re-check
+  your output before returning: if offering.name contains words like "Announcement",
+  "Update", "Email", "Post", "Newsletter", "Pitch", "Launch", or "Memo", you
+  confused the task for the offering. Rename the offering to the underlying
+  business and move the task concept into primaryMedium.
 
 ═══ OUTPUT FORMAT ═══
 
