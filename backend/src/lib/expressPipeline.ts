@@ -27,13 +27,13 @@ import type { ExpressInterpretation } from './expressExtraction.js';
 // The 2.5 FiveChapterStory model uses internal keys like "in_person". Translate.
 const MEDIUM_ID_MAP: Record<string, string> = {
   email: 'email',
-  'pitch deck': 'landing_page', // Closest 2.5 format for a narrative deck
+  'pitch deck': 'pitch_deck',
   'landing page': 'landing_page',
   'blog post': 'blog',
   'press release': 'press_release',
   'talking points': 'in_person',
   newsletter: 'newsletter',
-  'one-pager': 'landing_page',
+  'one-pager': 'landing_page', // Closest 2.5 format for a concise leave-behind
   report: 'report',
 };
 
@@ -520,14 +520,18 @@ Polish this into a final, cohesive ${mediumSpec.label.toLowerCase()}.`;
 
     let blendedText = await callAI(BLEND_SYSTEM, blendMessage, 'elite');
 
-    // Strip markdown artifacts (same safety net as 2.5 blend-story)
+    // Strip markdown artifacts. Same safety net as 2.5 blend-story, plus the
+    // additional cases observed in Express pipeline output during the first
+    // vignette walkthrough (horizontal rules and blockquote markers).
     blendedText = blendedText
-      .replace(/^#{1,6}\s+/gm, '')
-      .replace(/\*\*(.+?)\*\*/g, '$1')
-      .replace(/\*(.+?)\*/g, '$1')
-      .replace(/^[\-*]\s+/gm, '')
-      .replace(/^\d+\.\s+/gm, '')
-      .replace(/\n{3,}/g, '\n\n');
+      .replace(/^#{1,6}\s+/gm, '')          // ATX headers
+      .replace(/\*\*(.+?)\*\*/g, '$1')      // bold
+      .replace(/\*(.+?)\*/g, '$1')          // italic
+      .replace(/^[-*]\s+/gm, '')            // bullet markers at line start
+      .replace(/^\d+\.\s+/gm, '')           // ordered list markers
+      .replace(/^---+\s*$/gm, '')           // horizontal rules (stand-alone)
+      .replace(/^>\s?/gm, '')               // blockquote markers
+      .replace(/\n{3,}/g, '\n\n');          // collapse excessive blank lines
 
     await prisma.fiveChapterStory.update({
       where: { id: story.id },

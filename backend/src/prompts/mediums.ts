@@ -62,6 +62,16 @@ export const MEDIUM_SPECS: Record<string, MediumSpec> = {
     formatRules: 'These are talking points, not prose. Short phrases a speaker can glance at. No full paragraphs.',
     tone: 'Casual and confident. How you\'d actually talk to someone.',
   },
+  pitch_deck: {
+    id: 'pitch_deck',
+    label: 'Pitch Deck Narrative',
+    description: 'Slide-by-slide narrative for a presentation deck',
+    wordRange: [300, 600],
+    chapterBudgets: [60, 150, 90, 120, 30],
+    format: 'Slide-by-slide narrative. Each slide gets a short headline plus one or two lines of what the presenter says out loud. Order the slides to match the five-chapter arc — pain, solution, de-risking, proof, next step.',
+    formatRules: 'Short and scannable. Written to be spoken out loud to a room of executives, not read quietly on a page. Each slide should stand on its own. No heavy paragraphs. No markdown formatting. Do not number slides — just label them with a short headline.',
+    tone: 'Conversational and confident. The presenter knows the audience and their world. Do not sound like a TED talk or a brochure.',
+  },
   press_release: {
     id: 'press_release',
     label: 'Press Release',

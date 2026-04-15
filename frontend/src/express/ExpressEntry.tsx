@@ -24,7 +24,7 @@ type Phase =
   | { name: 'greeting' }
   | { name: 'extracting'; message: string }
   | { name: 'reviewing'; interpretation: ExpressInterpretation }
-  | { name: 'building'; jobId: string; stage: string; progress: number }
+  | { name: 'building'; jobId: string; stage: string; progress: number; mediumLabel: string }
   | { name: 'complete'; blendedText: string; mediumLabel: string }
   | { name: 'error'; message: string };
 
@@ -55,7 +55,10 @@ interface StatusResponse {
   } | null;
 }
 
-const MEDIUM_LABELS: Record<string, string> = {
+// Fallback labels if the user's original extracted medium label is not
+// available (e.g. page reload during polling). Covers every internal 2.5
+// medium key and the Maria 3 pitch_deck addition.
+const INTERNAL_MEDIUM_FALLBACK: Record<string, string> = {
   email: 'email',
   blog: 'blog post',
   social: 'social post',
@@ -64,6 +67,7 @@ const MEDIUM_LABELS: Record<string, string> = {
   press_release: 'press release',
   newsletter: 'newsletter',
   report: 'report',
+  pitch_deck: 'pitch deck',
 };
 
 export function ExpressEntry() {
@@ -106,15 +110,19 @@ export function ExpressEntry() {
     }
   }
 
-  async function pollStatus(jobId: string) {
+  async function pollStatus(jobId: string, preservedMediumLabel: string) {
     try {
       const status = await api.get<StatusResponse>(`/express/status/${jobId}`);
       if (status.status === 'complete') {
         stopPolling();
         const blendedText = status.story?.blendedText || '';
-        const mediumLabel = status.story
-          ? MEDIUM_LABELS[status.story.medium] || status.story.customName
-          : 'first draft';
+        // Prefer the user's original extracted medium label. Fall back to the
+        // internal 2.5 medium key if that somehow got lost.
+        const mediumLabel =
+          preservedMediumLabel ||
+          (status.story
+            ? INTERNAL_MEDIUM_FALLBACK[status.story.medium] || status.story.customName
+            : 'first draft');
         setPhase({ name: 'complete', blendedText, mediumLabel });
       } else if (status.status === 'error') {
         stopPolling();
@@ -128,6 +136,7 @@ export function ExpressEntry() {
           jobId,
           stage: status.stage || 'Working on it',
           progress: status.progress || 0,
+          mediumLabel: preservedMediumLabel,
         });
       }
     } catch (err) {
@@ -137,19 +146,36 @@ export function ExpressEntry() {
   }
 
   async function handleConfirm(interpretation: ExpressInterpretation) {
-    setPhase({ name: 'building', jobId: '', stage: 'Setting things up', progress: 3 });
+    // Preserve the user's original medium label. The backend translates it to
+    // an internal 2.5 key when committing, but the user should see the words
+    // they chose in the preview ("pitch deck", not "landing page").
+    const mediumLabel = interpretation.primaryMedium.value || 'first draft';
+
+    setPhase({
+      name: 'building',
+      jobId: '',
+      stage: 'Setting things up',
+      progress: 3,
+      mediumLabel,
+    });
 
     try {
       const res = await api.post<CommitResponse>('/express/commit', { interpretation });
-      setPhase({ name: 'building', jobId: res.jobId, stage: 'Setting things up', progress: 5 });
+      setPhase({
+        name: 'building',
+        jobId: res.jobId,
+        stage: 'Setting things up',
+        progress: 5,
+        mediumLabel,
+      });
 
       // Start polling. The pipeline runs for several minutes.
       pollRef.current = setInterval(() => {
-        pollStatus(res.jobId);
+        pollStatus(res.jobId, mediumLabel);
       }, 2500);
 
       // Kick off one immediate poll so the stage label updates quickly.
-      pollStatus(res.jobId);
+      pollStatus(res.jobId, mediumLabel);
     } catch (err) {
       stopPolling();
       const errMsg =
