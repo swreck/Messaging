@@ -85,6 +85,10 @@ function isMariaThreeHost(hostname: string): boolean {
 
 function transformToMaria3(html: string): string {
   return html
+    // Strip the SVG favicon entirely on Maria 3 — we have no SVG variant of
+    // the 3-badge icon. The PNG icon below carries the Maria 3 branding in
+    // desktop browser tabs.
+    .replace(/<link rel="icon" type="image\/svg\+xml" href="\/icon\.svg" \/>\s*/g, '')
     .replace(/href="\/icon-32\.png"/g, 'href="/icon-32-maria3.png"')
     .replace(/href="\/apple-touch-icon\.png"/g, 'href="/apple-touch-icon-maria3.png"')
     .replace(/href="\/manifest\.json"/g, 'href="/manifest-maria3.json"')

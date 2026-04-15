@@ -18,6 +18,7 @@ import {
   buildChapterPrompt,
   BLEND_SYSTEM,
   CHAPTER_CRITERIA,
+  CHAPTER_NAMES,
 } from '../prompts/fiveChapter.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import type { ExpressInterpretation } from './expressExtraction.js';
@@ -506,8 +507,13 @@ IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation
       return;
     }
 
+    // Pass only chapter CONTENT to the blend step, never the titles. If the
+    // titles go in, the blend LLM tends to mirror them as standalone headings
+    // in the output (Ch1 "You Need This Category" has shown up as the first
+    // line during Chrome walkthroughs). Dropping the titles entirely removes
+    // the temptation.
     const sourceText = storyWithChapters.chapters
-      .map(ch => `${ch.title}\n${ch.content}`)
+      .map(ch => ch.content)
       .join('\n\n');
 
     const blendMessage = `CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words)
@@ -522,7 +528,12 @@ Polish this into a final, cohesive ${mediumSpec.label.toLowerCase()}.`;
 
     // Strip markdown artifacts. Same safety net as 2.5 blend-story, plus the
     // additional cases observed in Express pipeline output during the first
-    // vignette walkthrough (horizontal rules and blockquote markers).
+    // vignette walkthroughs (horizontal rules, blockquote markers, and
+    // chapter-name lines that survived the title strip above).
+    const chapterNameLineRegex = new RegExp(
+      `^(?:${CHAPTER_NAMES.map(n => n.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')).join('|')})\\s*$`,
+      'gm',
+    );
     blendedText = blendedText
       .replace(/^#{1,6}\s+/gm, '')          // ATX headers
       .replace(/\*\*(.+?)\*\*/g, '$1')      // bold
@@ -531,7 +542,9 @@ Polish this into a final, cohesive ${mediumSpec.label.toLowerCase()}.`;
       .replace(/^\d+\.\s+/gm, '')           // ordered list markers
       .replace(/^---+\s*$/gm, '')           // horizontal rules (stand-alone)
       .replace(/^>\s?/gm, '')               // blockquote markers
-      .replace(/\n{3,}/g, '\n\n');          // collapse excessive blank lines
+      .replace(chapterNameLineRegex, '')    // stray chapter-title lines
+      .replace(/\n{3,}/g, '\n\n')           // collapse excessive blank lines
+      .trim();
 
     await prisma.fiveChapterStory.update({
       where: { id: story.id },
