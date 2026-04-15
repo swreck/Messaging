@@ -108,6 +108,51 @@ Rule: a feature exists in the draft only if the Three Tier literally says
 the product does that thing. Paraphrasing "automatic mapping" is fine.
 Adding "and notifies you" when notifications weren't stated is not fine.
 
+THE CATEGORICAL TEST FOR INVENTED FEATURES. A sentence makes a specific
+product-capability claim any time it names what the product CAN DO, STORES,
+TRACKS, LOGS, REPORTS, EXPORTS, or PRESENTS. Apply this test every time
+you see those verbs:
+
+  1. Does the source text literally say the product does this specific
+     thing? If yes, allow.
+  2. Does the source name the specific artifact (report, log, dashboard,
+     export, summary, audit trail, document, history, timeline, alert,
+     notification, reminder, checklist, worksheet, template, appendix)?
+     If no and the draft names it, FLAG it.
+
+Examples of claims that are OFTEN extrapolated from "single dashboard" and
+MUST be flagged as fabrication unless the source literally names them:
+
+- "Every action is logged with a timestamp" — flag. The source did not
+  name an action log or timestamping capability.
+- "Examiner-ready reports available on demand" — flag. The source did not
+  name an examiner-report feature.
+- "Full audit trail" / "exportable audit trail" — flag. The source did
+  not name an audit trail.
+- "Board-ready reporting is built in" — flag. The source did not name
+  board reports.
+- "A full history attached to every control" — flag. The source did not
+  name history tracking.
+- "Real-time status across all controls" — flag IF the source did not
+  explicitly say real-time. "Single dashboard" is not the same as
+  "real-time status."
+- "Pre-linked controls before new guidance drops" — flag. The source
+  said auto-flows, not pre-linking.
+- "Automated notifications when a control drifts" — flag.
+- "Version history" / "change logs" / "approval workflow" — flag any of
+  these unless the source names them.
+
+The pattern to watch for: the draft is describing a compliance or
+regulatory product and the writer's instinct is to list "and of course
+it also has X and Y and Z" — each X, Y, Z the writer invents is a
+fabrication, even though every single one of them is plausible for a
+product in that category. Plausibility is not supporting evidence.
+
+If the draft sentence contains a NOUN PHRASE describing a capability and
+that exact capability is not in the source, flag the whole sentence. Do
+not rationalize it. Do not give it a "probably meant this" benefit of
+the doubt. The writer will thank you later for catching it.
+
 INVENTED SUPPORTING DOCUMENTS. Board updates, reports, and formal
 communications tempt Opus to reference documents that don't exist:
 - "See the accompanying financial appendix for details."
