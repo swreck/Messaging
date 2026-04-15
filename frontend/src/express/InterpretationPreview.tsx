@@ -315,7 +315,7 @@ export function InterpretationPreview({ initial, onConfirm, onSwitchToWizard }: 
 
       {/* ─── Medium ───────────────────────────────────────── */}
       <section className="express-section">
-        <h2 className="express-section-title">What you need first</h2>
+        <h2 className="express-section-title">What format you need</h2>
         <div className={inferredClass(state.primaryMedium.source)}>
           <select
             className="express-select"

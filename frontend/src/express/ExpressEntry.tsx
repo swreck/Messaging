@@ -224,7 +224,7 @@ export function ExpressEntry() {
           <p className="express-entry-subtitle">
             I help people communicate more effectively about what they do — emails, pitch
             narratives, talking points, landing pages, whatever you need. Tell me a little
-            about your work and what you need first.
+            about your work and what you need me to write.
           </p>
         </div>
 
@@ -233,7 +233,7 @@ export function ExpressEntry() {
             className="express-entry-textarea"
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="What do you do, who are you writing to, and what do you need first?"
+            placeholder="What do you do, who are you writing to, and what do you need me to write?"
             rows={8}
             autoFocus
           />

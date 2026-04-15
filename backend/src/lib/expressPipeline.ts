@@ -28,6 +28,10 @@ import {
   buildProseViolationFeedback,
   type StatementInput,
 } from '../services/voiceCheck.js';
+import {
+  checkChapterFabrication,
+  buildFabricationFeedback,
+} from '../services/fabricationCheck.js';
 import type { ExpressInterpretation } from './expressExtraction.js';
 
 // ─── Medium translation ────────────────────────────────
@@ -580,6 +584,42 @@ returning.`;
       } catch (err) {
         console.error(
           `[ExpressPipeline] ${jobId} chapter ${chapterNum} voice check error (fail-open):`,
+          err,
+        );
+      }
+
+      // Fabrication check with one retry. This is separate from voice check:
+      // voice check evaluates HOW things are said, fabrication check evaluates
+      // WHETHER things are true. Catches invented customers, metrics, pricing,
+      // processes, and professional services that the chapter prompt rules
+      // don't always prevent on their own.
+      try {
+        const tierTextForCheck = `Tier 1: "${draftForStory.tier1Statement?.text || ''}"
+${draftForStory.tier2Statements
+  .map(
+    (t2, i) => `Tier 2 #${i + 1} [${t2.categoryLabel || 'unlabeled'}]: "${t2.text}"
+  Proof: ${t2.tier3Bullets.map(b => b.text).join(', ') || '(no proof)'}`,
+  )
+  .join('\n')}`;
+        const prioritiesTextForCheck = draftForStory.audience.priorities
+          .map(p => `[Rank ${p.rank}] "${p.text}"`)
+          .join('\n');
+        const fabCheck = await checkChapterFabrication({
+          situation,
+          tierText: tierTextForCheck,
+          prioritiesText: prioritiesTextForCheck,
+          chapterContent: content,
+        });
+        if (!fabCheck.passed && fabCheck.violations.length > 0) {
+          console.log(
+            `[ExpressPipeline] ${jobId} chapter ${chapterNum} fabrication: ${fabCheck.violations.length} unsupported claims, retrying`,
+          );
+          const feedback = buildFabricationFeedback(fabCheck.violations);
+          content = await callAI(systemPrompt, userMessage + feedback, 'elite');
+        }
+      } catch (err) {
+        console.error(
+          `[ExpressPipeline] ${jobId} chapter ${chapterNum} fabrication check error (fail-open):`,
           err,
         );
       }
