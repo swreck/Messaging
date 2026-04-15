@@ -89,6 +89,72 @@ unless the source actually says so. Examples:
 - "Your dashboard turns red when a control drifts out of compliance."
   → FABRICATION unless stated.
 
+INVENTED PRODUCT FEATURES. Opus will frequently extrapolate one stated
+capability into a cluster of related capabilities. Each extrapolation is
+fabrication. Examples:
+- Source: "Single dashboard that covers all controls."
+  Chapter: "Board reporting is built in. You get a live view across all
+  your controls, with drill-down analytics and exportable audit trails."
+  → FABRICATION. "Board reporting is built in" is a specific feature not
+    in the source. "Drill-down", "exportable audit trails" are invented.
+- Source: "The product handles the re-mapping automatically."
+  Chapter: "When the regulatory change comes in, the product flags the
+  affected workflows, generates a remediation checklist, and notifies
+  your compliance officer by email."
+  → FABRICATION. "Remediation checklist" and "email notifications" are
+    invented features.
+
+Rule: a feature exists in the draft only if the Three Tier literally says
+the product does that thing. Paraphrasing "automatic mapping" is fine.
+Adding "and notifies you" when notifications weren't stated is not fine.
+
+INVENTED SUPPORTING DOCUMENTS. Board updates, reports, and formal
+communications tempt Opus to reference documents that don't exist:
+- "See the accompanying financial appendix for details."
+  → FABRICATION unless the user said there is a financial appendix.
+- "The full modeling assumptions are in Appendix B."
+  → FABRICATION.
+- "Please review the supporting memo attached to this update."
+  → FABRICATION unless stated.
+
+If the draft references any "attached", "accompanying", "enclosed",
+"appendix", "supporting memo", or "companion document" that the user
+did not describe, that reference is fabrication. Cut or rewrite.
+
+INVENTED TIMELINES AND SCHEDULING. Claims about when something is
+scheduled, funded, or due are fabrication unless the source said so:
+- Source: "EHR rollout on schedule for Q4 go-live."
+  Chapter: "The full migration team is staffed and funded through the
+  go-live date. The team will ramp down in January."
+  → FABRICATION. Staffing and funding details, ramp-down plan, are
+    invented.
+- Source: "3 of 5 consent order milestones complete."
+  Chapter: "The remaining two milestones are scheduled for completion
+  during Q4. Milestone 4 lands in October and milestone 5 in November."
+  → FABRICATION. The schedule and specific months were not stated.
+
+Rule: if the source gives a single date/status and the draft adds more
+schedule detail ("in October", "by Thanksgiving", "during the first
+week", "after the board meeting"), that extra detail is fabrication
+unless the source literally says so.
+
+INVENTED ORGANIZATIONAL STRUCTURES. Drafts frequently invent internal
+teams, processes, governance bodies, or routines:
+- "Our implementation team will walk you through the migration."
+  → FABRICATION unless the source says there is an implementation team.
+- "Management will present the margin variance detail at Tuesday's
+  meeting."
+  → FABRICATION unless the source said this agenda item was planned.
+- "Every communication from the company goes through a weekly review."
+  → FABRICATION unless the source described such a review.
+- "I review every policy change personally."
+  → FABRICATION unless the source stated this personal review practice.
+
+Any time the draft describes how the ORGANIZATION behaves internally —
+routines, reviews, sign-offs, meetings, team responsibilities — the
+specifics must trace to the source. Vague "we care about quality" is
+fine; specific "our QA team reviews every message" is not.
+
 Reasonable tonal framing ("your membership is valued", "we know this is a
 change") is NOT fabrication. Specific claims about people, numbers, processes,
 programs, roles, actor behaviors, or product behaviors ARE fabrication.
