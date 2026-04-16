@@ -219,8 +219,8 @@ YOU MUST USE THESE EXACT categoryLabel VALUES — do not invent creative alterna
 2. categoryLabel: "Product"
    Targeted product differentiation. What's structurally different about the product and why it matters to this audience. Use priorities related to product features or capabilities.
 
-3. categoryLabel: "[specific aspect]" — OPTIONAL OVERFLOW
-   Only if the product story genuinely needs two columns. Label it with the specific aspect (e.g., "Accuracy", "Processing"). SKIP if not needed — do not force it.
+3. categoryLabel: "Product" — OPTIONAL OVERFLOW
+   Only if the product story genuinely needs two columns. Use the same "Product" label — this IS a second product column, not a new category. SKIP if not needed — do not force it. NEVER label this column "Differentiation", "Competitive Advantage", "Technology", or any creative alternative. It is "Product".
 
 4. categoryLabel: "ROI"
    Financial and measurable value. Use priorities about cost, savings, efficiency, or measurable outcomes.
