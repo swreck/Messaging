@@ -610,23 +610,19 @@ router.post('/message', async (req: Request, res: Response) => {
       });
 
       if (recentOffering && recentAudience) {
-        const continuationActions: { type: string; params: Record<string, any> }[] = [];
-
-        // Draft MFs if not already done
-        if (!alreadyDraftedMFs) {
-          continuationActions.push({
-            type: 'draft_mfs',
-            params: { offeringName: recentOffering.name },
-          });
-        }
-
         // Detect medium from user message
         let medium = 'email';
         if (/one.?page|one.?pager|briefing/i.test(message)) medium = 'landing_page';
         else if (/pitch.*deck/i.test(message)) medium = 'pitch_deck';
         else if (/report/i.test(message)) medium = 'report';
 
-        continuationActions.push({
+        // Go straight to build_deliverable — skip draft_mfs in the
+        // continuation because it takes 20+ seconds and would timeout
+        // the HTTP response. The pipeline will produce a draft without
+        // MFs (slightly lower mapping quality, acceptable for first
+        // draft). If Opus already chained draft_mfs in its own actions,
+        // those ran before we get here.
+        const continuationActions: { type: string; params: Record<string, any> }[] = [{
           type: 'build_deliverable',
           params: {
             offeringName: recentOffering.name,
@@ -634,7 +630,7 @@ router.post('/message', async (req: Request, res: Response) => {
             medium,
             situation: message,
           },
-        });
+        }];
 
         const contDispatch = await dispatchActions(continuationActions, userId, ctx, workspaceId);
         const contResult = contDispatch.results.join(' · ');
