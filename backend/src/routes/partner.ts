@@ -582,6 +582,77 @@ router.post('/message', async (req: Request, res: Response) => {
     if (failedResults.length > 0) {
       result.response = `I tried, but it didn't work: ${failedResults.join('. ')}`;
     }
+
+    // ─── Lead-mode continuation ──────────────────────────
+    // When Maria creates an offering + audience but stops short of enriching
+    // and building, the user is left waiting for a result Maria promised.
+    // Detect this pattern and automatically chain the remaining steps:
+    // draft_mfs → build_deliverable. This makes "do everything" reliable
+    // regardless of whether Opus chains all actions in one response.
+    const createdOffering = dispatch.results.some(r => r.includes('Created offering'));
+    const createdAudience = dispatch.results.some(r => r.includes('Created audience'));
+    const alreadyBuilding = dispatch.results.some(r => r.includes('BUILD_STARTED'));
+    const alreadyDraftedMFs = dispatch.results.some(r => r.includes('Drafted motivating factors'));
+    const userWantsEverything = /do everything|show me the finished|please do everything|work.*independent|do it all|build.*everything/i.test(message);
+
+    if (createdOffering && createdAudience && !alreadyBuilding && userWantsEverything) {
+      console.log('[Partner] Lead-mode continuation: offering + audience created, chaining enrichment + build');
+
+      // Find the offering and audience that were just created
+      const recentOffering = await prisma.offering.findFirst({
+        where: { userId, ...(workspaceId ? { workspaceId } : {}) },
+        orderBy: { createdAt: 'desc' },
+      });
+      const recentAudience = await prisma.audience.findFirst({
+        where: { userId, ...(workspaceId ? { workspaceId } : {}) },
+        orderBy: { createdAt: 'desc' },
+        include: { priorities: true },
+      });
+
+      if (recentOffering && recentAudience) {
+        const continuationActions: { type: string; params: Record<string, any> }[] = [];
+
+        // Draft MFs if not already done
+        if (!alreadyDraftedMFs) {
+          continuationActions.push({
+            type: 'draft_mfs',
+            params: { offeringName: recentOffering.name },
+          });
+        }
+
+        // Detect medium from user message
+        let medium = 'email';
+        if (/one.?page|one.?pager|briefing/i.test(message)) medium = 'landing_page';
+        else if (/pitch.*deck/i.test(message)) medium = 'pitch_deck';
+        else if (/report/i.test(message)) medium = 'report';
+
+        continuationActions.push({
+          type: 'build_deliverable',
+          params: {
+            offeringName: recentOffering.name,
+            audienceName: recentAudience.name,
+            medium,
+            situation: message,
+          },
+        });
+
+        const contDispatch = await dispatchActions(continuationActions, userId, ctx, workspaceId);
+        const contResult = contDispatch.results.join(' · ');
+        actionResult = actionResult ? `${actionResult} · ${contResult}` : contResult;
+        if (contDispatch.refreshNeeded) refreshNeeded = true;
+
+        // Update response to reflect what actually happened
+        if (contResult.includes('BUILD_STARTED')) {
+          result.response = (result.response || '').replace(
+            /This'll take a few minutes.*$/i,
+            ''
+          ).trim();
+          if (!result.response.includes("I'll bring you")) {
+            result.response += " I've drafted the foundational message — you can see it by tapping '3 Tiers' in the menu anytime. I'm putting together your one-pager now. I'll bring you right to it when it's ready.";
+          }
+        }
+      }
+    }
   }
 
   // Guard against empty responses. When Opus returns empty text, the user
