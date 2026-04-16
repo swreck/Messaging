@@ -219,8 +219,8 @@ YOU MUST USE THESE EXACT categoryLabel VALUES — do not invent creative alterna
 2. categoryLabel: "Product"
    Targeted product differentiation. What's structurally different about the product and why it matters to this audience. Use priorities related to product features or capabilities.
 
-3. categoryLabel: "Product" — OPTIONAL OVERFLOW
-   Only if the product story genuinely needs two columns. Use the same "Product" label — this IS a second product column, not a new category. SKIP if not needed — do not force it. NEVER label this column "Differentiation", "Competitive Advantage", "Technology", or any creative alternative. It is "Product".
+3. categoryLabel: "Product" — OPTIONAL OVERFLOW — RARE
+   Use ONLY when the offering contains two INDEPENDENT product value propositions that serve different audience priorities and cannot be combined into a single Thanksgiving statement. Examples: a physical product AND a cloud platform it rides on; a complete solution AND a separate custom services offering. Multiple features of the SAME product do NOT justify a second column — write a better Thanksgiving for column 2 instead. Default to 5 columns. Use 6 only when you can articulate why no single statement could hold both value propositions honestly. NEVER label this "Differentiation", "Competitive Advantage", "Technology", or any creative alternative — it is "Product".
 
 4. categoryLabel: "ROI"
    Financial and measurable value. Use priorities about cost, savings, efficiency, or measurable outcomes.
