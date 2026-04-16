@@ -257,6 +257,97 @@ export async function commitInterpretationForWizard(
   };
 }
 
+// ─── Commit from existing data (partner chat build_deliverable) ──
+// Used when Maria's partner chat triggers a full pipeline from an offering
+// and audience that already exist in the DB. Unlike commitInterpretation
+// (which creates new DB rows from an extraction), this creates only the
+// ThreeTierDraft + ExpressJob pointing at EXISTING offering/audience IDs.
+// The pipeline then loads everything through the draft's relations.
+export interface ExistingCommitResult {
+  jobId: string;
+  draftId: string;
+}
+
+export async function commitExistingForPipeline(
+  offeringId: string,
+  audienceId: string,
+  medium: string,
+  situation: string,
+  userId: string,
+  workspaceId: string,
+): Promise<ExistingCommitResult> {
+  const offering = await prisma.offering.findFirst({
+    where: { id: offeringId },
+    include: { elements: { orderBy: { sortOrder: 'asc' } } },
+  });
+  if (!offering) throw new Error('Offering not found.');
+
+  const audience = await prisma.audience.findFirst({
+    where: { id: audienceId },
+    include: { priorities: { orderBy: { sortOrder: 'asc' } } },
+  });
+  if (!audience) throw new Error('Audience not found.');
+
+  if (offering.elements.length === 0) {
+    throw new Error('Offering needs at least one capability before building a deliverable.');
+  }
+  if (audience.priorities.length === 0) {
+    throw new Error('Audience needs at least one priority before building a deliverable.');
+  }
+
+  const draft = await prisma.threeTierDraft.create({
+    data: {
+      offeringId: offering.id,
+      audienceId: audience.id,
+      currentStep: 5,
+    },
+  });
+
+  // Synthesize an ExpressInterpretation from the existing DB data so the
+  // pipeline can use situation/medium/offering metadata without changes.
+  const syntheticInterpretation = {
+    offering: {
+      name: offering.name,
+      nameSource: 'stated' as const,
+      description: offering.description || '',
+      differentiators: offering.elements.map(e => ({
+        text: e.text,
+        source: 'stated' as const,
+      })),
+    },
+    audiences: [{
+      name: audience.name,
+      description: audience.description || '',
+      source: 'stated' as const,
+      priorities: audience.priorities.map(p => ({
+        text: p.text,
+        source: 'stated' as const,
+      })),
+    }],
+    primaryMedium: {
+      value: medium || 'email',
+      source: 'stated' as const,
+      reasoning: 'User-selected format',
+    },
+    situation: situation || '',
+    confidenceNotes: 'Built from existing offering and audience data.',
+  };
+
+  const job = await prisma.expressJob.create({
+    data: {
+      userId,
+      workspaceId,
+      draftId: draft.id,
+      status: 'pending',
+      stage: 'Setting things up',
+      progress: 3,
+      interpretation: syntheticInterpretation as unknown as object,
+    },
+  });
+
+  return { jobId: job.id, draftId: draft.id };
+}
+
 // ─── Async pipeline runner ─────────────────────────────
 // Fire-and-forget from the commit route via setImmediate(() => runPipeline(jobId)).
 // Updates the ExpressJob row as it progresses so the frontend can poll status.

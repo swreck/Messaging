@@ -666,7 +666,7 @@ export function MariaPartner() {
                   {messages.map((msg, i) => (
                     <div key={i} className={`partner-msg partner-msg-${msg.role}`}>
                       {formatContent(msg.content)}
-                      {msg.actionResult && <span className="partner-action-badge">{msg.actionResult.replace(/\[NAVIGATE:[^\]]+\]\s*/g, '').trim()}</span>}
+                      {msg.actionResult && <span className="partner-action-badge">{msg.actionResult.replace(/\[NAVIGATE:[^\]]+\]\s*/g, '').replace(/\[BUILD_STARTED:[^\]]+\]\s*/g, '').trim()}</span>}
                     </div>
                   ))}
                   {sending && (

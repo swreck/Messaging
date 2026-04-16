@@ -80,18 +80,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </svg>
           </button>
           {mobileMenuOpen && (
-            <div className="nav-mobile-menu">
-              {NAV_ITEMS.map(item => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={isActive(item.path) ? 'active' : ''}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
+            <>
+              <div
+                className="nav-mobile-backdrop"
+                onClick={() => setMobileMenuOpen(false)}
+                aria-hidden="true"
+              />
+              <div className="nav-mobile-menu">
+                {NAV_ITEMS.map(item => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={isActive(item.path) ? 'active' : ''}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </>
           )}
         </div>
         {showTeams && (

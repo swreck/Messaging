@@ -1,6 +1,10 @@
 import { prisma } from './prisma.js';
 import { callAI } from '../services/ai.js';
 import {
+  commitExistingForPipeline,
+  runPipeline,
+} from './expressPipeline.js';
+import {
   buildChapterPrompt,
   CHAPTER_CRITERIA,
   REFINE_CHAPTER_SYSTEM,
@@ -106,6 +110,14 @@ export const ACTION_ALIASES: Record<string, string> = {
   'analyze_style': 'analyze_personalization_doc',
   'style_doc': 'analyze_personalization_doc',
   'personalize_doc': 'analyze_personalization_doc',
+  'make_deliverable': 'build_deliverable',
+  'generate_deliverable': 'build_deliverable',
+  'build_draft': 'build_deliverable',
+  'make_draft': 'build_deliverable',
+  'build_story': 'build_deliverable',
+  'check_build': 'check_deliverable',
+  'check_status': 'check_deliverable',
+  'build_status': 'check_deliverable',
   'start_style_interview': 'start_personalize_interview',
   'start_interview': 'start_personalize_interview',
   'interview_answer': 'personalize_interview_answer',
@@ -1293,6 +1305,76 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
         }
       }
 
+      // ─── Build deliverable (full pipeline from existing data) ──
+      // Maria triggers this when she has a complete offering + audience and
+      // the user wants a deliverable. Creates a draft from existing DB rows,
+      // fires the Express pipeline asynchronously, and returns a marker so
+      // the frontend/Maria knows a build is in progress.
+      if (a.type === 'build_deliverable') {
+        const scopeFilter = workspaceId ? { workspaceId } : { userId };
+        const offeringId = await resolveOfferingId(a.params, userId, ctx.offeringId, workspaceId);
+        const audienceId = await resolveAudienceId(a.params, userId, ctx.audienceId, workspaceId);
+        if (!offeringId) {
+          actionResult = `Could not find the offering. Try including the offering name.`;
+        } else if (!audienceId) {
+          actionResult = `Could not find the audience. Try including the audience name.`;
+        } else {
+          try {
+            const medium = a.params.medium || 'email';
+            const situation = a.params.situation || '';
+            const result = await commitExistingForPipeline(
+              offeringId,
+              audienceId,
+              medium,
+              situation,
+              userId,
+              workspaceId || '',
+            );
+            setImmediate(() => {
+              runPipeline(result.jobId).catch(err => {
+                console.error(`[build_deliverable] Pipeline error for job ${result.jobId}:`, err);
+              });
+            });
+            actionResult = `[BUILD_STARTED:${result.jobId}:${result.draftId}] Building your first draft now. This takes a few minutes.`;
+            refreshNeeded = false;
+          } catch (err: any) {
+            actionResult = `Could not start the build: ${err.message || 'unknown error'}`;
+          }
+        }
+      }
+
+      // ─── Check deliverable status ──────────────────────────
+      // Maria calls this to check on a pipeline job she started earlier.
+      // When the job is complete, returns a NAVIGATE to the story page.
+      if (a.type === 'check_deliverable') {
+        const scopeFilter = workspaceId ? { workspaceId } : { userId };
+        let job = null;
+        if (a.params.jobId) {
+          job = await prisma.expressJob.findFirst({
+            where: { id: a.params.jobId, userId },
+          });
+        } else {
+          // Find the most recent job for this user
+          job = await prisma.expressJob.findFirst({
+            where: { userId, ...scopeFilter },
+            orderBy: { createdAt: 'desc' },
+          });
+        }
+        if (!job) {
+          actionResult = 'No build job found.';
+        } else if (job.status === 'complete' && job.resultStoryId) {
+          const story = await prisma.fiveChapterStory.findFirst({
+            where: { id: job.resultStoryId },
+          });
+          actionResult = `[NAVIGATE:/five-chapter/${job.draftId}] Your first draft is ready.`;
+          refreshNeeded = true;
+        } else if (job.status === 'error') {
+          actionResult = `The build ran into a problem: ${job.error || 'unknown error'}. You can try again.`;
+        } else {
+          actionResult = `Still working — ${job.stage || 'processing'}. ${job.progress || 0}% done.`;
+        }
+      }
+
       // ─── Personalization actions ───────────────────────────────
       // Action results for personalization are kept minimal or empty.
       // Maria's system prompt (personalize chat block) guides her response.
@@ -1633,6 +1715,10 @@ export function buildActionList(context: ActionContext): string {
   if (context.draftId) {
     actions.push('- edit_tier: Change the TEXT of existing Three Tier cells based on a direction. Params: { instruction: string } — Can rewrite text, shift emphasis, change wording. CANNOT add or remove Tier 2 columns — for structural changes (adding/removing columns), suggest the user uses Regenerate.');
   }
+
+  // Build deliverable — full pipeline from existing offering + audience
+  actions.push('- build_deliverable: Build a complete first draft (Three Tier + Five Chapter Story) from an existing offering and audience. Runs the full pipeline autonomously — mapping, message generation, story writing, voice check, polishing. Takes a few minutes. Params: { offeringName: string, audienceName: string, medium: string, situation?: string } — medium options: email, blog, landing_page, in_person, press_release, newsletter, one-pager, report, pitch_deck. situation is the specific context or occasion for this deliverable.');
+  actions.push('- check_deliverable: Check status of a deliverable build you started with build_deliverable. When complete, navigates to the finished draft. Params: { jobId?: string } — omit jobId to check the most recent build.');
 
   // Cross-workspace copy — always included, dispatch handles errors if user has only 1 workspace
   actions.push('- copy_audience_to_workspace: Copy an audience and its priorities to another workspace. Params: { audienceName: string, targetWorkspaceName: string }');

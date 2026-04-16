@@ -190,9 +190,17 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .nav-hamburger:hover { background: var(--bg-hover); color: var(--text-primary); }
 .nav-mobile-wrapper { display: none; position: relative; }
+.nav-mobile-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 199;
+  -webkit-tap-highlight-color: transparent;
+}
 .nav-mobile-menu {
-  position: absolute;
-  top: calc(100% + 8px);
+  position: fixed;
+  top: 60px;
+  left: 0;
   right: 0;
   min-width: 200px;
   background: rgba(255, 255, 255, 0.96);
