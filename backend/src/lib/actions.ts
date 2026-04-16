@@ -1330,12 +1330,16 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
               userId,
               workspaceId || '',
             );
-            setImmediate(() => {
-              runPipeline(result.jobId).catch(err => {
-                console.error(`[build_deliverable] Pipeline error for job ${result.jobId}:`, err);
+            if (!result || !result.jobId) {
+              actionResult = 'Could not start the build — setup returned no job.';
+            } else {
+              setImmediate(() => {
+                runPipeline(result.jobId).catch(err => {
+                  console.error(`[build_deliverable] Pipeline error for job ${result.jobId}:`, err);
+                });
               });
-            });
-            actionResult = `[BUILD_STARTED:${result.jobId}:${result.draftId}] Building your first draft now. This takes a few minutes.`;
+              actionResult = `[BUILD_STARTED:${result.jobId}:${result.draftId}] Building your first draft now. This takes a few minutes.`;
+            }
             refreshNeeded = false;
           } catch (err: any) {
             actionResult = `Could not start the build: ${err.message || 'unknown error'}`;
@@ -1347,28 +1351,32 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
       // Maria calls this to check on a pipeline job she started earlier.
       // When the job is complete, returns a NAVIGATE to the story page.
       if (a.type === 'check_deliverable') {
-        const scopeFilter = workspaceId ? { workspaceId } : { userId };
-        let job = null;
-        if (a.params.jobId) {
-          job = await prisma.expressJob.findFirst({
-            where: { id: a.params.jobId, userId },
-          });
-        } else {
-          // Find the most recent job for this user
-          job = await prisma.expressJob.findFirst({
-            where: { userId, ...scopeFilter },
-            orderBy: { createdAt: 'desc' },
-          });
-        }
-        if (!job) {
-          actionResult = 'No build job found.';
-        } else if (job.status === 'complete' && job.resultStoryId) {
-          actionResult = `[NAVIGATE:/five-chapter/${job.draftId}?story=${job.resultStoryId}] Your first draft is ready.`;
-          refreshNeeded = true;
-        } else if (job.status === 'error') {
-          actionResult = `The build ran into a problem: ${job.error || 'unknown error'}. You can try again.`;
-        } else {
-          actionResult = `Still working — ${job.stage || 'processing'}. ${job.progress || 0}% done.`;
+        try {
+          const scopeFilter = workspaceId ? { workspaceId } : { userId };
+          let job = null;
+          if (a.params?.jobId) {
+            job = await prisma.expressJob.findFirst({
+              where: { id: a.params.jobId, userId },
+            });
+          } else {
+            job = await prisma.expressJob.findFirst({
+              where: { userId, ...scopeFilter },
+              orderBy: { createdAt: 'desc' },
+            });
+          }
+          if (!job) {
+            actionResult = 'No build in progress right now.';
+          } else if (job.status === 'complete' && job.resultStoryId) {
+            actionResult = `[NAVIGATE:/five-chapter/${job.draftId}?story=${job.resultStoryId}] Your first draft is ready.`;
+            refreshNeeded = true;
+          } else if (job.status === 'error') {
+            actionResult = `The build ran into a problem: ${job.error || 'unknown error'}. You can try again.`;
+          } else {
+            actionResult = `Still working — ${job.stage || 'processing'}. ${job.progress || 0}% done.`;
+          }
+        } catch (err: any) {
+          console.error('[check_deliverable] error:', err);
+          actionResult = `Could not check status: ${err.message || 'unknown error'}`;
         }
       }
 
