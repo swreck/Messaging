@@ -509,8 +509,10 @@ router.post('/message', async (req: Request, res: Response) => {
     content: m.content,
   }));
 
-  // Call Opus with JSON response format
-  const result = await callAIWithJSON<{
+  // Call Opus with JSON response format. If Opus returns an empty
+  // response AND no actions, retry once — this occasionally happens
+  // when the model outputs malformed JSON that gets parsed to empty.
+  let result = await callAIWithJSON<{
     response: string;
     action?: { type: string; params: Record<string, any> } | null;
     actions?: { type: string; params: Record<string, any> }[];
@@ -522,6 +524,22 @@ router.post('/message', async (req: Request, res: Response) => {
     rawActions = result.actions;
   } else if (result.action && result.action.type) {
     rawActions = [result.action];
+  }
+
+  // Retry once if Opus returned nothing usable
+  if ((!result.response || !result.response.trim()) && rawActions.length === 0) {
+    console.warn('[Partner] Empty response + no actions from Opus. Retrying once.');
+    result = await callAIWithJSON<{
+      response: string;
+      action?: { type: string; params: Record<string, any> } | null;
+      actions?: { type: string; params: Record<string, any> }[];
+    }>(systemPrompt, message, 'elite', conversationHistory);
+    rawActions = [];
+    if (result.actions && Array.isArray(result.actions) && result.actions.length > 0) {
+      rawActions = result.actions;
+    } else if (result.action && result.action.type) {
+      rawActions = [result.action];
+    }
   }
 
   // Check if Maria wants to read the page
@@ -566,11 +584,11 @@ router.post('/message', async (req: Request, res: Response) => {
     }
   }
 
-  // Guard against empty responses. When Opus returns actions but no text,
-  // the user sees a blank message — unacceptable. Generate a fallback
-  // based on what actions were dispatched so the user always knows what
-  // Maria is doing.
+  // Guard against empty responses. When Opus returns empty text, the user
+  // sees a blank message — unacceptable. Generate a fallback so the user
+  // always knows what Maria is doing.
   if (!result.response || !result.response.trim()) {
+    console.warn(`[Partner] Empty response from Opus. Actions: ${normalizedActions.map(a => a.type).join(', ') || 'none'}`);
     if (actionResult?.includes('BUILD_STARTED')) {
       result.response = "I'm putting together your draft now. I'll bring you right to it when it's ready — just give me a few minutes.";
     } else if (actionResult?.includes('Drafted motivating factors')) {
@@ -581,6 +599,10 @@ router.post('/message', async (req: Request, res: Response) => {
       result.response = "Got it — I've set that up. Let me keep building.";
     } else if (actionResult) {
       result.response = "Working on it.";
+    } else {
+      // No actions AND empty response — Opus call produced nothing usable.
+      // This should never happen but does occasionally. Give a recovery message.
+      result.response = "Sorry — I lost my train of thought for a second. Could you say that again?";
     }
   }
 
