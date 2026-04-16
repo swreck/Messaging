@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useMaria } from '../shared/MariaContext';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { api } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
+import { AdminPanel } from '../admin/AdminPanel';
 import type { PersonalizeProfile } from '../types';
 
 interface LearningData {
@@ -14,6 +16,7 @@ interface LearningData {
 
 export function SettingsPage() {
   const { setPageContext } = useMaria();
+  const { user } = useAuth();
   const [learning, setLearning] = useState<LearningData | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -271,6 +274,13 @@ export function SettingsPage() {
           </div>
         )}
       </div>
+
+      {user?.isAdmin && (
+        <>
+          <hr className="settings-divider" />
+          <AdminPanel />
+        </>
+      )}
 
       <ConfirmModal
         open={showResetConfirm}

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import { api } from '../api/client';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -9,6 +10,15 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoCount, setDemoCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.get<{ demos: unknown[]; totalCreated: number }>('/auth/demos')
+      .then(r => setDemoCount(r.totalCreated))
+      .catch(() => {});
+  }, []);
+
+  const isDemo = username.toLowerCase().startsWith('demo');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,10 +35,13 @@ export function LoginPage() {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1>Maria</h1>
-        <p className="auth-subtitle">Your Messaging Partner</p>
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-brand">
+          <h1 className="login-title">Maria</h1>
+          <p className="login-tagline">Your messaging partner</p>
+        </div>
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="username">Username</label>
@@ -52,15 +65,23 @@ export function LoginPage() {
               autoComplete="current-password"
               required
             />
+            {isDemo && (
+              <span className="login-demo-hint">Maria2026</span>
+            )}
           </div>
           {error && <div className="form-error">{error}</div>}
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
         <p className="auth-link">
-          Have an invite code? <Link to="/register">Create account</Link>
+          Have an invite link? <Link to="/register">Create account</Link>
         </p>
+
+        {demoCount !== null && demoCount > 0 && (
+          <p className="login-demo-count">{demoCount} demo accounts</p>
+        )}
       </div>
     </div>
   );
