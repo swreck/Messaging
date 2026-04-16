@@ -1363,10 +1363,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
         if (!job) {
           actionResult = 'No build job found.';
         } else if (job.status === 'complete' && job.resultStoryId) {
-          const story = await prisma.fiveChapterStory.findFirst({
-            where: { id: job.resultStoryId },
-          });
-          actionResult = `[NAVIGATE:/five-chapter/${job.draftId}] Your first draft is ready.`;
+          actionResult = `[NAVIGATE:/five-chapter/${job.draftId}?story=${job.resultStoryId}] Your first draft is ready.`;
           refreshNeeded = true;
         } else if (job.status === 'error') {
           actionResult = `The build ran into a problem: ${job.error || 'unknown error'}. You can try again.`;
