@@ -435,10 +435,16 @@ router.get('/history', async (req: Request, res: Response) => {
 });
 
 // POST /api/partner/message — send a message and get Maria's response
+// Optionally accepts an attachment: { data: base64string, mimeType: string, filename: string }
+// Images are sent to Claude via vision. PDFs and text files are extracted and prepended.
 router.post('/message', async (req: Request, res: Response) => {
-  const { message, context } = req.body;
-  if (!message) {
-    res.status(400).json({ error: 'message is required' });
+  const { message, context, attachment } = req.body as {
+    message?: string;
+    context?: ActionContext;
+    attachment?: { data: string; mimeType: string; filename: string };
+  };
+  if (!message && !attachment) {
+    res.status(400).json({ error: 'message or attachment is required' });
     return;
   }
 
@@ -509,6 +515,45 @@ router.post('/message', async (req: Request, res: Response) => {
     content: m.content,
   }));
 
+  // Build user message — plain text or content blocks with attachment.
+  // Images go through Claude vision. Text/PDF content is prepended as text.
+  let userContent: string | any[] = message || '';
+  if (attachment?.data && attachment?.mimeType) {
+    const isImage = attachment.mimeType.startsWith('image/');
+    const isPDF = attachment.mimeType === 'application/pdf';
+    const isText = attachment.mimeType.startsWith('text/') || attachment.mimeType === 'application/json';
+
+    if (isImage) {
+      userContent = [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: attachment.mimeType,
+            data: attachment.data,
+          },
+        },
+        { type: 'text', text: message || `I've attached an image (${attachment.filename || 'file'}). What do you see, and how can you use this for my messaging?` },
+      ];
+    } else if (isPDF) {
+      userContent = [
+        {
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: attachment.data,
+          },
+        },
+        { type: 'text', text: message || `I've attached a PDF (${attachment.filename || 'document'}). Please read it and use whatever is relevant for my messaging.` },
+      ];
+    } else if (isText) {
+      const textContent = Buffer.from(attachment.data, 'base64').toString('utf-8');
+      const prefix = `[ATTACHED FILE: ${attachment.filename || 'file'}]\n${textContent}\n[END OF ATTACHED FILE]\n\n`;
+      userContent = prefix + (message || 'I pasted some content above. Please read it and use whatever is relevant.');
+    }
+  }
+
   // Call Opus with JSON response format. If Opus returns an empty
   // response AND no actions, retry once — this occasionally happens
   // when the model outputs malformed JSON that gets parsed to empty.
@@ -516,7 +561,7 @@ router.post('/message', async (req: Request, res: Response) => {
     response: string;
     action?: { type: string; params: Record<string, any> } | null;
     actions?: { type: string; params: Record<string, any> }[];
-  }>(systemPrompt, message, 'elite', conversationHistory);
+  }>(systemPrompt, userContent, 'elite', conversationHistory);
 
   // Normalize actions
   let rawActions: { type: string; params: Record<string, any> }[] = [];
@@ -533,7 +578,7 @@ router.post('/message', async (req: Request, res: Response) => {
       response: string;
       action?: { type: string; params: Record<string, any> } | null;
       actions?: { type: string; params: Record<string, any> }[];
-    }>(systemPrompt, message, 'elite', conversationHistory);
+    }>(systemPrompt, userContent, 'elite', conversationHistory);
     rawActions = [];
     if (result.actions && Array.isArray(result.actions) && result.actions.length > 0) {
       rawActions = result.actions;
@@ -551,7 +596,7 @@ router.post('/message', async (req: Request, res: Response) => {
   if (normalizedActions.length === 1 && normalizedActions[0].type === 'read_page') {
     // Store the user message but not the response yet (will retry with page content)
     await prisma.assistantMessage.create({
-      data: { userId, role: 'user', content: message, context: partnerChannel(workspaceId) },
+      data: { userId, role: 'user', content: message || '', context: partnerChannel(workspaceId) },
     });
 
     res.json({
@@ -593,7 +638,7 @@ router.post('/message', async (req: Request, res: Response) => {
     const createdAudience = dispatch.results.some(r => r.includes('Created audience'));
     const alreadyBuilding = dispatch.results.some(r => r.includes('BUILD_STARTED'));
     const alreadyDraftedMFs = dispatch.results.some(r => r.includes('Drafted motivating factors'));
-    const userWantsEverything = /do everything|show me the finished|please do everything|work.*independent|do it all|build.*everything/i.test(message);
+    const userWantsEverything = /do everything|show me the finished|please do everything|work.*independent|do it all|build.*everything/i.test(message || '');
 
     if (createdOffering && createdAudience && !alreadyBuilding && userWantsEverything) {
       console.log('[Partner] Lead-mode continuation: offering + audience created, chaining enrichment + build');
@@ -611,10 +656,11 @@ router.post('/message', async (req: Request, res: Response) => {
 
       if (recentOffering && recentAudience) {
         // Detect medium from user message
+        const msg = message || '';
         let medium = 'email';
-        if (/one.?page|one.?pager|briefing/i.test(message)) medium = 'landing_page';
-        else if (/pitch.*deck/i.test(message)) medium = 'pitch_deck';
-        else if (/report/i.test(message)) medium = 'report';
+        if (/one.?page|one.?pager|briefing/i.test(msg)) medium = 'landing_page';
+        else if (/pitch.*deck/i.test(msg)) medium = 'pitch_deck';
+        else if (/report/i.test(msg)) medium = 'report';
 
         // Go straight to build_deliverable — skip draft_mfs in the
         // continuation because it takes 20+ seconds and would timeout
@@ -628,7 +674,7 @@ router.post('/message', async (req: Request, res: Response) => {
             offeringName: recentOffering.name,
             audienceName: recentAudience.name,
             medium,
-            situation: message,
+            situation: message || '',
           },
         }];
 
@@ -679,9 +725,10 @@ router.post('/message', async (req: Request, res: Response) => {
     : result.response;
 
   // Strip [PAGE CONTENT] prefix from stored message — only keep the user's actual text
-  const userQuestion = message.includes('[USER QUESTION]\n')
-    ? message.split('[USER QUESTION]\n').pop()!
-    : message;
+  const rawMsg = message || '';
+  const userQuestion = rawMsg.includes('[USER QUESTION]\n')
+    ? rawMsg.split('[USER QUESTION]\n').pop()!
+    : (rawMsg || (attachment ? `[Attached: ${attachment.filename}]` : ''));
 
   await prisma.assistantMessage.createMany({
     data: [

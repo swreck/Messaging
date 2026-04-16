@@ -14,7 +14,7 @@ function getModel(tier: ModelTier): string {
 
 export async function callAI(
   systemPrompt: string,
-  userMessage: string,
+  userMessage: string | Anthropic.ContentBlockParam[],
   tier: ModelTier = 'fast',
   conversationHistory?: { role: 'user' | 'assistant'; content: string }[]
 ): Promise<string> {
@@ -41,7 +41,7 @@ export async function callAI(
 
 export async function callAIWithJSON<T>(
   systemPrompt: string,
-  userMessage: string,
+  userMessage: string | Anthropic.ContentBlockParam[],
   tier: ModelTier = 'fast',
   conversationHistory?: { role: 'user' | 'assistant'; content: string }[]
 ): Promise<T> {

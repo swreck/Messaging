@@ -57,6 +57,8 @@ export function MariaPartner() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [pendingFile, setPendingFile] = useState<{ data: string; mimeType: string; filename: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loaded, setLoaded] = useState(false);
 
   // Intro state — persisted on backend as introStep (0-4)
@@ -109,6 +111,18 @@ export function MariaPartner() {
         setIntroduced(false);
       });
   }, [user]);
+
+  // Screen Wake Lock — prevent iPhone from sleeping during dictation.
+  // Acquired when the partner panel opens, released when it closes.
+  useEffect(() => {
+    let wakeLock: WakeLockSentinel | null = null;
+    if (open && 'wakeLock' in navigator) {
+      navigator.wakeLock.request('screen')
+        .then(wl => { wakeLock = wl; })
+        .catch(() => {}); // Silently fail on unsupported browsers
+    }
+    return () => { wakeLock?.release().catch(() => {}); };
+  }, [open]);
 
   // Load conversation history when panel first opens and intro is done
   useEffect(() => {
@@ -306,7 +320,9 @@ export function MariaPartner() {
       }>('/partner/message', {
         message: pageContent ? `[PAGE CONTENT]\n${pageContent}\n\n[USER QUESTION]\n${text}` : text,
         context: pageContext,
+        ...(pendingFile ? { attachment: pendingFile } : {}),
       });
+      setPendingFile(null);
 
       if (result.needsPageContent) {
         setMessages(prev => [...prev, { role: 'assistant', content: 'Let me take a look...' }]);
@@ -714,7 +730,29 @@ export function MariaPartner() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div className="partner-input-area">
+                <div
+                  className="partner-input-area"
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const file = e.dataTransfer.files[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const base64 = (reader.result as string).split(',')[1];
+                        setPendingFile({ data: base64, mimeType: file.type || 'application/octet-stream', filename: file.name });
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                >
+                  {pendingFile && (
+                    <div className="partner-attachment-preview">
+                      <span className="partner-attachment-name">{pendingFile.filename}</span>
+                      <button type="button" className="partner-attachment-remove" onClick={() => setPendingFile(null)} aria-label="Remove attachment">×</button>
+                    </div>
+                  )}
                   <textarea
                     ref={textareaRef}
                     value={input}
@@ -725,11 +763,57 @@ export function MariaPartner() {
                       el.style.height = 'auto';
                       el.style.height = Math.min(el.scrollHeight, 100) + 'px';
                     }}
-                    placeholder="Talk to Maria..."
+                    onPaste={e => {
+                      const items = e.clipboardData?.items;
+                      if (!items) return;
+                      for (const item of Array.from(items)) {
+                        if (item.type.startsWith('image/')) {
+                          e.preventDefault();
+                          const file = item.getAsFile();
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            const base64 = (reader.result as string).split(',')[1];
+                            setPendingFile({ data: base64, mimeType: file.type, filename: file.name || 'pasted-image.png' });
+                          };
+                          reader.readAsDataURL(file);
+                          return;
+                        }
+                      }
+                    }}
+                    placeholder="Talk to Maria... (drag files here or paste images)"
                     disabled={sending}
                     rows={1}
                   />
-                  <button className="partner-send" onClick={() => send()} disabled={!input.trim() || sending} aria-label="Send">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.pdf,.txt,.csv,.json,.md"
+                    style={{ display: 'none' }}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const base64 = (reader.result as string).split(',')[1];
+                        setPendingFile({ data: base64, mimeType: file.type || 'application/octet-stream', filename: file.name });
+                      };
+                      reader.readAsDataURL(file);
+                      e.target.value = '';
+                    }}
+                  />
+                  <button
+                    className="partner-attach"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending}
+                    aria-label="Attach file"
+                    title="Attach a file (image, PDF, or text)"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                    </svg>
+                  </button>
+                  <button className="partner-send" onClick={() => send()} disabled={(!input.trim() && !pendingFile) || sending} aria-label="Send">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
                     </svg>
