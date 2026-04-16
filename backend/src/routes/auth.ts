@@ -167,6 +167,14 @@ router.get('/invite-codes', requireAuth, requireAdmin, async (_req: Request, res
   res.json({ codes });
 });
 
+// GET /api/auth/demo-count — public endpoint for login page hint
+router.get('/demo-count', async (_req: Request, res: Response) => {
+  const count = await prisma.user.count({
+    where: { username: { startsWith: 'demo' } },
+  });
+  res.json({ count });
+});
+
 // ─── Demo account system ─────────────────────────────────
 // Admin-only endpoints for creating, listing, renaming, and deleting
 // demo accounts. Each demo is a user + workspace with a fixed password.

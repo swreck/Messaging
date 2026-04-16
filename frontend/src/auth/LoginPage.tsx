@@ -13,8 +13,12 @@ export function LoginPage() {
   const [demoCount, setDemoCount] = useState<number | null>(null);
 
   useEffect(() => {
-    api.get<{ demos: unknown[]; totalCreated: number }>('/auth/demos')
-      .then(r => setDemoCount(r.totalCreated))
+    // Use the public demo-count endpoint — NOT the admin demos endpoint.
+    // Calling an auth-required endpoint from the login page triggers the
+    // 401 → redirect-to-login loop (CLAUDE.md gotcha #7).
+    fetch('/api/auth/demo-count')
+      .then(r => r.json())
+      .then(j => { if (j.count > 0) setDemoCount(j.count); })
       .catch(() => {});
   }, []);
 
