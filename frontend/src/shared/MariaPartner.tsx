@@ -375,6 +375,43 @@ export function MariaPartner() {
       if (result.actionResult) {
         const navMatch = result.actionResult.match(/\[NAVIGATE:([^\]]+)\]/);
         if (navMatch) setTimeout(() => navigate(navMatch[1]), 1200);
+
+        // Auto-poll pipeline when Maria fires build_deliverable. The user
+        // should NEVER have to ask "is it ready?" — the partner chat polls
+        // automatically and navigates when the draft is complete.
+        const buildMatch = result.actionResult.match(/\[BUILD_STARTED:([^:]+):([^\]]+)\]/);
+        if (buildMatch) {
+          const jobId = buildMatch[1];
+          const pollInterval = setInterval(async () => {
+            try {
+              const status = await api.get<{
+                status: string;
+                draftId: string | null;
+                resultStoryId: string | null;
+              }>(`/express/status/${jobId}`);
+              if (status.status === 'complete' && status.resultStoryId && status.draftId) {
+                clearInterval(pollInterval);
+                setMessages(prev => [...prev, {
+                  role: 'assistant',
+                  content: "Your first draft is ready — let me take you to it.",
+                }]);
+                setTimeout(() => {
+                  navigate(`/five-chapter/${status.draftId}?story=${status.resultStoryId}`);
+                }, 800);
+              } else if (status.status === 'error') {
+                clearInterval(pollInterval);
+                setMessages(prev => [...prev, {
+                  role: 'assistant',
+                  content: "Something went wrong building the draft. Tell me to try again if you'd like.",
+                }]);
+              }
+            } catch {
+              // Transient error — keep polling
+            }
+          }, 5000);
+          // Safety: stop polling after 10 minutes
+          setTimeout(() => clearInterval(pollInterval), 600000);
+        }
       }
 
       if (result.refreshNeeded) refreshPage();

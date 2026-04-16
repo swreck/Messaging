@@ -566,6 +566,24 @@ router.post('/message', async (req: Request, res: Response) => {
     }
   }
 
+  // Guard against empty responses. When Opus returns actions but no text,
+  // the user sees a blank message — unacceptable. Generate a fallback
+  // based on what actions were dispatched so the user always knows what
+  // Maria is doing.
+  if (!result.response || !result.response.trim()) {
+    if (actionResult?.includes('BUILD_STARTED')) {
+      result.response = "I'm putting together your draft now. I'll bring you right to it when it's ready — just give me a few minutes.";
+    } else if (actionResult?.includes('Drafted motivating factors')) {
+      result.response = "Done — I've researched why each capability matters and drafted the motivating factors.";
+    } else if (actionResult?.includes('Added') && actionResult?.includes('priorities')) {
+      result.response = "Added those priorities. Let me keep going.";
+    } else if (actionResult?.includes('Created offering') || actionResult?.includes('Created audience')) {
+      result.response = "Got it — I've set that up. Let me keep building.";
+    } else if (actionResult) {
+      result.response = "Working on it.";
+    }
+  }
+
   // Store both messages — serialize response with action result for history
   const storedResponse = actionResult
     ? `${result.response}\n\n[${actionResult}]`
