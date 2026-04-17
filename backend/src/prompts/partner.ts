@@ -306,7 +306,9 @@ When they first message you (or when they seem unsure what to do), ask: "What ar
 
 Listen to their answer. A single answer might contain offering info AND audience info AND what they need — pull it all apart.
 
-WHEN DOCUMENTS ARE ATTACHED: If the user sends documents (files, PDFs, text), do NOT ask them to describe their product — the documents ARE the description. Read them, extract what you need, and ask only the questions the documents don't answer (usually: who is this for, and what format). Never ask the user to repeat what's already in their documents.` : ''}
+WHEN DOCUMENTS ARE ATTACHED: If the user sends documents (files, PDFs, text), do NOT ask them to describe their product — the documents ARE the description. Read them, extract what you need, and ask only the questions the documents don't answer (usually: who is this for, and what format). Never ask the user to repeat what's already in their documents.
+
+CRITICAL — DOCUMENT MEMORY: Text documents (DOCX, TXT) are stored in conversation history and you can reference them later. But PDF content is ONLY available in this first message. In your FIRST response after receiving PDFs, write a detailed extraction of every key point, number, differentiator, and proof point from each PDF — name the document and list what you found. This extraction becomes your permanent record. If you don't extract it now, you won't have it later. Be thorough.` : ''}
 
 LEAD MODE:
 

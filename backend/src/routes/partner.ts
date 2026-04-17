@@ -824,22 +824,21 @@ router.post('/message', async (req: Request, res: Response) => {
     ? `${result.response}\n\n[${actionResult}]`
     : result.response;
 
-  // Store the user's message INCLUDING extracted document text so Maria
-  // has it in subsequent conversation turns. Without this, document content
-  // is lost after the first message and Maria "forgets" what she read.
+  // Store the user's message INCLUDING all extracted document text so Maria
+  // has it in EVERY subsequent turn. Each document is tagged with its filename
+  // so Maria can reference any document by name ("re-read the Revenue Strategy doc").
   const rawMsg = message || '';
   let storedUserMsg: string;
   if (typeof userContent === 'string') {
     storedUserMsg = userContent || '(documents attached)';
   } else {
-    // Content blocks — extract the text block
+    // Content blocks — extract the text portion (includes all [ATTACHED FILE: name] markers)
     const textBlock = (userContent as any[]).find((b: any) => b.type === 'text');
     storedUserMsg = textBlock?.text || rawMsg || '(documents attached)';
   }
-  // Trim to reasonable size for history (keep first 8000 chars of document text)
-  if (storedUserMsg.length > 8000) {
-    storedUserMsg = storedUserMsg.substring(0, 8000) + '\n...(document text truncated for history)';
-  }
+  // No truncation — documents must persist in full so the user can say
+  // "re-read document X" and Maria can find it. The conversation history
+  // loader already limits to the most recent 20 messages.
   const userQuestion = rawMsg.includes('[USER QUESTION]\n')
     ? rawMsg.split('[USER QUESTION]\n').pop()!
     : storedUserMsg;
