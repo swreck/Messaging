@@ -563,12 +563,17 @@ router.post('/message', async (req: Request, res: Response) => {
     actions?: { type: string; params: Record<string, any> }[];
   }>(systemPrompt, userContent, 'elite', conversationHistory);
 
-  // Normalize actions
+  // Normalize actions — Opus sometimes uses "action", "name", or "tool"
+  // instead of "type" for the action field. Handle all variants.
   let rawActions: { type: string; params: Record<string, any> }[] = [];
   if (result.actions && Array.isArray(result.actions) && result.actions.length > 0) {
-    rawActions = result.actions;
-  } else if (result.action && result.action.type) {
-    rawActions = [result.action];
+    rawActions = result.actions.map((a: any) => ({
+      type: a.type || a.action || a.name || a.tool || '',
+      params: a.params || a.parameters || a.args || {},
+    }));
+  } else if (result.action) {
+    const a = result.action as any;
+    rawActions = [{ type: a.type || a.action || a.name || '', params: a.params || a.parameters || {} }];
   }
 
   // Retry once if Opus returned nothing usable
@@ -581,9 +586,13 @@ router.post('/message', async (req: Request, res: Response) => {
     }>(systemPrompt, userContent, 'elite', conversationHistory);
     rawActions = [];
     if (result.actions && Array.isArray(result.actions) && result.actions.length > 0) {
-      rawActions = result.actions;
-    } else if (result.action && result.action.type) {
-      rawActions = [result.action];
+      rawActions = result.actions.map((a: any) => ({
+        type: a.type || a.action || a.name || a.tool || '',
+        params: a.params || a.parameters || a.args || {},
+      }));
+    } else if (result.action) {
+      const a = result.action as any;
+      rawActions = [{ type: a.type || a.action || a.name || '', params: a.params || a.parameters || {} }];
     }
   }
 
