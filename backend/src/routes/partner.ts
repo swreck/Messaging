@@ -547,14 +547,15 @@ router.post('/message', async (req: Request, res: Response) => {
           source: { type: 'base64', media_type: 'application/pdf', data: att.data },
         });
       } else if (isPDF && useTextExtraction) {
-        try {
-          const pdfParse = (await import('pdf-parse')).default;
-          const buffer = Buffer.from(att.data, 'base64');
-          const result = await pdfParse(buffer);
-          textPrefix += `[ATTACHED PDF: ${att.filename || 'document.pdf'}]\n${result.text}\n[END OF PDF]\n\n`;
-        } catch (err) {
-          console.error('[Partner] PDF extraction failed:', att.filename, err);
-          textPrefix += `[ATTACHED PDF: ${att.filename || 'document.pdf'}]\n(Could not extract text from this PDF)\n[END OF PDF]\n\n`;
+        // Multi-file mode: limit to 2 PDF document blocks (Anthropic limit)
+        const pdfBlockCount = contentBlocks.filter((b: any) => b.type === 'document').length;
+        if (pdfBlockCount < 2) {
+          contentBlocks.push({
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: att.data },
+          });
+        } else {
+          textPrefix += `[ADDITIONAL PDF: ${att.filename || 'document.pdf'} — included by name only; read the other PDFs for context]\n\n`;
         }
       } else if (isDocx) {
         try {
