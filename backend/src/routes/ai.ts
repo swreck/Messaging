@@ -1310,21 +1310,17 @@ in Y days." If the CTA is simple, the chapter is short and direct.
 For senior readers: offer a path to evaluate, never give directives.`;
   }
 
-  const userMessage = `OFFERING: ${story.draft.offering.name}
-AUDIENCE (THIS IS THE READER): ${story.draft.audience.name}
-CONTENT FORMAT: ${spec.label} (${spec.wordRange[0]}-${spec.wordRange[1]} words total)
-CTA: ${story.cta}
-${story.emphasis ? `EMPHASIS: ${story.emphasis}` : ''}
-${readerDirective}
+  // Chapter 1 gets ONLY audience data + thesis — no product/Three Tier data.
+  // This forces Opus to write about the reader's world without product contamination.
+  // Chapters 2-5 get the full Three Tier.
+  const threeTierBlock = chapterNum === 1 ? '' : `
 THREE TIER MESSAGE:
 Tier 1: "${story.draft.tier1Statement?.text || ''}"
 ${story.draft.tier2Statements.map((t2, i) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}"${t2.priority?.driver ? `, Driver: "${t2.priority.driver}"` : ''})
   Proof: ${t2.tier3Bullets.map((t3) => t3.text).join(', ')}`).join('\n')}
+`;
 
-AUDIENCE PRIORITIES:
-${story.draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"${p.driver ? ` — Driver: "${p.driver}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
-
-${story.chapters.filter((c) => c.chapterNum < chapterNum).length > 0 ? `
+  const prevChapterBlock = story.chapters.filter((c) => c.chapterNum < chapterNum).length > 0 ? `
 PREVIOUS CHAPTERS (context — do NOT repeat their facts or phrases):
 ${story.chapters.filter((c) => c.chapterNum < chapterNum).map((c) => {
     const text = c.content;
@@ -1335,16 +1331,26 @@ ${story.chapters.filter((c) => c.chapterNum < chapterNum).map((c) => {
     const clean = lastSentenceEnd > 100 ? truncated.substring(0, lastSentenceEnd + 1) : truncated.substring(0, truncated.lastIndexOf(' '));
     return `Ch ${c.chapterNum}: ${clean}`;
   }).join('\n')}
-` : ''}
-Write Chapter ${chapterNum}: "${ch.name}"
-IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.
+` : '';
 
+  const fabricationBlock = chapterNum === 1 ? '' : `
 CRITICAL — NO FABRICATION. You may only assert claims explicitly supported
 by the THREE TIER MESSAGE, AUDIENCE PRIORITIES, or SITUATION above.
 SOURCE-FIRST WRITING: Before writing each sentence, identify which Tier 2,
 Tier 3, or Priority it derives from. If you cannot point to a specific
 source, the sentence is fabricated — cut it. A one-sentence chapter that
-is completely honest is better than three sentences with one fabricated line.
+is completely honest is better than three sentences with one fabricated line.`;
+
+  const userMessage = `${chapterNum === 1 ? '' : `OFFERING: ${story.draft.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${story.draft.audience.name}
+CONTENT FORMAT: ${spec.label} (${spec.wordRange[0]}-${spec.wordRange[1]} words total)
+${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${story.emphasis ? `EMPHASIS: ${story.emphasis}\n` : ''}${readerDirective}${threeTierBlock}
+AUDIENCE PRIORITIES:
+${story.draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"${p.driver ? ` — Driver: "${p.driver}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
+
+${prevChapterBlock}
+Write Chapter ${chapterNum}: "${ch.name}"
+IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.
+${fabricationBlock}
 ${chapterGuardrail}`;
 
   let content = await callAI(systemPrompt, userMessage, 'elite');

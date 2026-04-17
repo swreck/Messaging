@@ -889,12 +889,9 @@ FOR them, FOR this occasion, not a recycled template.
               : ''
       }\n`;
 
-      const userMessage = `${situationBlock}OFFERING: ${draftForStory.offering.name}
-AUDIENCE (THIS IS THE READER): ${draftForStory.audience.name}
-CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
-CTA: ${story.cta}
-${readerDirective}
-
+      // Chapter 1 gets ONLY audience data + thesis — no product/Three Tier.
+      // This forces the AI to write about the reader's world without product contamination.
+      const threeTierBlock = chapterNum === 1 ? '' : `
 THREE TIER MESSAGE:
 Tier 1: "${draftForStory.tier1Statement?.text || ''}"
 ${draftForStory.tier2Statements
@@ -905,7 +902,12 @@ ${draftForStory.tier2Statements
   Proof: ${t2.tier3Bullets.map(t3 => t3.text).join(', ')}`,
   )
   .join('\n')}
+`;
 
+      const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftForStory.audience.name}
+CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
+${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}
+${threeTierBlock}
 AUDIENCE PRIORITIES:
 ${draftForStory.audience.priorities
   .map(
@@ -942,55 +944,14 @@ Write Chapter ${chapterNum}: "${ch.name}"
 
 IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.
 
-CRITICAL — NO FABRICATION. Read this carefully, because it is what will
-cause a draft to fail or succeed:
-
-You may only assert claims that are explicitly supported by the THREE TIER
-MESSAGE, the AUDIENCE PRIORITIES, or the SITUATION above. If the fact is not
-in one of those three places, you may not write it as a claim. Period.
-
-Specifically forbidden unless explicitly supported above:
-- Customer references. "Banks like yours are already on the platform." "We
-  are working with community banks today." Unless Tier 3 names the customer,
-  do not mention them.
-- Metrics. No percentages, dollar figures, timelines, reduction claims, case
-  study outcomes unless they appear as proof in Tier 3.
-- Pricing. No "flat monthly subscription", no "dining is included in dues",
-  no "per-seat", no dollar amounts of any kind.
-- Professional services. No "dedicated onboarding lead", no "quarterly
-  check-ins", no "implementation team", no "typically done in days", no
-  "we handle the setup" unless stated.
-- Product features. Only features listed in the Three Tier exist. Do not
-  infer adjacent features the product "probably has."
-- Processes, programs, and events the user did not describe. No "open comment
-  period", no "written rationale to every member", no "member forum", no
-  "town hall", no "Q&A session", no "feedback session", no "review board",
-  no "quarterly review". If the user mentioned "send them directly to the
-  board" that IS the process; do not elaborate into a formal program.
-- Governance artifacts the user did not describe. No "the board published
-  its reasoning in writing", no "formal vote", no "ratification session".
-- Audience actions beyond what the user described. If the user said "members
-  need to make reservations three days ahead", do NOT tell readers to "mark
-  their calendars" or "set a reminder in your phone app" — those are
-  invented specifics.
-
-The discipline: after you write each sentence, ask yourself "is this fact
-in the Three Tier, the Priorities, or the Situation?" If the answer is no
-or uncertain, cut the sentence. A three-paragraph honest draft is better
-than a five-paragraph draft with one fabricated line, because the reader
-will copy the whole thing and ship the fabrication along with the truth.
-
-Length discipline. If the chapter word budget requires more content than
-you can honestly produce from the Three Tier, produce a shorter chapter.
-Never inflate the word count by adding invented content to reach a target.
-A one-sentence chapter that is completely honest is better than a
-three-sentence chapter with one fabricated line.
-
-SOURCE-FIRST WRITING: Before writing each sentence, identify which Tier 2
-statement, Tier 3 bullet, or Audience Priority it derives from. If you
-cannot point to a specific source in the data above, the sentence is
-fabricated — cut it before writing it. This is not a suggestion. This is
-the test that determines whether the draft succeeds or fails.
+${chapterNum > 1 ? `CRITICAL — NO FABRICATION. You may only assert claims explicitly supported
+by the THREE TIER MESSAGE, AUDIENCE PRIORITIES, or SITUATION above.
+SOURCE-FIRST WRITING: Before writing each sentence, identify which Tier 2,
+Tier 3, or Priority it derives from. If you cannot point to a specific source,
+cut the sentence. A one-sentence chapter that is honest is better than three
+sentences with one fabricated line. No invented metrics, customer names,
+timelines, team commitments, pilot structures, or product features not in the
+Three Tier.` : ''}
 
 The test: if you are about to write something, and you are not sure whether
 it is true, it is not true for this user — so cut it.
