@@ -657,7 +657,7 @@ router.post('/message', async (req: Request, res: Response) => {
     const [postOfferingCount, postAudienceCount, existingStoryCount] = justCreatedSomething ? await Promise.all([
       prisma.offering.count({ where: { workspaceId } }),
       prisma.audience.count({ where: { workspaceId } }),
-      prisma.story.count({ where: { draft: { workspaceId } } }),
+      prisma.fiveChapterStory.count({ where: { draft: { offering: { workspaceId } } } }),
     ]) : [offeringCount, audienceCount, 1];
     const bothReady = postOfferingCount > 0 && postAudienceCount > 0;
 
