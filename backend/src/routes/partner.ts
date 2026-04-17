@@ -587,6 +587,11 @@ router.post('/message', async (req: Request, res: Response) => {
     }
   }
 
+  // Log raw actions for debugging
+  if (rawActions.length > 0) {
+    console.log(`[Partner] Actions: ${rawActions.map(a => `${a.type}(${Object.keys(a.params || {}).join(',')})`).join(', ')}`);
+  }
+
   // Check if Maria wants to read the page
   const normalizedActions = rawActions.map(a => ({
     ...a,
