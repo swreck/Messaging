@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { Spinner } from '../shared/Spinner';
 import { InfoTooltip } from '../shared/InfoTooltip';
 import { ChapterVersionNav } from '../shared/ChapterVersionNav';
-import { BlendedVersionNav } from '../shared/BlendedVersionNav';
+// BlendedVersionNav moved to content-first block (imported dynamically if needed)
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { useMaria } from '../shared/MariaContext';
 import { useToast } from '../shared/ToastContext';
@@ -896,6 +896,57 @@ export function FiveChapterShell() {
         </div>
       )}
 
+      {/* Content-first: show the draft ABOVE controls when it exists */}
+      {story && !showCreateForm && showCompleteDraft && story.blendedText && (
+        <div className="fcs-content-first" style={{ marginBottom: 16 }}>
+          <div className="fcs-blended-header" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>{blendedStage === 'personalized' ? 'Personalized Draft' : blendedStage === 'polished' ? 'Polished Draft' : 'Your Draft'}</h3>
+            <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
+            <button className="copy-btn" onClick={exportStory}>Export</button>
+            <button className="copy-btn" onClick={shareStory}>Share</button>
+          </div>
+          {shareUrl && (
+            <div style={{ padding: '6px 12px', fontSize: 14, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span>Link copied!</span>
+              <code style={{ fontSize: 13, background: 'var(--bg-secondary, #f5f5f7)', padding: '4px 8px', borderRadius: 4 }}>{shareUrl}</code>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShareUrl(null)}>&times;</button>
+            </div>
+          )}
+          {editingBlended ? (
+            <div className="fcs-chapter-edit" style={{ marginBottom: 16 }}>
+              <textarea
+                ref={el => { if (el) { el.style.height = 'auto'; el.style.height = Math.max(200, el.scrollHeight) + 'px'; } }}
+                value={editContent}
+                onChange={e => { setEditContent(e.target.value); const t = e.target; t.style.height = 'auto'; t.style.height = Math.max(200, t.scrollHeight) + 'px'; }}
+                onBlur={saveBlendedEdit}
+              />
+              <div className="fcs-chapter-edit-actions">
+                <button className="btn btn-ghost btn-sm" onClick={() => setEditingBlended(false)}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="fcs-blended-content"
+              style={{ marginBottom: 16 }}
+              onClick={() => { setEditingBlended(true); setEditContent(story.blendedText); }}
+              dangerouslySetInnerHTML={{ __html: renderLightMarkdown(story.blendedText) }}
+            />
+          )}
+          <div className="fcs-copy-edit" style={{ marginBottom: 16 }}>
+            <textarea
+              value={copyEditInput}
+              onChange={e => { setCopyEditInput(e.target.value); const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(Math.max(44, t.scrollHeight), 160) + 'px'; }}
+              placeholder="Tell Maria what to change — e.g. 'Make it shorter' or 'More emphasis on security'"
+              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); copyEdit(); } }}
+              rows={1}
+            />
+            <button className="btn btn-primary btn-sm" onClick={copyEdit} disabled={!copyEditInput.trim() || copyEditing}>
+              {copyEditing ? <Spinner size={12} /> : 'Edit'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Create form — inline, not modal */}
       {(!story || showCreateForm) && (
         <div className="story-input-form">
@@ -1031,9 +1082,9 @@ export function FiveChapterShell() {
         </div>
       )}
 
-      {/* All 5 chapters */}
+      {/* All 5 chapters — hidden when content-first draft is showing */}
       {story && !showCreateForm && (
-        <div className="fcs-chapters">
+        <div className="fcs-chapters" style={showCompleteDraft && story.blendedText ? { display: 'none' } : undefined}>
           {/* Progressive toolbar — buttons appear based on story stage */}
           <div className="fcs-chapters-header">
             {/* Stage 1: Generate / Regenerate */}
@@ -1332,69 +1383,7 @@ export function FiveChapterShell() {
             </div>
           ))}
 
-          {/* Active story text */}
-          {showCompleteDraft && story.blendedText && (
-            <div className="fcs-blended">
-              <div className="fcs-blended-header">
-                <h3>{blendedStage === 'personalized' ? 'Personalized Draft' : blendedStage === 'polished' ? 'Polished Draft' : 'Your Draft'}</h3>
-                <BlendedVersionNav storyId={story.id} storyVersion={story.version} onRestore={loadData} />
-                <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
-                <button className="copy-btn" onClick={exportStory} title="Open printable version">Export</button>
-                <button className="copy-btn" onClick={shareStory} title="Create shareable read-only link">Share</button>
-              </div>
-                  {shareUrl && (
-                    <div style={{ padding: '6px 12px', fontSize: 14, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>Link copied!</span>
-                      <code style={{ fontSize: 13, background: 'var(--bg-secondary, #f5f5f7)', padding: '4px 8px', borderRadius: 4 }}>{shareUrl}</code>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setShareUrl(null)} style={{ minWidth: 32, minHeight: 32 }}>&times;</button>
-                    </div>
-                  )}
-                  {editingBlended ? (
-                    <div className="fcs-chapter-edit">
-                      <textarea
-                        ref={el => { if (el) { el.style.height = 'auto'; el.style.height = Math.max(200, el.scrollHeight) + 'px'; } }}
-                        value={editContent}
-                        onChange={e => { setEditContent(e.target.value); const t = e.target; t.style.height = 'auto'; t.style.height = Math.max(200, t.scrollHeight) + 'px'; }}
-                        onBlur={saveBlendedEdit}
-                      />
-                      <div className="fcs-chapter-edit-actions">
-                        <button className="btn btn-ghost btn-sm" onClick={() => setEditingBlended(false)}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      className="fcs-blended-content"
-                      onClick={() => { setEditingBlended(true); setEditContent(story.blendedText); }}
-                      dangerouslySetInnerHTML={{ __html: renderLightMarkdown(story.blendedText) }}
-                    />
-                  )}
-
-                  {/* Copy edit */}
-                  <div className="fcs-copy-edit">
-                    <textarea
-                      value={copyEditInput}
-                      onChange={e => {
-                        setCopyEditInput(e.target.value);
-                        const t = e.currentTarget;
-                        t.style.height = 'auto';
-                        t.style.height = Math.min(Math.max(44, t.scrollHeight), 160) + 'px';
-                      }}
-                      placeholder="Tell Maria what to change — e.g. 'Make it shorter' or 'More emphasis on security'"
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                          e.preventDefault();
-                          copyEdit();
-                        }
-                      }}
-                      rows={1}
-                      style={{ resize: 'none', minHeight: 44, fontFamily: 'inherit', lineHeight: 1.4 }}
-                    />
-                    <button className="btn btn-secondary btn-sm" onClick={copyEdit} disabled={copyEditing || !copyEditInput.trim()}>
-                      {copyEditing ? <Spinner size={12} /> : 'Edit'}
-                    </button>
-                  </div>
-                </div>
-          )}
+          {/* Active story text — now rendered in content-first block above */}
         </div>
       )}
 
@@ -1413,13 +1402,13 @@ export function FiveChapterShell() {
                 Your new {mediumLabel?.toLowerCase()} draft is done. If your next deliverable is related, e.g., a landing page for that {mediumLabel?.toLowerCase()}, you can build on your work and go straight to a new deliverable format.
               </p>
               <button className="btn btn-secondary btn-sm" onClick={() => { setSourceStoryIdForCreate(story.id); setShowCreateForm(true); }}>
-                Draft the Next Piece
+                Create another deliverable
               </button>
             </div>
           )}
 
           <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between' }}>
-            <button className="btn btn-ghost" onClick={() => navigate(`/three-tier/${draftId}`)}>Back to Three Tier</button>
+            <button className="btn btn-ghost" onClick={() => navigate(`/three-tier/${draftId}`)}>Refine the underlying message</button>
             <button className="btn btn-ghost" onClick={() => navigate('/')}>Dashboard</button>
           </div>
         </>

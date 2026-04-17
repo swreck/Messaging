@@ -136,7 +136,7 @@ export function MariaPartner() {
 
   // Load conversation history when panel first opens and intro is done
   useEffect(() => {
-    if (open && !loaded && introduced && introStep >= INTRO_DONE) {
+    if (open && !loaded && introduced) {
       api.get<{ messages: Message[] }>('/partner/history')
         .then(({ messages: history }) => {
           if (history.length === 0) {
@@ -166,7 +166,7 @@ export function MariaPartner() {
 
   // Focus textarea
   useEffect(() => {
-    if (open && introStep >= INTRO_DONE) {
+    if (open && introduced) {
       setTimeout(() => textareaRef.current?.focus(), 100);
     }
   }, [open, introStep]);
@@ -271,10 +271,7 @@ export function MariaPartner() {
     } catch { /* non-critical */ }
   }
 
-  function remindLater() {
-    // Just close the panel — introStep stays where it is, so same phase shows next time
-    setOpen(false);
-  }
+  // remindLater removed — intro simplified to 2 steps
 
   async function confirmName(name: string) {
     try {
@@ -459,14 +456,8 @@ export function MariaPartner() {
               if (status.status === 'complete' && status.resultStoryId && status.draftId) {
                 clearInterval(pollInterval);
                 clearInterval(phraseInterval);
-                setMessages(prev => prev.map(m =>
-                  (m as any).id === progressMsgId
-                    ? { ...m, content: "Your first draft is ready — let me take you to it." }
-                    : m
-                ));
-                setTimeout(() => {
-                  navigate(`/five-chapter/${status.draftId}?story=${status.resultStoryId}`);
-                }, 800);
+                setMessages(prev => prev.filter(m => (m as any).id !== progressMsgId));
+                navigate(`/five-chapter/${status.draftId}?story=${status.resultStoryId}`);
               } else if (status.status === 'error') {
                 clearInterval(pollInterval);
                 clearInterval(phraseInterval);
@@ -563,33 +554,16 @@ export function MariaPartner() {
       );
     }
 
-    // Step 1: Phase 1 — interested in what I can do?
-    if (introStep === 1) {
+    // Steps 1-2 combined: brief pitch + go
+    if (introStep === 1 || introStep === 2) {
       return (
         <div className="partner-intro">
           <div className="partner-intro-message">
-            <p>I help people communicate more effectively about what they do — emails, pitch decks, talking points, whatever you need. Want to see how it works?</p>
+            <p>I help people build more persuasive messages and then apply them to almost any medium. Tell me about your work and I'll take it from there.</p>
           </div>
           <div className="partner-intro-actions">
-            <button className="btn btn-primary" onClick={() => advanceIntro(2)}>Yes</button>
-            <button className="btn btn-secondary" onClick={remindLater}>Remind me later</button>
-            <button className="btn btn-ghost" onClick={dismissIntro}>Dismiss</button>
-          </div>
-        </div>
-      );
-    }
-
-    // Step 2: Phase 2 — the real value
-    if (introStep === 2) {
-      return (
-        <div className="partner-intro">
-          <div className="partner-intro-message">
-            <p>I can manage the whole process. Tell me about your product and audience, and I'll interview you one question at a time — pulling out what matters and building the structure as we go. Or use the app directly and bring me in whenever.</p>
-          </div>
-          <div className="partner-intro-actions">
-            <button className="btn btn-primary" onClick={() => advanceIntro(3)}>Continue</button>
-            <button className="btn btn-secondary" onClick={remindLater}>Remind me later</button>
-            <button className="btn btn-ghost" onClick={dismissIntro}>Dismiss</button>
+            <button className="btn btn-primary" onClick={() => advanceIntro(INTRO_DONE)}>Let's go</button>
+            <button className="btn btn-ghost" onClick={dismissIntro}>Not now</button>
           </div>
         </div>
       );
@@ -854,7 +828,7 @@ export function MariaPartner() {
                         });
                       }
                     }}
-                    placeholder="Work with Maria... (drag files here or paste documents)"
+                    placeholder="Work with Maria..."
                     disabled={sending}
                     rows={1}
                   />
