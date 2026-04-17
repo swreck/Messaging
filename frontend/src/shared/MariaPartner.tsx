@@ -803,18 +803,18 @@ export function MariaPartner() {
                   <div ref={messagesEndRef} />
                 </div>
 
+                {pendingFiles.length > 0 && (
+                  <div style={{ padding: '6px 12px', borderTop: '1px solid var(--border-light, #e5e5ea)', maxHeight: 80, overflowY: 'auto', flexShrink: 0 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>{pendingFiles.length} file{pendingFiles.length > 1 ? 's' : ''} attached</div>
+                    {pendingFiles.map((f, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{f.filename}</span>
+                        <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 14, lineHeight: 1, padding: '0 4px', flexShrink: 0 }} aria-label="Remove">×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="partner-input-area">
-                  {pendingFiles.length > 0 && (
-                    <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-light, #e5e5ea)', maxHeight: 80, overflowY: 'auto', flexShrink: 0 }}>
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4 }}>{pendingFiles.length} file{pendingFiles.length > 1 ? 's' : ''} attached</div>
-                      {pendingFiles.map((f, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{f.filename}</span>
-                          <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, lineHeight: 1, padding: '0 4px', flexShrink: 0 }} aria-label="Remove">×</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                   <textarea
                     ref={textareaRef}
                     value={input}
