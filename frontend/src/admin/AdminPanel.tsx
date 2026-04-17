@@ -26,7 +26,7 @@ interface UsageRow {
 export function AdminPanel() {
   const { showToast } = useToast();
   const [demos, setDemos] = useState<DemoAccount[]>([]);
-  const [totalCreated, setTotalCreated] = useState(0);
+  const [, setTotalCreated] = useState(0);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -125,7 +125,7 @@ export function AdminPanel() {
           </button>
         </div>
         <p className="admin-hint">
-          All demos use password <strong>Maria2026</strong>. Next account: <strong>demo{totalCreated + 1}</strong>
+          All demos use password <strong>Maria2026</strong>. Next account: <strong>demo{demos.length > 0 ? Math.max(...demos.map(d => { const n = parseInt(d.username.replace('demo_', '').replace('demo', ''), 10); return isNaN(n) ? 0 : n; })) + 1 : 1}</strong>
         </p>
 
         {demos.length === 0 ? (
@@ -163,18 +163,20 @@ export function AdminPanel() {
                 <div className="admin-demo-actions">
                   <button
                     className="btn btn-ghost btn-sm"
-                    onClick={async () => {
-                      try {
-                        const { token } = await api.post<{ token: string }>('/auth/login', { username: d.username, password: 'Maria2026' });
-                        const w = window.open('about:blank', '_blank');
-                        if (w) {
-                          w.location.href = `${window.location.origin}/login`;
+                    onClick={() => {
+                      const w = window.open(`${window.location.origin}/login`, '_blank');
+                      if (!w) { showToast('Popup blocked — allow popups for this site'); return; }
+                      api.post<{ token: string }>('/auth/login', { username: d.username, password: 'Maria2026' })
+                        .then(({ token }) => {
                           setTimeout(() => {
-                            w.localStorage.setItem('token', token);
-                            w.location.href = window.location.origin + '/';
+                            try {
+                              w.localStorage.clear();
+                              w.localStorage.setItem('token', token);
+                              w.location.href = window.location.origin + '/';
+                            } catch { showToast('Could not set up the account in the new tab'); }
                           }, 500);
-                        }
-                      } catch { showToast('Could not open account'); }
+                        })
+                        .catch(() => showToast('Could not log into demo account'));
                     }}
                   >
                     View as
