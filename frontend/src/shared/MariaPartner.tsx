@@ -315,10 +315,13 @@ export function MariaPartner() {
       return;
     }
 
+    // Capture files before clearing so they're available for the API call
+    const filesToSend = [...pendingFiles];
     if (!overrideText) {
       setInput('');
-      setMessages(prev => [...prev, { role: 'user', content: text }]);
+      setMessages(prev => [...prev, { role: 'user', content: text || (filesToSend.length > 0 ? `(${filesToSend.length} files)` : '') }]);
     }
+    setPendingFiles([]); // Clear immediately so user sees they were sent
     setSending(true);
 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -332,9 +335,8 @@ export function MariaPartner() {
       }>('/partner/message', {
         message: pageContent ? `[PAGE CONTENT]\n${pageContent}\n\n[USER QUESTION]\n${text}` : text,
         context: pageContext,
-        ...(pendingFiles.length === 1 ? { attachment: pendingFiles[0] } : pendingFiles.length > 1 ? { attachments: pendingFiles } : {}),
+        ...(filesToSend.length === 1 ? { attachment: filesToSend[0] } : filesToSend.length > 1 ? { attachments: filesToSend } : {}),
       });
-      setPendingFiles([]);
 
       if (result.needsPageContent) {
         setMessages(prev => [...prev, { role: 'assistant', content: 'Let me take a look...' }]);
@@ -665,6 +667,7 @@ export function MariaPartner() {
               reader.onload = () => {
                 const base64 = (reader.result as string).split(',')[1];
                 setPendingFiles(prev => [...prev, { data: base64, mimeType: file.type || 'application/octet-stream', filename: file.name }]);
+                setTimeout(() => textareaRef.current?.focus(), 100);
               };
               reader.readAsDataURL(file);
             });
@@ -802,7 +805,7 @@ export function MariaPartner() {
 
                 <div className="partner-input-area">
                   {pendingFiles.length > 0 && (
-                    <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-light, #e5e5ea)', maxHeight: 120, overflowY: 'auto' }}>
+                    <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-light, #e5e5ea)', maxHeight: 80, overflowY: 'auto', flexShrink: 0 }}>
                       <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4 }}>{pendingFiles.length} file{pendingFiles.length > 1 ? 's' : ''} attached</div>
                       {pendingFiles.map((f, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 0', fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -847,6 +850,7 @@ export function MariaPartner() {
                     placeholder="Work with Maria..."
                     disabled={sending}
                     rows={1}
+                    style={{ minHeight: 44, flexShrink: 0 }}
                   />
                   <input
                     ref={fileInputRef}
