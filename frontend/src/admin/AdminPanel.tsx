@@ -163,6 +163,24 @@ export function AdminPanel() {
                 <div className="admin-demo-actions">
                   <button
                     className="btn btn-ghost btn-sm"
+                    onClick={async () => {
+                      try {
+                        const { token } = await api.post<{ token: string }>('/auth/login', { username: d.username, password: 'Maria2026' });
+                        const w = window.open('about:blank', '_blank');
+                        if (w) {
+                          w.location.href = `${window.location.origin}/login`;
+                          setTimeout(() => {
+                            w.localStorage.setItem('token', token);
+                            w.location.href = window.location.origin + '/';
+                          }, 500);
+                        }
+                      } catch { showToast('Could not open account'); }
+                    }}
+                  >
+                    View as
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
                     onClick={() => { setEditingId(d.userId); setEditName(d.workspaceName); }}
                   >
                     Rename
