@@ -702,7 +702,7 @@ router.post('/message', async (req: Request, res: Response) => {
 
     // Check ALL user messages for deliverable intent — not just current message
     const allUserText = history.filter(m => m.role === 'user').map(m => m.content).join(' ') + ' ' + (message || '');
-    const userWantsDeliverable = /do everything|show me the finished|please do everything|work.*independent|do it all|build.*everything|email|pitch.*deck|one.?page|one.?pager|briefing|letter|report|write.*for|send.*to|draft|reach (him|her|them|out)|something short|help me with|need to write|need.*message|cold.*outreach/i.test(allUserText);
+    const userWantsDeliverable = /do everything|show me the finished|work.*independent|do it all|build.*everything|email|pitch.*deck|one.?page|one.?pager|briefing|letter|report|write|send|draft|reach|something short|help me|need to|cold.*outreach|sell|buy|give|persuade|convince|message for|build it|build this/i.test(allUserText);
 
     if (justCreatedSomething && bothReady && !alreadyBuilding && existingStoryCount === 0 && userWantsDeliverable) {
       console.log('[Partner] Lead-mode continuation: offering + audience ready, user wants deliverable, chaining build');
@@ -766,7 +766,7 @@ router.post('/message', async (req: Request, res: Response) => {
   // fires build_deliverable on the next message, the offering/audience may
   // not exist yet. Detect this and auto-create + retry.
   const allMsgText = history.filter(m => m.role === 'user').map(m => m.content).join(' ') + ' ' + (message || '');
-  const wantsDeliverable = /do everything|email|pitch.*deck|one.?page|briefing|letter|report|write|send|draft|reach|cold.*outreach/i.test(allMsgText);
+  const wantsDeliverable = /do everything|email|pitch.*deck|one.?page|briefing|letter|report|write|send|draft|reach|cold.*outreach|sell|buy|give|persuade|convince|message for|build it|build this/i.test(allMsgText);
   if (actionResult?.includes('Could not find the offering') && wantsDeliverable) {
     console.log('[Partner] build_deliverable failed — offering missing. Auto-creating and retrying.');
     const recentOffering = await prisma.offering.findFirst({
