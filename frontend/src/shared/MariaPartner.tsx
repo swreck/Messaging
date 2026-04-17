@@ -90,8 +90,9 @@ export function MariaPartner() {
       .then(status => {
         setIntroduced(status.introduced);
         setIntroStep(status.introStep ?? 0);
+        const name = status.displayName || status.username || '';
         setSuggestedName(
-          status.username.charAt(0).toUpperCase() + status.username.slice(1)
+          name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
         );
 
         if (status.returnContext) {
@@ -524,10 +525,10 @@ export function MariaPartner() {
       return (
         <div className="partner-intro">
           <div className="partner-intro-message">
-            <p>Hi — I'm Maria. Can I call you {suggestedName}?</p>
+            <p>Hi — I'm Maria.{suggestedName ? ` Can I call you ${suggestedName}?` : ' What should I call you?'}</p>
           </div>
           <div className="partner-intro-actions">
-            {!showCustomInput ? (
+            {!showCustomInput && suggestedName ? (
               <>
                 <button className="btn btn-primary" onClick={() => confirmName(suggestedName)}>That's me</button>
                 <button className="btn btn-ghost" onClick={() => setShowCustomInput(true)}>Call me something else</button>

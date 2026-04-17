@@ -547,15 +547,17 @@ router.post('/message', async (req: Request, res: Response) => {
           source: { type: 'base64', media_type: 'application/pdf', data: att.data },
         });
       } else if (isPDF && useTextExtraction) {
-        // Multi-file mode: limit to 2 PDF document blocks (Anthropic limit)
+        // Multi-file mode: PDFs sent as document blocks cause timeouts.
+        // Send only the first PDF as a document block for best quality.
+        // Additional PDFs are noted by name — user can send them individually later.
         const pdfBlockCount = contentBlocks.filter((b: any) => b.type === 'document').length;
-        if (pdfBlockCount < 2) {
+        if (pdfBlockCount < 1) {
           contentBlocks.push({
             type: 'document',
             source: { type: 'base64', media_type: 'application/pdf', data: att.data },
           });
         } else {
-          textPrefix += `[ADDITIONAL PDF: ${att.filename || 'document.pdf'} — included by name only; read the other PDFs for context]\n\n`;
+          textPrefix += `[ADDITIONAL PDF: ${att.filename || 'document.pdf'} — I can see this was included but couldn't read its full contents in this batch. If it's important, send it to me separately and I'll read it fully.]\n\n`;
         }
       } else if (isDocx) {
         try {

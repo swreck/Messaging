@@ -36,7 +36,18 @@ export async function requireWorkspace(req: Request, res: Response, next: NextFu
     where: { workspaceId_userId: { workspaceId, userId: req.user!.userId } },
   });
   if (!membership) {
-    res.status(403).json({ error: 'Not a member of this workspace' });
+    // Stale workspace ID — fall back to user's first workspace instead of 403.
+    // This happens when workspaces are deleted/recreated and the browser caches the old ID.
+    const fallback = await prisma.workspaceMember.findFirst({
+      where: { userId: req.user!.userId },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (fallback) {
+      req.workspaceId = fallback.workspaceId;
+      next();
+      return;
+    }
+    res.status(403).json({ error: 'Not a member of any workspace' });
     return;
   }
 
