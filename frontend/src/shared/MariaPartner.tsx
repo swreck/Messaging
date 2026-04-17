@@ -421,6 +421,30 @@ export function MariaPartner() {
         const buildMatch = result.actionResult.match(/\[BUILD_STARTED:([^:]+):([^\]]+)\]/);
         if (buildMatch) {
           const jobId = buildMatch[1];
+          // Show a progress message that updates with fun status lines
+          const progressPhrases = [
+            "Reading between the lines...",
+            "Mapping what matters to your audience...",
+            "Writing chapter 1 — setting the scene...",
+            "Building the case...",
+            "Finding the right words...",
+            "Almost there — polishing the draft...",
+          ];
+          let phraseIdx = 0;
+          const progressMsgId = `build-${jobId}`;
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: progressPhrases[0],
+            id: progressMsgId,
+          } as any]);
+          const phraseInterval = setInterval(() => {
+            phraseIdx = Math.min(phraseIdx + 1, progressPhrases.length - 1);
+            setMessages(prev => prev.map(m =>
+              (m as any).id === progressMsgId
+                ? { ...m, content: progressPhrases[phraseIdx] }
+                : m
+            ));
+          }, 12000);
           const pollInterval = setInterval(async () => {
             try {
               const status = await api.get<{
@@ -430,15 +454,18 @@ export function MariaPartner() {
               }>(`/express/status/${jobId}`);
               if (status.status === 'complete' && status.resultStoryId && status.draftId) {
                 clearInterval(pollInterval);
-                setMessages(prev => [...prev, {
-                  role: 'assistant',
-                  content: "Your first draft is ready — let me take you to it.",
-                }]);
+                clearInterval(phraseInterval);
+                setMessages(prev => prev.map(m =>
+                  (m as any).id === progressMsgId
+                    ? { ...m, content: "Your first draft is ready — let me take you to it." }
+                    : m
+                ));
                 setTimeout(() => {
                   navigate(`/five-chapter/${status.draftId}?story=${status.resultStoryId}`);
                 }, 800);
               } else if (status.status === 'error') {
                 clearInterval(pollInterval);
+                clearInterval(phraseInterval);
                 setMessages(prev => [...prev, {
                   role: 'assistant',
                   content: "Something went wrong building the draft. Tell me to try again if you'd like.",
@@ -449,7 +476,7 @@ export function MariaPartner() {
             }
           }, 5000);
           // Safety: stop polling after 10 minutes
-          setTimeout(() => clearInterval(pollInterval), 600000);
+          setTimeout(() => { clearInterval(pollInterval); clearInterval(phraseInterval); }, 600000);
         }
       }
 
