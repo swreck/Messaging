@@ -1255,7 +1255,7 @@ router.post('/generate-chapter', requireStoryteller, async (req: Request, res: R
 
   // Reader-perspective directive
   const readerDirective = chapterNum === 1
-    ? `\nCRITICAL — THE READER: "${story.draft.audience.name}" is the person reading this. Write about THEIR world — their challenges, pressures, and daily reality. If the product serves end users who are different from this reader, Chapter 1 is about the READER's problems, not the end users' problems.\n`
+    ? `\nCRITICAL — THE READER: "${story.draft.audience.name}" is the person reading this. Write about THEIR world at the STRATEGIC level they think about their job. Frame the category of capability they are missing, stated as their strategic loss. "Unmanaged [category] means [their loss]." NOT tactical symptoms ("your reps have nothing to bring") but strategic framing ("unmanaged lifecycle management costs you enterprise revenue"). If the product serves end users different from this reader, Chapter 1 is about the READER's strategic problems, not the end users' problems.\n`
     : chapterNum === 2
       ? `\nDo NOT open with the product name as the sentence subject. Lead with what the READER gets or how their situation changes.\n`
       : chapterNum === 5

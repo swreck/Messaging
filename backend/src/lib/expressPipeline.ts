@@ -857,7 +857,7 @@ FOR them, FOR this occasion, not a recycled template.
 
       const readerDirective = `\nTHE READER: "${draftForStory.audience.name}" is the person reading this. Every sentence should be written for THIS person — their concerns, their perspective, their level of seniority. ${
         chapterNum === 1
-          ? 'Chapter 1 is about the READER\'s world — their challenges, pressures, and daily reality. If the product serves end users who are different from this reader, write about the READER\'s problems, not the end users\' problems.'
+          ? 'Write about the READER\'s world at the STRATEGIC level they think about their job. Frame the category of capability they are missing, stated as their strategic loss. "Unmanaged [category] means [their loss]." NOT tactical symptoms but strategic framing. If the product serves end users different from this reader, Chapter 1 is about the READER\'s strategic problems, not the end users\' problems.'
           : chapterNum === 2
             ? 'Do NOT open with the product name as the sentence subject. Lead with what the READER gets or how their situation changes. The product is the mechanism, not the headline.'
             : chapterNum === 5

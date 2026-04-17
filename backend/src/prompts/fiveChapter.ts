@@ -85,7 +85,13 @@ Chapter 1 describes the READER's world — their challenges, their frustrations,
 
 If the reader is an executive who manages a team that serves customers, Chapter 1 is about the EXECUTIVE's challenges (losing revenue, losing competitive position, teams without tools) — NOT the end customer's problems (device depreciation, workflow inefficiency). The end customer's problems may CAUSE the reader's pain, but Chapter 1 lives in the reader's experience, not downstream.
 
-Test: after writing, read every sentence and ask "is this about the READER's life or about someone else's life?" Every sentence must pass.`,
+STRATEGIC ALTITUDE: Frame the category at the level the reader thinks about their business. Name what they are NOT doing, stated as a strategic consequence in their own language.
+- For an SVP of sales: lost revenue, competitive disadvantage, strategic blind spots — not "your reps have nothing to bring to meetings" (that's a symptom, not the strategic frame)
+- For a CEO: unmanaged risk, board exposure, market position erosion
+- For a clinical lead: patient outcomes delayed, diagnostic gaps
+The opening should name the CATEGORY of capability the reader is missing and immediately connect it to THEIR strategic outcome. "Unmanaged [category] means [their strategic loss]."
+
+Test: after writing, read every sentence and ask "is this about the READER's life or about someone else's life?" Every sentence must pass. Then ask: "is this at the strategic level this reader thinks about their job, or is it about operational symptoms?" It must be strategic.`,
 
     2: `CHAPTER 2 RULES:
 - This IS the "Let me tell you all about me" chapter.
