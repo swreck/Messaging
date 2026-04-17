@@ -141,7 +141,7 @@ export function DashboardPage() {
             }}
             style={{ marginTop: 12 }}
           >
-            Talk to Maria
+            Work with Maria
           </button>
         </div>
       )}
