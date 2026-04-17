@@ -85,13 +85,17 @@ Chapter 1 describes the READER's world — their challenges, their frustrations,
 
 If the reader is an executive who manages a team that serves customers, Chapter 1 is about the EXECUTIVE's challenges (losing revenue, losing competitive position, teams without tools) — NOT the end customer's problems (device depreciation, workflow inefficiency). The end customer's problems may CAUSE the reader's pain, but Chapter 1 lives in the reader's experience, not downstream.
 
-STRATEGIC ALTITUDE: Frame the category at the level the reader thinks about their business. Name what they are NOT doing, stated as a strategic consequence in their own language.
-- For an SVP of sales: lost revenue, competitive disadvantage, strategic blind spots — not "your reps have nothing to bring to meetings" (that's a symptom, not the strategic frame)
-- For a CEO: unmanaged risk, board exposure, market position erosion
-- For a clinical lead: patient outcomes delayed, diagnostic gaps
-The opening should name the CATEGORY of capability the reader is missing and immediately connect it to THEIR strategic outcome. "Unmanaged [category] means [their strategic loss]."
+STRATEGIC ALTITUDE — THIS DETERMINES WHETHER CHAPTER 1 SUCCEEDS OR FAILS:
+The opening sentence must be a BUSINESS THESIS, not a narrative. Format: "[Missing category/discipline] means [reader's strategic loss]."
 
-Test: after writing, read every sentence and ask "is this about the READER's life or about someone else's life?" Every sentence must pass. Then ask: "is this at the strategic level this reader thinks about their job, or is it about operational symptoms?" It must be strategic.`,
+EXAMPLE (for an SVP of enterprise sales):
+"Unmanaged device lifecycle management means lost Apple revenue."
+NOT: "Your reps have nothing to bring to meetings between purchase cycles."
+The first names a strategic discipline and a business consequence. The second describes an operational symptom. The SVP thinks about revenue and competitive position, not about what their reps bring to meetings.
+
+After the thesis sentence, show the DUAL VALUE: what end customers/stakeholders will experience as valuable translates directly into the reader's strategic outcome (revenue, market position, retention, risk reduction).
+
+ALTITUDE SELF-CHECK: Read your opening sentence. Does it name a DISCIPLINE or CATEGORY (lifecycle management, account engagement infrastructure, diagnostic capability)? Or does it describe a SYMPTOM (reps have nothing to bring, accounts go dark, results are slow)? If it's a symptom, rewrite at the strategic level.`,
 
     2: `CHAPTER 2 RULES:
 - This IS the "Let me tell you all about me" chapter.
@@ -166,7 +170,8 @@ HARD RULES (ALL CHAPTERS):
    The principle: ALWAYS describe the positive reality. What IS true, what DOES happen, what the team DOES. Never describe what they're NOT doing, what they DON'T have to do, or what ISN'T the case. The reader fills in the contrast from their own experience — that's more powerful than you stating it.
 10. NO REPEATING FACTS ACROSS CHAPTERS. If you stated a specific number, metric, or claim in a previous chapter, do NOT repeat it in a later chapter. Each chapter introduces NEW information. If "response time is under 30 minutes" was in Ch2, do not say it again in Ch3 or Ch4. The reader reads all chapters in sequence — repetition sounds like you ran out of things to say.
 11. STRICT CONTENT BOUNDARIES by chapter: Ch1 = category problem only (no company, no product). Ch2 = product value and mechanisms only (no proof, no social validation, no support details). Ch3 = support, deployment, and risk reduction only (no social proof, no product features). Ch4 = social proof and results from similar organizations only (no new product claims). Ch5 = CTA and first steps only.
-12. NEVER STATE FACTS THE READER ALREADY KNOWS from their own position. An SVP at a company knows their own org structure and subsidiaries. A CFO knows financial terminology. A CTO knows their tech stack. State only what this specific reader would find NEW, surprising, or useful. Every sentence must earn the reader's attention by telling them something they didn't already know. If they'd read a sentence and think "obviously" — cut it.
+12. NEVER REFERENCE THE METHODOLOGY OR ITS MECHANICS. The reader does not know about priorities, rankings, tiers, chapters, or any internal structure. "Your fourth priority" or "the top-ranked concern" are methodology leaks — write about the substance directly without referencing the framework. "You need proof before committing budget" NOT "Your fourth priority is seeing proof at scale."
+13. NEVER STATE FACTS THE READER ALREADY KNOWS from their own position. An SVP at a company knows their own org structure and subsidiaries. A CFO knows financial terminology. A CTO knows their tech stack. State only what this specific reader would find NEW, surprising, or useful. Every sentence must earn the reader's attention by telling them something they didn't already know. If they'd read a sentence and think "obviously" — cut it.
 
 ${sourceContent ? `
 CONTENT CONVERSION:
