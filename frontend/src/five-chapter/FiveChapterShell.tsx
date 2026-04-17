@@ -852,7 +852,7 @@ export function FiveChapterShell() {
               />
             ) : (
               <span className="fcs-param-clickable" onClick={() => { setEditCta(story.cta); setEditingParam('cta'); }}>
-                CTA: {story.cta}
+                Ask: {story.cta}
               </span>
             )}
           </div>
@@ -1072,8 +1072,8 @@ export function FiveChapterShell() {
                 {blending
                   ? <><Spinner size={12} /> Blending...</>
                   : story.blendedText
-                    ? <>View Blended Story <InfoTooltip text="Shows the blended version of your story — chapters rewritten as one flowing piece." /></>
-                    : <>Blend into Story <InfoTooltip text="Rewrites your chapters into one flowing piece with transitions between ideas. This is your draft to edit. Takes a moment." /></>
+                    ? <>View Draft <InfoTooltip text="Shows the complete draft — chapters blended into one flowing piece." /></>
+                    : <>Create Draft <InfoTooltip text="Combines your chapters into one flowing piece with transitions. This is your draft to edit. Takes a moment." /></>
                 }
               </button>
             )}
@@ -1336,7 +1336,7 @@ export function FiveChapterShell() {
           {showCompleteDraft && story.blendedText && (
             <div className="fcs-blended">
               <div className="fcs-blended-header">
-                <h3>{blendedStage === 'personalized' ? 'Personalized Story' : blendedStage === 'polished' ? 'Polished Story' : 'Blended Story'}</h3>
+                <h3>{blendedStage === 'personalized' ? 'Personalized Draft' : blendedStage === 'polished' ? 'Polished Draft' : 'Your Draft'}</h3>
                 <BlendedVersionNav storyId={story.id} storyVersion={story.version} onRestore={loadData} />
                 <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
                 <button className="copy-btn" onClick={exportStory} title="Open printable version">Export</button>

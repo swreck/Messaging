@@ -198,15 +198,14 @@ export function AudiencesPage() {
       {audiences.length === 0 && (
         <div className="empty-state empty-state-enhanced">
           <div className="empty-icon">👥</div>
-          <h3>Who needs to hear your message?</h3>
-          <p>An audience is the person you'd like to help understand that doing what you want them to do is truly in their best interest.</p>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>The fastest way is to tell Maria about them in a conversation. Or add one manually here.</p>
-          <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+          <h3>Tell Maria about your audience</h3>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.6 }}>If it helps you get started, I think of an audience as the person you'd like to help understand that doing what you want them to do is truly in their best interest. You can start anywhere in describing them.</p>
+          <div style={{ display: 'flex', gap: 12, marginTop: 16, alignItems: 'center' }}>
             <button className="btn btn-primary" onClick={() => {
               const bubble = document.querySelector('.partner-bubble') as HTMLElement;
               if (bubble) bubble.click();
-            }}>Talk to Maria</button>
-            <button className="btn btn-secondary" onClick={openNew}>Add manually</button>
+            }}>Work with Maria</button>
+            <button className="btn btn-ghost btn-sm" onClick={openNew}>or add manually</button>
           </div>
         </div>
       )}

@@ -146,15 +146,14 @@ export function OfferingsPage() {
       {offerings.length === 0 ? (
         <div className="empty-state-card empty-state-enhanced">
           <div className="empty-icon">✨</div>
-          <h3>What are you building messaging for?</h3>
-          <p>An offering is the full solution you provide — your product, service, configuration, and anything else you deliver to ensure the person you're writing to receives the promised value.</p>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>The fastest way to get started is to tell Maria about it in a conversation. Or you can add one manually here.</p>
-          <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+          <h3>Tell Maria about your offering</h3>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.6 }}>If it helps you get started, I think of an offering as the full solution you provide — your product, service, configuration, and anything else you deliver to ensure the person you're writing to receives the promised value. You can start anywhere in describing it.</p>
+          <div style={{ display: 'flex', gap: 12, marginTop: 16, alignItems: 'center' }}>
             <button className="btn btn-primary" onClick={() => {
               const bubble = document.querySelector('.partner-bubble') as HTMLElement;
               if (bubble) bubble.click();
-            }}>Talk to Maria</button>
-            <button className="btn btn-secondary" onClick={openNew}>Add manually</button>
+            }}>Work with Maria</button>
+            <button className="btn btn-ghost btn-sm" onClick={openNew}>or add manually</button>
           </div>
         </div>
       ) : (
