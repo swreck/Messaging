@@ -320,11 +320,10 @@ router.post('/invite-simple', requireAuth, requireAdmin, async (req: Request, re
   const crypto = await import('crypto');
   const fullCode = crypto.randomBytes(4).toString('hex').toUpperCase();
 
-  // Determine target workspace — admin's active workspace if not specified
-  const targetWs = workspaceId || (await prisma.workspaceMember.findFirst({
-    where: { userId: req.user!.userId, role: 'owner' },
-    select: { workspaceId: true },
-  }))?.workspaceId;
+  // Only assign a workspace if explicitly provided. Otherwise the new user
+  // gets their own clean workspace on registration — prevents naive users
+  // from landing in the admin's workspace full of someone else's data.
+  const targetWs = workspaceId || undefined;
 
   await prisma.inviteCode.create({
     data: {
