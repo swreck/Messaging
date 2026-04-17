@@ -284,7 +284,7 @@ export function MariaPartner() {
 
   const send = useCallback(async (overrideText?: string, pageContent?: string) => {
     const text = overrideText || input.trim();
-    if (!text || sending) return;
+    if ((!text && pendingFiles.length === 0) || sending) return;
 
     setShowReturnCard(false);
     setShowProactiveCard(false);
@@ -642,7 +642,24 @@ export function MariaPartner() {
 
       {/* Chat panel */}
       {open && (
-        <div className={`partner-panel partner-panel-${panelSize}`} ref={panelRef}>
+        <div
+          className={`partner-panel partner-panel-${panelSize}`}
+          ref={panelRef}
+          onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+          onDrop={e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const files = Array.from(e.dataTransfer.files);
+            files.forEach(file => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const base64 = (reader.result as string).split(',')[1];
+                setPendingFiles(prev => [...prev, { data: base64, mimeType: file.type || 'application/octet-stream', filename: file.name }]);
+              };
+              reader.readAsDataURL(file);
+            });
+          }}
+        >
           <div className="partner-header">
             <span className="partner-header-name">Maria</span>
             <div className="partner-header-actions">
@@ -773,30 +790,15 @@ export function MariaPartner() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div
-                  className="partner-input-area"
-                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-                  onDrop={e => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const files = Array.from(e.dataTransfer.files);
-                    files.forEach(file => {
-                      const reader = new FileReader();
-                      reader.onload = () => {
-                        const base64 = (reader.result as string).split(',')[1];
-                        setPendingFiles(prev => [...prev, { data: base64, mimeType: file.type || 'application/octet-stream', filename: file.name }]);
-                      };
-                      reader.readAsDataURL(file);
-                    });
-                  }}
-                >
+                <div className="partner-input-area">
                   {pendingFiles.length > 0 && (
-                    <div className="partner-attachment-preview">
+                    <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-light, #e5e5ea)', maxHeight: 120, overflowY: 'auto' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4 }}>{pendingFiles.length} file{pendingFiles.length > 1 ? 's' : ''} attached</div>
                       {pendingFiles.map((f, i) => (
-                        <span key={i} className="partner-attachment-name">
-                          {f.filename}
-                          <button type="button" className="partner-attachment-remove" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} aria-label="Remove">×</button>
-                        </span>
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{f.filename}</span>
+                          <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, lineHeight: 1, padding: '0 4px', flexShrink: 0 }} aria-label="Remove">×</button>
+                        </div>
                       ))}
                     </div>
                   )}
