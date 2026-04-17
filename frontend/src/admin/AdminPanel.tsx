@@ -163,20 +163,15 @@ export function AdminPanel() {
                 <div className="admin-demo-actions">
                   <button
                     className="btn btn-ghost btn-sm"
-                    onClick={() => {
-                      const w = window.open(`${window.location.origin}/login`, '_blank');
-                      if (!w) { showToast('Popup blocked — allow popups for this site'); return; }
-                      api.post<{ token: string }>('/auth/login', { username: d.username, password: 'Maria2026' })
-                        .then(({ token }) => {
-                          setTimeout(() => {
-                            try {
-                              w.localStorage.clear();
-                              w.localStorage.setItem('token', token);
-                              w.location.href = window.location.origin + '/';
-                            } catch { showToast('Could not set up the account in the new tab'); }
-                          }, 500);
-                        })
-                        .catch(() => showToast('Could not log into demo account'));
+                    onClick={async () => {
+                      try {
+                        const adminToken = localStorage.getItem('token');
+                        const { token } = await api.post<{ token: string }>('/auth/login', { username: d.username, password: 'Maria2026' });
+                        localStorage.setItem('maria-admin-return-token', adminToken || '');
+                        localStorage.removeItem('maria-workspace-id');
+                        localStorage.setItem('token', token);
+                        window.location.href = '/';
+                      } catch { showToast('Could not switch to demo account'); }
                     }}
                   >
                     View as

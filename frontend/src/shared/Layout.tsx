@@ -48,8 +48,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return location.pathname.startsWith(path);
   }
 
+  const adminReturnToken = typeof window !== 'undefined' ? localStorage.getItem('maria-admin-return-token') : null;
+
   return (
     <div className="app-layout">
+      {adminReturnToken && (
+        <div style={{ background: '#007aff', color: 'white', padding: '6px 16px', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Viewing as {user?.username}</span>
+          <button
+            style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 13 }}
+            onClick={() => {
+              localStorage.removeItem('maria-admin-return-token');
+              localStorage.removeItem('maria-workspace-id');
+              localStorage.setItem('token', adminReturnToken);
+              window.location.href = '/settings';
+            }}
+          >
+            Return to admin
+          </button>
+        </div>
+      )}
       <nav className="nav-bar">
         <Link to="/" className="nav-brand">
           <span className="nav-brand-name">Maria</span>
