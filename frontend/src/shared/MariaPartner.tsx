@@ -485,7 +485,7 @@ export function MariaPartner() {
         setSending(false);
       }
     }
-  }, [input, sending, pageContext, refreshPage]);
+  }, [input, sending, pageContext, refreshPage, pendingFiles]);
 
   // Auto-send pending message after panel opens
   useEffect(() => {
