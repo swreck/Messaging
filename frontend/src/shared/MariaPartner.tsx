@@ -476,7 +476,8 @@ export function MariaPartner() {
       }
 
       if (result.refreshNeeded) refreshPage();
-    } catch {
+    } catch (err) {
+      console.error('[Maria send error]', err);
       setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I had trouble with that. Try again?' }]);
     } finally {
       if (followUpRef.current) {

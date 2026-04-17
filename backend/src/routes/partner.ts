@@ -525,10 +525,14 @@ router.post('/message', async (req: Request, res: Response) => {
   if (allAttachments.length > 0) {
     const contentBlocks: any[] = [];
     let textPrefix = '';
+    // When multiple files, extract text from everything (including PDFs)
+    // to avoid Anthropic's document block limit. Only use document blocks
+    // for single-PDF uploads where quality matters most.
+    const useTextExtraction = allAttachments.length > 1;
 
     for (const att of allAttachments) {
       const isImage = att.mimeType.startsWith('image/');
-      const isPDF = att.mimeType === 'application/pdf';
+      const isPDF = att.mimeType === 'application/pdf' || att.filename?.endsWith('.pdf');
       const isDocx = att.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || att.filename?.endsWith('.docx');
       const isText = att.mimeType.startsWith('text/') || att.mimeType === 'application/json' || att.filename?.endsWith('.txt') || att.filename?.endsWith('.md') || att.filename?.endsWith('.csv');
 
@@ -537,11 +541,21 @@ router.post('/message', async (req: Request, res: Response) => {
           type: 'image',
           source: { type: 'base64', media_type: att.mimeType, data: att.data },
         });
-      } else if (isPDF) {
+      } else if (isPDF && !useTextExtraction) {
         contentBlocks.push({
           type: 'document',
           source: { type: 'base64', media_type: 'application/pdf', data: att.data },
         });
+      } else if (isPDF && useTextExtraction) {
+        try {
+          const pdfParse = (await import('pdf-parse')).default;
+          const buffer = Buffer.from(att.data, 'base64');
+          const result = await pdfParse(buffer);
+          textPrefix += `[ATTACHED PDF: ${att.filename || 'document.pdf'}]\n${result.text}\n[END OF PDF]\n\n`;
+        } catch (err) {
+          console.error('[Partner] PDF extraction failed:', att.filename, err);
+          textPrefix += `[ATTACHED PDF: ${att.filename || 'document.pdf'}]\n(Could not extract text from this PDF)\n[END OF PDF]\n\n`;
+        }
       } else if (isDocx) {
         try {
           const mammoth = await import('mammoth');
