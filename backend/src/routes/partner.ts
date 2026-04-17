@@ -797,6 +797,50 @@ router.post('/message', async (req: Request, res: Response) => {
     }
   }
 
+  // ─── Nuclear fallback: Maria refused to build despite having everything ──
+  // If documents were attached, user specified audience + format, Maria
+  // created nothing and didn't build — force creation and build from
+  // Maria's response text (which contains her extraction of the documents).
+  const hadDocuments = allAttachments.length > 0;
+  const mariDidntBuild = !actionResult?.includes('BUILD_STARTED');
+  const mariDidntCreate = !actionResult?.includes('Created offering') && !actionResult?.includes('Created audience');
+  const noExistingWork = offeringCount === 0 && audienceCount === 0;
+
+  if (hadDocuments && mariDidntBuild && mariDidntCreate && noExistingWork && wantsDeliverable && !actionResult?.includes('Could not find')) {
+    console.log('[Partner] Nuclear fallback: Maria refused to build with documents. Forcing creation + build.');
+    // Extract offering/audience names from Maria's response or use defaults
+    const offeringName = message?.match(/about\s+([\w\s]+?)(?:\.|,|$)/i)?.[1]?.trim() || 'Product from Documents';
+    const audienceName = message?.match(/(?:for|to)\s+(?:the\s+)?([\w\s]+?)(?:\.|,|$)/i)?.[1]?.trim() || 'Target Audience';
+
+    let medium = 'email';
+    if (/one.?page|one.?pager|briefing/i.test(allMsgText)) medium = 'landing_page';
+    else if (/pitch.*deck/i.test(allMsgText)) medium = 'pitch_deck';
+    else if (/report/i.test(allMsgText)) medium = 'report';
+
+    const forceActions: { type: string; params: Record<string, any> }[] = [
+      { type: 'create_offering', params: { name: offeringName, description: result.response || message || '' } },
+      { type: 'create_audience', params: { name: audienceName, description: message || '' } },
+    ];
+    const forceDispatch = await dispatchActions(forceActions, userId, ctx, workspaceId);
+    if (forceDispatch.results.some(r => r.includes('Created offering'))) {
+      const recentOff = await prisma.offering.findFirst({ where: { workspaceId }, orderBy: { createdAt: 'desc' } });
+      const recentAud = await prisma.audience.findFirst({ where: { workspaceId }, orderBy: { createdAt: 'desc' } });
+      if (recentOff && recentAud) {
+        const buildDispatch = await dispatchActions([{
+          type: 'build_deliverable',
+          params: { offeringName: recentOff.name, audienceName: recentAud.name, medium, situation: message || '' },
+        }], userId, ctx, workspaceId);
+        const buildResult = buildDispatch.results.join(' · ');
+        actionResult = (actionResult || '') + ' · ' + forceDispatch.results.join(' · ') + ' · ' + buildResult;
+        if (buildResult.includes('BUILD_STARTED')) {
+          const mediumLabel = medium === 'landing_page' ? 'one-pager' : medium === 'pitch_deck' ? 'pitch deck' : medium;
+          result.response += `\n\nI have what I need from your documents. I'm building your ${mediumLabel} now — I'll bring you right to it when it's ready.`;
+        }
+        if (buildDispatch.refreshNeeded) refreshNeeded = true;
+      }
+    }
+  }
+
   // Guard against empty responses. When Opus returns empty text, the user
   // sees a blank message — unacceptable. Generate a fallback so the user
   // always knows what Maria is doing.
