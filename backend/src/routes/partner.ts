@@ -513,11 +513,15 @@ router.post('/message', async (req: Request, res: Response) => {
     systemPrompt += buildPersonalizeChatBlock(personalizeProfile);
   }
 
-  // Build conversation history for the AI
-  const conversationHistory = history.map(m => ({
-    role: m.role as 'user' | 'assistant',
-    content: m.content,
-  }));
+  // Build conversation history for the AI.
+  // Filter out empty messages — files-only sends store with empty text,
+  // which Anthropic rejects ("user messages must have non-empty content").
+  const conversationHistory = history
+    .filter(m => m.content && m.content.trim())
+    .map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
 
   // Build user message — plain text or content blocks with attachments.
   // Images go through Claude vision. Text/PDF/DOCX content is prepended as text.
@@ -823,9 +827,12 @@ router.post('/message', async (req: Request, res: Response) => {
 
   // Strip [PAGE CONTENT] prefix from stored message — only keep the user's actual text
   const rawMsg = message || '';
+  const fileDesc = allAttachments.length > 0
+    ? `[Attached ${allAttachments.length} file${allAttachments.length > 1 ? 's' : ''}: ${allAttachments.map(a => a.filename).join(', ')}]`
+    : '';
   const userQuestion = rawMsg.includes('[USER QUESTION]\n')
     ? rawMsg.split('[USER QUESTION]\n').pop()!
-    : (rawMsg || (attachment ? `[Attached: ${attachment.filename}]` : ''));
+    : (rawMsg || fileDesc || '(empty)');
 
   await prisma.assistantMessage.createMany({
     data: [
