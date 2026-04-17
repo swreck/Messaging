@@ -198,9 +198,16 @@ export function AudiencesPage() {
       {audiences.length === 0 && (
         <div className="empty-state empty-state-enhanced">
           <div className="empty-icon">👥</div>
-          <h3>No audiences yet</h3>
-          <p>Add the audience you're building messaging for. You can always add more later.</p>
-          <button className="btn btn-primary" onClick={openNew} style={{ marginTop: 16 }}>Add an Audience</button>
+          <h3>Who needs to hear your message?</h3>
+          <p>An audience is the person you'd like to help understand that doing what you want them to do is truly in their best interest.</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>The fastest way is to tell Maria about them in a conversation. Or add one manually here.</p>
+          <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+            <button className="btn btn-primary" onClick={() => {
+              const bubble = document.querySelector('.partner-bubble') as HTMLElement;
+              if (bubble) bubble.click();
+            }}>Talk to Maria</button>
+            <button className="btn btn-secondary" onClick={openNew}>Add manually</button>
+          </div>
         </div>
       )}
 

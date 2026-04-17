@@ -438,12 +438,16 @@ router.get('/history', async (req: Request, res: Response) => {
 // Optionally accepts an attachment: { data: base64string, mimeType: string, filename: string }
 // Images are sent to Claude via vision. PDFs and text files are extracted and prepended.
 router.post('/message', async (req: Request, res: Response) => {
-  const { message, context, attachment } = req.body as {
+  const { message, context, attachment, attachments: rawAttachments } = req.body as {
     message?: string;
     context?: ActionContext;
     attachment?: { data: string; mimeType: string; filename: string };
+    attachments?: { data: string; mimeType: string; filename: string }[];
   };
-  if (!message && !attachment) {
+  // Normalize: single attachment or array of attachments
+  const allAttachments: { data: string; mimeType: string; filename: string }[] =
+    rawAttachments || (attachment ? [attachment] : []);
+  if (!message && allAttachments.length === 0) {
     res.status(400).json({ error: 'message or attachment is required' });
     return;
   }
@@ -515,42 +519,56 @@ router.post('/message', async (req: Request, res: Response) => {
     content: m.content,
   }));
 
-  // Build user message — plain text or content blocks with attachment.
-  // Images go through Claude vision. Text/PDF content is prepended as text.
+  // Build user message — plain text or content blocks with attachments.
+  // Images go through Claude vision. Text/PDF/DOCX content is prepended as text.
   let userContent: string | any[] = message || '';
-  if (attachment?.data && attachment?.mimeType) {
-    const isImage = attachment.mimeType.startsWith('image/');
-    const isPDF = attachment.mimeType === 'application/pdf';
-    const isText = attachment.mimeType.startsWith('text/') || attachment.mimeType === 'application/json';
+  if (allAttachments.length > 0) {
+    const contentBlocks: any[] = [];
+    let textPrefix = '';
 
-    if (isImage) {
-      userContent = [
-        {
+    for (const att of allAttachments) {
+      const isImage = att.mimeType.startsWith('image/');
+      const isPDF = att.mimeType === 'application/pdf';
+      const isDocx = att.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || att.filename?.endsWith('.docx');
+      const isText = att.mimeType.startsWith('text/') || att.mimeType === 'application/json' || att.filename?.endsWith('.txt') || att.filename?.endsWith('.md') || att.filename?.endsWith('.csv');
+
+      if (isImage) {
+        contentBlocks.push({
           type: 'image',
-          source: {
-            type: 'base64',
-            media_type: attachment.mimeType,
-            data: attachment.data,
-          },
-        },
-        { type: 'text', text: message || `I've attached an image (${attachment.filename || 'file'}). What do you see, and how can you use this for my messaging?` },
-      ];
-    } else if (isPDF) {
-      userContent = [
-        {
+          source: { type: 'base64', media_type: att.mimeType, data: att.data },
+        });
+      } else if (isPDF) {
+        contentBlocks.push({
           type: 'document',
-          source: {
-            type: 'base64',
-            media_type: 'application/pdf',
-            data: attachment.data,
-          },
-        },
-        { type: 'text', text: message || `I've attached a PDF (${attachment.filename || 'document'}). Please read it and use whatever is relevant for my messaging.` },
-      ];
-    } else if (isText) {
-      const textContent = Buffer.from(attachment.data, 'base64').toString('utf-8');
-      const prefix = `[ATTACHED FILE: ${attachment.filename || 'file'}]\n${textContent}\n[END OF ATTACHED FILE]\n\n`;
-      userContent = prefix + (message || 'I pasted some content above. Please read it and use whatever is relevant.');
+          source: { type: 'base64', media_type: 'application/pdf', data: att.data },
+        });
+      } else if (isDocx) {
+        try {
+          const mammoth = await import('mammoth');
+          const buffer = Buffer.from(att.data, 'base64');
+          const result = await mammoth.extractRawText({ buffer });
+          textPrefix += `[ATTACHED DOCUMENT: ${att.filename || 'document.docx'}]\n${result.value}\n[END OF DOCUMENT]\n\n`;
+        } catch (err) {
+          console.error('[Partner] DOCX extraction failed:', err);
+          textPrefix += `[ATTACHED DOCUMENT: ${att.filename || 'document.docx'}]\n(Could not extract text from this document)\n[END OF DOCUMENT]\n\n`;
+        }
+      } else if (isText) {
+        const textContent = Buffer.from(att.data, 'base64').toString('utf-8');
+        textPrefix += `[ATTACHED FILE: ${att.filename || 'file'}]\n${textContent}\n[END OF ATTACHED FILE]\n\n`;
+      }
+    }
+
+    const fileNames = allAttachments.map(a => a.filename).filter(Boolean).join(', ');
+    const defaultMsg = allAttachments.length === 1
+      ? `I've attached a file (${fileNames}). Please read it and use whatever is relevant for my messaging.`
+      : `I've attached ${allAttachments.length} files (${fileNames}). Please read them and use whatever is relevant for my messaging.`;
+    const userText = textPrefix + (message || defaultMsg);
+
+    if (contentBlocks.length > 0) {
+      contentBlocks.push({ type: 'text', text: userText });
+      userContent = contentBlocks;
+    } else {
+      userContent = userText;
     }
   }
 

@@ -147,8 +147,15 @@ export function OfferingsPage() {
         <div className="empty-state-card empty-state-enhanced">
           <div className="empty-icon">✨</div>
           <h3>What are you building messaging for?</h3>
-          <p>Add the product or service you want to message. When you're ready, Maria will interview you about what makes it different.</p>
-          <button className="btn btn-primary" onClick={openNew} style={{ marginTop: 16 }}>Add an Offering</button>
+          <p>An offering is the full solution you provide — your product, service, configuration, and anything else you deliver to ensure the person you're writing to receives the promised value.</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>The fastest way to get started is to tell Maria about it in a conversation. Or you can add one manually here.</p>
+          <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+            <button className="btn btn-primary" onClick={() => {
+              const bubble = document.querySelector('.partner-bubble') as HTMLElement;
+              if (bubble) bubble.click();
+            }}>Talk to Maria</button>
+            <button className="btn btn-secondary" onClick={openNew}>Add manually</button>
+          </div>
         </div>
       ) : (
         <div className="list-cards">

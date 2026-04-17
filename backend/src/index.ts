@@ -28,7 +28,7 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 app.use(cors({
   exposedHeaders: ['x-refreshed-token'],
 }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // API routes
 app.use('/api/auth', authRoutes);

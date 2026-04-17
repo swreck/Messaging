@@ -57,7 +57,7 @@ export function MariaPartner() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [pendingFile, setPendingFile] = useState<{ data: string; mimeType: string; filename: string } | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<{ data: string; mimeType: string; filename: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -334,9 +334,9 @@ export function MariaPartner() {
       }>('/partner/message', {
         message: pageContent ? `[PAGE CONTENT]\n${pageContent}\n\n[USER QUESTION]\n${text}` : text,
         context: pageContext,
-        ...(pendingFile ? { attachment: pendingFile } : {}),
+        ...(pendingFiles.length === 1 ? { attachment: pendingFiles[0] } : pendingFiles.length > 1 ? { attachments: pendingFiles } : {}),
       });
-      setPendingFile(null);
+      setPendingFiles([]);
 
       if (result.needsPageContent) {
         setMessages(prev => [...prev, { role: 'assistant', content: 'Let me take a look...' }]);
@@ -805,21 +805,25 @@ export function MariaPartner() {
                   onDrop={e => {
                     e.preventDefault();
                     e.stopPropagation();
-                    const file = e.dataTransfer.files[0];
-                    if (file) {
+                    const files = Array.from(e.dataTransfer.files);
+                    files.forEach(file => {
                       const reader = new FileReader();
                       reader.onload = () => {
                         const base64 = (reader.result as string).split(',')[1];
-                        setPendingFile({ data: base64, mimeType: file.type || 'application/octet-stream', filename: file.name });
+                        setPendingFiles(prev => [...prev, { data: base64, mimeType: file.type || 'application/octet-stream', filename: file.name }]);
                       };
                       reader.readAsDataURL(file);
-                    }
+                    });
                   }}
                 >
-                  {pendingFile && (
+                  {pendingFiles.length > 0 && (
                     <div className="partner-attachment-preview">
-                      <span className="partner-attachment-name">{pendingFile.filename}</span>
-                      <button type="button" className="partner-attachment-remove" onClick={() => setPendingFile(null)} aria-label="Remove attachment">×</button>
+                      {pendingFiles.map((f, i) => (
+                        <span key={i} className="partner-attachment-name">
+                          {f.filename}
+                          <button type="button" className="partner-attachment-remove" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} aria-label="Remove">×</button>
+                        </span>
+                      ))}
                     </div>
                   )}
                   <textarea
@@ -835,39 +839,41 @@ export function MariaPartner() {
                     onPaste={e => {
                       const items = e.clipboardData?.items;
                       if (!items) return;
-                      for (const item of Array.from(items)) {
-                        if (item.type.startsWith('image/')) {
-                          e.preventDefault();
+                      const fileItems = Array.from(items).filter(item => item.kind === 'file');
+                      if (fileItems.length > 0) {
+                        e.preventDefault();
+                        fileItems.forEach(item => {
                           const file = item.getAsFile();
                           if (!file) return;
                           const reader = new FileReader();
                           reader.onload = () => {
                             const base64 = (reader.result as string).split(',')[1];
-                            setPendingFile({ data: base64, mimeType: file.type, filename: file.name || 'pasted-image.png' });
+                            setPendingFiles(prev => [...prev, { data: base64, mimeType: file.type || 'application/octet-stream', filename: file.name || 'pasted-file' }]);
                           };
                           reader.readAsDataURL(file);
-                          return;
-                        }
+                        });
                       }
                     }}
-                    placeholder="Talk to Maria... (drag files here or paste images)"
+                    placeholder="Talk to Maria... (drag files here or paste documents)"
                     disabled={sending}
                     rows={1}
                   />
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*,.pdf,.txt,.csv,.json,.md"
+                    multiple
+                    accept="image/*,.pdf,.txt,.csv,.json,.md,.doc,.docx,.pptx"
                     style={{ display: 'none' }}
                     onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = () => {
-                        const base64 = (reader.result as string).split(',')[1];
-                        setPendingFile({ data: base64, mimeType: file.type || 'application/octet-stream', filename: file.name });
-                      };
-                      reader.readAsDataURL(file);
+                      const files = Array.from(e.target.files || []);
+                      files.forEach(file => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          const base64 = (reader.result as string).split(',')[1];
+                          setPendingFiles(prev => [...prev, { data: base64, mimeType: file.type || 'application/octet-stream', filename: file.name }]);
+                        };
+                        reader.readAsDataURL(file);
+                      });
                       e.target.value = '';
                     }}
                   />
@@ -876,13 +882,13 @@ export function MariaPartner() {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={sending}
                     aria-label="Attach file"
-                    title="Attach a file (image, PDF, or text)"
+                    title="Attach files (images, PDFs, Word docs, text)"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                     </svg>
                   </button>
-                  <button className="partner-send" onClick={() => send()} disabled={(!input.trim() && !pendingFile) || sending} aria-label="Send">
+                  <button className="partner-send" onClick={() => send()} disabled={(!input.trim() && pendingFiles.length === 0) || sending} aria-label="Send">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
                     </svg>
