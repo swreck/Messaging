@@ -778,8 +778,8 @@ export function MariaPartner() {
                         if (!cleaned) return null;
                         // Simplify internal action results for naive users
                         const simple = cleaned
-                          .replace(/Created offering "[^"]*" with \d+ capabilities?/g, 'Set up your offering')
-                          .replace(/Created audience "[^"]*" with \d+ priorities?/g, 'Set up your audience')
+                          .replace(/Created offering "[^"]*" with \d+ capabilities?/g, 'Set up your product')
+                          .replace(/Created audience "[^"]*" with \d+ priorities?/g, 'Set up the message target')
                           .replace(/Updated \d+ priorities in "[^"]*"/g, '')
                           .replace(/Drafted motivating factors for \d+ differentiators on "[^"]*"\. Each one names multiple audience types so the same offering can speak to different audiences\.?/g, '')
                           .replace(/Drafted motivating factors[^·]*/g, '')

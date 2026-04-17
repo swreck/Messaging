@@ -697,9 +697,12 @@ export function FiveChapterShell() {
 
   return (
     <div className="five-chapter-shell">
-      <h1 style={{ marginBottom: 4 }}>Five Chapter Story</h1>
-      <p className="page-description" style={{ marginBottom: 20 }}>
+      <h1 style={{ marginBottom: 4 }}>Message Deliverables</h1>
+      <p className="page-description" style={{ marginBottom: 4, color: 'var(--text-secondary)', fontSize: 13 }}>
         {draft.offering.name} &rarr; {draft.audience.name}
+      </p>
+      <p style={{ marginBottom: 20, color: 'var(--text-tertiary)', fontSize: 12, fontStyle: 'italic' }}>
+        Based on Five Chapter Story format
       </p>
 
       {/* Story selector — only if multiple stories */}

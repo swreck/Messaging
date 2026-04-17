@@ -369,7 +369,10 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           </button>
         </div>
       )}
-      <h2>Your Three Tier</h2>
+      <h2 style={{ marginBottom: 4 }}>Foundational Message</h2>
+      <p style={{ marginBottom: 16, color: 'var(--text-tertiary)', fontSize: 12, fontStyle: 'italic' }}>
+        Based on Three Tier format
+      </p>
 
       {showOrientation && (
         <div className="orientation-card" style={{

@@ -730,9 +730,9 @@ router.post('/message', async (req: Request, res: Response) => {
     if (actionResult?.includes('BUILD_STARTED')) {
       result.response = "I'm putting together your draft now. I'll bring you right to it when it's ready — just give me a few minutes.";
     } else if (actionResult?.includes('Drafted motivating factors')) {
-      result.response = "Done — I've researched why each capability matters and drafted the motivating factors.";
+      result.response = "Done — I've filled in the details on why each part of your product matters.";
     } else if (actionResult?.includes('Added') && actionResult?.includes('priorities')) {
-      result.response = "Added those priorities. Let me keep going.";
+      result.response = "Got it. Let me keep going.";
     } else if (actionResult?.includes('Created offering') || actionResult?.includes('Created audience')) {
       result.response = "Got it — I've set that up. Let me keep building.";
     } else if (actionResult) {
