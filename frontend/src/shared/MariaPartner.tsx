@@ -825,6 +825,10 @@ export function MariaPartner() {
                     onPaste={e => {
                       const items = e.clipboardData?.items;
                       if (!items) return;
+                      // If clipboard has text, let the browser handle it normally (paste as text).
+                      // Only intercept if there are ONLY file items (actual file drops, not rich text copies).
+                      const hasText = Array.from(items).some(item => item.kind === 'string' && (item.type === 'text/plain' || item.type === 'text/html'));
+                      if (hasText) return; // Let browser paste the text naturally
                       const fileItems = Array.from(items).filter(item => item.kind === 'file');
                       if (fileItems.length > 0) {
                         e.preventDefault();
