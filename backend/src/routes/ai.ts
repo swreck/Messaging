@@ -1253,9 +1253,30 @@ router.post('/generate-chapter', requireStoryteller, async (req: Request, res: R
   const ch = CHAPTER_CRITERIA[chapterNum - 1];
   const spec = getMediumSpec(story.medium);
 
+  // For Chapter 1: generate strategic thesis first
+  let ch1Thesis = '';
+  if (chapterNum === 1) {
+    try {
+      const topP = story.draft.audience.priorities[0];
+      const thesisPrompt = `You are writing ONE sentence for a senior executive. Given:
+AUDIENCE: ${story.draft.audience.name}
+TOP PRIORITY: "${topP?.text || ''}"
+DRIVER: "${topP?.driver || ''}"
+
+Write a single sentence: "[Missing category/discipline] means [reader's strategic loss]."
+Example: "Unmanaged device lifecycle management means lost Apple revenue."
+Return ONLY the one sentence.`;
+      ch1Thesis = await callAI(thesisPrompt, '', 'elite');
+      ch1Thesis = ch1Thesis.replace(/^["']|["']$/g, '').trim();
+      console.log(`[Ch1 thesis] ${ch1Thesis}`);
+    } catch (err) {
+      console.error('[Ch1 thesis] Failed:', err);
+    }
+  }
+
   // Reader-perspective directive
   const readerDirective = chapterNum === 1
-    ? `\nCRITICAL — THE READER: "${story.draft.audience.name}" is the person reading this. Write about THEIR world at the STRATEGIC level they think about their job. Frame the category of capability they are missing, stated as their strategic loss. "Unmanaged [category] means [their loss]." NOT tactical symptoms ("your reps have nothing to bring") but strategic framing ("unmanaged lifecycle management costs you enterprise revenue"). If the product serves end users different from this reader, Chapter 1 is about the READER's strategic problems, not the end users' problems.\n`
+    ? `\nCRITICAL — THE READER: "${story.draft.audience.name}" is the person reading this. The opening must be a BUSINESS THESIS at the strategic level.${ch1Thesis ? ` USE THIS AS YOUR OPENING THESIS (adapt for tone but keep the strategic frame): "${ch1Thesis}"` : ' Format: "[Missing category/discipline] means [reader\'s strategic loss]."'} Then show dual value: what end customers experience translates into the reader\'s strategic outcome.\n`
     : chapterNum === 2
       ? `\nDo NOT open with the product name as the sentence subject. Lead with what the READER gets or how their situation changes.\n`
       : chapterNum === 5

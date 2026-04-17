@@ -828,6 +828,30 @@ a pilot program.`;
       return '';
     }
 
+    // Pre-generate the Chapter 1 strategic thesis — a one-sentence business
+    // frame at the altitude the reader thinks about their job. This anchors
+    // Chapter 1 generation so it starts from a strategic discipline, not a
+    // tactical symptom.
+    let ch1Thesis = '';
+    try {
+      const thesisPrompt = `You are writing ONE sentence for a senior executive. Given:
+AUDIENCE: ${draftForStory.audience.name}
+TOP PRIORITY: "${draftForStory.audience.priorities[0]?.text || ''}"
+DRIVER: "${draftForStory.audience.priorities[0]?.driver || ''}"
+
+Write a single sentence in the format: "[Missing category/discipline] means [reader's strategic loss]."
+Example for an SVP of enterprise sales: "Unmanaged device lifecycle management means lost Apple revenue."
+Example for a hospital CEO: "Uncoordinated pathology workflows mean delayed treatment decisions."
+
+The category/discipline should be the STRATEGIC GAP — not a product feature, not a tactical symptom. Name what they are NOT doing, stated as their business consequence.
+Return ONLY the one sentence. No explanation.`;
+      ch1Thesis = await callAI(thesisPrompt, '', 'elite');
+      ch1Thesis = ch1Thesis.replace(/^["']|["']$/g, '').trim();
+      console.log(`[Ch1 thesis] ${ch1Thesis}`);
+    } catch (err) {
+      console.error('[Ch1 thesis] Generation failed, proceeding without:', err);
+    }
+
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
         status: `chapter_${chapterNum}`,
@@ -857,7 +881,7 @@ FOR them, FOR this occasion, not a recycled template.
 
       const readerDirective = `\nTHE READER: "${draftForStory.audience.name}" is the person reading this. Every sentence should be written for THIS person — their concerns, their perspective, their level of seniority. ${
         chapterNum === 1
-          ? 'Write about the READER\'s world at the STRATEGIC level they think about their job. Frame the category of capability they are missing, stated as their strategic loss. "Unmanaged [category] means [their loss]." NOT tactical symptoms but strategic framing. If the product serves end users different from this reader, Chapter 1 is about the READER\'s strategic problems, not the end users\' problems.'
+          ? `The opening must be a BUSINESS THESIS at the strategic level, not a tactical narrative.${ch1Thesis ? ` USE THIS AS YOUR OPENING THESIS (adapt for tone but keep the strategic frame): "${ch1Thesis}"` : ' Format: "[Missing category/discipline] means [reader\'s strategic loss]."'} Then show dual value: what end customers experience translates into the reader\'s strategic outcome.`
           : chapterNum === 2
             ? 'Do NOT open with the product name as the sentence subject. Lead with what the READER gets or how their situation changes. The product is the mechanism, not the headline.'
             : chapterNum === 5
