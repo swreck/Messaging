@@ -643,19 +643,30 @@ router.post('/message', async (req: Request, res: Response) => {
     }
 
     // ─── Lead-mode continuation ──────────────────────────
-    // When Maria creates an offering + audience but stops short of enriching
-    // and building, the user is left waiting for a result Maria promised.
-    // Detect this pattern and automatically chain the remaining steps:
-    // draft_mfs → build_deliverable. This makes "do everything" reliable
-    // regardless of whether Opus chains all actions in one response.
+    // When Maria creates an offering + audience but stops short of building
+    // a deliverable, the user is left waiting. Auto-chain build_deliverable
+    // when both ingredients exist and the user has expressed deliverable intent
+    // at ANY point in the conversation — not just via magic phrases.
     const createdOffering = dispatch.results.some(r => r.includes('Created offering'));
     const createdAudience = dispatch.results.some(r => r.includes('Created audience'));
     const alreadyBuilding = dispatch.results.some(r => r.includes('BUILD_STARTED'));
     const alreadyDraftedMFs = dispatch.results.some(r => r.includes('Drafted motivating factors'));
-    const userWantsEverything = /do everything|show me the finished|please do everything|work.*independent|do it all|build.*everything/i.test(message || '');
+    const justCreatedSomething = createdOffering || createdAudience;
 
-    if (createdOffering && createdAudience && !alreadyBuilding && userWantsEverything) {
-      console.log('[Partner] Lead-mode continuation: offering + audience created, chaining enrichment + build');
+    // Re-query counts AFTER actions ran so we detect cross-message readiness
+    const [postOfferingCount, postAudienceCount, existingStoryCount] = justCreatedSomething ? await Promise.all([
+      prisma.offering.count({ where: { workspaceId } }),
+      prisma.audience.count({ where: { workspaceId } }),
+      prisma.story.count({ where: { draft: { workspaceId } } }),
+    ]) : [offeringCount, audienceCount, 1];
+    const bothReady = postOfferingCount > 0 && postAudienceCount > 0;
+
+    // Check ALL user messages for deliverable intent — not just current message
+    const allUserText = history.filter(m => m.role === 'user').map(m => m.content).join(' ') + ' ' + (message || '');
+    const userWantsDeliverable = /do everything|show me the finished|please do everything|work.*independent|do it all|build.*everything|email|pitch.*deck|one.?page|one.?pager|briefing|letter|report|write.*for|send.*to|draft|reach (him|her|them|out)|something short|help me with|need to write|need.*message|cold.*outreach/i.test(allUserText);
+
+    if (justCreatedSomething && bothReady && !alreadyBuilding && existingStoryCount === 0 && userWantsDeliverable) {
+      console.log('[Partner] Lead-mode continuation: offering + audience ready, user wants deliverable, chaining build');
 
       // Find the offering and audience that were just created
       const recentOffering = await prisma.offering.findFirst({
@@ -669,12 +680,11 @@ router.post('/message', async (req: Request, res: Response) => {
       });
 
       if (recentOffering && recentAudience) {
-        // Detect medium from user message
-        const msg = message || '';
+        // Detect medium from ALL user messages in conversation
         let medium = 'email';
-        if (/one.?page|one.?pager|briefing/i.test(msg)) medium = 'landing_page';
-        else if (/pitch.*deck/i.test(msg)) medium = 'pitch_deck';
-        else if (/report/i.test(msg)) medium = 'report';
+        if (/one.?page|one.?pager|briefing/i.test(allUserText)) medium = 'landing_page';
+        else if (/pitch.*deck/i.test(allUserText)) medium = 'pitch_deck';
+        else if (/report/i.test(allUserText)) medium = 'report';
 
         // Go straight to build_deliverable — skip draft_mfs in the
         // continuation because it takes 20+ seconds and would timeout
@@ -704,7 +714,8 @@ router.post('/message', async (req: Request, res: Response) => {
             ''
           ).trim();
           if (!result.response.includes("I'll bring you")) {
-            result.response += " I've drafted the foundational message — you can see it by tapping '3 Tiers' in the menu anytime. I'm putting together your one-pager now. I'll bring you right to it when it's ready.";
+            const mediumLabel = medium === 'landing_page' ? 'one-pager' : medium === 'pitch_deck' ? 'pitch deck' : medium;
+            result.response += ` I have what I need. I'm building your ${mediumLabel} now — I'll bring you right to it when it's ready.`;
           }
         }
       }

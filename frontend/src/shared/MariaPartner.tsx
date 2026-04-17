@@ -139,7 +139,11 @@ export function MariaPartner() {
     if (open && !loaded && introduced && introStep >= INTRO_DONE) {
       api.get<{ messages: Message[] }>('/partner/history')
         .then(({ messages: history }) => {
-          setMessages(history);
+          if (history.length === 0) {
+            setMessages([{ role: 'assistant', content: "What are you working on? Tell me about your product or service, and who you need to reach." }]);
+          } else {
+            setMessages(history);
+          }
           setLoaded(true);
           if (returnContext) {
             setShowReturnCard(true);
@@ -564,7 +568,7 @@ export function MariaPartner() {
       return (
         <div className="partner-intro">
           <div className="partner-intro-message">
-            <p>I've been here before, but I've gotten better. Interested in what I can do?</p>
+            <p>I help people communicate more effectively about what they do — emails, pitch decks, talking points, whatever you need. Want to see how it works?</p>
           </div>
           <div className="partner-intro-actions">
             <button className="btn btn-primary" onClick={() => advanceIntro(2)}>Yes</button>
@@ -763,13 +767,28 @@ export function MariaPartner() {
                     </div>
                   )}
 
-                  {messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && (
+                  {messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && !introduced && (
                     <div className="partner-empty">What's on your mind?</div>
                   )}
                   {messages.map((msg, i) => (
                     <div key={i} className={`partner-msg partner-msg-${msg.role}`}>
                       {formatContent(msg.content)}
-                      {msg.actionResult && <span className="partner-action-badge">{msg.actionResult.replace(/\[NAVIGATE:[^\]]+\]\s*/g, '').replace(/\[BUILD_STARTED:[^\]]+\]\s*/g, '').trim()}</span>}
+                      {msg.actionResult && (() => {
+                        const cleaned = msg.actionResult.replace(/\[NAVIGATE:[^\]]+\]\s*/g, '').replace(/\[BUILD_STARTED:[^\]]+\]\s*/g, '').trim();
+                        if (!cleaned) return null;
+                        // Simplify internal action results for naive users
+                        const simple = cleaned
+                          .replace(/Created offering "[^"]*" with \d+ capabilities?/g, 'Set up your offering')
+                          .replace(/Created audience "[^"]*" with \d+ priorities?/g, 'Set up your audience')
+                          .replace(/Updated \d+ priorities in "[^"]*"/g, '')
+                          .replace(/Drafted motivating factors for \d+ differentiators on "[^"]*"\. Each one names multiple audience types so the same offering can speak to different audiences\.?/g, '')
+                          .replace(/Drafted motivating factors[^·]*/g, '')
+                          .replace(/Building your first draft now\. This takes a few minutes\.?/g, '')
+                          .replace(/\s*·\s*·\s*/g, ' · ')
+                          .replace(/^\s*·\s*|\s*·\s*$/g, '')
+                          .trim();
+                        return simple ? <span className="partner-action-badge">{simple}</span> : null;
+                      })()}
                     </div>
                   ))}
                   {sending && (
