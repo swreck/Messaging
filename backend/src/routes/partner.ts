@@ -737,6 +737,8 @@ router.post('/message', async (req: Request, res: Response) => {
     ],
   });
 
+  console.log(`[Partner] RESPONSE: text=${(result.response || '').length}chars, actionResult=${(actionResult || '').length}chars, hasBuildStarted=${(actionResult || '').includes('BUILD_STARTED')}`);
+
   res.json({
     response: result.response,
     actionResult,
