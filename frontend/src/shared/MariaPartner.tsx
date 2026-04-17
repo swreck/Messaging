@@ -395,7 +395,20 @@ export function MariaPartner() {
         interviewQuestionRef.current = 0;
         setMessages(prev => [...prev, { role: 'assistant', content: "I've got it. From now on when you hit Personalize, I'll adjust the story to sound more like you. If you want to change this later, just tell me you want to adjust your personal style. Or paste in any document you like and I'll analyze it." }]);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: result.response, actionResult: result.actionResult }]);
+        // If response is empty but actions happened, generate a visible message
+        // so the user never sees a blank bubble. This handles the case where
+        // the server returns actions but empty text for any reason.
+        let displayResponse = result.response;
+        if (!displayResponse?.trim() && result.actionResult) {
+          if (result.actionResult.includes('BUILD_STARTED')) {
+            displayResponse = "I'm putting together your draft now. I'll bring you right to it when it's ready.";
+          } else if (result.actionResult.includes('Created offering') || result.actionResult.includes('Created audience')) {
+            displayResponse = "Got it — I've set that up. Let me keep building.";
+          } else {
+            displayResponse = "Working on it.";
+          }
+        }
+        setMessages(prev => [...prev, { role: 'assistant', content: displayResponse || result.response, actionResult: result.actionResult }]);
       }
 
       if (result.actionResult) {

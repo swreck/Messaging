@@ -465,7 +465,7 @@ router.post('/message', async (req: Request, res: Response) => {
   const history = allHistory.filter(m => {
     const ctx = m.context as any;
     return !ctx?.workspaceId || ctx.workspaceId === workspaceId;
-  }).slice(0, 40);
+  }).slice(0, 20);
   history.reverse();
 
   // Get user's display name
