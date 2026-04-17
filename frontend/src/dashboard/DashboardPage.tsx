@@ -132,14 +132,17 @@ export function DashboardPage() {
         <div className="dashboard-welcome empty-state-enhanced">
           <div className="empty-icon">💬</div>
           <h3>Welcome to Maria</h3>
-          <p>Tell Maria what you're working on — she'll help you build your messaging from scratch. Open her panel in the bottom right corner.</p>
-          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 8 }}>
-            Or if you prefer, start by adding an audience and an offering manually.
-          </p>
-          <div className="dashboard-welcome-actions">
-            <button className="btn btn-secondary" onClick={() => navigate('/audiences')}>Create an Audience</button>
-            <button className="btn btn-secondary" onClick={() => navigate('/offerings')}>Create an Offering</button>
-          </div>
+          <p>Tell Maria what you're working on — she'll help you build your messaging from scratch.</p>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              const bubble = document.querySelector('.partner-bubble') as HTMLElement;
+              if (bubble) bubble.click();
+            }}
+            style={{ marginTop: 12 }}
+          >
+            Talk to Maria
+          </button>
         </div>
       )}
 

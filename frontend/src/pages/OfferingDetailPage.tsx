@@ -117,9 +117,18 @@ export function OfferingDetailPage() {
       </header>
 
       {offering.elements.length === 0 && (
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
-          Add capabilities here, or let Maria pull them out during an interview. She'll ask what makes this offering different and capture what you tell her. You can start, stop, and continue whenever you want.
-        </p>
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6, maxWidth: '100%' }}>
+          <p style={{ margin: '0 0 12px' }}>Add capabilities here, or ask Maria — she'll figure out what makes this offering different from a conversation with you.</p>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              const bubble = document.querySelector('.partner-bubble') as HTMLElement;
+              if (bubble) bubble.click();
+            }}
+          >
+            Ask Maria
+          </button>
+        </div>
       )}
 
       <DifferentiatorList

@@ -112,6 +112,16 @@ export function MariaPartner() {
       });
   }, [user]);
 
+  // Push page content aside when panel is open (desktop/tablet).
+  useEffect(() => {
+    if (open) {
+      document.body.classList.add('maria-panel-open');
+    } else {
+      document.body.classList.remove('maria-panel-open');
+    }
+    return () => { document.body.classList.remove('maria-panel-open'); };
+  }, [open]);
+
   // Screen Wake Lock — prevent iPhone from sleeping during dictation.
   // Acquired when the partner panel opens, released when it closes.
   useEffect(() => {

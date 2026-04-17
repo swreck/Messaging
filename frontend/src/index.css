@@ -234,7 +234,24 @@ p { line-height: 1.5; color: var(--text-secondary); }
 
 /* ─── Layout ──────────────────────────────────────── */
 .app-layout { min-height: 100vh; }
-.main-content { max-width: 1200px; margin: 0 auto; padding: 24px; padding-bottom: 40px; }
+.main-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  padding-bottom: 40px;
+  transition: margin-right 0.2s ease;
+}
+/* When Maria's panel is open on screens wide enough, shrink main content */
+@media (min-width: 768px) {
+  body.maria-panel-open .main-content {
+    margin-right: 420px;
+  }
+}
+@media (min-width: 1024px) {
+  body.maria-panel-open .main-content {
+    margin-right: 440px;
+  }
+}
 
 /* ─── Auth ────────────────────────────────────────── */
 /* ─── Login page (redesigned) ──────────────────────── */
@@ -1964,7 +1981,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 
 /* ─── Page Container ─────────────────────────────── */
-.page-container { max-width: 960px; margin: 0 auto; }
+.page-container { max-width: 960px; margin: 0 auto; width: 100%; box-sizing: border-box; }
 .page-header {
   display: flex;
   justify-content: space-between;
