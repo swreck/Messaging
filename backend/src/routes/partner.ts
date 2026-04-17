@@ -722,6 +722,43 @@ router.post('/message', async (req: Request, res: Response) => {
     }
   }
 
+  // ─── Fallback: build_deliverable failed because offering doesn't exist ──
+  // When Maria asks quality questions first (no create actions) and then
+  // fires build_deliverable on the next message, the offering/audience may
+  // not exist yet. Detect this and auto-create + retry.
+  const allMsgText = history.filter(m => m.role === 'user').map(m => m.content).join(' ') + ' ' + (message || '');
+  const wantsDeliverable = /do everything|email|pitch.*deck|one.?page|briefing|letter|report|write|send|draft|reach|cold.*outreach/i.test(allMsgText);
+  if (actionResult?.includes('Could not find the offering') && wantsDeliverable) {
+    console.log('[Partner] build_deliverable failed — offering missing. Auto-creating and retrying.');
+    const recentOffering = await prisma.offering.findFirst({
+      where: { workspaceId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!recentOffering) {
+      // Need to create offering + audience from scratch. Find the build_deliverable action params.
+      const buildAction = normalizedActions.find(a => a.type === 'build_deliverable');
+      if (buildAction) {
+        const createActions: { type: string; params: Record<string, any> }[] = [
+          { type: 'create_offering', params: { name: buildAction.params.offeringName || 'My Product', description: message || '' } },
+          { type: 'create_audience', params: { name: buildAction.params.audienceName || 'Target Audience', description: message || '' } },
+        ];
+        const createDispatch = await dispatchActions(createActions, userId, ctx, workspaceId);
+        if (createDispatch.results.some(r => r.includes('Created offering'))) {
+          const retryDispatch = await dispatchActions([{ type: 'build_deliverable', params: buildAction.params }], userId, ctx, workspaceId);
+          const retryResult = retryDispatch.results.join(' · ');
+          actionResult = retryResult;
+          if (retryResult.includes('BUILD_STARTED')) {
+            const medium = buildAction.params.medium || 'email';
+            const mediumLabel = medium === 'landing_page' ? 'one-pager' : medium === 'pitch_deck' ? 'pitch deck' : medium;
+            result.response = result.response.replace(/I tried.*$/, '').trim();
+            result.response += ` I have what I need. I'm building your ${mediumLabel} now — I'll bring you right to it when it's ready.`;
+          }
+          if (retryDispatch.refreshNeeded) refreshNeeded = true;
+        }
+      }
+    }
+  }
+
   // Guard against empty responses. When Opus returns empty text, the user
   // sees a blank message — unacceptable. Generate a fallback so the user
   // always knows what Maria is doing.
