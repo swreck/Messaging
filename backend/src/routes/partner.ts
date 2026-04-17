@@ -824,14 +824,25 @@ router.post('/message', async (req: Request, res: Response) => {
     ? `${result.response}\n\n[${actionResult}]`
     : result.response;
 
-  // Strip [PAGE CONTENT] prefix from stored message — only keep the user's actual text
+  // Store the user's message INCLUDING extracted document text so Maria
+  // has it in subsequent conversation turns. Without this, document content
+  // is lost after the first message and Maria "forgets" what she read.
   const rawMsg = message || '';
-  const fileDesc = allAttachments.length > 0
-    ? `[Attached ${allAttachments.length} file${allAttachments.length > 1 ? 's' : ''}: ${allAttachments.map(a => a.filename).join(', ')}]`
-    : '';
+  let storedUserMsg: string;
+  if (typeof userContent === 'string') {
+    storedUserMsg = userContent || '(documents attached)';
+  } else {
+    // Content blocks — extract the text block
+    const textBlock = (userContent as any[]).find((b: any) => b.type === 'text');
+    storedUserMsg = textBlock?.text || rawMsg || '(documents attached)';
+  }
+  // Trim to reasonable size for history (keep first 8000 chars of document text)
+  if (storedUserMsg.length > 8000) {
+    storedUserMsg = storedUserMsg.substring(0, 8000) + '\n...(document text truncated for history)';
+  }
   const userQuestion = rawMsg.includes('[USER QUESTION]\n')
     ? rawMsg.split('[USER QUESTION]\n').pop()!
-    : (rawMsg || fileDesc || '(empty)');
+    : storedUserMsg;
 
   await prisma.assistantMessage.createMany({
     data: [
