@@ -78,7 +78,14 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
 - Make the audience profoundly uncomfortable with the status quo.
 - If possible, quantify the cost of inaction.
 - Content comes from the audience's highest priorities — priorities are the "lens" filtering what to emphasize.
-- Chapter 1 is the pain from the ABSENCE of what Chapter 2 will promise.`,
+- Chapter 1 is the pain from the ABSENCE of what Chapter 2 will promise.
+
+CRITICAL — WHOSE WORLD:
+Chapter 1 describes the READER's world — their challenges, their frustrations, their reality. The AUDIENCE listed above is the READER. Write about what THEY face every day.
+
+If the reader is an executive who manages a team that serves customers, Chapter 1 is about the EXECUTIVE's challenges (losing revenue, losing competitive position, teams without tools) — NOT the end customer's problems (device depreciation, workflow inefficiency). The end customer's problems may CAUSE the reader's pain, but Chapter 1 lives in the reader's experience, not downstream.
+
+Test: after writing, read every sentence and ask "is this about the READER's life or about someone else's life?" Every sentence must pass.`,
 
     2: `CHAPTER 2 RULES:
 - This IS the "Let me tell you all about me" chapter.
@@ -88,7 +95,8 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
 - Transitions between points ARE appropriate here (unlike Tier 2 statements).
 - NEVER include proof, credentials, institutional names, or social validation. Those belong in Ch3 (trust) and Ch4 (proof).
 - The audience doesn't care WHO made it until they understand WHY it has value. Ch2 establishes value. Ch4 proves it.
-- If you're tempted to write "built by [experts]" or "[institution] is evaluating" — STOP. That's Ch3/Ch4 material.`,
+- If you're tempted to write "built by [experts]" or "[institution] is evaluating" — STOP. That's Ch3/Ch4 material.
+- NEVER open this chapter with the product name as the sentence subject. The product is the mechanism, not the headline. Lead with what the READER gets or how their situation changes. "[Product] gives you X" is wrong. "Your reps now have X" or "Every account gets X" is right.`,
 
     3: `CHAPTER 3 RULES:
 - Help people feel comfortable making the adoption decision.
@@ -113,7 +121,8 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
 - Keep this chapter SHORT. Every sentence must contain action or information — no filler.
 - NEVER write empty closers like "That's it for now," "Simple as that," "That's all there is to it," or any variation. These add zero content. End with the last concrete step or a single direct sentence about what happens next.
 - NEVER open with the recipient's name (e.g., "Amy," or "Ken,"). This is the close of a professional communication — lead with the action, not a greeting.
-- Align the steps with the specified medium and CTA.`,
+- Align the steps with the specified medium and CTA.
+- Match tone to the reader's seniority. For senior executives and decision-makers: offer a path they can evaluate ("One approach: select a segment of accounts and run a pilot"). NEVER give directives ("Pick a segment and run it"). Senior people decide — you present options.`,
   };
 
   const formatGuidance = spec ? `
@@ -151,6 +160,7 @@ HARD RULES (ALL CHAPTERS):
    The principle: ALWAYS describe the positive reality. What IS true, what DOES happen, what the team DOES. Never describe what they're NOT doing, what they DON'T have to do, or what ISN'T the case. The reader fills in the contrast from their own experience — that's more powerful than you stating it.
 10. NO REPEATING FACTS ACROSS CHAPTERS. If you stated a specific number, metric, or claim in a previous chapter, do NOT repeat it in a later chapter. Each chapter introduces NEW information. If "response time is under 30 minutes" was in Ch2, do not say it again in Ch3 or Ch4. The reader reads all chapters in sequence — repetition sounds like you ran out of things to say.
 11. STRICT CONTENT BOUNDARIES by chapter: Ch1 = category problem only (no company, no product). Ch2 = product value and mechanisms only (no proof, no social validation, no support details). Ch3 = support, deployment, and risk reduction only (no social proof, no product features). Ch4 = social proof and results from similar organizations only (no new product claims). Ch5 = CTA and first steps only.
+12. NEVER STATE FACTS THE READER ALREADY KNOWS from their own position. An SVP at a company knows their own org structure and subsidiaries. A CFO knows financial terminology. A CTO knows their tech stack. State only what this specific reader would find NEW, surprising, or useful. Every sentence must earn the reader's attention by telling them something they didn't already know. If they'd read a sentence and think "obviously" — cut it.
 
 ${sourceContent ? `
 CONTENT CONVERSION:
@@ -192,12 +202,13 @@ YOUR TASK: Blend this into a polished, cohesive narrative that reads as a single
 
 RULES:
 1. Maintain the canonical chapter order: 1 → 2 → 3 → 4 → 5.
-2. Write smooth transitions — the reader should not feel "chapters."
+2. Write smooth transitions — the reader should not feel "chapters." But preserve the PERSUASIVE ARC: each section must do its original job. The opening must be about the reader's world (no product). Product value comes next. Then support/trust. Then proof. Then CTA. Smoothing transitions does NOT mean reorganizing content across these stages.
 3. Tighten the language. Cut redundancy. Every sentence should earn its place.
 4. Keep the total length within the target word range for the content format.
 5. Preserve the essential content and persuasive arc.
 6. The result should sound like one person talking naturally to another — not a corporate document.
 7. Respect the content format conventions (email structure, blog headers, social brevity, etc.).
+8. Never state facts the reader already knows from their own position. If the reader is a senior executive at a company, they know their own org chart, subsidiaries, and industry basics. Cut anything the reader would respond to with "obviously."
 8. Never invent facts not present in the input.
 
 Respond with the blended story as plain text.`;

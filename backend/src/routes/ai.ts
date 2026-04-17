@@ -1253,12 +1253,48 @@ router.post('/generate-chapter', requireStoryteller, async (req: Request, res: R
   const ch = CHAPTER_CRITERIA[chapterNum - 1];
   const spec = getMediumSpec(story.medium);
 
+  // Reader-perspective directive
+  const readerDirective = chapterNum === 1
+    ? `\nCRITICAL — THE READER: "${story.draft.audience.name}" is the person reading this. Write about THEIR world — their challenges, pressures, and daily reality. If the product serves end users who are different from this reader, Chapter 1 is about the READER's problems, not the end users' problems.\n`
+    : chapterNum === 2
+      ? `\nDo NOT open with the product name as the sentence subject. Lead with what the READER gets or how their situation changes.\n`
+      : chapterNum === 5
+        ? `\nMatch tone to seniority. For senior executives: offer a path they can evaluate, never give directives.\n`
+        : '';
+
+  // Chapter-specific guardrails for fabrication
+  const tier2Labels = story.draft.tier2Statements.map(t => (t.categoryLabel || '').toLowerCase());
+  const supportTexts = story.draft.tier2Statements.filter(t => /support/i.test(t.categoryLabel || '')).map(t => t.text.toLowerCase());
+  const hasRealSupport = supportTexts.some(text =>
+    /onboard|training|implementation|migration|setup|install|dedicated team|support team|customer success|configuration|deployment plan|pilot program/.test(text)
+    && !/already deployed|already validate|already running|already live|already proven/.test(text)
+  );
+
+  let chapterGuardrail = '';
+  if (chapterNum === 3 && !hasRealSupport) {
+    chapterGuardrail = `
+CHAPTER 3 GUARDRAIL — THE SOURCE HAS NO SUPPORT CONTENT.
+The Three Tier does not describe any onboarding, migration, training,
+pilot program, implementation, or support team. You MUST NOT invent any.
+No timelines ("two weeks", "90 days"). No team commitments ("dedicated
+support", "we stay involved"). No pilot structures ("pilot with X reps").
+Write 1-2 sentences of reassurance from FACTS IN THE THREE TIER ONLY.
+A one-sentence chapter is acceptable. Fabrication is not.`;
+  }
+  if (chapterNum === 5) {
+    chapterGuardrail = `
+CHAPTER 5 GUARDRAIL — No invented pilot programs, trial accounts, or
+timelines. Do NOT invent "pick X accounts" or "we'll build dashboards
+in Y days." If the CTA is simple, the chapter is short and direct.
+For senior readers: offer a path to evaluate, never give directives.`;
+  }
+
   const userMessage = `OFFERING: ${story.draft.offering.name}
-AUDIENCE: ${story.draft.audience.name}
+AUDIENCE (THIS IS THE READER): ${story.draft.audience.name}
 CONTENT FORMAT: ${spec.label} (${spec.wordRange[0]}-${spec.wordRange[1]} words total)
 CTA: ${story.cta}
 ${story.emphasis ? `EMPHASIS: ${story.emphasis}` : ''}
-
+${readerDirective}
 THREE TIER MESSAGE:
 Tier 1: "${story.draft.tier1Statement?.text || ''}"
 ${story.draft.tier2Statements.map((t2, i) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}"${t2.priority?.driver ? `, Driver: "${t2.priority.driver}"` : ''})
@@ -1280,7 +1316,15 @@ ${story.chapters.filter((c) => c.chapterNum < chapterNum).map((c) => {
   }).join('\n')}
 ` : ''}
 Write Chapter ${chapterNum}: "${ch.name}"
-IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.`;
+IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.
+
+CRITICAL — NO FABRICATION. You may only assert claims explicitly supported
+by the THREE TIER MESSAGE, AUDIENCE PRIORITIES, or SITUATION above.
+SOURCE-FIRST WRITING: Before writing each sentence, identify which Tier 2,
+Tier 3, or Priority it derives from. If you cannot point to a specific
+source, the sentence is fabricated — cut it. A one-sentence chapter that
+is completely honest is better than three sentences with one fabricated line.
+${chapterGuardrail}`;
 
   let content = await callAI(systemPrompt, userMessage, 'elite');
 

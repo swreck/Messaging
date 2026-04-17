@@ -702,9 +702,17 @@ AUDIENCE: ${draftWithElements.audience.name}`;
     const tier2Labels = draftForStory.tier2Statements
       .map(t => (t.categoryLabel || '').toLowerCase())
       .filter(l => l.length > 0);
-    const hasSupportColumn = tier2Labels.some(l =>
+    const supportColumnLabel = tier2Labels.some(l =>
       /support|onboard|service|help|success|implement/.test(l),
     );
+    const supportColumnTexts = draftForStory.tier2Statements
+      .filter(t => /support/i.test(t.categoryLabel || ''))
+      .map(t => t.text.toLowerCase());
+    const supportContentIsReal = supportColumnTexts.some(text =>
+      /onboard|training|implementation|migration|setup|install|dedicated team|support team|customer success|configuration|deployment plan|pilot program/.test(text)
+      && !/already deployed|already validate|already running|already live|already proven/.test(text)
+    );
+    const hasSupportColumn = supportColumnLabel && supportContentIsReal;
     const hasSocialProofColumn = tier2Labels.some(l =>
       /social|proof|recognition|customer|testimonial|reference/.test(l),
     );
@@ -721,32 +729,35 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       if (chapterNum === 3) {
         if (!hasSupportColumn) {
           return `
-CHAPTER 3 GUARDRAIL — THE SOURCE HAS NO SUPPORT CONTENT.
+CHAPTER 3 GUARDRAIL — CRITICAL — THE SOURCE HAS NO SUPPORT CONTENT.
 
-The Three Tier above does not describe any onboarding, migration, training,
-implementation, or customer success program. You may NOT invent one.
+THIS IS THE MOST IMPORTANT INSTRUCTION FOR THIS CHAPTER. The Three Tier
+above does not describe ANY onboarding, migration, training, pilot program,
+implementation timeline, or customer success program.
 
-Forbidden phrases and claims for this chapter, regardless of how natural they
-feel structurally:
-- "dedicated contact", "dedicated support", "dedicated account manager",
-  "customer success manager", "onboarding lead", "implementation team"
-- "48-hour migration", "structured onboarding", "migration in X days",
-  "typical onboarding", "we handle the setup", "we walk you through"
-- "one person, and you know who they are", "single point of contact"
-- Any invented timeline for how long anything takes
-- Any invented team role working on behalf of the customer
+YOU MUST NOT INVENT ANY OF THESE. This is non-negotiable.
 
-Instead, write reassurance that comes from the PRODUCT ITSELF, using only
-facts from the Three Tier. The product removes risk because of how it is
-built, not because a services layer catches mistakes. Good directions:
-- "The system assumes your team is small — that is the starting point."
-- "You are not learning a new framework. The guidelines you already follow
-  map to the workflows you already have."
-- "When the next update comes out, the change lands in the workflow you
-  already use. There is nothing new to roll out."
+Specifically, you MUST NOT write:
+- ANY timeline ("90 days", "two weeks", "within X")
+- ANY pilot structure ("pilot with X reps", "small group", "test accounts")
+- ANY team commitment ("we stay involved", "live support", "dedicated team",
+  "weekly monitoring", "adoption monitoring")
+- ANY onboarding process ("we run your first X", "we handle setup",
+  "we walk you through")
+- ANY number of accounts, reps, or analyses to perform
 
-A short, honest Chapter 3 is required. Half the word target is fine. Zero
-invented services is non-negotiable.`;
+WHAT TO DO INSTEAD: Write 1-2 sentences of reassurance that come from
+FACTS ALREADY IN THE THREE TIER ABOVE. The product reduces risk because
+of how it is built — not because of a services layer. For example:
+- The technology is already proven at scale (if the Three Tier says this)
+- The data stays on-premises (if the Three Tier says this)
+- The platform is owned by the same company (if the Three Tier says this)
+
+If you cannot write a single honest sentence from the Three Tier data,
+write: "The technology is already in production." That single sentence
+is better than three sentences of fabrication.
+
+A ONE-SENTENCE chapter is acceptable. Fabrication is not.`;
         }
       }
       // Ch4 — You're Not Alone (social proof / customer references)
@@ -781,7 +792,13 @@ You may NOT use phrases like "banks like yours are already using it",
 "beta customers", or any count or plural reference that implies more
 customers than are named above. If you want to reinforce credibility beyond
 the named customer, do it through the SPECIFIC results in the Three Tier
-proof bullets — not through manufactured customer quantities.`;
+proof bullets — not through manufactured customer quantities.
+
+METRICS MUST BE FROM THE THREE TIER. You may NOT invent timelines
+("accelerating by X quarters"), percentages ("Y% improvement"), or outcomes
+("re-engaged dormant accounts") unless those exact facts appear in Tier 3
+proof bullets. If the proof is thin, write a shorter chapter. Two honest
+sentences beat four sentences with one fabricated metric.`;
         }
       }
       // Ch5 — Let's Get Started (direction)
@@ -794,8 +811,19 @@ reader to take. You may NOT invent trial options, sandbox environments,
 workshops, assessments, pilot programs, free audits, or any other offer
 that does not appear explicitly in the Three Tier or the Situation. If the
 CTA is "get a demo", the chapter lands on "get a demo" — not on
-"pick one workflow and run it in our sandbox". If the honest ending is
-thin, make the chapter short and direct.`;
+"pick one workflow and run it in our sandbox". Specifically: do NOT invent
+a number of accounts to test with ("pick 10 accounts"), do NOT invent
+who will do the work ("we'll run the analyses"), do NOT invent a trial
+structure that isn't in the source data.
+
+SENIORITY: If the reader is a senior executive, NEVER give directives.
+"Pick 10 accounts" is a directive. Instead, offer a path: "One way to
+evaluate this: a small pilot with a handful of accounts." The reader
+decides how to act — you present options.
+
+If the honest ending is thin, make the chapter short and direct. One
+sentence pointing to the CTA is better than three sentences inventing
+a pilot program.`;
       }
       return '';
     }
@@ -827,10 +855,21 @@ FOR them, FOR this occasion, not a recycled template.
 `
         : '';
 
+      const readerDirective = `\nTHE READER: "${draftForStory.audience.name}" is the person reading this. Every sentence should be written for THIS person — their concerns, their perspective, their level of seniority. ${
+        chapterNum === 1
+          ? 'Chapter 1 is about the READER\'s world — their challenges, pressures, and daily reality. If the product serves end users who are different from this reader, write about the READER\'s problems, not the end users\' problems.'
+          : chapterNum === 2
+            ? 'Do NOT open with the product name as the sentence subject. Lead with what the READER gets or how their situation changes. The product is the mechanism, not the headline.'
+            : chapterNum === 5
+              ? 'Match tone to seniority. For senior executives: offer a path they can evaluate, never give directives. "One approach would be..." not "Pick X and do Y."'
+              : ''
+      }\n`;
+
       const userMessage = `${situationBlock}OFFERING: ${draftForStory.offering.name}
-AUDIENCE: ${draftForStory.audience.name}
+AUDIENCE (THIS IS THE READER): ${draftForStory.audience.name}
 CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
 CTA: ${story.cta}
+${readerDirective}
 
 THREE TIER MESSAGE:
 Tier 1: "${draftForStory.tier1Statement?.text || ''}"
@@ -920,6 +959,14 @@ will copy the whole thing and ship the fabrication along with the truth.
 Length discipline. If the chapter word budget requires more content than
 you can honestly produce from the Three Tier, produce a shorter chapter.
 Never inflate the word count by adding invented content to reach a target.
+A one-sentence chapter that is completely honest is better than a
+three-sentence chapter with one fabricated line.
+
+SOURCE-FIRST WRITING: Before writing each sentence, identify which Tier 2
+statement, Tier 3 bullet, or Audience Priority it derives from. If you
+cannot point to a specific source in the data above, the sentence is
+fabricated — cut it before writing it. This is not a suggestion. This is
+the test that determines whether the draft succeeds or fails.
 
 The test: if you are about to write something, and you are not sure whether
 it is true, it is not true for this user — so cut it.
