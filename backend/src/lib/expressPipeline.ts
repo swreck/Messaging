@@ -834,17 +834,19 @@ a pilot program.`;
     // tactical symptom.
     let ch1Thesis = '';
     try {
-      const thesisPrompt = `You are writing ONE sentence for a senior executive. Given:
+      const thesisPrompt = `You are writing ONE sentence — a market truth a senior executive would independently recognize.
+
 AUDIENCE: ${draftForStory.audience.name}
 TOP PRIORITY: "${draftForStory.audience.priorities[0]?.text || ''}"
 DRIVER: "${draftForStory.audience.priorities[0]?.driver || ''}"
 
-Write a single sentence in the format: "[Missing category/discipline] means [reader's strategic loss]."
-Example for an SVP of enterprise sales: "Unmanaged device lifecycle management means lost Apple revenue."
-Example for a hospital CEO: "Uncoordinated pathology workflows mean delayed treatment decisions."
-
-The category/discipline should be the STRATEGIC GAP — not a product feature, not a tactical symptom. Name what they are NOT doing, stated as their business consequence.
-Return ONLY the one sentence. No explanation.`;
+Write a single sentence: "[Category condition] means [business consequence]."
+This must be a truth about the MARKET or INDUSTRY — NOT a claim about the reader's team.
+GOOD: "Unmanaged device lifecycle management means lost Apple revenue." (market truth)
+GOOD: "Uncoordinated pathology workflows mean delayed treatment decisions." (market truth)
+BAD: "Your team has no structured way to engage accounts." (claim about their org)
+BAD: "Competitors are filling the gap." (teaching them their landscape)
+Return ONLY the one sentence.`;
       ch1Thesis = await callAI(thesisPrompt, '', 'elite');
       ch1Thesis = ch1Thesis.replace(/^["']|["']$/g, '').trim();
       console.log(`[Ch1 thesis] ${ch1Thesis}`);

@@ -86,16 +86,22 @@ Chapter 1 describes the READER's world — their challenges, their frustrations,
 If the reader is an executive who manages a team that serves customers, Chapter 1 is about the EXECUTIVE's challenges (losing revenue, losing competitive position, teams without tools) — NOT the end customer's problems (device depreciation, workflow inefficiency). The end customer's problems may CAUSE the reader's pain, but Chapter 1 lives in the reader's experience, not downstream.
 
 STRATEGIC ALTITUDE — THIS DETERMINES WHETHER CHAPTER 1 SUCCEEDS OR FAILS:
-The opening sentence must be a BUSINESS THESIS, not a narrative. Format: "[Missing category/discipline] means [reader's strategic loss]."
+Chapter 1 states a MARKET TRUTH the reader independently recognizes — not a claim about the reader's organization. The writer has NO STANDING to tell the reader what their team does wrong or what their competitors are doing. The reader already knows.
+
+FORMAT: "[Category condition] means [business consequence]."
+This is a statement about the MARKET or INDUSTRY, not about "your team" or "your organization."
 
 EXAMPLE (for an SVP of enterprise sales):
 "Unmanaged device lifecycle management means lost Apple revenue."
-NOT: "Your reps have nothing to bring to meetings between purchase cycles."
-The first names a strategic discipline and a business consequence. The second describes an operational symptom. The SVP thinks about revenue and competitive position, not about what their reps bring to meetings.
+NOT: "Your team has no structured way to stay in front of accounts." (presumes knowledge of their team)
+NOT: "Dell and HP are filling the gap." (teaching them their own competitive landscape)
+The SVP reads the first and thinks "that's true about our industry — do we manage lifecycle well enough?" He applies it to himself. The other two tell him about his own business, which is patronizing.
 
-After the thesis sentence, show the DUAL VALUE: what end customers/stakeholders will experience as valuable translates directly into the reader's strategic outcome (revenue, market position, retention, risk reduction).
+STANCE: You are sharing an INSIGHT about the market that the reader can verify independently. You are NOT telling them what their team lacks or what their competitors do. A senior executive who reads "your team has no structured way" would think "who are you to tell me about my team?" and stop reading.
 
-ALTITUDE SELF-CHECK: Read your opening sentence. Does it name a DISCIPLINE or CATEGORY (lifecycle management, account engagement infrastructure, diagnostic capability)? Or does it describe a SYMPTOM (reps have nothing to bring, accounts go dark, results are slow)? If it's a symptom, rewrite at the strategic level.`,
+After the thesis, show DUAL VALUE: what the market/customers experience translates into the reader's strategic outcome.
+
+SELF-CHECK: Read every sentence. Does any sentence tell the reader something about THEIR organization or THEIR competitors that they obviously already know? If yes, cut it. Does any sentence start with "Your team" or "Your reps" followed by a claim about what they lack? If yes, rewrite as a market truth.`,
 
     2: `CHAPTER 2 RULES:
 - This IS the "Let me tell you all about me" chapter.

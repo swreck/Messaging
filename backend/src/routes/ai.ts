@@ -1258,13 +1258,17 @@ router.post('/generate-chapter', requireStoryteller, async (req: Request, res: R
   if (chapterNum === 1) {
     try {
       const topP = story.draft.audience.priorities[0];
-      const thesisPrompt = `You are writing ONE sentence for a senior executive. Given:
+      const thesisPrompt = `You are writing ONE sentence — a market truth a senior executive would independently recognize.
+
 AUDIENCE: ${story.draft.audience.name}
 TOP PRIORITY: "${topP?.text || ''}"
 DRIVER: "${topP?.driver || ''}"
 
-Write a single sentence: "[Missing category/discipline] means [reader's strategic loss]."
-Example: "Unmanaged device lifecycle management means lost Apple revenue."
+Write a single sentence: "[Category condition] means [business consequence]."
+This must be a truth about the MARKET or INDUSTRY — NOT a claim about the reader's team or organization. The reader has no patience for someone telling them what their team lacks.
+GOOD: "Unmanaged device lifecycle management means lost Apple revenue." (market truth)
+BAD: "Your team has no structured way to engage accounts between cycles." (claim about their org)
+BAD: "Competitors are filling the gap when your reps go silent." (teaching them their landscape)
 Return ONLY the one sentence.`;
       ch1Thesis = await callAI(thesisPrompt, '', 'elite');
       ch1Thesis = ch1Thesis.replace(/^["']|["']$/g, '').trim();
@@ -1276,7 +1280,7 @@ Return ONLY the one sentence.`;
 
   // Reader-perspective directive
   const readerDirective = chapterNum === 1
-    ? `\nCRITICAL — THE READER: "${story.draft.audience.name}" is the person reading this. The opening must be a BUSINESS THESIS at the strategic level.${ch1Thesis ? ` USE THIS AS YOUR OPENING THESIS (adapt for tone but keep the strategic frame): "${ch1Thesis}"` : ' Format: "[Missing category/discipline] means [reader\'s strategic loss]."'} Then show dual value: what end customers experience translates into the reader\'s strategic outcome.\n`
+    ? `\nCRITICAL — THE READER: "${story.draft.audience.name}". State a MARKET TRUTH this person independently recognizes. Do NOT make claims about their team or tell them what their competitors do — they know. ${ch1Thesis ? `USE THIS AS YOUR OPENING: "${ch1Thesis}"` : 'Format: "[Category condition] means [business consequence]."'}\n`
     : chapterNum === 2
       ? `\nDo NOT open with the product name as the sentence subject. Lead with what the READER gets or how their situation changes.\n`
       : chapterNum === 5
