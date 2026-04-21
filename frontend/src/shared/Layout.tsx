@@ -39,8 +39,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { path: '/audiences', label: 'Audiences' },
     { path: '/offerings', label: 'Offerings' },
     { path: '/three-tiers', label: '3 Tiers' },
-    { path: '/five-chapters', label: '5 Ch. Stories' },
-    { path: '/settings', label: 'Settings' },
+    { path: '/five-chapters', label: 'Stories' },
   ];
 
   function isActive(path: string) {

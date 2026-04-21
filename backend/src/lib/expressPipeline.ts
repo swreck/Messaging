@@ -1347,3 +1347,584 @@ ${draftForStory.tier2Statements
     await fail(message);
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Guided Excellence — checkpoint-based pipeline
+// ═══════════════════════════════════════════════════════════════
+
+// Step 1: Commit confirmed inputs and build the Three Tier foundation.
+// Synchronous — takes ~30-45 seconds. Creates DB rows, runs mapping,
+// generates Three Tier with voice check. Returns the full draft data
+// so the frontend can display the foundation for review.
+export interface FoundationResult {
+  draftId: string;
+  offeringId: string;
+  audienceId: string;
+  tier1: { id: string; text: string } | null;
+  tier2: {
+    id: string;
+    text: string;
+    categoryLabel: string;
+    priorityId: string | null;
+    tier3: { id: string; text: string }[];
+  }[];
+  audienceName: string;
+}
+
+export async function commitAndBuildFoundation(
+  interpretation: ExpressInterpretation,
+  userId: string,
+  workspaceId: string,
+): Promise<FoundationResult> {
+  if (!interpretation.audiences || interpretation.audiences.length === 0) {
+    throw new Error('Need at least one audience.');
+  }
+
+  const primaryAudience = interpretation.audiences[0];
+  const cleanedDiffs = interpretation.offering.differentiators
+    .map(d => ({ text: d.text.trim(), source: d.source, mf: (d as any).motivatingFactor || '' }))
+    .filter(d => d.text.length > 0);
+  const cleanedPriorities = primaryAudience.priorities
+    .map(p => ({ text: p.text.trim(), source: p.source, driver: (p as any).driver || '' }))
+    .filter(p => p.text.length > 0);
+
+  if (cleanedDiffs.length === 0) throw new Error('Need at least one differentiator.');
+  if (cleanedPriorities.length === 0) throw new Error('Need at least one priority.');
+
+  const offering = await prisma.offering.create({
+    data: {
+      userId,
+      workspaceId,
+      name: interpretation.offering.name.trim() || 'My offering',
+      description: interpretation.offering.description.trim(),
+      elements: {
+        create: cleanedDiffs.map((d, i) => ({
+          text: d.text,
+          source: d.source === 'stated' ? 'manual' : 'ai_extracted',
+          sortOrder: i,
+          motivatingFactor: d.mf,
+        })),
+      },
+    },
+    include: { elements: { orderBy: { sortOrder: 'asc' } } },
+  });
+
+  const audience = await prisma.audience.create({
+    data: {
+      userId,
+      workspaceId,
+      name: primaryAudience.name.trim() || 'My audience',
+      description: primaryAudience.description.trim(),
+      priorities: {
+        create: cleanedPriorities.map((p, i) => ({
+          text: p.text,
+          rank: i + 1,
+          sortOrder: i,
+          driver: p.driver,
+        })),
+      },
+    },
+    include: { priorities: { orderBy: { sortOrder: 'asc' } } },
+  });
+
+  const draft = await prisma.threeTierDraft.create({
+    data: {
+      offeringId: offering.id,
+      audienceId: audience.id,
+      currentStep: 5,
+    },
+  });
+
+  // ── Mapping ────────────────────────────────────
+  const mappingMessage = `PRIORITIES (ranked by importance):
+${audience.priorities
+  .map(p => `- [ID: ${p.id}] [Rank ${p.rank}] "${p.text}"`)
+  .join('\n')}
+
+CAPABILITIES/DIFFERENTIATORS:
+${offering.elements
+  .map(e => `- [ID: ${e.id}] "${e.text}"${e.motivatingFactor ? ` (MF: ${e.motivatingFactor})` : ''}`)
+  .join('\n')}`;
+
+  type MappingResult = {
+    mappings: {
+      priorityId: string;
+      elementId: string;
+      confidence: number;
+      mfRationale?: string;
+    }[];
+  };
+
+  const mappingResult = await callAIWithJSON<MappingResult>(
+    MAPPING_SYSTEM,
+    mappingMessage,
+    'fast',
+  );
+
+  const validPriorityIds = new Set(audience.priorities.map(p => p.id));
+  const validElementIds = new Set(offering.elements.map(e => e.id));
+  const cleanMappings = (mappingResult.mappings || []).filter(
+    m => validPriorityIds.has(m.priorityId) && validElementIds.has(m.elementId),
+  );
+
+  for (const m of cleanMappings.filter(m => m.confidence >= 0.5)) {
+    await prisma.mapping.create({
+      data: {
+        draftId: draft.id,
+        priorityId: m.priorityId,
+        elementId: m.elementId,
+        confidence: m.confidence,
+        status: 'confirmed',
+        mfRationale: m.mfRationale || '',
+      },
+    });
+  }
+
+  // ── Three Tier generation ──────────────────────
+  const confirmedMappings = await prisma.mapping.findMany({
+    where: { draftId: draft.id, status: 'confirmed' },
+    include: { priority: true, element: true },
+  });
+
+  if (confirmedMappings.length === 0) {
+    throw new Error('No mappings could be generated. Try editing your inputs.');
+  }
+
+  const byPriority = new Map<
+    string,
+    { priority: typeof confirmedMappings[0]['priority']; elements: typeof confirmedMappings[0]['element'][] }
+  >();
+  for (const m of confirmedMappings) {
+    if (!byPriority.has(m.priorityId)) {
+      byPriority.set(m.priorityId, { priority: m.priority, elements: [] });
+    }
+    byPriority.get(m.priorityId)!.elements.push(m.element);
+  }
+
+  const mappedElementIds = new Set(confirmedMappings.map(m => m.elementId));
+  const orphanElements = offering.elements.filter(e => !mappedElementIds.has(e.id));
+
+  const convertMessage = `CONFIRMED MAPPINGS (grouped by priority, in rank order):
+${audience.priorities
+  .filter(p => byPriority.has(p.id))
+  .map(p => {
+    const group = byPriority.get(p.id)!;
+    return `Priority [ID: ${p.id}] [Rank ${p.rank}]: "${p.text}"
+  Driver (why this matters to them): ${p.driver || 'not specified'}
+  Mapped capabilities: ${group.elements.map(e => `"${e.text}"`).join(', ')}`;
+  })
+  .join('\n\n')}
+${
+  orphanElements.length > 0
+    ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements
+        .map(e => `- "${e.text}"`)
+        .join('\n')}`
+    : ''
+}
+AUDIENCE: ${audience.name}`;
+
+  type TierResult = {
+    tier1: { text: string; priorityId: string };
+    tier2: {
+      text: string;
+      priorityId?: string;
+      categoryLabel: string;
+      tier3: string[];
+    }[];
+  };
+
+  async function generateTierWithVoiceCheck(): Promise<TierResult> {
+    const first = await callAIWithJSON<TierResult>(
+      CONVERT_LINES_SYSTEM,
+      convertMessage,
+      'elite',
+    );
+    try {
+      const priorityById = new Map(audience.priorities.map(p => [p.id, p]));
+      const statements: StatementInput[] = [];
+      if (first.tier1?.text) {
+        statements.push({
+          text: first.tier1.text,
+          column: 'Tier 1',
+          priorityText: priorityById.get(first.tier1.priorityId)?.text,
+        });
+      }
+      for (const t2 of first.tier2 || []) {
+        statements.push({
+          text: t2.text,
+          column: t2.categoryLabel || '',
+          priorityText: t2.priorityId ? priorityById.get(t2.priorityId)?.text : undefined,
+        });
+      }
+      const check = await checkStatements(statements);
+      if (!check.passed) {
+        console.log(`[GuidedFoundation] voice check found ${check.violations.length} violations, retrying`);
+        const feedback = buildViolationFeedback(check.violations);
+        return await callAIWithJSON<TierResult>(
+          CONVERT_LINES_SYSTEM,
+          convertMessage + feedback,
+          'elite',
+        );
+      }
+    } catch (err) {
+      console.error('[GuidedFoundation] voice check error (fail-open):', err);
+    }
+    return first;
+  }
+
+  const tierResult = await generateTierWithVoiceCheck();
+
+  let tier1Row: { id: string; text: string } | null = null;
+  if (tierResult.tier1?.text) {
+    tier1Row = await prisma.tier1Statement.create({
+      data: { draftId: draft.id, text: tierResult.tier1.text },
+    });
+  }
+
+  const tier2Rows: FoundationResult['tier2'] = [];
+  for (let i = 0; i < (tierResult.tier2 || []).length; i++) {
+    const t2 = tierResult.tier2[i];
+    const validT2Priority = t2.priorityId && validPriorityIds.has(t2.priorityId)
+      ? t2.priorityId
+      : null;
+    const tier2 = await prisma.tier2Statement.create({
+      data: {
+        draftId: draft.id,
+        text: t2.text,
+        sortOrder: i,
+        priorityId: validT2Priority,
+        categoryLabel: t2.categoryLabel || '',
+      },
+    });
+    const t3Rows: { id: string; text: string }[] = [];
+    if (Array.isArray(t2.tier3)) {
+      for (let j = 0; j < t2.tier3.length; j++) {
+        const bullet = await prisma.tier3Bullet.create({
+          data: { tier2Id: tier2.id, text: t2.tier3[j], sortOrder: j },
+        });
+        t3Rows.push({ id: bullet.id, text: bullet.text });
+      }
+    }
+    tier2Rows.push({
+      id: tier2.id,
+      text: tier2.text,
+      categoryLabel: tier2.categoryLabel,
+      priorityId: validT2Priority,
+      tier3: t3Rows,
+    });
+  }
+
+  return {
+    draftId: draft.id,
+    offeringId: offering.id,
+    audienceId: audience.id,
+    tier1: tier1Row,
+    tier2: tier2Rows,
+    audienceName: audience.name,
+  };
+}
+
+// Step 2: Build a Five Chapter draft from a confirmed foundation.
+// Async with polling — takes ~2-3 minutes. Creates an ExpressJob,
+// runs chapters + blend in the background. The frontend polls status.
+export async function buildDraftFromFoundation(
+  draftId: string,
+  medium: string,
+  cta: string,
+  situation: string,
+  userId: string,
+  workspaceId: string,
+): Promise<{ jobId: string; storyId: string }> {
+  const draftForStory = await prisma.threeTierDraft.findFirst({
+    where: { id: draftId },
+    include: {
+      tier1Statement: true,
+      tier2Statements: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          tier3Bullets: { orderBy: { sortOrder: 'asc' } },
+          priority: true,
+        },
+      },
+      offering: { include: { elements: true } },
+      audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+    },
+  });
+  if (!draftForStory) throw new Error('Draft not found.');
+  if (!draftForStory.tier1Statement) throw new Error('Foundation has no Tier 1 — build it first.');
+
+  const mediumKey = pickInternalMedium(medium);
+  const mediumSpec = getMediumSpec(mediumKey);
+
+  const story = await prisma.fiveChapterStory.create({
+    data: {
+      draftId,
+      medium: mediumKey,
+      customName: `${medium} · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+      cta: cta || `Get started with ${draftForStory.offering.name || 'us'}`,
+    },
+  });
+
+  const job = await prisma.expressJob.create({
+    data: {
+      userId,
+      workspaceId,
+      draftId,
+      status: 'pending',
+      stage: 'Writing your first draft',
+      progress: 5,
+      resultStoryId: story.id,
+      interpretation: { guided: true, medium, cta, situation } as unknown as object,
+    },
+  });
+
+  // Fire the chapter generation pipeline in the background
+  setImmediate(() => {
+    runDraftPipeline(job.id, story.id, draftForStory, mediumKey, mediumSpec, cta, situation)
+      .catch(err => console.error(`[GuidedDraft] Uncaught error for job ${job.id}:`, err));
+  });
+
+  return { jobId: job.id, storyId: story.id };
+}
+
+// Internal: runs the Five Chapter generation pipeline for a guided draft.
+// Reuses the same chapter generation, voice check, and fabrication check
+// logic as the autonomous pipeline but operates on a single confirmed draft.
+async function runDraftPipeline(
+  jobId: string,
+  storyId: string,
+  draftForStory: any,
+  mediumKey: string,
+  mediumSpec: ReturnType<typeof getMediumSpec>,
+  cta: string,
+  situation: string,
+): Promise<void> {
+  async function update(data: Partial<{
+    status: string; stage: string; progress: number; error: string;
+  }>) {
+    try {
+      await prisma.expressJob.update({ where: { id: jobId }, data });
+    } catch (err) {
+      console.error(`[GuidedDraft] ${jobId} failed to update job:`, err);
+    }
+  }
+
+  try {
+    // Detect support/social proof content for guardrails
+    const tier2Labels = draftForStory.tier2Statements
+      .map((t: any) => (t.categoryLabel || '').toLowerCase())
+      .filter((l: string) => l.length > 0);
+    const hasSupportColumn = tier2Labels.some((l: string) =>
+      /support|onboard|service|help|success|implement/.test(l),
+    );
+    const hasSocialProofColumn = tier2Labels.some((l: string) =>
+      /social|proof|recognition|customer|testimonial|reference/.test(l),
+    );
+    const namedCustomers = new Set<string>();
+    for (const t2 of draftForStory.tier2Statements) {
+      for (const b of t2.tier3Bullets) {
+        const m = b.text.match(/\b([A-Z][a-zA-Z&']*(?:\s+(?:[A-Z][a-zA-Z&']*|of|the|and|at|for)){0,4})\s+(?:Bank|Hospital|Clinic|Health|Medical|Regional|Community|Inc|LLC|Ltd|Co|Corporation|University|College|School|Center)\b/);
+        if (m) namedCustomers.add(m[0].trim());
+      }
+    }
+
+    function buildChapterGuardrails(chapterNum: number): string {
+      if (chapterNum === 3 && !hasSupportColumn) {
+        return '\nCHAPTER 3 GUARDRAIL: No support content in the Three Tier. Do NOT invent onboarding, pilots, timelines, or team commitments. Write reassurance from facts already in the Three Tier only.';
+      }
+      if (chapterNum === 4 && namedCustomers.size === 0 && !hasSocialProofColumn) {
+        return '\nCHAPTER 4 GUARDRAIL: No customer references in the Three Tier. Do NOT invent customer names, counts, or composite references. Re-anchor in the reader\'s own situation.';
+      }
+      if (chapterNum === 5) {
+        return `\nCHAPTER 5 GUARDRAIL: CTA is "${cta}". Do NOT invent trial options, sandbox environments, or pilot programs not in the source. For senior executives, offer paths, not directives.`;
+      }
+      return '';
+    }
+
+    // Chapter 1 strategic thesis
+    let ch1Thesis = '';
+    try {
+      const thesisPrompt = `You are writing ONE sentence — a market truth a senior executive would independently recognize.
+
+AUDIENCE: ${draftForStory.audience.name}
+TOP PRIORITY: "${draftForStory.audience.priorities[0]?.text || ''}"
+DRIVER: "${draftForStory.audience.priorities[0]?.driver || ''}"
+
+Write a single sentence: "[Category condition] means [business consequence]."
+This must be a truth about the MARKET or INDUSTRY — NOT a claim about the reader's team.
+Return ONLY the one sentence.`;
+      ch1Thesis = await callAI(thesisPrompt, '', 'elite');
+      ch1Thesis = ch1Thesis.replace(/^["']|["']$/g, '').trim();
+    } catch (err) {
+      console.error('[GuidedDraft] Ch1 thesis failed:', err);
+    }
+
+    for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
+      await update({
+        status: `chapter_${chapterNum}`,
+        stage: `Writing section ${chapterNum} of 5`,
+        progress: 10 + chapterNum * 15,
+      });
+
+      const systemPrompt = buildChapterPrompt(chapterNum, mediumKey);
+      const ch = CHAPTER_CRITERIA[chapterNum - 1];
+      const chapterGuardrail = buildChapterGuardrails(chapterNum);
+      const prevChapters = await prisma.chapterContent.findMany({
+        where: { storyId, chapterNum: { lt: chapterNum } },
+        orderBy: { chapterNum: 'asc' },
+      });
+
+      const situationBlock = situation
+        ? `SITUATION — THIS IS WHAT THE DRAFT MUST DO:\n${situation}\n\n`
+        : '';
+
+      const readerDirective = `\nTHE READER: "${draftForStory.audience.name}" is the person reading this.${
+        chapterNum === 1
+          ? ` The opening must be a BUSINESS THESIS at the strategic level.${ch1Thesis ? ` USE THIS AS YOUR OPENING THESIS: "${ch1Thesis}"` : ''}`
+          : chapterNum === 2
+            ? ' Do NOT open with the product name as the sentence subject.'
+            : ''
+      }\n`;
+
+      const threeTierBlock = chapterNum === 1 ? '' : `
+THREE TIER MESSAGE:
+Tier 1: "${draftForStory.tier1Statement?.text || ''}"
+${draftForStory.tier2Statements
+  .map(
+    (t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}"${
+      t2.priority?.driver ? `, Driver: "${t2.priority.driver}"` : ''
+    })
+  Proof: ${t2.tier3Bullets.map((t3: any) => t3.text).join(', ')}`,
+  )
+  .join('\n')}
+`;
+
+      const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE: ${draftForStory.audience.name}
+CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
+${chapterNum === 1 ? '' : `CTA: ${cta}\n`}${readerDirective}
+${threeTierBlock}
+AUDIENCE PRIORITIES:
+${draftForStory.audience.priorities
+  .map((p: any) => `[Rank ${p.rank}] "${p.text}"${p.driver ? ` — Driver: "${p.driver}"` : ''}`)
+  .join('\n')}
+
+${prevChapters.length > 0 ? `PREVIOUS CHAPTERS:\n${prevChapters.map((c: any) => `Ch ${c.chapterNum}: ${c.content.substring(0, 500)}`).join('\n')}\n` : ''}
+Write Chapter ${chapterNum}: "${ch.name}"
+Start fresh. Each chapter is self-contained.
+${chapterNum > 1 ? 'CRITICAL — NO FABRICATION. Only assert claims from the Three Tier or Situation above.' : ''}
+${chapterGuardrail}`;
+
+      let content = await callAI(systemPrompt, userMessage, 'elite');
+
+      // Voice check
+      try {
+        const proseCheck = await checkProse(content, `Chapter ${chapterNum}: ${ch.name}`);
+        if (!proseCheck.passed && proseCheck.violations.length > 0) {
+          const feedback = buildProseViolationFeedback(proseCheck.violations);
+          content = await callAI(systemPrompt, userMessage + feedback, 'elite');
+        }
+      } catch (err) {
+        console.error(`[GuidedDraft] ch${chapterNum} voice check error (fail-open):`, err);
+      }
+
+      // Fabrication check
+      try {
+        const tierTextForCheck = `Tier 1: "${draftForStory.tier1Statement?.text || ''}"
+${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" Proof: ${t2.tier3Bullets.map((b: any) => b.text).join(', ')}`).join('\n')}`;
+        const prioritiesTextForCheck = draftForStory.audience.priorities
+          .map((p: any) => `[Rank ${p.rank}] "${p.text}"`)
+          .join('\n');
+        const fabCheck = await checkChapterFabrication({
+          situation,
+          tierText: tierTextForCheck,
+          prioritiesText: prioritiesTextForCheck,
+          chapterContent: content,
+        });
+        if (!fabCheck.passed && fabCheck.violations.length > 0) {
+          const feedback = buildFabricationFeedback(fabCheck.violations);
+          content = await callAI(systemPrompt, userMessage + feedback, 'elite');
+        }
+      } catch (err) {
+        console.error(`[GuidedDraft] ch${chapterNum} fabrication check error (fail-open):`, err);
+      }
+
+      content = content.replace(/^\s*\.{2,}\s*/g, '').trim();
+      if (chapterNum < 5 && cta) {
+        const ctaLower = cta.toLowerCase().trim();
+        content = content
+          .split('\n')
+          .map(line => (line.toLowerCase().trim() === ctaLower ? '' : line))
+          .filter(line => line.trim())
+          .join('\n')
+          .trim();
+      }
+
+      await prisma.chapterContent.upsert({
+        where: { storyId_chapterNum: { storyId, chapterNum } },
+        update: { title: ch.name, content },
+        create: { storyId, chapterNum, title: ch.name, content },
+      });
+    }
+
+    // ── Blend ──────────────────────────────────────
+    await update({ status: 'blending', stage: 'Polishing the draft', progress: 88 });
+
+    const storyWithChapters = await prisma.fiveChapterStory.findFirst({
+      where: { id: storyId },
+      include: { chapters: { orderBy: { chapterNum: 'asc' } } },
+    });
+    if (!storyWithChapters || storyWithChapters.chapters.length < 5) {
+      throw new Error('Not all chapters generated.');
+    }
+
+    const sourceText = storyWithChapters.chapters.map(ch => ch.content).join('\n\n');
+    const blendMessage = `${situation ? `SITUATION:\n${situation}\n\n` : ''}CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words)
+FORMAT RULES: ${mediumSpec.format}
+TONE: ${mediumSpec.tone}
+
+${sourceText}
+
+Polish this into a final, cohesive ${mediumSpec.label.toLowerCase()}.
+CRITICAL — NO FABRICATION. Only use claims from the source chapters above.`;
+
+    let blendedText = await callAI(BLEND_SYSTEM, blendMessage, 'elite');
+
+    // Blend voice check
+    try {
+      const blendCheck = await checkProse(blendedText, `Blended ${mediumSpec.label}`);
+      if (!blendCheck.passed && blendCheck.violations.length > 0) {
+        const feedback = buildProseViolationFeedback(blendCheck.violations);
+        blendedText = await callAI(BLEND_SYSTEM, blendMessage + feedback, 'elite');
+      }
+    } catch (err) {
+      console.error(`[GuidedDraft] blend voice check error (fail-open):`, err);
+    }
+
+    // Strip markdown
+    blendedText = blendedText
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/^[-*]\s+/gm, '')
+      .replace(/^\d+\.\s+/gm, '')
+      .replace(/^---+\s*$/gm, '')
+      .replace(/^>\s?/gm, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    await prisma.fiveChapterStory.update({
+      where: { id: storyId },
+      data: { blendedText, stage: 'blended', version: { increment: 1 } },
+    });
+
+    await update({ status: 'complete', stage: 'First draft ready', progress: 100 });
+    console.log(`[GuidedDraft] ${jobId} complete, story ${storyId}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[GuidedDraft] ${jobId} ${message}`);
+    await prisma.expressJob.update({
+      where: { id: jobId },
+      data: { status: 'error', error: message, stage: 'Something went wrong' },
+    }).catch(() => {});
+  }
+}

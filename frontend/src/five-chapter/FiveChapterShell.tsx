@@ -901,6 +901,17 @@ export function FiveChapterShell() {
         <div className="fcs-content-first" style={{ marginBottom: 16 }}>
           <div className="fcs-blended-header" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
             <h3 style={{ margin: 0 }}>{blendedStage === 'personalized' ? 'Personalized Draft' : blendedStage === 'polished' ? 'Polished Draft' : 'Your Draft'}</h3>
+            {story.chapters.length > 0 ? (
+              <button
+                className="copy-btn"
+                onClick={() => setChaptersCollapsed(!chaptersCollapsed)}
+                style={{ color: 'var(--accent)', fontWeight: 500 }}
+              >
+                {chaptersCollapsed ? 'See sections' : 'Hide sections'}
+              </button>
+            ) : (
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Sections not available for this draft</span>
+            )}
             <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
             <button className="copy-btn" onClick={exportStory}>Export</button>
             <button className="copy-btn" onClick={shareStory}>Share</button>
@@ -1171,7 +1182,7 @@ export function FiveChapterShell() {
           )}
 
           {/* Chapter disclosure — one thin row when collapsed, full cards when expanded */}
-          {chaptersCollapsed && allChaptersGenerated && (
+          {chaptersCollapsed && story.chapters.length > 0 && (
             <button
               onClick={() => setChaptersCollapsed(false)}
               style={{
@@ -1195,7 +1206,7 @@ export function FiveChapterShell() {
             </button>
           )}
 
-          {!chaptersCollapsed && (story.joinedText || story.blendedText) && allChaptersGenerated && (
+          {!chaptersCollapsed && (story.joinedText || story.blendedText) && story.chapters.length > 0 && (
             <button
               onClick={() => setChaptersCollapsed(true)}
               style={{

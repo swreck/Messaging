@@ -9,7 +9,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [demoCount, setDemoCount] = useState<number | null>(null);
+  const [, setDemoCount] = useState<number | null>(null);
 
   useEffect(() => {
     // Use the public demo-count endpoint — NOT the admin demos endpoint.
@@ -82,9 +82,7 @@ export function LoginPage() {
           Have an invite link? <Link to="/register">Create account</Link>
         </p>
 
-        {demoCount !== null && demoCount > 0 && (
-          <p className="login-demo-count">{demoCount} demo accounts</p>
-        )}
+        {/* Demo count hidden — admin-only info, confuses new users */}
       </div>
     </div>
   );

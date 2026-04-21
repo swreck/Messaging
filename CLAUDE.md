@@ -23,6 +23,47 @@ Maria, Your Messaging Partner — a web app implementing Ken Rosen's two messagi
 - **Three Tier Builder (3T)** — 8-step coached process that produces a canonical value hierarchy
 - **Five Chapter Story Generator (5CS)** — generates narrative stories from a completed Three Tier
 
+## Maria 3.0: Guided Excellence — SUCCESS METRICS FOR DEVELOPMENT
+
+**Read this before every build session. Do not claim readiness for Ken's review until every metric is met.**
+
+These are SPECIFIC standards. Ken's descriptions are literal, not general. Failure to meet these IS failure.
+
+### Outcome Metrics
+1. **Zero hallucinated capabilities.** Every capability traceable to user input or Maria's verified research from real sources. Nothing from training knowledge.
+2. **Priorities are the audience's world.** Zero product features as priorities. Every priority passes: "would this person worry about this at 2am?"
+3. **Tier 1 compels action as a market truth.** The reader thinks "I can't ignore this." It names a discipline and a consequence. It does NOT tell the reader what they already know or make claims about their organization.
+4. **No fabrication in deliverables.** Every fact, metric, customer name, timeline traceable to user input or verified research.
+5. **The deliverable sounds like the user.** Not AI, not marketing, not a consultant.
+6. **Time to first value: <3 minutes.** Time to deliverable: <20 minutes.
+
+### Interaction Metrics
+7. **No modal walls.** At every moment, user can talk to Maria OR directly edit. Switching is instant. No "are you sure?" No separate modes.
+8. **Guidance density adapts.** Full for new users. After ~5 interactions Maria asks about length preference. User can always request shorter without losing substance.
+9. **Terminology introduced naturally in context.** "I tend to call these 'priorities.'" Never jargon without definition. Maria cannot assume methodological fluency.
+10. **Maria navigates to relevant pages** as conversation shifts, like a colleague pulling up notes.
+11. **Maria asks questions only when she genuinely has them.** No artificial quotas. No "would you like me to..." at the end of every response.
+12. **Attachments and research are first-class inputs everywhere.** Not just at start. Part of core interaction.
+
+### Innovation Layer Metrics
+13. **"i" icons on every element** show stable intent and quality metric. Static. Discoverable. Separate from Maria's evaluation.
+14. **Maria's evaluation is live.** Highlights update within 5-10 seconds of content changes. Nothing cached. Every evaluation responds to current state.
+15. **Visual indicators focus attention.** Subtle shading = Maria has input. Hand up = Maria has input across multiple areas. User engages when they choose.
+16. **Maria starts with biggest gap** when user clicks hand without designating focus. Briefly frames scope. User can redirect.
+17. **Backlog/resurface pattern.** Maria logs dismissed observations. If user asks "what else?" Maria resurfaces: "I've got 3 things, 2 of which we've discussed."
+18. **Research is core capability.** Maria reads websites, compares competitors, researches personas from current sources. Results go into structured data with rose bar/wash provenance.
+
+### Platform Metrics
+19. **iPad/Mac: both visible.** Chat and content simultaneously. Edit AND discuss without switching.
+20. **iPhone: Maria-first.** Content for reading. Maria for directing. Voice commands primary editing path. "They know I hate typing on a phone."
+21. **Consultation toggle works cleanly.** OFF = effective AI app. ON = new-generation partner. Same data underneath.
+22. **Multimodal from the start.** Architecture assumes voice, touch, attachments, research. Text-only V1 acceptable but architecture ready.
+
+### Style and Delight
+23. **Style observations captured from edits.** End-of-session acknowledgment with pointer to settings.
+24. **Professional delight.** The joy of a system making life easier. Not cute. Not clever. The user thinks "they thought of everything."
+25. **The user can describe what they did** and it sounds like sophisticated strategic work.
+
 ## Product Intent
 
 **Why this exists:** Ken Rosen has developed two proprietary messaging methodologies over his career. Maria turns those methodologies into a guided, AI-coached experience that anyone can walk through — without Ken being in the room. This is the product form of Ken's consulting expertise.

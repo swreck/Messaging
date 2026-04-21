@@ -42,6 +42,12 @@ export function DashboardPage() {
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [loading, setLoading] = useState(true);
+  const [consultation, setConsultation] = useState(() => {
+    try {
+      const saved = localStorage.getItem('maria-consultation');
+      return saved === null ? true : saved === 'on';
+    } catch { return true; }
+  });
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'dashboard' }); registerRefresh(loadAll); }, []);
@@ -100,7 +106,13 @@ export function DashboardPage() {
   const needsFirstThreeTier = hasSetup && allDrafts.length === 0;
 
   function getStepLabel(step: number): string {
-    const labels = ['Confirm', 'Your Offering', 'Your Audience', 'Building', 'Your Three Tier'];
+    const labels = [
+      'Setting up',
+      'Describing your offering',
+      'Defining your audience',
+      'Mapping priorities',
+      'Reviewing your message',
+    ];
     return labels[step - 1] || `Step ${step}`;
   }
 
@@ -121,27 +133,49 @@ export function DashboardPage() {
   const ttCount = allDrafts.length;
   const fcsCount = allDrafts.reduce((sum, d) => sum + d.deliverableCount, 0);
 
+  function toggleConsultation() {
+    const next = !consultation;
+    setConsultation(next);
+    try { localStorage.setItem('maria-consultation', next ? 'on' : 'off'); } catch {}
+    if (next) navigate('/express');
+  }
+
   return (
     <div className="dashboard">
-      {activeWorkspace && (
-        <h2 className="dashboard-workspace-name">{activeWorkspace.name}</h2>
-      )}
+      {/* Consultation toggle — default ON */}
+      <div className="consultation-toggle-bar">
+        <div className="consultation-toggle-left">
+          {activeWorkspace && (
+            <h2 className="dashboard-workspace-name" style={{ margin: 0 }}>{activeWorkspace.name}</h2>
+          )}
+        </div>
+        <label className="consultation-toggle" title={consultation ? 'Maria guides you through building your message. Turn off to work manually.' : 'Turn on to let Maria guide you through building your message step by step.'}>
+          <span className={`consultation-toggle-label ${consultation ? 'consultation-toggle-label-active' : ''}`}>
+            {consultation ? 'Maria is your partner' : 'Add collaboration'}
+          </span>
+          <button
+            type="button"
+            className={`consultation-switch ${consultation ? 'consultation-switch-on' : ''}`}
+            onClick={toggleConsultation}
+            aria-label="Toggle Maria collaboration"
+          >
+            <span className="consultation-switch-thumb" />
+          </button>
+        </label>
+      </div>
 
-      {/* New user welcome */}
+      {/* New user — go straight to guided */}
       {isNew && (
         <div className="dashboard-welcome empty-state-enhanced">
           <div className="empty-icon">💬</div>
           <h3>Welcome to Maria</h3>
-          <p>Tell Maria what you're working on — she'll help you build your messaging from scratch.</p>
+          <p>Maria will help you build persuasive messaging through a guided conversation. Just answer her questions.</p>
           <button
             className="btn btn-primary"
-            onClick={() => {
-              const bubble = document.querySelector('.partner-bubble') as HTMLElement;
-              if (bubble) bubble.click();
-            }}
+            onClick={() => navigate('/express')}
             style={{ marginTop: 12 }}
           >
-            Work with Maria
+            Get started with Maria
           </button>
         </div>
       )}
@@ -242,9 +276,18 @@ export function DashboardPage() {
       {/* Completed Three Tiers — portfolio view with Tier 1 text */}
       {completed.length > 0 && (
         <div style={{ marginTop: 24 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Your recent messaging work
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
+              Recent work
+            </h3>
+            <button
+              className="btn btn-ghost"
+              onClick={() => navigate('/express')}
+              style={{ fontSize: 13, color: 'var(--accent, #007aff)', padding: '4px 10px' }}
+            >
+              + New message
+            </button>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {completed.map(d => (
               <div

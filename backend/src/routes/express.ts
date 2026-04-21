@@ -21,8 +21,11 @@ import {
 import {
   commitInterpretation,
   commitInterpretationForWizard,
+  commitAndBuildFoundation,
+  buildDraftFromFoundation,
   runPipeline,
 } from '../lib/expressPipeline.js';
+import { callAIWithJSON } from '../services/ai.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -233,6 +236,169 @@ router.get('/status/:jobId', requireWorkspace, async (req: Request, res: Respons
     variants,
     story,
   });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Guided Excellence endpoints — checkpoint-based flow
+// ═══════════════════════════════════════════════════════════════
+
+// POST /api/express/build-foundation
+// Takes a confirmed enriched interpretation, creates DB rows, and generates
+// the Three Tier foundation synchronously (~30-45 seconds).
+router.post('/build-foundation', requireWorkspace, async (req: Request, res: Response) => {
+  const { interpretation } = req.body as { interpretation?: ExpressInterpretation };
+
+  if (!interpretation) {
+    res.status(400).json({ error: 'An interpretation is required.' });
+    return;
+  }
+  if (!interpretation.offering?.name) {
+    res.status(400).json({ error: 'The offering needs a name.' });
+    return;
+  }
+  if (!interpretation.audiences || interpretation.audiences.length === 0) {
+    res.status(400).json({ error: 'Need at least one audience.' });
+    return;
+  }
+
+  try {
+    const result = await commitAndBuildFoundation(
+      interpretation,
+      req.user!.userId,
+      req.workspaceId!,
+    );
+    res.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error('[GuidedFoundation] error:', message);
+    res.status(500).json({ error: `Had trouble building the foundation: ${message}` });
+  }
+});
+
+// POST /api/express/build-draft
+// Takes a confirmed draft + medium + CTA. Generates the Five Chapter Story
+// async. Returns a jobId the frontend can poll via /status/:jobId.
+router.post('/build-draft', requireWorkspace, async (req: Request, res: Response) => {
+  const { draftId, medium, cta, situation } = req.body as {
+    draftId?: string;
+    medium?: string;
+    cta?: string;
+    situation?: string;
+  };
+
+  if (!draftId) {
+    res.status(400).json({ error: 'A draft ID is required.' });
+    return;
+  }
+  if (!medium) {
+    res.status(400).json({ error: 'A format is required (email, pitch deck, etc.).' });
+    return;
+  }
+
+  try {
+    const result = await buildDraftFromFoundation(
+      draftId,
+      medium,
+      cta || '',
+      situation || '',
+      req.user!.userId,
+      req.workspaceId!,
+    );
+    res.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error('[GuidedDraft] error:', message);
+    res.status(500).json({ error: `Had trouble starting the draft: ${message}` });
+  }
+});
+
+// GET /api/express/foundation/:draftId
+// Returns the full Three Tier data for a given draft, for display after
+// edits or on return visits.
+router.get('/foundation/:draftId', requireWorkspace, async (req: Request, res: Response) => {
+  const draft = await prisma.threeTierDraft.findFirst({
+    where: { id: param(req.params.draftId) },
+    include: {
+      tier1Statement: true,
+      tier2Statements: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          tier3Bullets: { orderBy: { sortOrder: 'asc' } },
+          priority: true,
+        },
+      },
+      offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
+      audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+    },
+  });
+
+  if (!draft) {
+    res.status(404).json({ error: 'Draft not found.' });
+    return;
+  }
+
+  res.json({
+    draftId: draft.id,
+    tier1: draft.tier1Statement ? { id: draft.tier1Statement.id, text: draft.tier1Statement.text } : null,
+    tier2: draft.tier2Statements.map(t2 => ({
+      id: t2.id,
+      text: t2.text,
+      categoryLabel: t2.categoryLabel,
+      priorityId: t2.priorityId,
+      tier3: t2.tier3Bullets.map(b => ({ id: b.id, text: b.text })),
+    })),
+    audienceName: draft.audience.name,
+    offering: {
+      id: draft.offering.id,
+      name: draft.offering.name,
+      elements: draft.offering.elements,
+    },
+    audience: {
+      id: draft.audience.id,
+      name: draft.audience.name,
+      priorities: draft.audience.priorities,
+    },
+  });
+});
+
+// ─── POST /api/express/edit-draft ─────────────────────────
+//
+// Takes the current draft text + an edit instruction from the user.
+// Returns the full revised draft with the edit applied, plus a short summary.
+// Uses Sonnet — draft editing is voice-sensitive work.
+router.post('/edit-draft', async (req: Request, res: Response) => {
+  const { currentDraft, editInstruction, audienceName } = req.body as {
+    currentDraft: string;
+    editInstruction: string;
+    audienceName?: string;
+  };
+
+  if (!currentDraft || !editInstruction) {
+    res.status(400).json({ error: 'currentDraft and editInstruction are required' });
+    return;
+  }
+
+  try {
+    const result = await callAIWithJSON<{ revisedDraft: string; summary: string }>(
+      `You are a writing editor. You receive a draft and an edit instruction from the user.
+Apply the edit to the draft and return the COMPLETE revised draft — not just the changed section, the ENTIRE draft with the edit incorporated.
+Also return a brief one-sentence summary of what you changed.
+
+Rules:
+- Preserve the overall structure and tone of the draft
+- Only change what the user asked you to change
+- Keep the same approximate length unless the user asked to shorten or lengthen
+- The audience is ${audienceName || 'the reader'} — keep edits appropriate for them
+- Return valid JSON: { "revisedDraft": "the full revised draft text", "summary": "one sentence about what changed" }`,
+      `[CURRENT DRAFT]\n${currentDraft}\n[END DRAFT]\n\n[EDIT INSTRUCTION]\n${editInstruction}`,
+      'deep'
+    );
+
+    res.json(result);
+  } catch (err) {
+    console.error('[Express] edit-draft failed:', err);
+    res.status(500).json({ error: 'Failed to apply edit' });
+  }
 });
 
 export default router;

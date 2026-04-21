@@ -36,6 +36,7 @@ export function AudiencesPage() {
   const [deleteTarget, setDeleteTarget] = useState<{id: string, name: string, draftCount: number} | null>(null);
   const [copyDropdownId, setCopyDropdownId] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [searchFilter, setSearchFilter] = useState('');
   const copyDropdownRef = useRef<HTMLDivElement>(null);
 
   const { workspaces, activeWorkspace } = useWorkspace();
@@ -210,8 +211,20 @@ export function AudiencesPage() {
         </div>
       )}
 
+      {audiences.length > 8 && (
+        <input
+          className="page-search"
+          type="text"
+          placeholder="Filter audiences..."
+          value={searchFilter}
+          onChange={e => setSearchFilter(e.target.value)}
+        />
+      )}
+
       <div className="audience-cards">
-        {audiences.map(a => (
+        {audiences
+          .filter(a => !searchFilter || a.name.toLowerCase().includes(searchFilter.toLowerCase()))
+          .map(a => (
           <div key={a.id} className="expandable-card">
             <div className="expandable-card-header" onClick={() => toggleExpand(a.id)}>
               <span className="expand-icon">{expanded.has(a.id) ? '\u25BC' : '\u25B6'}</span>

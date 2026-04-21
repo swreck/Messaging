@@ -120,6 +120,36 @@ user will rename it in the review step.
   confused the task for the offering. Rename the offering to the underlying
   business and move the task concept into primaryMedium.
 
+═══ ENRICHMENT — MOTIVATING FACTORS AND DRIVERS ═══
+
+For EACH differentiator, draft a Motivating Factor (MF): WHY would someone
+crave this? State the general benefit principle, then name 2-3 concrete
+audience types that would care about it. The MF bridges the differentiator
+to any audience's priorities. Keep it literal — no buzzwords, no
+metaphorical verbs. Two to three sentences.
+
+For EACH priority, draft a Driver: WHY is this priority so personal to THIS
+specific audience? What happens to THEM if this goes wrong? What's the
+specific situation that makes this priority urgent? Reference the persona's
+role, constraints, fears. Two to three sentences. Write as if you know
+this person — make it specific enough that the user will either nod and
+say "exactly" or correct you with better detail.
+
+═══ MARIA'S RESPONSE ═══
+
+Also generate three short Maria voice responses:
+1. mariaAcknowledgment — one sentence summarizing what you understood (e.g.
+   "Clear picture — healthcare workflow against Epic and Cerner, pitched
+   to a CFO who controls the budget."). Direct, specific, no fluff.
+2. mariaContextNote — one sentence directing the user's attention to the
+   enrichment (e.g. "Take a look — especially the 'why' notes under each
+   item. If I got the reason wrong, the whole message will aim wrong.").
+3. mariaQuestion — one good question that would make the user think for 3
+   seconds and then say "actually, good question." The question should
+   surface a differentiator or priority they haven't mentioned. Examples:
+   "Is there something you offer that [competitor] honestly can't claim?"
+   "What would get [audience role] fired? That's usually near the top."
+
 ═══ OUTPUT FORMAT ═══
 
 Return ONLY valid JSON in this exact shape (no markdown, no code fences):
@@ -130,7 +160,7 @@ Return ONLY valid JSON in this exact shape (no markdown, no code fences):
     "nameSource": "stated" | "inferred",
     "description": "...",
     "differentiators": [
-      { "text": "...", "source": "stated" | "inferred" }
+      { "text": "...", "source": "stated" | "inferred", "motivatingFactor": "..." }
     ]
   },
   "audiences": [
@@ -139,7 +169,7 @@ Return ONLY valid JSON in this exact shape (no markdown, no code fences):
       "description": "...",
       "source": "stated" | "inferred",
       "priorities": [
-        { "text": "...", "source": "stated" | "inferred" }
+        { "text": "...", "source": "stated" | "inferred", "driver": "..." }
       ]
     }
   ],
@@ -149,7 +179,10 @@ Return ONLY valid JSON in this exact shape (no markdown, no code fences):
     "reasoning": "one short sentence on why this medium"
   },
   "situation": "two to four sentences capturing the specific thing this deliverable needs to do — the occasion, the trigger, the audience reaction you're aiming for, any constraint or deadline. See Example A and Example B above.",
-  "confidenceNotes": "one sentence on overall confidence — were you mostly reading stated facts, or mostly inferring? Flag any place where you felt the description was too thin to extract reliably."
+  "confidenceNotes": "one sentence on overall confidence — were you mostly reading stated facts, or mostly inferring? Flag any place where you felt the description was too thin to extract reliably.",
+  "mariaAcknowledgment": "...",
+  "mariaContextNote": "...",
+  "mariaQuestion": "..."
 }`;
 
 // ─── Types ──────────────────────────────────────────────────
@@ -172,13 +205,13 @@ export interface ExpressInterpretation {
     name: string;
     nameSource: FactSource;
     description: string;
-    differentiators: { text: string; source: FactSource }[];
+    differentiators: { text: string; source: FactSource; motivatingFactor: string }[];
   };
   audiences: {
     name: string;
     description: string;
     source: FactSource;
-    priorities: { text: string; source: FactSource }[];
+    priorities: { text: string; source: FactSource; driver: string }[];
   }[];
   primaryMedium: {
     value: ExpressMedium;
@@ -187,6 +220,9 @@ export interface ExpressInterpretation {
   };
   situation: string;
   confidenceNotes: string;
+  mariaAcknowledgment: string;
+  mariaContextNote: string;
+  mariaQuestion: string;
 }
 
 // ─── Extraction function ────────────────────────────────────

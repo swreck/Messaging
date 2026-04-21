@@ -376,6 +376,16 @@ router.get('/usage', requireAuth, requireAdmin, async (_req: Request, res: Respo
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
+    const lastDraft = await prisma.threeTierDraft.findFirst({
+      where: { offering: { userId: u.id } },
+      orderBy: { updatedAt: 'desc' },
+      select: { updatedAt: true },
+    });
+    const lastStory = await prisma.fiveChapterStory.findFirst({
+      where: { draft: { offering: { userId: u.id } } },
+      orderBy: { updatedAt: 'desc' },
+      select: { updatedAt: true },
+    });
     const storyCount = await prisma.fiveChapterStory.count({
       where: {
         draft: {
@@ -386,10 +396,17 @@ router.get('/usage', requireAuth, requireAdmin, async (_req: Request, res: Respo
       },
     });
     const ws = u.workspaces[0]?.workspace;
+    const activityDates = [
+      lastMsg?.createdAt,
+      lastDraft?.updatedAt,
+      lastStory?.updatedAt,
+      u.createdAt,
+    ].filter(Boolean) as Date[];
+    const latestActivity = new Date(Math.max(...activityDates.map(d => d.getTime())));
     return {
       username: u.username,
       createdAt: u.createdAt,
-      lastActive: lastMsg?.createdAt || u.createdAt,
+      lastActive: latestActivity,
       messageCount: msgCount,
       offeringCount: ws?._count?.offerings || 0,
       audienceCount: ws?._count?.audiences || 0,

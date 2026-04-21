@@ -23,6 +23,7 @@ import { MappingPage } from './pages/MappingPage';
 import { SharedView } from './pages/SharedView';
 import { ExpressPreviewDemo } from './express/ExpressPreviewDemo';
 import { ExpressEntry } from './express/ExpressEntry';
+import { GuidedFlow } from './guided/GuidedFlow';
 
 // Maria 3.0 dual deployment: detect which branded URL is serving this bundle.
 // When running on the 3.0 service hostname, "/" redirects to "/express" so
@@ -63,13 +64,18 @@ function App() {
             path="/express"
             element={
               isMariaThreeHost ? (
-                // Maria 3: render ExpressEntry standalone. It draws its own
-                // minimal top chrome so the page feels like a dedicated chat
-                // surface, not a route inside the 2.5 navigation shell.
+                <ProtectedRoute><GuidedFlow /></ProtectedRoute>
+              ) : (
+                <ProtectedRoute><Layout><GuidedFlow /></Layout></ProtectedRoute>
+              )
+            }
+          />
+          <Route
+            path="/express-legacy"
+            element={
+              isMariaThreeHost ? (
                 <ProtectedRoute><ExpressEntry /></ProtectedRoute>
               ) : (
-                // Maria 2.5: keep the full Layout. Users who navigated here
-                // directly still see the 2.5 nav.
                 <ProtectedRoute><Layout><ExpressEntry /></Layout></ProtectedRoute>
               )
             }

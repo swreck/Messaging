@@ -15,6 +15,7 @@ export function OfferingsPage() {
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [searchFilter, setSearchFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingOffering, setEditingOffering] = useState<Offering | null>(null);
   const [name, setName] = useState('');
@@ -157,8 +158,20 @@ export function OfferingsPage() {
           </div>
         </div>
       ) : (
+        <>
+        {offerings.length > 8 && (
+          <input
+            className="page-search"
+            type="text"
+            placeholder="Filter offerings..."
+            value={searchFilter}
+            onChange={e => setSearchFilter(e.target.value)}
+          />
+        )}
         <div className="list-cards">
-          {offerings.map(o => (
+          {offerings
+            .filter(o => !searchFilter || o.name.toLowerCase().includes(searchFilter.toLowerCase()))
+            .map(o => (
             <div key={o.id} className="list-card" onClick={() => navigate(`/offerings/${o.id}`)}>
               <div className="list-card-content">
                 <strong className="list-card-title">{o.name}</strong>
@@ -187,6 +200,7 @@ export function OfferingsPage() {
             </div>
           ))}
         </div>
+        </>
       )}
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title={editingOffering ? 'Edit Offering' : 'New Offering'}>

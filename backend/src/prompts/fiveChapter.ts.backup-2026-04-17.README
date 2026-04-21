@@ -1,0 +1,16 @@
+BACKUP SNAPSHOT — 2026-04-17
+============================
+
+What: fiveChapter.ts before Chapter 1/5 prompt fixes
+Commit: 8b0d128 (HEAD of main at time of backup)
+Branch: pre-chapter-fix-backup (also points here)
+State: Clean working tree, all tracked files committed
+
+Why: About to modify locked methodology file (fiveChapter.ts) to fix:
+1. Chapter 1 writes about end-user's problems instead of reader's problems
+2. Chapter boundaries bleed (proof in Ch3, ROI in Ch4)
+3. Chapter 5 gives directives to senior readers
+4. No filter for facts the reader already knows
+
+Rollback: git checkout pre-chapter-fix-backup -- backend/src/prompts/fiveChapter.ts
+Or: cp fiveChapter.ts.backup-2026-04-17 fiveChapter.ts

@@ -22,7 +22,7 @@ export default defineConfig({
     host: true, // Bind to all network interfaces (0.0.0.0) for iPhone/iPad access
     proxy: {
       '/api': {
-        target: 'http://localhost:3002',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
     },

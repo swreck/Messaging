@@ -297,7 +297,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
         {/* Tier 1 */}
         <div className={`tier1-row${isTier1Focused ? ' cell-focused' : ''}`}>
           <div className="tier-header-row">
-            <div className="tier-label">Tier 1 <span className="tier-subtitle">Core Value</span> <InfoTooltip text="Your single most important value statement \u2014 the headline of your message." /></div>
+            <div className="tier-label">Tier 1 <span className="tier-subtitle">Core Value</span> <InfoTooltip text="The single most important statement for your audience. Connects their #1 priority to your strongest differentiator. The test: does the reader think 'I cannot ignore this'?" /></div>
             <div className="tier-header-actions">
               <button className="btn-copy-table" onClick={copyTableToClipboard} title="Copy entire table to clipboard">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -376,7 +376,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
             const isColFocused = focusedCell === t2Key || editingCell === `tier2-${t2.id}`;
             return (
               <div key={t2.id} className={`tier2-col${isColFocused ? ' cell-focused' : ''}`}>
-                <div className="tier-label tier-label-small">Tier 2 {t2.categoryLabel ? <span className="tier-subtitle">{t2.categoryLabel}</span> : <span className="tier-subtitle">Supporting Value</span>}</div>
+                <div className="tier-label tier-label-small">Tier 2 {t2.categoryLabel ? <span className="tier-subtitle">{t2.categoryLabel}</span> : <span className="tier-subtitle">Supporting Value</span>} {t2Index === 0 && <InfoTooltip text="Each supporting statement reinforces your key message from a different angle — your focus, product, ROI, support commitment, and proof from other customers." />}</div>
                 {editingCell === `tier2-${t2.id}` ? (
                   <div style={{ padding: 8 }}>
                     <CellEditor
@@ -409,7 +409,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                 />
 
                 <div className="tier3-area">
-                  <div className="tier-label tier-label-small">Tier 3 <span className="tier-subtitle">Proof Points</span> <InfoTooltip text="Brief facts that prove this value is true. If a skeptic couldn\u2019t verify it, it\u2019s not proof." /></div>
+                  <div className="tier-label tier-label-small">Tier 3 <span className="tier-subtitle">Proof Points</span> {t2Index === 0 && <InfoTooltip text="Specific, verifiable facts — numbers, names, certifications, measurable outcomes. A skeptic should be able to check each one independently." />}</div>
                   {t2.tier3Bullets.map((t3, t3Index) => {
                     const t3Key = `tier3-${t2Index}-${t3Index}`;
                     const isPendingDelete = pendingDelete?.id === t3.id;
