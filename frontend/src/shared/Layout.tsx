@@ -153,6 +153,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
         <div className="nav-right">
+          <button
+            onClick={() => navigate('/express')}
+            className="btn btn-primary btn-sm nav-start-draft"
+            title="Start a new message — Maria will guide you"
+          >
+            Start a draft
+          </button>
           <span className="nav-user">{user?.username}</span>
           <button onClick={logout} className="btn btn-ghost btn-sm">Sign Out</button>
         </div>

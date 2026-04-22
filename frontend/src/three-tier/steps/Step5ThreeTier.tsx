@@ -4,7 +4,6 @@ import type { StepProps } from './types';
 import { api } from '../../api/client';
 import { ThreeTierTable } from '../components/ThreeTierTable';
 import { Spinner } from '../../shared/Spinner';
-import { InfoTooltip } from '../../shared/InfoTooltip';
 import { CompareModal } from '../components/CompareModal';
 import { Modal } from '../../shared/Modal';
 import { ConfirmModal } from '../../shared/ConfirmModal';
@@ -563,8 +562,9 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         </div>
       </div>
 
-      {/* Toolbar — simplified */}
+      {/* Toolbar — grouped: rewrite cluster | review + state cluster */}
       <div className="three-tier-toolbar">
+        {/* Cluster 1: rewrite actions */}
         <button
           className={`btn btn-sm ${hasRefined ? 'btn-secondary' : 'btn-primary'}`}
           onClick={refineLanguage}
@@ -573,11 +573,14 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         >
           {refining ? <><Spinner size={12} /> Refining...</> : 'Refine Language'}
         </button>
+        <button className="btn btn-secondary btn-sm" onClick={polish} disabled={anyBusy} title="Results are usually better, but take a little longer">
+          {polishing ? <><Spinner size={12} /> Polishing...</> : 'Polish'}
+        </button>
+        {/* Divider */}
+        <span aria-hidden="true" style={{ display: 'inline-block', width: 1, height: 20, background: 'var(--border-light, #e5e5ea)', margin: '0 4px', alignSelf: 'center' }} />
+        {/* Cluster 2: review + state */}
         <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={anyBusy} title="Maria reviews your message and tells you what she'd improve">
           {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria to review'}
-        </button>
-        <button className="btn btn-secondary btn-sm" onClick={polish} disabled={anyBusy} title="Results are usually better, but take a little longer">
-          {polishing ? <><Spinner size={12} /> Polishing...</> : <>Polish <InfoTooltip text="Results are usually better, but take a little longer." /></>}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={createSnapshot} title="Save the current state as a checkpoint you can return to">
           {showCheckpointSaved ? 'Checkpoint saved' : 'Save checkpoint'}

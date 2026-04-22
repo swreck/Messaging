@@ -715,9 +715,9 @@ export function FiveChapterShell() {
 
   return (
     <div className="five-chapter-shell">
-      <h1 style={{ marginBottom: 4 }}>Message Deliverables</h1>
-      <p className="page-description" style={{ marginBottom: 4, color: 'var(--text-secondary)', fontSize: 13 }}>
-        {draft.offering.name} &rarr; {draft.audience.name}
+      <h1 style={{ marginBottom: 4 }}>Stories for {draft.audience.name}</h1>
+      <p className="page-description" style={{ marginBottom: 4, color: 'var(--text-secondary)', fontSize: 14 }}>
+        about {draft.offering.name}
       </p>
       <p style={{ marginBottom: 20, color: 'var(--text-tertiary)', fontSize: 12, fontStyle: 'italic' }}>
         Based on Five Chapter Story format
@@ -930,10 +930,10 @@ export function FiveChapterShell() {
                 onClick={() => setChaptersCollapsed(!chaptersCollapsed)}
                 style={{ color: 'var(--accent)', fontWeight: 500 }}
               >
-                {chaptersCollapsed ? 'See sections' : 'Hide sections'}
+                {chaptersCollapsed ? 'Show chapter markers' : 'Hide chapter markers'}
               </button>
             ) : (
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Sections not available for this draft</span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Chapter markers not available for this draft</span>
             )}
             <button className="copy-btn" onClick={() => copyToClipboard(story.blendedText)}>Copy</button>
             <button className="copy-btn" onClick={exportStory}>Export</button>
@@ -1444,7 +1444,7 @@ export function FiveChapterShell() {
                 Your new {mediumLabel?.toLowerCase()} draft is done. If your next deliverable is related, e.g., a landing page for that {mediumLabel?.toLowerCase()}, you can build on your work and go straight to a new deliverable format.
               </p>
               <button className="btn btn-secondary btn-sm" onClick={() => { setSourceStoryIdForCreate(story.id); setShowCreateForm(true); }}>
-                Create another deliverable
+                + New Deliverable
               </button>
             </div>
           )}

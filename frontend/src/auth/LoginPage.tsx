@@ -43,6 +43,7 @@ export function LoginPage() {
         <div className="login-brand">
           <h1 className="login-title">Maria</h1>
           <p className="login-tagline">Your messaging partner</p>
+          <p className="login-value-prop">A partner in drafting persuasive stories, who can either lead the process or offer support when asked.</p>
         </div>
 
         <form onSubmit={handleSubmit}>

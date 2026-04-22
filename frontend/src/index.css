@@ -288,6 +288,13 @@ p { line-height: 1.5; color: var(--text-secondary); }
   margin: 0;
   font-weight: 400;
 }
+.login-value-prop {
+  font-size: 14px;
+  color: #4a4a4e;
+  margin: 14px 4px 0;
+  line-height: 1.5;
+  font-weight: 400;
+}
 .login-card form { text-align: left; }
 .login-demo-hint {
   display: block;
@@ -5842,7 +5849,21 @@ p { line-height: 1.5; color: var(--text-secondary); }
   padding: 16px 24px;
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 16px;
+}
+.guided-foundation-action-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  max-width: 220px;
+}
+.guided-foundation-action-caption {
+  font-size: 11px;
+  color: var(--text-tertiary, #8e8e93);
+  line-height: 1.4;
+  text-align: center;
 }
 .guided-foundation-refine {
   font-size: 14px;

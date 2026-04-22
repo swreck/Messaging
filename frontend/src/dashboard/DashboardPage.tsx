@@ -48,6 +48,11 @@ export function DashboardPage() {
       return saved === null ? true : saved === 'on';
     } catch { return true; }
   });
+  const [recentSearch, setRecentSearch] = useState('');
+  const [recentTab, setRecentTab] = useState<'all' | 'inProgress' | 'complete'>('all');
+  const [recentAudience, setRecentAudience] = useState<string>('');
+  const [recentSort, setRecentSort] = useState<'recent' | 'oldest' | 'offeringAZ' | 'audienceAZ'>('recent');
+  const [recentDateRange, setRecentDateRange] = useState<'any' | '7' | '30' | '90'>('any');
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'dashboard' }); registerRefresh(loadAll); }, []);
@@ -96,25 +101,55 @@ export function DashboardPage() {
   }
   allDrafts.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
-  const inProgress = allDrafts.filter(d => d.status !== 'complete' && d.currentStep < 5);
-  const completed = allDrafts.filter(d => d.status === 'complete' || d.currentStep === 5);
-  const mostRecent = inProgress[0] || null;
+  const inProgressAll = allDrafts.filter(d => d.status !== 'complete' && d.currentStep < 5);
+  const completedAll = allDrafts.filter(d => d.status === 'complete' || d.currentStep === 5);
+  const mostRecent = inProgressAll[0] || null;
+
+  // Unified Recent Work pipeline — tab → search → audience → date range → sort.
+  const q = recentSearch.trim().toLowerCase();
+  const isDraftComplete = (d: ActiveDraft) => d.status === 'complete' || d.currentStep === 5;
+
+  let workingList: ActiveDraft[] = [...allDrafts];
+  if (recentTab === 'inProgress') workingList = workingList.filter(d => !isDraftComplete(d));
+  else if (recentTab === 'complete') workingList = workingList.filter(isDraftComplete);
+  if (q) workingList = workingList.filter(d => d.offeringName.toLowerCase().includes(q) || d.audienceName.toLowerCase().includes(q));
+  if (recentAudience) workingList = workingList.filter(d => d.audienceName === recentAudience);
+  if (recentDateRange !== 'any') {
+    const days = parseInt(recentDateRange, 10);
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    workingList = workingList.filter(d => new Date(d.updatedAt).getTime() >= cutoff);
+  }
+  if (recentSort === 'recent') workingList.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  else if (recentSort === 'oldest') workingList.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+  else if (recentSort === 'offeringAZ') workingList.sort((a, b) => a.offeringName.localeCompare(b.offeringName));
+  else if (recentSort === 'audienceAZ') workingList.sort((a, b) => a.audienceName.localeCompare(b.audienceName));
+
+  const recentList = workingList;
+  const uniqueAudiences = Array.from(new Set(allDrafts.map(d => d.audienceName))).sort();
+  const showFilters = allDrafts.length >= 6;
+  const anyFilterActive = !!q || !!recentAudience || recentDateRange !== 'any' || recentSort !== 'recent';
+
+  function clearAllFilters() {
+    setRecentSearch('');
+    setRecentAudience('');
+    setRecentSort('recent');
+    setRecentDateRange('any');
+  }
+
+  function plainProgress(d: ActiveDraft): string {
+    if (isDraftComplete(d)) return 'Complete';
+    const step = d.currentStep;
+    if (step <= 1) return 'Just started';
+    if (step === 2) return 'Getting started';
+    if (step === 3) return 'Halfway';
+    if (step === 4) return 'Almost done';
+    return `Step ${step}`;
+  }
 
   // First Three Tier prompt — user has an offering and audience set up but no draft yet.
   // This closes the gap Ken hit: new users arrive on the dashboard and don't know where to start.
   const hasSetup = offerings.length > 0 && audiences.length > 0;
   const needsFirstThreeTier = hasSetup && allDrafts.length === 0;
-
-  function getStepLabel(step: number): string {
-    const labels = [
-      'Setting up',
-      'Describing your offering',
-      'Defining your audience',
-      'Mapping priorities',
-      'Reviewing your message',
-    ];
-    return labels[step - 1] || `Step ${step}`;
-  }
 
   function formatTimeAgo(dateStr: string): string {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -228,10 +263,13 @@ export function DashboardPage() {
             Pick up where you left off
           </div>
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
-            {mostRecent.offeringName} → {mostRecent.audienceName}
+            Message for {mostRecent.audienceName}
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
-            {getStepLabel(mostRecent.currentStep)} · {formatTimeAgo(mostRecent.updatedAt)}
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            about {mostRecent.offeringName}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>
+            {plainProgress(mostRecent)} · {formatTimeAgo(mostRecent.updatedAt)}
           </div>
         </div>
       )}
@@ -277,8 +315,8 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Completed Three Tiers — portfolio view with Tier 1 text */}
-      {completed.length > 0 && (
+      {/* Recent Work — unified list with tabs, filters, status pills */}
+      {allDrafts.length > 0 && (
         <div style={{ marginTop: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
@@ -292,82 +330,217 @@ export function DashboardPage() {
               + New message
             </button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {completed.map(d => (
-              <div
-                key={d.draftId}
-                onClick={() => navigate(`/three-tier/${d.draftId}`)}
+
+          {/* Tabs — All / In progress / Complete */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: showFilters ? 10 : 14, flexWrap: 'wrap' }}>
+            {([
+              { key: 'all', label: `All (${allDrafts.length})` },
+              { key: 'inProgress', label: `In progress (${inProgressAll.length})` },
+              { key: 'complete', label: `Complete (${completedAll.length})` },
+            ] as const).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setRecentTab(tab.key)}
                 style={{
-                  padding: '14px 18px',
-                  background: 'var(--bg-primary, #fff)',
-                  borderRadius: 'var(--radius-sm, 6px)',
-                  border: '1px solid var(--border-light, #e5e5ea)',
+                  padding: '6px 12px',
+                  fontSize: 13,
+                  fontWeight: recentTab === tab.key ? 600 : 500,
+                  color: recentTab === tab.key ? 'var(--accent, #007aff)' : 'var(--text-secondary)',
+                  background: recentTab === tab.key ? 'var(--accent-light, #eaf4ff)' : 'transparent',
+                  border: `1px solid ${recentTab === tab.key ? 'var(--accent, #007aff)' : 'var(--border-light, #e5e5ea)'}`,
+                  borderRadius: 6,
                   cursor: 'pointer',
-                  transition: 'border-color 0.15s',
+                  transition: 'all 0.15s',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent, #007aff)')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-light, #e5e5ea)')}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {d.offeringName} → {d.audienceName}
-                  </div>
-                  {d.deliverableCount > 0 && (
-                    <div
-                      style={{ fontSize: 12, color: 'var(--accent, #007aff)', flexShrink: 0, marginLeft: 12, cursor: 'pointer' }}
-                      onClick={e => { e.stopPropagation(); navigate(`/five-chapter/${d.draftId}`); }}
-                    >
-                      {d.deliverableCount} stor{d.deliverableCount === 1 ? 'y' : 'ies'} →
-                    </div>
-                  )}
-                </div>
-                {d.tier1Text && (
-                  <div style={{
-                    fontSize: 13,
-                    color: 'var(--text-secondary)',
-                    marginTop: 6,
-                    fontStyle: 'italic',
-                    lineHeight: 1.5,
-                  }}>
-                    "{d.tier1Text}"
-                  </div>
-                )}
-              </div>
+                {tab.label}
+              </button>
             ))}
           </div>
-        </div>
-      )}
 
-      {/* Other in-progress drafts (beyond the most recent) */}
-      {inProgress.length > 1 && (
-        <div style={{ marginTop: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            In progress
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {inProgress.slice(1).map(d => (
-              <div
-                key={d.draftId}
-                onClick={() => navigate(`/three-tier/${d.draftId}`)}
+          {/* Filters — search, audience, sort, date range */}
+          {showFilters && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="Find by offering or audience…"
+                value={recentSearch}
+                onChange={e => setRecentSearch(e.target.value)}
                 style={{
-                  padding: '12px 18px',
-                  background: 'var(--bg-primary, #fff)',
-                  borderRadius: 'var(--radius-sm, 6px)',
+                  flex: '1 1 200px',
+                  minWidth: 160,
+                  padding: '6px 10px',
+                  fontSize: 13,
                   border: '1px solid var(--border-light, #e5e5ea)',
-                  cursor: 'pointer',
-                  transition: 'border-color 0.15s',
+                  borderRadius: 6,
+                  background: 'var(--bg-primary, #fff)',
+                  color: 'var(--text-primary)',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent, #007aff)')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-light, #e5e5ea)')}
+              />
+              <select
+                value={recentAudience}
+                onChange={e => setRecentAudience(e.target.value)}
+                style={{
+                  padding: '6px 10px',
+                  fontSize: 13,
+                  border: '1px solid var(--border-light, #e5e5ea)',
+                  borderRadius: 6,
+                  background: 'var(--bg-primary, #fff)',
+                  color: 'var(--text-primary)',
+                }}
+                title="Filter by audience"
               >
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {d.offeringName} → {d.audienceName}
+                <option value="">Any audience</option>
+                {uniqueAudiences.map(a => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+              <select
+                value={recentSort}
+                onChange={e => setRecentSort(e.target.value as typeof recentSort)}
+                style={{
+                  padding: '6px 10px',
+                  fontSize: 13,
+                  border: '1px solid var(--border-light, #e5e5ea)',
+                  borderRadius: 6,
+                  background: 'var(--bg-primary, #fff)',
+                  color: 'var(--text-primary)',
+                }}
+                title="Sort order"
+              >
+                <option value="recent">Most recent</option>
+                <option value="oldest">Oldest first</option>
+                <option value="offeringAZ">Offering A–Z</option>
+                <option value="audienceAZ">Audience A–Z</option>
+              </select>
+              <select
+                value={recentDateRange}
+                onChange={e => setRecentDateRange(e.target.value as typeof recentDateRange)}
+                style={{
+                  padding: '6px 10px',
+                  fontSize: 13,
+                  border: '1px solid var(--border-light, #e5e5ea)',
+                  borderRadius: 6,
+                  background: 'var(--bg-primary, #fff)',
+                  color: 'var(--text-primary)',
+                }}
+                title="Date range"
+              >
+                <option value="any">Any time</option>
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+              {anyFilterActive && (
+                <button
+                  onClick={clearAllFilters}
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: 12,
+                    color: 'var(--accent, #007aff)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Empty state when filters match nothing */}
+          {recentList.length === 0 && (
+            <div style={{
+              padding: '24px 16px',
+              textAlign: 'center',
+              color: 'var(--text-secondary)',
+              fontSize: 13,
+              border: '1px dashed var(--border-light, #e5e5ea)',
+              borderRadius: 'var(--radius-sm, 6px)',
+              background: 'var(--bg-secondary, #f8f8fa)',
+            }}>
+              No messages match these filters.
+              {anyFilterActive && (
+                <button
+                  onClick={clearAllFilters}
+                  style={{ marginLeft: 8, color: 'var(--accent, #007aff)', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13 }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {recentList.map(d => {
+              const isComplete = isDraftComplete(d);
+              return (
+                <div
+                  key={d.draftId}
+                  className="list-card"
+                  onClick={() => navigate(`/three-tier/${d.draftId}`)}
+                  style={{
+                    padding: '14px 18px',
+                    background: 'var(--bg-primary, #fff)',
+                    borderRadius: 'var(--radius-sm, 6px)',
+                    border: '1px solid var(--border-light, #e5e5ea)',
+                    cursor: 'pointer',
+                    transition: 'border-color 0.15s',
+                  }}
+                >
+                  {/* Top row: status pill + deliverable count */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.4px',
+                      borderRadius: 4,
+                      color: isComplete ? '#1a7f3c' : 'var(--text-secondary)',
+                      background: isComplete ? '#e6f6ec' : 'var(--bg-secondary, #f0f0f2)',
+                    }}>
+                      {isComplete ? 'Complete' : 'In progress'}
+                    </span>
+                    {d.deliverableCount > 0 && (
+                      <div
+                        style={{ fontSize: 12, color: 'var(--accent, #007aff)', flexShrink: 0, marginLeft: 12, cursor: 'pointer' }}
+                        onClick={e => { e.stopPropagation(); navigate(`/five-chapter/${d.draftId}`); }}
+                      >
+                        {d.deliverableCount} stor{d.deliverableCount === 1 ? 'y' : 'ies'} →
+                      </div>
+                    )}
+                  </div>
+                  {/* Title: Message for [audience] */}
+                  <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>
+                    Message for {d.audienceName}
+                  </div>
+                  {/* Subtitle: about [offering] */}
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    about {d.offeringName}
+                  </div>
+                  {/* Tier 1 preview */}
+                  {d.tier1Text && (
+                    <div style={{
+                      fontSize: 13,
+                      color: 'var(--text-secondary)',
+                      marginTop: 8,
+                      lineHeight: 1.5,
+                    }}>
+                      <span style={{ color: 'var(--text-tertiary)', fontStyle: 'normal' }}>First line so far: </span>
+                      <span style={{ fontStyle: 'italic' }}>"{d.tier1Text}"</span>
+                    </div>
+                  )}
+                  {/* Footer: plain progress + time */}
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8 }}>
+                    {plainProgress(d)} · {formatTimeAgo(d.updatedAt)}
+                  </div>
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                  {getStepLabel(d.currentStep)} · {formatTimeAgo(d.updatedAt)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

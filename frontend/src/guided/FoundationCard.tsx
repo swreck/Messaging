@@ -133,22 +133,28 @@ export function FoundationCard({ foundation, onConfirm, onRefineLanguage, onElem
       {/* ── Actions ───────────────────────────── */}
       <div className="guided-foundation-actions">
         {onRefineLanguage && (
+          <div className="guided-foundation-action-cell">
+            <button
+              type="button"
+              className="btn guided-foundation-refine"
+              onClick={onRefineLanguage}
+              title="Open the full three-tier editor with Maria — edit any cell, scope her to one column, run Refine Language or Polish"
+            >
+              Open in full editor
+            </button>
+            <div className="guided-foundation-action-caption">Opens the full Three Tier editor with Maria</div>
+          </div>
+        )}
+        <div className="guided-foundation-action-cell">
           <button
             type="button"
-            className="btn guided-foundation-refine"
-            onClick={onRefineLanguage}
-            title="Open the full three-tier editor with Maria — edit any cell, scope her to one column, run Refine Language or Polish"
+            className="btn btn-primary guided-foundation-confirm"
+            onClick={() => onConfirm(state)}
           >
-            Open in full editor
+            Use this foundation
           </button>
-        )}
-        <button
-          type="button"
-          className="btn btn-primary guided-foundation-confirm"
-          onClick={() => onConfirm(state)}
-        >
-          Use this foundation
-        </button>
+          <div className="guided-foundation-action-caption">Saves this version and continues to chapters</div>
+        </div>
       </div>
       <p className="guided-foundation-actions-hint">
         Click any line above to edit it here. For deeper control — scoped edits, alternate drafts, checkpoints — use the full editor.
