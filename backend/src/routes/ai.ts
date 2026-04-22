@@ -20,6 +20,7 @@ import {
 } from '../services/voiceCheck.js';
 import { checkThreeTier, buildThreeTierFeedback, type ThreeTierInput } from '../services/threeTierCheck.js';
 import { checkFiveChapter, buildFiveChapterFeedback, type FiveChapterInput } from '../services/fiveChapterCheck.js';
+import { checkStatementVoice, buildGuardCorrection } from '../lib/voiceGuard.js';
 
 import { requireWorkspace, requireEditor, requireStoryteller } from '../middleware/workspace.js';
 
@@ -79,6 +80,15 @@ function filterMaterialSuggestions(
   const kept: { cell: string; suggested: string }[] = [];
   for (const s of suggestions) {
     if (!s.suggested || !s.suggested.trim()) continue;
+    // Voice guard: drop suggestions on tier1/tier2 that fail syntactic voice rules
+    // (contrast clauses, word count). Better to offer fewer suggestions than bad ones.
+    if (s.cell === 'tier1' || /^tier2-\d+$/.test(s.cell)) {
+      const voiceCheck = checkStatementVoice(s.suggested);
+      if (!voiceCheck.passed) {
+        console.log(`[VoiceGuard] Dropping ${s.cell} suggestion "${s.suggested}" — ${voiceCheck.violations.map(v => v.message).join('; ')}`);
+        continue;
+      }
+    }
     if (s.cell === 'tier1') {
       const current = draft.tier1Statement?.text || '';
       if (isMaterialImprovement(s.suggested, current)) kept.push(s);
@@ -151,6 +161,31 @@ async function generateTier(
   if (rank1Priority && !priorityPreserved(result.tier1.text, rank1Priority.text)) {
     const correction = `\n\n══ CORRECTION ══\nYour previous Tier 1 was: "${result.tier1.text}"\nThis substitutes a product metric for the audience's priority. The Rank 1 priority is: "${rank1Priority.text}"\nRewrite Tier 1 so it begins with the audience's strategic concern, then "because [specific hook]." Fix any other Tier 2 statements with the same problem.`;
     result = await callAIWithJSON<TierGenResult>(CONVERT_LINES_SYSTEM, convertMessage + correction, 'elite');
+  }
+
+  // Fast regex-based voice guard on Tier 1 and Tier 2 (Ken's Voice Rules 5 + 10).
+  // One retry max. This is the cheap safety net the always-on Opus evaluator
+  // used to provide before it was turned off for latency.
+  const guardCorrections: string[] = [];
+  const tier1Check = checkStatementVoice(result.tier1.text);
+  if (!tier1Check.passed) {
+    guardCorrections.push(buildGuardCorrection(result.tier1.text, tier1Check, 'Tier 1'));
+  }
+  if (result.tier2) {
+    for (const t2 of result.tier2) {
+      const t2Check = checkStatementVoice(t2.text);
+      if (!t2Check.passed) {
+        guardCorrections.push(buildGuardCorrection(t2.text, t2Check, `Tier 2 [${t2.categoryLabel}]`));
+      }
+    }
+  }
+  if (guardCorrections.length > 0) {
+    console.log(`[VoiceGuard] ${guardCorrections.length} statement violations, retrying generation`);
+    const allCorrections = guardCorrections.join('');
+    result = await callAIWithJSON<TierGenResult>(CONVERT_LINES_SYSTEM, convertMessage + allCorrections, 'elite');
+    if (result.tier2 && result.tier2.length > 6) {
+      result.tier2 = result.tier2.slice(0, 6);
+    }
   }
 
   return result;

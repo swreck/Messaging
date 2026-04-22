@@ -49,7 +49,7 @@ Each statement must pass ALL applicable rules:
 
 4. NO METAPHORICAL VERBS. Watch for: fades, unlocks, fuels, drives, powers, transforms, bridges, reshapes, elevates, ignites, amplifies. "Burns out" is metaphorical. "Secures" and "protects" are OK when literal (actual security/protection), not when abstract.
 
-5. NO CONTRAST CLAUSES after the main claim. "not X," "instead of X," "no tradeoff." Just state the fact and stop.
+5. NO CONTRAST CLAUSES anywhere in the main claim. Ban: "not X," "instead of X," "rather than X," "without X" (e.g., "without degrading," "without compromising," "without the hassle"), "no tradeoff," "not just X." These turn a plain fact into a salesperson anticipating objections. State the fact and stop. Applies whether the contrast appears before or after the mechanism. The only "without" that passes is when it describes a natural mechanism AFTER "because" (e.g., "because AI answers without human intervention" — that's HOW it works, not a hedge).
 
 6. NO EM-DASHES adding extra clauses (" — ").
 
@@ -225,9 +225,12 @@ export interface ProseCheckResult {
 // ─── Settings check ─────────────────────────────────────────
 
 export async function isVoiceCheckEnabled(_userId: string): Promise<boolean> {
-  // Always-on voice check removed — Polish button provides on-demand evaluation.
-  // Faster generation without the extra Opus evaluation + retry cycle.
-  return false;
+  // Always-on voice check. Ken's Voice is the highest-leverage quality gate —
+  // if it catches a violation, the generator retries once with feedback.
+  // The extra Opus latency is worth it for reliable quality. The cheap regex
+  // voice guard in lib/voiceGuard.ts runs first and short-circuits retries
+  // for the syntactic cases it can detect, so most violations never reach this.
+  return true;
 }
 
 export async function isMethodologyCheckEnabled(userId: string): Promise<boolean> {

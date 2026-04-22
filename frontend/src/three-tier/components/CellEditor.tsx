@@ -35,10 +35,12 @@ export function CellEditor({ text, maxWords, onSave, onCancel }: CellEditorProps
     }
   }, []);
 
+  const overLimit = words > maxWords;
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      onSave(value.trim());
+      if (!overLimit) onSave(value.trim());
     }
     if (e.key === 'Escape') {
       onCancel();
@@ -55,13 +57,13 @@ export function CellEditor({ text, maxWords, onSave, onCancel }: CellEditorProps
           e.target.style.height = 'auto';
           e.target.style.height = e.target.scrollHeight + 'px';
         }}
-        onBlur={() => onSave(value.trim())}
+        onBlur={() => { if (!overLimit) onSave(value.trim()); }}
         onKeyDown={handleKeyDown}
         rows={2}
       />
       <div className="cell-editor-footer">
-        <span className={`cell-word-count ${pct >= 1 ? 'over' : pct >= 0.8 ? 'warning' : 'ok'}`}>
-          {words}/{maxWords}
+        <span className={`cell-word-count ${overLimit ? 'over' : pct >= 0.8 ? 'warning' : 'ok'}`}>
+          {overLimit ? `${words}/${maxWords} — trim to ${maxWords} to save` : `${words}/${maxWords}`}
         </span>
         <div className="cell-editor-actions">
           <button
@@ -75,7 +77,8 @@ export function CellEditor({ text, maxWords, onSave, onCancel }: CellEditorProps
             type="button"
             className="btn btn-primary btn-sm"
             onMouseDown={e => e.preventDefault()}
-            onClick={() => onSave(value.trim())}
+            onClick={() => { if (!overLimit) onSave(value.trim()); }}
+            disabled={overLimit}
             aria-label="Save edit"
           >Done</button>
         </div>

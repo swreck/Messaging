@@ -148,6 +148,7 @@ interface ReturnContext {
   currentStep: number;
   hasStories: boolean;
   unblendedMedium?: string;
+  lastActivityAt?: string;
 }
 
 async function buildReturnContext(workspaceId: string): Promise<ReturnContext | null> {
@@ -171,6 +172,7 @@ async function buildReturnContext(workspaceId: string): Promise<ReturnContext | 
     currentStep: recentDraft.currentStep,
     hasStories: recentDraft.stories.length > 0,
     unblendedMedium: unblended?.medium,
+    lastActivityAt: recentDraft.updatedAt.toISOString(),
   };
 }
 

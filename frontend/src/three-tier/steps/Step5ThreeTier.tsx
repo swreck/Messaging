@@ -146,6 +146,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
     setError(null);
     setRefining(true);
     setTier1Alternative(null);
+    if (showOrientation) dismissOrientation();
     try {
       const result = await api.post<{
         refinedTier1?: { best: string; alternative: string };
@@ -173,6 +174,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   async function polish() {
     setError(null);
     setPolishing(true);
+    if (showOrientation) dismissOrientation();
     try {
       const result = await api.post<{
         suggestions: { cell: string; suggested: string }[];
@@ -194,6 +196,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
     if (!directionText.trim()) return;
     setError(null);
     setSendingDirection(true);
+    if (showOrientation) dismissOrientation();
     try {
       const result = await api.post<DirectionResponse>('/ai/direction', {
         draftId: draft.id,
@@ -277,6 +280,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   function handleTableUpdate() {
     previousStateRef.current = null;
     setHasEdited(true);
+    if (showOrientation) dismissOrientation();
     refreshDraft().then(() => {
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 1500);
@@ -420,16 +424,32 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
 
       {/* Direction input — scope-aware */}
       <div className="direction-input" style={{ marginBottom: 16 }}>
-        {focusedCell && (
-          <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 4, fontWeight: 500 }}>
-            Scoped to {focusedCell.startsWith('tier1') ? 'Tier 1' : focusedCell.startsWith('tier2') ? `Tier 2 column` : 'a proof point'}
-            <button
-              className="btn btn-ghost"
-              style={{ fontSize: 11, padding: '0 6px', marginLeft: 6 }}
-              onClick={() => setFocusedCell(null)}
-            >clear</button>
-          </div>
-        )}
+        {focusedCell && (() => {
+          const t2Match = focusedCell.match(/^tier2-(\d+)$/);
+          const t3Match = focusedCell.match(/^tier3-(\d+)-(\d+)$/);
+          let label = 'this cell';
+          if (focusedCell === 'tier1') {
+            label = 'Tier 1';
+          } else if (t2Match) {
+            const idx = parseInt(t2Match[1]);
+            const col = draft.tier2Statements[idx]?.categoryLabel;
+            label = col ? `the ${col} column` : `Tier 2 column ${idx + 1}`;
+          } else if (t3Match) {
+            const t2idx = parseInt(t3Match[1]);
+            const col = draft.tier2Statements[t2idx]?.categoryLabel;
+            label = col ? `a proof point in ${col}` : 'a proof point';
+          }
+          return (
+            <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 4, fontWeight: 500 }}>
+              Scoped to {label}
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: 11, padding: '0 6px', marginLeft: 6 }}
+                onClick={() => setFocusedCell(null)}
+              >clear</button>
+            </div>
+          );
+        })()}
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
           <textarea
             value={directionText}

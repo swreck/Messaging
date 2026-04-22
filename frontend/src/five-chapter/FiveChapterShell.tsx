@@ -138,6 +138,12 @@ export function FiveChapterShell() {
       } catch {}
       const { stories: s } = await api.get<{ stories: FiveChapterStory[] }>(`/stories?draftId=${draftId}`);
       setStories(s);
+      // On refreshPage re-runs, story is already set — sync its fresh fields (blendedText, chapters, etc.)
+      // so Maria-driven edits propagate into the blended view without a full remount.
+      if (story) {
+        const fresh = s.find(st => st.id === story.id);
+        if (fresh) setStory(fresh);
+      }
       if (s.length > 0 && !story) {
         const requestedId = searchParams.get('story');
         if (requestedId) {
@@ -423,6 +429,10 @@ export function FiveChapterShell() {
         }, 100);
       }
       setChaptersJustGenerated(true);
+      // After all five generated, scroll back to Chapter 1 so the reader starts from the top.
+      setTimeout(() => {
+        chapterRefs.current[0]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 400);
       mariaGuide('chapters-generated', 'All five chapters are drafted. You can edit any of them by tapping the text. When you\'re ready, Combine Chapters puts them together as-is, or Blend into Story rewrites them as one flowing piece.');
     } catch (err: any) {
       showToast(err.message);
@@ -574,21 +584,29 @@ export function FiveChapterShell() {
 
   async function deriveMotivation() {
     if (!draft) return;
-    const top = draft.audience.priorities[0];
-    if (!top) return;
+    const missing = draft.audience.priorities.filter(p => !p.driver);
+    if (missing.length === 0) return;
     setDerivingMF(true);
     try {
-      await api.post('/ai/derive-driver', {
-        priorityId: top.id,
-        audienceId: draft.audience.id,
-        offeringId: draft.offering.id,
-      });
-      // Reload draft to get updated MF
+      // Derive drivers for every priority that's missing one — not just the top.
+      // Stronger mapping, one click, no second prompt.
+      await Promise.all(missing.map(p =>
+        api.post('/ai/derive-driver', {
+          priorityId: p.id,
+          audienceId: draft.audience.id,
+          offeringId: draft.offering.id,
+        }),
+      ));
+      // Reload draft to get updated drivers
       const { draft: d } = await api.get<{ draft: ThreeTierDraft }>(`/drafts/${draftId}`);
       setDraft(d);
-      setAiDerivedMFs(prev => new Set(prev).add(top.id));
+      setAiDerivedMFs(prev => {
+        const next = new Set(prev);
+        for (const p of missing) next.add(p.id);
+        return next;
+      });
       setShowMFPanel(false);
-      // Now generate — skip MF check since we just derived it
+      // Now generate — skip MF check since we just derived them
       generateAllChapters(true);
     } catch (err: any) {
       showToast(err.message);
@@ -803,7 +821,7 @@ export function FiveChapterShell() {
               );
             });
           })()}
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowCreateForm(true)}>
+          <button className="btn btn-sm fcs-new-deliverable-btn" onClick={() => setShowCreateForm(true)}>
             + New Deliverable
           </button>
         </div>
@@ -816,15 +834,20 @@ export function FiveChapterShell() {
           <div className="fcs-param-editable" style={{ position: 'relative' }}>
             {editingParam === 'medium' ? (
               <div className="fcs-param-dropdown">
-                {MEDIUM_OPTIONS.map(opt => (
-                  <button
-                    key={opt.id}
-                    className={`fcs-param-dropdown-item ${story.medium === opt.id ? 'active' : ''}`}
-                    onClick={() => updateStoryParam('medium', opt.id)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                {MEDIUM_OPTIONS.map(opt => {
+                  const existingCount = stories.filter(s => s.medium === opt.id && s.id !== story.id).length;
+                  return (
+                    <button
+                      key={opt.id}
+                      className={`fcs-param-dropdown-item ${story.medium === opt.id ? 'active' : ''}`}
+                      onClick={() => updateStoryParam('medium', opt.id)}
+                      title={existingCount > 0 ? `You already have ${existingCount} ${opt.label.toLowerCase()} deliverable${existingCount === 1 ? '' : 's'}` : undefined}
+                    >
+                      {opt.label}
+                      {existingCount > 0 && <span style={{ fontSize: 11, opacity: 0.6, marginLeft: 6 }}>· already have {existingCount}</span>}
+                    </button>
+                  );
+                })}
                 <button className="fcs-param-dropdown-item dismiss" onClick={() => setEditingParam(null)}>Cancel</button>
               </div>
             ) : (
@@ -1002,17 +1025,25 @@ export function FiveChapterShell() {
             <div className="form-group">
               <label>Content Format</label>
               <div className="medium-grid">
-                {MEDIUM_OPTIONS.map(opt => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    className={`medium-option ${medium === opt.id ? 'medium-selected' : ''}`}
-                    onClick={() => setMedium(opt.id)}
-                  >
-                    <strong>{opt.label}</strong>
-                    <span className="medium-desc">{opt.description}</span>
-                  </button>
-                ))}
+                {MEDIUM_OPTIONS.map(opt => {
+                  const existingCount = stories.filter(s => s.medium === opt.id).length;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={`medium-option ${medium === opt.id ? 'medium-selected' : ''}`}
+                      onClick={() => setMedium(opt.id)}
+                    >
+                      <strong>{opt.label}</strong>
+                      <span className="medium-desc">{opt.description}</span>
+                      {existingCount > 0 && (
+                        <span className="medium-existing-badge" title={`You already have ${existingCount} ${opt.label.toLowerCase()} deliverable${existingCount === 1 ? '' : 's'}`}>
+                          {existingCount} already
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div className="form-group">

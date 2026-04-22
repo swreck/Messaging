@@ -554,7 +554,7 @@ export async function dispatchActions(
       if (a.type === 'refine_chapter' && ctx.storyId && a.params.chapterNum && a.params.feedback) {
         const story = await prisma.fiveChapterStory.findFirst({
           where: { id: ctx.storyId, draft: { offering: workspaceId ? { workspaceId } : { userId } } },
-          include: { chapters: true },
+          include: { chapters: { orderBy: { chapterNum: 'asc' } } },
         });
         if (story) {
           const chapter = story.chapters.find((c: any) => c.chapterNum === a.params.chapterNum);
@@ -579,7 +579,33 @@ export async function dispatchActions(
                 changeSource: 'ai_refine',
               },
             });
-            actionResult = `Refined Chapter ${a.params.chapterNum}`;
+
+            // Keep joinedText and blendedText in sync so the UI reflects the refinement.
+            // Without this, the blended view shows stale chapter content while the chapter
+            // record holds the new text — user sees nothing change.
+            const updatedChapters = story.chapters.map((c: any) =>
+              c.chapterNum === a.params.chapterNum ? { ...c, content: revised } : c
+            );
+            const storyPatch: any = {};
+            if (story.joinedText) {
+              storyPatch.joinedText = updatedChapters
+                .map((c: any) => `${c.title}\n${c.content}`)
+                .join('\n\n');
+            }
+            if (story.blendedText) {
+              const spec = getMediumSpec(story.medium);
+              const sourceText = updatedChapters.map((c: any) => `${c.title}\n${c.content}`).join('\n\n');
+              const blendMsg = `CONTENT FORMAT: ${spec.label} (${spec.wordRange[0]}-${spec.wordRange[1]} words)\nFORMAT RULES: ${spec.format}\nTONE: ${spec.tone}\n\n${sourceText}\n\nPolish this into a final, cohesive ${spec.label.toLowerCase()}.`;
+              storyPatch.blendedText = await callAI(BLEND_SYSTEM, blendMsg, 'elite');
+            }
+            if (Object.keys(storyPatch).length > 0) {
+              await prisma.fiveChapterStory.update({
+                where: { id: ctx.storyId },
+                data: { ...storyPatch, version: { increment: 1 } },
+              });
+            }
+
+            actionResult = `Refined Chapter ${a.params.chapterNum}${story.blendedText ? ' and re-blended' : ''}`;
             refreshNeeded = true;
           }
         }
@@ -1003,7 +1029,14 @@ Write Chapter ${chNum}: "${ch.name}"${avoidInstruction}`;
           });
           if (editDraft) {
             const instruction = a.params.instruction.toLowerCase();
-            const isStructural = /restructur|add.*column|remove.*column|delete.*column|\d+\s*column|fewer column|more column/i.test(instruction);
+            // Structural = rebuild the whole table. Only trigger on explicit structural verbs
+            // tied to the word "column(s)" — not on cell references like "Tier 2 column 3".
+            // False-positive here wipes the draft and tries to regenerate; a bad AI response
+            // leaves the user with a gutted table. Be conservative.
+            const isStructural = /\b(restructur|reorganiz)/i.test(instruction) ||
+              /\b(add|remove|delete|insert|drop)\b[^.]{0,30}\bcolumns?\b/i.test(instruction) ||
+              /\b(fewer|more|additional|another)\b[^.]{0,10}\bcolumns?\b/i.test(instruction) ||
+              /\b(consolidat|split|merg)\w*[^.]{0,30}\bcolumns?\b/i.test(instruction);
 
             if (isStructural && editDraft.mappings.length === 0) {
               actionResult = 'Cannot restructure without confirmed mappings. Complete the mapping step first (Step 4), then try again.';
@@ -1064,36 +1097,81 @@ ADDITIONAL DIRECTION FROM USER: ${a.params.instruction}`;
                 tier2: { text: string; priorityId: string; categoryLabel: string; tier3: string[] }[];
               }>(CONVERT_LINES_SYSTEM, convertMsg + reminder, 'elite');
 
-              // Apply new tiers (with version entries so version nav works)
-              const newT1 = await prisma.tier1Statement.create({ data: { draftId: ctx.draftId!, text: result.tier1.text } });
-              await prisma.cellVersion.create({
-                data: { tier1Id: newT1.id, text: result.tier1.text, versionNum: 1, changeSource: 'ai_generate' },
-              });
-              for (let i = 0; i < result.tier2.length; i++) {
-                const t2 = await prisma.tier2Statement.create({
-                  data: {
-                    draftId: ctx.draftId!,
-                    text: result.tier2[i].text,
-                    sortOrder: i,
-                    priorityId: result.tier2[i].priorityId || null,
-                    categoryLabel: result.tier2[i].categoryLabel || '',
-                  },
-                });
-                await prisma.cellVersion.create({
-                  data: { tier2Id: t2.id, text: result.tier2[i].text, versionNum: 1, changeSource: 'ai_generate' },
-                });
-                for (let j = 0; j < (result.tier2[i].tier3 || []).length; j++) {
-                  const t3 = await prisma.tier3Bullet.create({
-                    data: { tier2Id: t2.id, text: result.tier2[i].tier3[j], sortOrder: j },
+              // Validate every priorityId against the audience's real priorities before
+              // creating rows. A single bad id used to FK-fail the loop and leave the
+              // draft gutted. Coerce unknown ids to null instead.
+              const validPriorityIds = new Set(editDraft.audience.priorities.map((p: any) => p.id));
+              const safePriorityId = (id: any): string | null =>
+                (typeof id === 'string' && validPriorityIds.has(id)) ? id : null;
+
+              // Apply new tiers inside one transaction so a mid-loop failure doesn't
+              // leave the draft in a partial state.
+              try {
+                await prisma.$transaction(async (tx: any) => {
+                  const newT1 = await tx.tier1Statement.create({ data: { draftId: ctx.draftId!, text: result.tier1.text } });
+                  await tx.cellVersion.create({
+                    data: { tier1Id: newT1.id, text: result.tier1.text, versionNum: 1, changeSource: 'ai_generate' },
                   });
-                  await prisma.cellVersion.create({
-                    data: { tier3Id: t3.id, text: result.tier2[i].tier3[j], versionNum: 1, changeSource: 'ai_generate' },
+                  for (let i = 0; i < result.tier2.length; i++) {
+                    const t2 = await tx.tier2Statement.create({
+                      data: {
+                        draftId: ctx.draftId!,
+                        text: result.tier2[i].text,
+                        sortOrder: i,
+                        priorityId: safePriorityId(result.tier2[i].priorityId),
+                        categoryLabel: result.tier2[i].categoryLabel || '',
+                      },
+                    });
+                    await tx.cellVersion.create({
+                      data: { tier2Id: t2.id, text: result.tier2[i].text, versionNum: 1, changeSource: 'ai_generate' },
+                    });
+                    for (let j = 0; j < (result.tier2[i].tier3 || []).length; j++) {
+                      const t3 = await tx.tier3Bullet.create({
+                        data: { tier2Id: t2.id, text: result.tier2[i].tier3[j], sortOrder: j },
+                      });
+                      await tx.cellVersion.create({
+                        data: { tier3Id: t3.id, text: result.tier2[i].tier3[j], versionNum: 1, changeSource: 'ai_generate' },
+                      });
+                    }
+                  }
+                });
+                actionResult = `Restructured Three Tier — ${result.tier2.length} columns generated. A checkpoint was saved automatically.`;
+                refreshNeeded = true;
+              } catch (regenErr: any) {
+                // Regenerate failed after the pre-transaction wiped the table.
+                // Restore from the snapshot we just saved so the user isn't stranded.
+                const latestSnap = await prisma.tableVersion.findFirst({
+                  where: { draftId: ctx.draftId!, label: 'Before restructure (via Maria)' },
+                  orderBy: { versionNum: 'desc' },
+                });
+                if (latestSnap) {
+                  const snap = latestSnap.snapshot as any;
+                  await prisma.$transaction(async (tx: any) => {
+                    await tx.tier2Statement.deleteMany({ where: { draftId: ctx.draftId } });
+                    await tx.tier1Statement.deleteMany({ where: { draftId: ctx.draftId } });
+                    if (snap.tier1) {
+                      await tx.tier1Statement.create({ data: { draftId: ctx.draftId!, text: snap.tier1 } });
+                    }
+                    for (let i = 0; i < (snap.tier2 || []).length; i++) {
+                      const row = snap.tier2[i];
+                      const t2 = await tx.tier2Statement.create({
+                        data: {
+                          draftId: ctx.draftId!,
+                          text: row.text,
+                          sortOrder: i,
+                          priorityId: safePriorityId(row.priorityId),
+                          categoryLabel: row.categoryLabel || '',
+                        },
+                      });
+                      for (let j = 0; j < (row.tier3 || []).length; j++) {
+                        await tx.tier3Bullet.create({ data: { tier2Id: t2.id, text: row.tier3[j], sortOrder: j } });
+                      }
+                    }
                   });
                 }
+                actionResult = `Could not restructure: ${regenErr?.message || 'regeneration failed'}. Your previous table has been restored.`;
+                refreshNeeded = true;
               }
-
-              actionResult = `Restructured Three Tier — ${result.tier2.length} columns generated. A checkpoint was saved automatically.`;
-              refreshNeeded = true;
 
             } else {
               // Text-only change: use direction system
@@ -1116,6 +1194,21 @@ OFFERING CAPABILITIES:
 ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
 
               const dirResult = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
+
+              // Voice guard: drop suggestions that fail syntactic voice rules
+              // (contrast clauses, word count) before they get written to the DB.
+              if (dirResult.suggestions) {
+                const { checkStatementVoice } = await import('./voiceGuard.js');
+                dirResult.suggestions = dirResult.suggestions.filter(s => {
+                  if (s.cell !== 'tier1' && !/^tier2-\d+$/.test(s.cell)) return true;
+                  const voiceCheck = checkStatementVoice(s.suggested);
+                  if (!voiceCheck.passed) {
+                    console.log(`[VoiceGuard:edit_tier] Dropping ${s.cell} suggestion "${s.suggested}" — ${voiceCheck.violations.map(v => v.message).join('; ')}`);
+                    return false;
+                  }
+                  return true;
+                });
+              }
 
               // Helper to create version entry (skips if text unchanged)
               async function createVersion(cellId: string, cellType: 'tier1' | 'tier2' | 'tier3', text: string) {

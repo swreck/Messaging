@@ -19,6 +19,23 @@ interface ReturnContext {
   currentStep: number;
   hasStories: boolean;
   unblendedMedium?: string;
+  lastActivityAt?: string;
+}
+
+// Step 7: warm relative-time phrasing for return greetings.
+// "earlier today" / "yesterday" / "3 days ago" / "last week" / "a while back"
+function describeWhen(iso?: string): string {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return '';
+  const hrs = (Date.now() - then) / 3_600_000;
+  if (hrs < 12) return 'earlier today';
+  if (hrs < 36) return 'yesterday';
+  const days = hrs / 24;
+  if (days < 7) return `${Math.round(days)} days ago`;
+  if (days < 14) return 'last week';
+  if (days < 45) return `${Math.round(days / 7)} weeks ago`;
+  return 'a while back';
 }
 
 // Intro steps: 0=name, 1=phase1, 2=phase2, 3=phase3, 4=done
@@ -70,6 +87,7 @@ export function MariaPartner() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [thinkingSlow, setThinkingSlow] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<{ data: string; mimeType: string; filename: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loaded, setLoaded] = useState(false);
@@ -303,6 +321,24 @@ export function MariaPartner() {
     setShowReturnCard(false);
     setShowProactiveCard(false);
 
+    // Step 6: Explicit handoff — user asks Maria to lead. Start a guided session so
+    // the GuidedFlow picks up the conversation. No mode announcement, just an energy shift.
+    const HANDOFF = /\b(tell me what to do|lead me|guide me|walk me through|take me through|help me (?:build|start|make|get started)|take over|you (?:lead|drive)|show me how (?:to )?(?:start|begin)|where do I (?:start|begin)|i don'?t know where to (?:start|begin))\b/i;
+    if (HANDOFF.test(text) && !hasActiveGuidedSession && !enteringGuided) {
+      setEnteringGuided(true);
+      setPreferAssistant(false);
+      if (!overrideText) {
+        setInput('');
+        setMessages(prev => [...prev, { role: 'user', content: text }]);
+      }
+      try {
+        await startNewSession();
+      } catch {
+        setEnteringGuided(false);
+      }
+      return;
+    }
+
     // Local "stop jumping in" intercept — user can opt out of proactive help without a backend call
     const lower = text.toLowerCase();
     if (/\bstop\s+jumping\s+in\b/.test(lower) || /\b(turn off|disable|stop)\b.*\bproactive\b/.test(lower)) {
@@ -511,21 +547,31 @@ export function MariaPartner() {
     }
   }, [open, loaded, sending, send]);
 
+  // After ~5s of bouncing dots, show "Maria is thinking..." so the user
+  // knows it's working, not stalled.
+  useEffect(() => {
+    if (!sending) { setThinkingSlow(false); return; }
+    const t = setTimeout(() => setThinkingSlow(true), 5000);
+    return () => clearTimeout(t);
+  }, [sending]);
+
   // ─── Context message for Phase 3 ───────────────���───
 
   function getContextMessage(): string {
     if (returnContext) {
       const { offeringName, audienceName, currentStep } = returnContext;
+      const when = describeWhen(returnContext.lastActivityAt);
+      const whenPhrase = when ? `${when.charAt(0).toUpperCase() + when.slice(1)}, ` : '';
       if (currentStep < 5) {
-        return `You were last building a message for ${offeringName} for ${audienceName}. Want to go there or start something else?`;
+        return `${whenPhrase}you were building a message for ${offeringName} for ${audienceName}. Want to pick that up or start something else?`;
       }
       if (returnContext.unblendedMedium) {
-        return `You were working on a ${returnContext.unblendedMedium} for ${offeringName} → ${audienceName}. The chapters are written but not blended yet. Want to finish that or start something else?`;
+        return `${whenPhrase}you were working on a ${returnContext.unblendedMedium} for ${offeringName} → ${audienceName}. The chapters are written but not blended yet. Want to finish that or start something else?`;
       }
       if (!returnContext.hasStories) {
-        return `Your Three Tier for ${offeringName} → ${audienceName} is done. Want to turn it into something or start something new?`;
+        return `Your Three Tier for ${offeringName} → ${audienceName} is done${when ? ` as of ${when}` : ''}. Want to turn it into something or start something new?`;
       }
-      return `Your ${offeringName} work is in good shape. Want to revisit it or start something new?`;
+      return `Your ${offeringName} work is in good shape${when ? ` — last touched ${when}` : ''}. Want to revisit it or start something new?`;
     }
     return `What are you working on? Tell me about your product or service, and who needs to hear about it.`;
   }
@@ -857,6 +903,9 @@ export function MariaPartner() {
                   {sending && (
                     <div className="partner-msg partner-msg-assistant partner-typing">
                       <span /><span /><span />
+                      {thinkingSlow && (
+                        <span className="partner-typing-label">Maria is thinking…</span>
+                      )}
                     </div>
                   )}
                   <div ref={messagesEndRef} />

@@ -137,8 +137,9 @@ export function FoundationCard({ foundation, onConfirm, onRefineLanguage, onElem
             type="button"
             className="btn guided-foundation-refine"
             onClick={onRefineLanguage}
+            title="Open the full three-tier editor with Maria — edit any cell, scope her to one column, run Refine Language or Polish"
           >
-            Refine Language
+            Open in full editor
           </button>
         )}
         <button
@@ -149,6 +150,9 @@ export function FoundationCard({ foundation, onConfirm, onRefineLanguage, onElem
           Use this foundation
         </button>
       </div>
+      <p className="guided-foundation-actions-hint">
+        Click any line above to edit it here. For deeper control — scoped edits, alternate drafts, checkpoints — use the full editor.
+      </p>
     </div>
   );
 }
