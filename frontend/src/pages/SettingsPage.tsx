@@ -91,6 +91,13 @@ export function SettingsPage() {
     <div className="page-container">
       <h1>Settings</h1>
 
+      {user?.isAdmin && (
+        <div style={{ marginTop: 24 }}>
+          <AdminPanel />
+          <hr className="settings-divider" />
+        </div>
+      )}
+
       <div style={{ marginTop: 32 }}>
         <h2 style={{ fontSize: 18, marginBottom: 8 }}>Maria's Memory</h2>
         <p className="text-secondary" style={{ marginBottom: 24, lineHeight: 1.5 }}>
@@ -274,13 +281,6 @@ export function SettingsPage() {
           </div>
         )}
       </div>
-
-      {user?.isAdmin && (
-        <>
-          <hr className="settings-divider" />
-          <AdminPanel />
-        </>
-      )}
 
       <ConfirmModal
         open={showResetConfirm}

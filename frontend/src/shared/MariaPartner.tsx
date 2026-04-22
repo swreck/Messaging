@@ -191,7 +191,11 @@ export function MariaPartner() {
       api.get<{ messages: Message[] }>('/partner/history')
         .then(({ messages: history }) => {
           if (history.length === 0) {
-            setMessages([{ role: 'assistant', content: "What are you working on? Tell me about your product or service, and who you need to reach." }]);
+            const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
+            const greeting = firstName
+              ? `Hi ${firstName} — what are you working on today? Tell me about your product or who you need to reach, or just ask me anything.`
+              : "Hi — what are you working on today? Tell me about your product or who you need to reach, or just ask me anything.";
+            setMessages([{ role: 'assistant', content: greeting }]);
           } else {
             setMessages(history);
           }

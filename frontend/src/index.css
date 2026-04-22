@@ -3549,6 +3549,18 @@ p { line-height: 1.5; color: var(--text-secondary); }
     bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     right: 16px;
   }
+  /* When the panel is open on mobile, push page content up so the last
+     interactive element (e.g. "Let's start") can scroll above the sheet
+     instead of sitting underneath it. 72vh covers medium/full variants;
+     compact gets extra comfortable room. */
+  body.maria-panel-open .main-content {
+    padding-bottom: calc(72vh + 32px);
+  }
+  /* Hide the floating bubble while the panel is open — otherwise it
+     covers the top-right of the sheet's header. */
+  body.maria-panel-open .partner-bubble {
+    display: none;
+  }
 }
 
 /* ─── Large Desktop (1200px+) ────────────────────── */

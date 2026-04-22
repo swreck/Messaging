@@ -1030,10 +1030,10 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
               onClick={mariaThinking ? undefined : onSwitchToAssistant}
               disabled={mariaThinking}
               title={mariaThinking
-                ? "Hang on — Maria's writing your reply. You can switch as soon as she's done."
-                : "Ask Maria something else — your guided message stays right here"}
+                ? "Hang on — Maria's writing. One sec."
+                : "Step out to ask Maria something. Your draft waits right here."}
             >
-              {mariaThinking ? 'Maria is writing…' : '← Chat with Maria instead'}
+              {mariaThinking ? 'Maria is writing…' : '← Ask Maria something'}
             </button>
           </div>
         );

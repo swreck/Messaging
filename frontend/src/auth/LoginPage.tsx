@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { user, login, logout } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -45,6 +45,21 @@ export function LoginPage() {
           <p className="login-tagline">Your messaging partner</p>
           <p className="login-value-prop">Draft the pitch. I can lead, follow, or just answer questions.</p>
         </div>
+
+        {user && (
+          <div className="form-error" style={{ marginBottom: 16, background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
+            You're already signed in as <strong>{user.username}</strong>.{' '}
+            <button
+              type="button"
+              className="btn-link"
+              style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}
+              onClick={() => { logout(); setUsername(''); setPassword(''); setError(''); }}
+            >
+              Sign out
+            </button>{' '}
+            to log in as someone else.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">

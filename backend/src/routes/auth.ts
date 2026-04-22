@@ -74,8 +74,27 @@ router.post('/register', async (req: Request, res: Response) => {
 
   const passwordHash = await bcryptjs.hash(password, 10);
 
+  // Display name: prefer the admin-supplied invitee name, fall back to the
+  // capitalized username. This is what Maria greets with and what anchors
+  // the workspace title — NOT the raw (possibly hyphenated) username.
+  const displayName =
+    (code.inviteeName && code.inviteeName.trim()) ||
+    `${normalizedUsername.charAt(0).toUpperCase()}${normalizedUsername.slice(1)}`;
+  const firstName = displayName.split(/\s+/)[0];
+
   const user = await prisma.user.create({
-    data: { username: normalizedUsername, passwordHash, isAdmin: code.role === 'admin' },
+    data: {
+      username: normalizedUsername,
+      passwordHash,
+      isAdmin: code.role === 'admin',
+      // Seed both top-level (for general UI) and partner.displayName
+      // (so Maria greets by the real first name, not the raw username).
+      settings: {
+        displayName,
+        firstName,
+        partner: { displayName: firstName },
+      },
+    },
   });
 
   // Mark invite code as used
@@ -97,7 +116,7 @@ router.post('/register', async (req: Request, res: Response) => {
   } else {
     await prisma.workspace.create({
       data: {
-        name: `${username.charAt(0).toUpperCase() + username.slice(1)}'s Workspace`,
+        name: `${firstName}'s Workspace`,
         members: {
           create: { userId: user.id, role: 'owner' },
         },

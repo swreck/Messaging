@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
 export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [inviteCode, setInviteCode] = useState('');
+  const [searchParams] = useSearchParams();
+  const initialInvite = (searchParams.get('invite') || searchParams.get('code') || '').toUpperCase();
+  const [inviteCode, setInviteCode] = useState(initialInvite);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

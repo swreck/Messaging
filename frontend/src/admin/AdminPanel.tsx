@@ -112,6 +112,42 @@ export function AdminPanel() {
 
   return (
     <div className="admin-panel">
+      {/* ─── Invite a Real User ────────────────────────── */}
+      <section className="admin-section">
+        <h3>Invite Someone</h3>
+        <p className="admin-hint">
+          Create an invite link. The message is copied to your clipboard — paste it into email or a DM.
+        </p>
+        <div className="admin-invite-form">
+          <input
+            className="admin-invite-input"
+            placeholder="Name (e.g., Brad)"
+            value={inviteName}
+            onChange={e => setInviteName(e.target.value)}
+          />
+          <input
+            className="admin-invite-input"
+            placeholder="Email (optional)"
+            value={inviteEmail}
+            onChange={e => setInviteEmail(e.target.value)}
+          />
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={sendInvite}
+            disabled={!inviteName.trim() || inviting}
+          >
+            {inviting ? 'Creating...' : 'Invite'}
+          </button>
+        </div>
+        {lastInviteUrl && (
+          <p className="admin-invite-result">
+            Invite link: <a href={lastInviteUrl} target="_blank" rel="noopener">{lastInviteUrl}</a>
+            <br />
+            <span className="admin-hint">Message copied to clipboard.</span>
+          </p>
+        )}
+      </section>
+
       {/* ─── Demo Accounts ─────────────────────────────── */}
       <section className="admin-section">
         <div className="admin-section-header">
@@ -192,39 +228,6 @@ export function AdminPanel() {
               </div>
             ))}
           </div>
-        )}
-      </section>
-
-      {/* ─── Invite a Real User ────────────────────────── */}
-      <section className="admin-section">
-        <h3>Invite Someone</h3>
-        <div className="admin-invite-form">
-          <input
-            className="admin-invite-input"
-            placeholder="Name (e.g., Brad)"
-            value={inviteName}
-            onChange={e => setInviteName(e.target.value)}
-          />
-          <input
-            className="admin-invite-input"
-            placeholder="Email (optional)"
-            value={inviteEmail}
-            onChange={e => setInviteEmail(e.target.value)}
-          />
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={sendInvite}
-            disabled={!inviteName.trim() || inviting}
-          >
-            {inviting ? 'Creating...' : 'Invite'}
-          </button>
-        </div>
-        {lastInviteUrl && (
-          <p className="admin-invite-result">
-            Invite link: <a href={lastInviteUrl} target="_blank" rel="noopener">{lastInviteUrl}</a>
-            <br />
-            <span className="admin-hint">Message copied to clipboard.</span>
-          </p>
         )}
       </section>
 

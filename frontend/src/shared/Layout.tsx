@@ -154,11 +154,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
         <div className="nav-right">
           <button
-            onClick={() => navigate('/express')}
+            onClick={() => {
+              // Open Maria panel in place; don't rip the user away from what
+              // they were looking at. If they're logged in, Maria greets and
+              // asks what they'd like to draft.
+              document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true } }));
+            }}
             className="btn btn-primary btn-sm nav-start-draft"
-            title="Start a new message — Maria will guide you"
+            title="Talk to Maria about a new message"
           >
-            Start a draft
+            Talk to Maria
           </button>
           <span className="nav-user">{user?.username}</span>
           <button

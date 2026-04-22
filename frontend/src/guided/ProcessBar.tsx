@@ -8,9 +8,9 @@ interface Props {
 }
 
 const STAGES: { key: GuidedStage; label: string; description: string }[] = [
-  { key: 'inputs', label: 'Inputs', description: 'What makes you different and what your audience cares about' },
-  { key: 'foundation', label: 'Foundation', description: 'Your foundational message connecting priorities to strengths' },
-  { key: 'deliverable', label: 'Deliverable', description: 'A first draft you can refine and send' },
+  { key: 'inputs', label: 'The basics', description: 'What you offer and who you\'re writing to' },
+  { key: 'foundation', label: 'Your message', description: 'The core of what you want to say' },
+  { key: 'deliverable', label: 'First draft', description: 'Something you can send or refine' },
 ];
 
 export function ProcessBar({ currentStage, completedStages, onNavigate, onReset }: Props) {
