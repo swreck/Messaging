@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useMaria } from './MariaContext';
+import { useGuidedSessionContext } from '../guided/GuidedSessionContext';
+import { GuidedFlow } from '../guided/GuidedFlow';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -39,12 +41,23 @@ export function MariaPartner() {
   const navigate = useNavigate();
   const location = useLocation();
   const { pageContext, refreshPage } = useMaria();
-  // Hide on auth pages AND on /express — Express Flow IS a chat, the global
-  // partner bubble would be redundant and visually cluttered.
+  const { hasActiveGuidedSession, startNewSession } = useGuidedSessionContext();
+  // Hide on auth pages only. Maria now appears on every other page, including
+  // former /express (which is being removed — this hide rule is dropped).
   const isAuthPage =
     ['/login', '/register'].some(p => location.pathname.startsWith(p)) ||
-    location.pathname.startsWith('/join/') ||
-    location.pathname.startsWith('/express');
+    location.pathname.startsWith('/join/');
+
+  // Guided-mode visibility within the panel. Separate from hasActiveGuidedSession because:
+  // - enteringGuided: user just clicked "Start a guided message" — new session exists but has no
+  //   content yet, so hasActiveGuidedSession is still false until GuidedFlow adds the first message.
+  // - preferAssistant: user clicked "Chat with Maria instead" from inside guided. They want the
+  //   assistant view even though a guided session is still active in the background.
+  const [enteringGuided, setEnteringGuided] = useState(false);
+  const [preferAssistant, setPreferAssistant] = useState(false);
+  const showGuidedInPanel = (hasActiveGuidedSession || enteringGuided) && !preferAssistant;
+  // Once the guided session picks up content, clear the transient entering flag.
+  useEffect(() => { if (hasActiveGuidedSession && enteringGuided) setEnteringGuided(false); }, [hasActiveGuidedSession, enteringGuided]);
 
   // Panel state
   const [open, setOpen] = useState(false);
@@ -722,9 +735,57 @@ export function MariaPartner() {
             )}
             {showIntro && renderIntro()}
 
-            {statusLoaded && !showIntro && (
+            {/* Guided flow branch — when an active guided session exists and user hasn't
+                explicitly chosen assistant view, render the full guided experience inside the panel.
+                The user can always tap "Chat with Maria instead" to hop back without losing progress. */}
+            {statusLoaded && !showIntro && showGuidedInPanel && (
+              <GuidedFlow
+                mode="panel"
+                onSwitchToAssistant={() => setPreferAssistant(true)}
+              />
+            )}
+
+            {statusLoaded && !showIntro && !showGuidedInPanel && (
               <>
                 <div className="partner-messages">
+                  {/* Guided entry card — shows one of two states:
+                      - Active session in background (user chose assistant view temporarily):
+                        "Return to your guided message" — clears preferAssistant and flips back
+                      - No active session: "Start a guided message" — creates new session */}
+                  {loaded && (hasActiveGuidedSession ? (
+                    <div className="partner-guided-card partner-guided-card-return">
+                      <div className="partner-guided-card-text">
+                        Your guided message is still in progress.
+                      </div>
+                      <div className="partner-guided-card-actions">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => setPreferAssistant(false)}
+                        >
+                          Pick it back up
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="partner-guided-card partner-guided-card-start">
+                      <div className="partner-guided-card-text">
+                        Want me to walk you through building a message? I'll ask a few questions and draft the first version for you.
+                      </div>
+                      <div className="partner-guided-card-actions">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={async () => {
+                            setEnteringGuided(true);
+                            setPreferAssistant(false);
+                            await startNewSession();
+                          }}
+                        >
+                          Start a guided message
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
                   {/* Return context card */}
                   {showReturnCard && returnContext && (
                     <div className="partner-return-card" style={{

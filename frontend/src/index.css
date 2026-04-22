@@ -4762,11 +4762,66 @@ p { line-height: 1.5; color: var(--text-secondary); }
   background: var(--surface-bg, #fafafa);
   overflow: hidden;
 }
-/* When wrapped in the 2.5 Layout, break out of padded container */
-.main-content .guided-shell {
+/* When wrapped in the 2.5 Layout, break out of padded container (NOT in panel mode) */
+.main-content .guided-shell:not(.guided-shell-panel) {
   height: calc(100vh - 56px);
   margin: -24px;
   width: calc(100% + 48px);
+}
+/* Panel mode — fills the MariaPartner panel body, not the viewport */
+.guided-shell-panel {
+  height: 100%;
+  background: white;
+}
+.guided-shell-panel .guided-chat-area {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+/* Entry card at top of assistant chat — offers guided flow or returns to one in progress */
+.partner-guided-card {
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #f5f7ff 0%, #eef2ff 100%);
+  border-radius: 8px;
+  border: 1px solid #dde3f5;
+}
+.partner-guided-card-return {
+  background: linear-gradient(135deg, #fff5e6 0%, #ffedd5 100%);
+  border-color: #fbd38d;
+}
+.partner-guided-card-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1a1a1a;
+  margin-bottom: 10px;
+}
+.partner-guided-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Subtle escape-hatch link back to assistant chat */
+.guided-panel-switch {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid #eef0f3;
+  background: #fafafa;
+  flex-shrink: 0;
+}
+.guided-panel-switch-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.01em;
+}
+.guided-panel-switch-btn:hover {
+  color: #1a1a1a;
+  background: #eef0f3;
 }
 @media (max-width: 600px) {
   .guided-shell .guided-input-textarea {

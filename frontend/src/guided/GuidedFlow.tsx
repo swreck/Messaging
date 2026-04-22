@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 import { useToast } from '../shared/ToastContext';
-import { useGuidedSession } from './useGuidedSession';
+import { useGuidedSessionContext } from './GuidedSessionContext';
 import { ProcessBar } from './ProcessBar';
 import { InputConfirmationCard } from './InputConfirmationCard';
 import { FoundationCard } from './FoundationCard';
@@ -47,7 +47,22 @@ function isMariaThreeHostname(): boolean {
   return h.includes('mariamessaging3') || h.includes('maria-messaging-3') || h.includes('maria3.');
 }
 
-export function GuidedFlow() {
+export interface GuidedFlowProps {
+  /**
+   * 'full' (default): renders as a full-page experience with hero header, its own chrome.
+   *   Used when GuidedFlow stands alone on a dedicated URL.
+   * 'panel': renders inside the MariaPartner panel. Drops the outer header + standalone chrome;
+   *   parent panel provides frame, sizing, close button.
+   */
+  mode?: 'full' | 'panel';
+  /**
+   * Panel-mode only: called when the user clicks "Chat with Maria instead" — lets the parent
+   * (MariaPartner) switch the panel body back to assistant chat without destroying the guided session.
+   */
+  onSwitchToAssistant?: () => void;
+}
+
+export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowProps = {}) {
   const [phase, setPhase] = useState<GuidedPhase>('greeting');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -93,9 +108,17 @@ export function GuidedFlow() {
   const { activeWorkspace } = useWorkspace();
   const { showToast } = useToast();
   const navigate = useNavigate();
-  const standalone = isMariaThreeHostname();
-  const { session, isLoading: sessionLoading, saveSession } = useGuidedSession();
+  // Standalone = full-page chrome (hero header, sign-out, workspace label).
+  // When embedded in a panel, parent provides the chrome and we suppress our own.
+  const standalone = mode === 'full' && isMariaThreeHostname();
+  const { session, isLoading: sessionLoading, saveSession } = useGuidedSessionContext();
   const restoredRef = useRef(false);
+  // Tracks whether the save effect has fired at least once AFTER restore.
+  // Skipping the first fire is critical: on a fresh mount, the save effect runs
+  // before React commits setMessages from the restore effect, so it would
+  // optimistically overwrite context.session.messages with the empty initial value —
+  // causing MariaPartner to see hasActiveGuidedSession=false and unmount us.
+  const skipNextSaveRef = useRef(false);
 
   useEffect(() => {
     if (!session || restoredRef.current || sessionLoading) return;
@@ -104,6 +127,9 @@ export function GuidedFlow() {
       return;
     }
     restoredRef.current = true;
+    // When there's real session state to restore, the save effect is about to
+    // fire with stale (empty) local state. Mark it to be skipped once.
+    skipNextSaveRef.current = true;
     setPhase(session.phase as GuidedPhase);
     setMessages(session.messages);
     setCompletedStages(new Set(session.completedStages as GuidedStage[]));
@@ -121,6 +147,10 @@ export function GuidedFlow() {
 
   useEffect(() => {
     if (!restoredRef.current) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
     saveSession({
       phase,
       messages,
@@ -963,7 +993,7 @@ export function GuidedFlow() {
   // ── Render ────────────────────────────────────────
 
   return (
-    <div className="guided-shell">
+    <div className={`guided-shell ${mode === 'panel' ? 'guided-shell-panel' : ''}`}>
       {/* ── Top chrome ──────────────────────────── */}
       {standalone && (
         <header className="guided-chrome">
@@ -985,6 +1015,21 @@ export function GuidedFlow() {
             )}
           </div>
         </header>
+      )}
+
+      {/* Panel-mode escape hatch: small link so the user can switch to assistant chat
+          without losing the guided session. Appears only when parent provided the callback. */}
+      {mode === 'panel' && onSwitchToAssistant && (
+        <div className="guided-panel-switch">
+          <button
+            type="button"
+            className="guided-panel-switch-btn"
+            onClick={onSwitchToAssistant}
+            title="Ask Maria something else — your guided message stays right here"
+          >
+            ← Chat with Maria instead
+          </button>
+        </div>
       )}
 
       {/* ── Process bar ─────────────────────────── */}
@@ -1017,7 +1062,13 @@ export function GuidedFlow() {
                     <button
                       type="button"
                       className="guided-greeting-dismiss"
-                      onClick={() => navigate('/')}
+                      onClick={() => {
+                        if (mode === 'panel' && onSwitchToAssistant) {
+                          onSwitchToAssistant();
+                        } else {
+                          navigate('/');
+                        }
+                      }}
                     >
                       I'll build it myself
                     </button>

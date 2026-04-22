@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { LoginPage } from './auth/LoginPage';
@@ -9,6 +10,7 @@ import { MariaProvider } from './shared/MariaContext';
 import { WorkspaceProvider } from './shared/WorkspaceContext';
 import { MariaPartner } from './shared/MariaPartner';
 import { ToastProvider } from './shared/ToastContext';
+import { GuidedSessionProvider } from './guided/GuidedSessionContext';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { AudiencesPage } from './pages/AudiencesPage';
 import { OfferingsPage } from './pages/OfferingsPage';
@@ -23,7 +25,19 @@ import { MappingPage } from './pages/MappingPage';
 import { SharedView } from './pages/SharedView';
 import { ExpressPreviewDemo } from './express/ExpressPreviewDemo';
 import { ExpressEntry } from './express/ExpressEntry';
-import { GuidedFlow } from './guided/GuidedFlow';
+
+// /express → / and auto-open the Maria panel. The guided flow now lives inside the panel;
+// legacy bookmarks and the Maria3 host's default landing land here and pop the panel.
+function ExpressRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate('/', { replace: true });
+    setTimeout(() => {
+      document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true } }));
+    }, 50);
+  }, [navigate]);
+  return null;
+}
 
 // Maria 3.0 dual deployment: detect which branded URL is serving this bundle.
 // When running on the 3.0 service hostname, "/" redirects to "/express" so
@@ -45,6 +59,7 @@ function App() {
       <AuthProvider>
         <ToastProvider>
         <WorkspaceProvider>
+        <GuidedSessionProvider>
         <MariaProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -53,22 +68,14 @@ function App() {
           <Route
             path="/"
             element={
-              isMariaThreeHost ? (
-                <Navigate to="/express" replace />
-              ) : (
-                <ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>
-              )
+              <ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>
             }
           />
+          {/* /express retired. Legacy bookmarks + Maria3 host land here and get bounced
+              to / with the panel auto-opened. The guided flow lives inside the Maria panel now. */}
           <Route
             path="/express"
-            element={
-              isMariaThreeHost ? (
-                <ProtectedRoute><GuidedFlow /></ProtectedRoute>
-              ) : (
-                <ProtectedRoute><Layout><GuidedFlow /></Layout></ProtectedRoute>
-              )
-            }
+            element={<ProtectedRoute><ExpressRedirect /></ProtectedRoute>}
           />
           <Route
             path="/express-legacy"
@@ -96,6 +103,7 @@ function App() {
         </Routes>
         <MariaPartner />
         </MariaProvider>
+        </GuidedSessionProvider>
         </WorkspaceProvider>
         </ToastProvider>
       </AuthProvider>
