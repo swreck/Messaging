@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { StepProps } from './types';
 import { api } from '../../api/client';
@@ -9,6 +9,27 @@ import { CompareModal } from '../components/CompareModal';
 import { Modal } from '../../shared/Modal';
 import { ConfirmModal } from '../../shared/ConfirmModal';
 import type { TableVersion, ReviewResponse, DirectionResponse, TableSnapshot } from '../../types';
+
+// Frontend voice-guard patterns — mirrors backend/src/lib/voiceGuard.ts.
+// Kept in sync with that file; both enforce Ken's Voice Rule 5 contrast clauses
+// and Rule 10 word count. Banner surfaces stored drafts whose statements predate
+// the voice guard and still carry old-style voice violations.
+const CONTRAST_CLAUSE_PATTERNS: RegExp[] = [
+  /\bwithout\s+\w+ing\b/i,
+  /\bwithout\s+(?:the\s+|any\s+|a\s+)?(?:risk|hassle|cost|tradeoff|compromise|downside|overhead|delay|loss|sacrifice)\b/i,
+  /\binstead\s+of\b/i,
+  /\brather\s+than\b/i,
+  /\bno\s+tradeoff/i,
+  /\bnot\s+just\b/i,
+];
+function statementHasVoiceViolation(text: string | null | undefined, maxWords = 20): boolean {
+  if (!text || !text.trim()) return false;
+  const [mainRaw] = text.split(/\bbecause\b/i);
+  const main = (mainRaw || text).trim();
+  for (const p of CONTRAST_CLAUSE_PATTERNS) if (p.test(main)) return true;
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return words > maxWords;
+}
 
 
 export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToStep }: StepProps) {
@@ -79,6 +100,25 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   function dismissOrientation() {
     localStorage.setItem(orientationKey, '1');
     setShowOrientation(false);
+  }
+
+  // Voice-violation banner — for stored drafts that predate the voice guard
+  // and still carry old-style contrast-clause / word-count violations.
+  const voiceBannerDismissedKey = `step5-voice-dismissed-${draft.id}`;
+  const [voiceBannerDismissed, setVoiceBannerDismissed] = useState(() => {
+    return !!localStorage.getItem(voiceBannerDismissedKey);
+  });
+  const voiceViolationCount = useMemo(() => {
+    let n = 0;
+    if (statementHasVoiceViolation(draft.tier1Statement?.text)) n++;
+    for (const t2 of draft.tier2Statements) {
+      if (statementHasVoiceViolation(t2.text)) n++;
+    }
+    return n;
+  }, [draft]);
+  function dismissVoiceBanner() {
+    localStorage.setItem(voiceBannerDismissedKey, '1');
+    setVoiceBannerDismissed(true);
   }
 
   // Snapshot of table state for "revise from edits"
@@ -377,6 +417,42 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       <p style={{ marginBottom: 16, color: 'var(--text-tertiary)', fontSize: 12, fontStyle: 'italic' }}>
         Based on Three Tier format
       </p>
+
+      {voiceViolationCount > 0 && !voiceBannerDismissed && !refining && !polishing && (
+        <div style={{
+          padding: '14px 18px',
+          marginBottom: 16,
+          background: 'var(--accent-light, #eaf4ff)',
+          borderRadius: 'var(--radius-md, 10px)',
+          border: '1px solid var(--accent, #007aff)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5, flex: '1 1 260px' }}>
+            I'd tighten {voiceViolationCount === 1 ? 'one statement' : `${voiceViolationCount} statements`} here — the language has a few hedges I'd drop. Want me to touch it up?
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 13, padding: '6px 14px' }}
+              disabled={refining}
+              onClick={() => { dismissVoiceBanner(); refineLanguage(); }}
+            >
+              {refining ? 'Touching up…' : 'Touch up'}
+            </button>
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 13, padding: '6px 12px' }}
+              onClick={dismissVoiceBanner}
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
 
       {showOrientation && (
         <div className="orientation-card" style={{

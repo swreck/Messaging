@@ -149,9 +149,9 @@ export function DashboardPage() {
             <h2 className="dashboard-workspace-name" style={{ margin: 0 }}>{activeWorkspace.name}</h2>
           )}
         </div>
-        <label className="consultation-toggle" title={consultation ? 'Maria guides you through building your message. Turn off to work manually.' : 'Turn on to let Maria guide you through building your message step by step.'}>
+        <label className="consultation-toggle" title={consultation ? 'Maria guides each step. Take over whenever you want.' : 'You drive. Maria waits on the side.'}>
           <span className={`consultation-toggle-label ${consultation ? 'consultation-toggle-label-active' : ''}`}>
-            {consultation ? 'Maria is your partner' : 'Add collaboration'}
+            Let Maria lead
           </span>
           <button
             type="button"
@@ -164,18 +164,18 @@ export function DashboardPage() {
         </label>
       </div>
 
-      {/* New user — go straight to guided */}
+      {/* New user — Maria's voice, one forward button */}
       {isNew && (
         <div className="dashboard-welcome empty-state-enhanced">
           <div className="empty-icon">💬</div>
-          <h3>Welcome to Maria</h3>
-          <p>Maria will help you build persuasive messaging through a guided conversation. Just answer her questions.</p>
+          <h3>Hi, I'm Maria.</h3>
+          <p>Tell me what you're selling and who you're selling to. I'll help you land a clear message and a story your team can use.</p>
           <button
             className="btn btn-primary"
             onClick={() => navigate('/express')}
             style={{ marginTop: 12 }}
           >
-            Get started with Maria
+            Let's start
           </button>
         </div>
       )}
@@ -242,6 +242,7 @@ export function DashboardPage() {
           <div className="nav-tile nav-tile-audiences" onClick={() => navigate('/audiences')}>
             <div className="nav-tile-icon">👥</div>
             <div className="nav-tile-title">Audiences</div>
+            <div className="nav-tile-sub">people you're writing to</div>
             <div className="nav-tile-stat">
               {audCount > 0 ? `${audCount}` : 'None yet'}
             </div>
@@ -250,6 +251,7 @@ export function DashboardPage() {
           <div className="nav-tile nav-tile-offerings" onClick={() => navigate('/offerings')}>
             <div className="nav-tile-icon">✨</div>
             <div className="nav-tile-title">Offerings</div>
+            <div className="nav-tile-sub">what you're selling</div>
             <div className="nav-tile-stat">
               {offCount > 0 ? `${offCount}` : 'None yet'}
             </div>
@@ -258,6 +260,7 @@ export function DashboardPage() {
           <div className="nav-tile nav-tile-three-tiers" onClick={() => navigate('/three-tiers')}>
             <div className="nav-tile-icon">💬</div>
             <div className="nav-tile-title">3 Tiers</div>
+            <div className="nav-tile-sub">Three Tier messages</div>
             <div className="nav-tile-stat">
               {ttCount > 0 ? `${ttCount}` : 'None yet'}
             </div>
@@ -266,6 +269,7 @@ export function DashboardPage() {
           <div className="nav-tile nav-tile-five-chapters" onClick={() => navigate('/five-chapters')}>
             <div className="nav-tile-icon">📖</div>
             <div className="nav-tile-title">5 Ch. Stories</div>
+            <div className="nav-tile-sub">Five Chapter stories</div>
             <div className="nav-tile-stat">
               {fcsCount > 0 ? `${fcsCount}` : 'None yet'}
             </div>
