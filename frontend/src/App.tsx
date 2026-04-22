@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { LoginPage } from './auth/LoginPage';
@@ -23,6 +23,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { WorkspacesPage } from './pages/WorkspacesPage';
 import { MappingPage } from './pages/MappingPage';
 import { SharedView } from './pages/SharedView';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { ExpressPreviewDemo } from './express/ExpressPreviewDemo';
 import { ExpressEntry } from './express/ExpressEntry';
 
@@ -119,7 +120,7 @@ function App() {
           <Route path="/mapping/:draftId" element={<ProtectedRoute><MappingPage /></ProtectedRoute>} />
           <Route path="/express-preview-demo" element={<ProtectedRoute><Layout><ExpressPreviewDemo /></Layout></ProtectedRoute>} />
           <Route path="/s/:token" element={<SharedView />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<ProtectedRoute><Layout><NotFoundPage /></Layout></ProtectedRoute>} />
         </Routes>
         <MariaPartner />
         </MariaProvider>

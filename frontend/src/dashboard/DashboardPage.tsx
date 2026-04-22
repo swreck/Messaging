@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
+import { LEAD_TOGGLE_EVENT } from '../shared/leadershipDetection';
 import type { Offering, Audience } from '../types';
 
 interface HierarchyOffering {
@@ -57,6 +58,20 @@ export function DashboardPage() {
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'dashboard' }); registerRefresh(loadAll); }, []);
   useEffect(() => { loadAll(); }, []);
+
+  // Listen for toggle promotions from chat. When Maria flips the "Let Maria lead"
+  // default in response to a user's in-chat request, the switch here should
+  // visibly move so the toggle stays truthful.
+  useEffect(() => {
+    function onToggleChanged(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.value === 'on' || detail?.value === 'off') {
+        setConsultation(detail.value === 'on');
+      }
+    }
+    document.addEventListener(LEAD_TOGGLE_EVENT, onToggleChanged);
+    return () => document.removeEventListener(LEAD_TOGGLE_EVENT, onToggleChanged);
+  }, []);
 
   async function loadAll(retries = 2) {
     setLoading(true);
@@ -172,6 +187,9 @@ export function DashboardPage() {
     const next = !consultation;
     setConsultation(next);
     try { localStorage.setItem('maria-consultation', next ? 'on' : 'off'); } catch {}
+    try {
+      document.dispatchEvent(new CustomEvent(LEAD_TOGGLE_EVENT, { detail: { value: next ? 'on' : 'off' } }));
+    } catch {}
     if (next) navigate('/express');
   }
 
@@ -298,7 +316,7 @@ export function DashboardPage() {
           <div className="nav-tile nav-tile-three-tiers" onClick={() => navigate('/three-tiers')}>
             <div className="nav-tile-icon">💬</div>
             <div className="nav-tile-title">3 Tiers</div>
-            <div className="nav-tile-sub">Three Tier messages</div>
+            <div className="nav-tile-sub">what you want to say</div>
             <div className="nav-tile-stat">
               {ttCount > 0 ? `${ttCount}` : 'None yet'}
             </div>
@@ -307,7 +325,7 @@ export function DashboardPage() {
           <div className="nav-tile nav-tile-five-chapters" onClick={() => navigate('/five-chapters')}>
             <div className="nav-tile-icon">📖</div>
             <div className="nav-tile-title">5 Ch. Stories</div>
-            <div className="nav-tile-sub">Five Chapter stories</div>
+            <div className="nav-tile-sub">how you tell it</div>
             <div className="nav-tile-stat">
               {fcsCount > 0 ? `${fcsCount}` : 'None yet'}
             </div>

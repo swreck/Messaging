@@ -5,6 +5,15 @@ import { useAuth } from '../auth/AuthContext';
 import { useMaria } from './MariaContext';
 import { useGuidedSessionContext } from '../guided/GuidedSessionContext';
 import { GuidedFlow } from '../guided/GuidedFlow';
+import {
+  detectLeadDirective,
+  directiveConflictsWithToggle,
+  setToggleState,
+  bumpOverrideCount,
+  resetOverrideCount,
+  getOverrideCount,
+  type LeadDirection,
+} from './leadershipDetection';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -108,6 +117,16 @@ export function MariaPartner() {
   // Bubble indicators
   const [showDot, setShowDot] = useState(false);
   const [showGlow, setShowGlow] = useState(false);
+
+  // Toggle-can't-lie: when a user's in-chat directive conflicts with the visible
+  // "Let Maria lead" toggle, Maria does the requested thing immediately AND offers
+  // to promote the change to the toggle. The card below the latest exchange
+  // presents the offer. After three dismissals in the same direction, the ask
+  // softens (a little self-aware note) rather than repeating verbatim.
+  const [leadPromotion, setLeadPromotion] = useState<{
+    direction: LeadDirection;
+    softened: boolean;
+  } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -277,7 +296,17 @@ export function MariaPartner() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [open]);
 
-  const handleOpen = useCallback(() => { setOpen(true); setShowDot(false); setShowGlow(false); }, []);
+  // FAB click — default to chat view. If the user has an active guided session, a
+  // "Return to your guided message" card appears at the top of chat so they can
+  // resume the wizard in one tap. Opening the FAB should feel like tapping a
+  // partner on the shoulder (chat), not falling back into a wizard they may have
+  // left mid-step.
+  const handleOpen = useCallback(() => {
+    setPreferAssistant(true);
+    setOpen(true);
+    setShowDot(false);
+    setShowGlow(false);
+  }, []);
   const handleClose = useCallback(() => setOpen(false), []);
 
   // ─── Intro helpers ──────────────────────────────────
@@ -364,10 +393,45 @@ export function MariaPartner() {
       return;
     }
 
+    // Toggle-can't-lie detection. A pure lead directive ("just decide", "ask
+    // me first") is a meta-instruction about HOW Maria should work — it isn't
+    // a task. Handle it client-side so Maria acknowledges directly instead of
+    // round-tripping through the partner prompt (which treats it as a bad
+    // request and replies "Sorry, I had trouble with that"). If the directive
+    // conflicts with the current toggle, also queue the promotion offer.
+    {
+      const directive = detectLeadDirective(text);
+      if (directive) {
+        const conflicts = directiveConflictsWithToggle(directive);
+        const reply = directive === 'more'
+          ? (conflicts
+              ? "Got it — I'll take the lead on this one."
+              : "Got it — staying in the lead.")
+          : (conflicts
+              ? "Okay — I'll slow down and check in as we go."
+              : "Okay — I'll keep checking in.");
+        if (!overrideText) {
+          setInput('');
+          setMessages(prev => [
+            ...prev,
+            { role: 'user', content: text },
+            { role: 'assistant', content: reply },
+          ]);
+        }
+        if (conflicts) {
+          const softened = getOverrideCount(directive) >= 3;
+          setLeadPromotion({ direction: directive, softened });
+        }
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+        return;
+      }
+    }
+
     if (!overrideText) {
       setInput('');
       setMessages(prev => [...prev, { role: 'user', content: (text ? text : '') + (pendingFiles.length > 0 ? ` (${pendingFiles.length} files)` : '') }]);
     }
+
     setSending(true);
 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -908,6 +972,53 @@ export function MariaPartner() {
                       )}
                     </div>
                   )}
+
+                  {/* Toggle-can't-lie promotion card. Appears after Maria's reply when the
+                      user's message contradicted the visible "Let Maria lead" toggle. Maria
+                      already complied on this turn; this card asks once whether to move the
+                      toggle too. After 3 dismissals in a row, the ask softens. */}
+                  {leadPromotion && !sending && (
+                    <div className="partner-lead-promotion">
+                      <div className="partner-lead-promotion-text">
+                        {leadPromotion.softened
+                          ? (leadPromotion.direction === 'more'
+                              ? "You've told me to just decide three times now — want me to just decide by default from here on?"
+                              : "You've asked me to check with you three times now — want me to check first by default from here on?")
+                          : (leadPromotion.direction === 'more'
+                              ? "Want me to just decide by default from here on?"
+                              : "Want me to check with you first by default from here on?")}
+                      </div>
+                      <div className="partner-lead-promotion-actions">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => {
+                            const next = leadPromotion.direction === 'more' ? 'on' : 'off';
+                            setToggleState(next);
+                            resetOverrideCount(leadPromotion.direction);
+                            setMessages(prev => [...prev, {
+                              role: 'assistant',
+                              content: leadPromotion.direction === 'more'
+                                ? "Done — I'll just decide by default. You can flip it back anytime from the home screen."
+                                : "Done — I'll check with you first by default. You can flip it back anytime from the home screen.",
+                            }]);
+                            setLeadPromotion(null);
+                          }}
+                        >
+                          {leadPromotion.direction === 'more' ? 'Yes, make it the default' : 'Yes, check with me'}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => {
+                            bumpOverrideCount(leadPromotion.direction);
+                            setLeadPromotion(null);
+                          }}
+                        >
+                          Just this time
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div ref={messagesEndRef} />
                 </div>
 

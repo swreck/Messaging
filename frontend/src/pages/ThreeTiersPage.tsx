@@ -278,7 +278,7 @@ export function ThreeTiersPage() {
           {compareSelection.size > 0 && compareSelection.size < 2 && (
             <span style={{ fontSize: 13, color: 'var(--text-tertiary)', alignSelf: 'center' }}>Select one more to compare</span>
           )}
-          <button className="btn btn-primary" onClick={() => openNewModal()}>New Three Tier</button>
+          <button className="btn btn-primary" onClick={() => openNewModal()}>+ New 3 Tier</button>
         </div>
       </header>
 

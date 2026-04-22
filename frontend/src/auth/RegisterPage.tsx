@@ -29,7 +29,10 @@ export function RegisterPage() {
     <div className="auth-page">
       <div className="auth-card">
         <h1>Maria</h1>
-        <p className="auth-subtitle">Create your account</p>
+        <p className="auth-subtitle">Your Messaging Partner</p>
+        <p className="auth-welcome">
+          Glad you're here. Drop in your invite code and pick a sign-in. I'll help you draft the pitch — lead, follow, or just answer questions.
+        </p>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="inviteCode">Invite Code</label>

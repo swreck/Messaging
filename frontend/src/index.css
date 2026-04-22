@@ -174,6 +174,21 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .nav-links a.active { background: var(--accent-light); color: var(--accent); }
 .nav-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .nav-user { font-size: 15px; color: var(--text-secondary); }
+.nav-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s, color 0.15s;
+}
+.nav-settings-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-settings-btn.active { background: var(--accent-light); color: var(--accent); }
 
 /* Hamburger — hidden on desktop, shown at narrow widths */
 .nav-hamburger {
@@ -327,8 +342,67 @@ p { line-height: 1.5; color: var(--text-secondary); }
   text-align: center;
 }
 .auth-card h1 { font-size: 32px; margin-bottom: 4px; }
-.auth-subtitle { color: var(--text-secondary); margin-bottom: 32px; font-size: 16px; }
+.auth-subtitle { color: var(--text-secondary); margin-bottom: 12px; font-size: 16px; }
+.auth-welcome {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 auto 28px;
+  max-width: 320px;
+  text-align: center;
+}
 .auth-card form { text-align: left; }
+.not-found-page {
+  display: flex;
+  justify-content: center;
+  padding: 60px 24px;
+}
+.not-found-card {
+  max-width: 520px;
+  width: 100%;
+  text-align: left;
+}
+.not-found-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+.not-found-title {
+  font-size: 28px;
+  margin: 0 0 12px;
+  color: var(--text-primary);
+}
+.not-found-body {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0 0 24px;
+}
+.not-found-path {
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 14px;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.not-found-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.not-found-footer {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+.not-found-footer a { color: var(--accent); text-decoration: none; }
+.not-found-footer a:hover { text-decoration: underline; }
+
 .auth-link { margin-top: 20px; font-size: 15px; color: var(--text-secondary); }
 .auth-link a { color: var(--accent); text-decoration: none; }
 .auth-link a:hover { text-decoration: underline; }
@@ -4910,6 +4984,29 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .partner-guided-card-actions {
   display: flex;
   gap: 8px;
+}
+
+/* Toggle-can't-lie promotion card — shown after Maria replies when the user's
+   message contradicted the "Let Maria lead" toggle. Different color from the
+   guided card so it doesn't feel like a wizard entry. */
+.partner-lead-promotion {
+  margin: 4px 0 12px;
+  padding: 12px 14px;
+  background: var(--bg-secondary, #f8f8fa);
+  border: 1px solid var(--border-light, #e5e5ea);
+  border-left: 3px solid var(--accent, #007aff);
+  border-radius: 6px;
+}
+.partner-lead-promotion-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+.partner-lead-promotion-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* Subtle escape-hatch link back to assistant chat */
