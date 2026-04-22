@@ -242,6 +242,88 @@ router.get('/status/:jobId', requireWorkspace, async (req: Request, res: Respons
 // Guided Excellence endpoints — checkpoint-based flow
 // ═══════════════════════════════════════════════════════════════
 
+// GET /api/express/session?workspaceId=...
+// Returns the active (not completed) GuidedSession for this user + workspace.
+// Creates one with defaults if none exists.
+router.get('/session', async (req: Request, res: Response) => {
+  const workspaceId = (req.query.workspaceId as string) || (req.headers['x-workspace-id'] as string);
+  const forceNew = req.query.forceNew === 'true';
+
+  if (!workspaceId) {
+    res.status(400).json({ error: 'workspaceId is required.' });
+    return;
+  }
+
+  try {
+    const userId = req.user!.userId;
+
+    if (forceNew) {
+      await prisma.guidedSession.updateMany({
+        where: { userId, workspaceId, completedAt: null },
+        data: { completedAt: new Date() },
+      });
+    }
+
+    let session = forceNew ? null : await prisma.guidedSession.findFirst({
+      where: { userId, workspaceId, completedAt: null },
+    });
+
+    if (!session) {
+      session = await prisma.guidedSession.create({
+        data: {
+          userId,
+          workspaceId,
+          phase: 'greeting',
+          completedStages: [],
+          messages: [],
+          backlog: [],
+        },
+      });
+    }
+
+    res.json(session);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error('[GuidedSession] GET error:', message);
+    res.status(500).json({ error: 'Could not load session.' });
+  }
+});
+
+// PATCH /api/express/session/:id
+// Partial update of persisted session fields.
+router.patch('/session/:id', async (req: Request, res: Response) => {
+  const id = param(req.params.id);
+  const allowed = [
+    'phase', 'completedStages', 'messages', 'intakeAnswers',
+    'interpretation', 'situation', 'draftId', 'storyId',
+    'foundation', 'backlog', 'lastDraftText', 'completedAt',
+  ] as const;
+
+  const data: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) {
+      data[key] = req.body[key];
+    }
+  }
+
+  if (Object.keys(data).length === 0) {
+    res.status(400).json({ error: 'No updatable fields provided.' });
+    return;
+  }
+
+  try {
+    const session = await prisma.guidedSession.update({
+      where: { id, userId: req.user!.userId },
+      data,
+    });
+    res.json(session);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error('[GuidedSession] PATCH error:', message);
+    res.status(500).json({ error: 'Could not update session.' });
+  }
+});
+
 // POST /api/express/build-foundation
 // Takes a confirmed enriched interpretation, creates DB rows, and generates
 // the Three Tier foundation synchronously (~30-45 seconds).

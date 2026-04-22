@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 import { useToast } from '../shared/ToastContext';
+import { useGuidedSession } from './useGuidedSession';
 import { ProcessBar } from './ProcessBar';
 import { InputConfirmationCard } from './InputConfirmationCard';
 import { FoundationCard } from './FoundationCard';
@@ -93,6 +94,43 @@ export function GuidedFlow() {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const standalone = isMariaThreeHostname();
+  const { session, isLoading: sessionLoading, saveSession } = useGuidedSession();
+  const restoredRef = useRef(false);
+
+  useEffect(() => {
+    if (!session || restoredRef.current || sessionLoading) return;
+    if (session.phase === 'greeting' && session.messages.length === 0) {
+      restoredRef.current = true;
+      return;
+    }
+    restoredRef.current = true;
+    setPhase(session.phase as GuidedPhase);
+    setMessages(session.messages);
+    setCompletedStages(new Set(session.completedStages as GuidedStage[]));
+    if (session.interpretation) setInterpretation(session.interpretation);
+    if (session.foundation) setFoundation(session.foundation);
+    if (session.situation) setSituation(session.situation);
+    if (session.lastDraftText) latestDraftRef.current = session.lastDraftText;
+    if (session.intakeAnswers) {
+      intakeAnswers.current = session.intakeAnswers;
+      const steps = [session.intakeAnswers.offering, session.intakeAnswers.audience, session.intakeAnswers.situation];
+      setIntakeStep(steps.filter(Boolean).length);
+    }
+    if (session.backlog) backlog.current = session.backlog;
+  }, [session, sessionLoading]);
+
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    saveSession({
+      phase,
+      messages,
+      completedStages: Array.from(completedStages),
+      interpretation,
+      foundation,
+      situation,
+      lastDraftText: latestDraftRef.current || null,
+    });
+  }, [phase, messages, interpretation, foundation, situation, completedStages]);
 
   // Auto-scroll to bottom when messages change (slight delay for card rendering)
   useEffect(() => {

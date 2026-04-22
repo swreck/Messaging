@@ -346,3 +346,34 @@ model ExpressJob {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+// ─── Guided Flow Session (3.0 Maria merge) ─────────────
+// Persists GuidedFlow React state so the session survives
+// page navigation, browser close, and device switching.
+// One active session per user per workspace at a time.
+
+model GuidedSession {
+  id              String   @id @default(cuid())
+  userId          String
+  workspaceId     String
+
+  phase           String   @default("greeting")
+  completedStages Json     @default("[]")
+  messages        Json     @default("[]")
+
+  intakeAnswers   Json?
+  interpretation  Json?
+  situation       String?
+
+  draftId         String?
+  storyId         String?
+  foundation      Json?
+  backlog         Json     @default("[]")
+  lastDraftText   String?
+
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId, workspaceId])
+}
