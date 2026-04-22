@@ -87,6 +87,7 @@ export function GuidedFlow() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const generatingRef = useRef(false);
   const { user, logout } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const { showToast } = useToast();
@@ -422,7 +423,8 @@ export function GuidedFlow() {
 
   // ── Phase: Choosing Format → Generating Draft ──
   async function handleFormatChosen(medium: string, cta: string) {
-    if (!foundation) return;
+    if (!foundation || generatingRef.current) return;
+    generatingRef.current = true;
 
     addMessage({ type: 'user', text: `${medium}. CTA: ${cta}` });
     addMessage({
@@ -457,6 +459,7 @@ export function GuidedFlow() {
       console.error('[GuidedFlow] Draft build error:', err);
       addMessage({ type: 'maria', text: "I had trouble starting the draft — something went wrong on my end. Your foundation is still intact. Try selecting the format and clicking \"Write it\" again. The foundation doesn't need to be rebuilt — I'll use what you already approved." });
       setPhase('choosing_format');
+      generatingRef.current = false;
     }
   }
 
@@ -498,6 +501,7 @@ export function GuidedFlow() {
 
         setCompletedStages(prev => new Set([...prev, 'deliverable']));
         setPhase('complete');
+        generatingRef.current = false;
 
         setTimeout(() => {
           const styleId = nextId();
@@ -513,6 +517,7 @@ export function GuidedFlow() {
         removeMessage(progressId);
         addMessage({ type: 'maria', text: status.error || 'Something went wrong while writing the draft.' });
         setPhase('choosing_format');
+        generatingRef.current = false;
       } else {
         const stageDescriptions: Record<string, string> = {
           'Writing section 1 of 5': 'Writing the opening — the truth your reader has been avoiding',
