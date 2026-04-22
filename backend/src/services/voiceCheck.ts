@@ -32,7 +32,7 @@ Pass the first, fail the second.
 
 COLUMN CONTEXT — each statement belongs to a column type:
 - **Focus**: A simple declaration of company commitment ("X is the entire focus of our company"). These are SUPPOSED to be company-centric. Do NOT flag rule 9 on Focus statements. P1/P2 do not apply — Focus statements often have no mapped priority.
-- **Social proof**: Named customers, institutions, or adoption numbers. These are factual references. Apply negative rules lightly. P1/P2 do not apply — Social proof uses orphan data, not mapped priorities.
+- **Social proof**: Named customers, institutions, or adoption numbers. These are factual references. Apply negative rules lightly. P1 does not apply — Social proof uses orphan data, not mapped priorities. **P2 STILL APPLIES** — the hook (the part after "because", or the body if there is no "because") MUST introduce a specific verifiable fact: a named customer, a named organization, a named award/certification, or a specific adoption number. If the hook just describes the audience back to themselves ("because mid-market B2B operations teams are seeing value," "because leaders in this space are adopting it") or refers vaguely to "customers," "organizations," "teams," "leaders," "peers," "the industry," "the market," without naming anyone specific, it is TAUTOLOGICAL — FAIL P2. Social proof without named specifics is not proof.
 - **Product, ROI, Support, Tier 1**: Standard value statements. Apply all rules strictly. P1/P2 apply when priority text is provided.
 
 ═══════════════════════════════════════════════════════════
@@ -77,7 +77,7 @@ Each statement must pass ALL applicable rules:
 POSITIVE QUALITY CHECKS — apply ONLY when a priority is provided
 ═══════════════════════════════════════════════════════════
 
-Some statements include the audience's priority text. When present, these additional checks apply. When no priority is provided (Focus, Social proof, or statements without mapped priorities), skip P1 and P2.
+Some statements include the audience's priority text. When present, P1 and P2 both apply. When no priority is provided, skip P1. P2 still applies to Social proof statements (named-specifics rule above) even with no priority provided. For Focus statements and other orphan-data cases, skip both P1 and P2.
 
 P1. PRIORITY ALIGNMENT — the statement must clearly ADDRESS the audience's priority. The priority is their strategic concern — what they care about at a business or personal level. The statement must serve that concern, not substitute a product metric or a different concern.
 
@@ -125,6 +125,21 @@ NOT TAUTOLOGICAL (PASS P2):
   Priority: "Financial health of hospital" → "...testing costs under $1 per slide" — financial health is BROADER, $1/slide is a surprising specific
   Priority: "Patient outcomes" → "...results in under 60 seconds" — outcomes is BROADER, 60 seconds is a dramatic specific fact
   Priority: "Protecting from regulatory penalties" → "...pre-mapped controls cover 90% on day one" — penalties is BROADER, 90% day-one coverage is a surprising specific
+
+SOCIAL PROOF — special P2 rule. Social proof statements have no priority to compare against, so the tautology test collapses to: did the hook introduce a NAMED SPECIFIC? Rule: there must be at least one named organization, named award/certification, or specific adoption number (a digit). Generic gestures at "customers," "teams," "leaders," "peers," or "the industry" fail.
+
+  TAUTOLOGICAL (FAIL P2):
+    "Trusted by mid-market B2B operations teams" — describes the audience back to themselves, no named specific
+    "Industry leaders are adopting our platform" — no named specific
+    "Customers in your space are seeing results" — no named specific
+    "Recognized by peers across the industry" — no named specific
+
+  NOT TAUTOLOGICAL (PASS P2):
+    "Geisinger Clinic and Mayo Clinic in active evaluation" — two named organizations
+    "300+ hospitals live in production" — specific adoption number
+    "SOC 2 Type II certified; HIPAA audit complete" — named certifications
+    "Finalist, 2024 HIMSS Innovation Award" — named award with year
+    "Used by the FDA for companion diagnostic validation" — named organization
 
 ═══════════════════════════════════════════════════════════
 
