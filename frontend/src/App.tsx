@@ -39,6 +39,26 @@ function ExpressRedirect() {
   return null;
 }
 
+// On the Maria 3 host, landing on "/" auto-opens the panel so returning users
+// immediately see Maria (matches the prior /express-by-default behavior).
+// On the 2.5 host, this is a no-op — dashboard loads normally.
+// Once-per-session: if the user closes the panel and navigates back to /, we
+// do NOT re-open it. The user has already been greeted this session.
+const MARIA3_GREETED_KEY = 'maria3-dashboard-greeted';
+function MariaThreeDashboardAutoOpen() {
+  useEffect(() => {
+    if (!isMariaThreeHost) return;
+    if (sessionStorage.getItem(MARIA3_GREETED_KEY)) return;
+    sessionStorage.setItem(MARIA3_GREETED_KEY, '1');
+    const t = setTimeout(() => {
+      document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true } }));
+    }, 80);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
 // Maria 3.0 dual deployment: detect which branded URL is serving this bundle.
 // When running on the 3.0 service hostname, "/" redirects to "/express" so
 // Maria 3 users land on the chat entry by default. On the 2.5 URL, "/" stays
@@ -68,7 +88,7 @@ function App() {
           <Route
             path="/"
             element={
-              <ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>
+              <ProtectedRoute><Layout><MariaThreeDashboardAutoOpen /><DashboardPage /></Layout></ProtectedRoute>
             }
           />
           {/* /express retired. Legacy bookmarks + Maria3 host land here and get bounced

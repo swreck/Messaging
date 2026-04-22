@@ -1018,19 +1018,26 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
       )}
 
       {/* Panel-mode escape hatch: small link so the user can switch to assistant chat
-          without losing the guided session. Appears only when parent provided the callback. */}
-      {mode === 'panel' && onSwitchToAssistant && (
-        <div className="guided-panel-switch">
-          <button
-            type="button"
-            className="guided-panel-switch-btn"
-            onClick={onSwitchToAssistant}
-            title="Ask Maria something else — your guided message stays right here"
-          >
-            ← Chat with Maria instead
-          </button>
-        </div>
-      )}
+          without losing the guided session. Appears only when parent provided the callback.
+          Disabled while Maria is mid-generation — switching away abandons the in-flight reply. */}
+      {mode === 'panel' && onSwitchToAssistant && (() => {
+        const mariaThinking = messages.some(m => m.type === 'thinking');
+        return (
+          <div className="guided-panel-switch">
+            <button
+              type="button"
+              className="guided-panel-switch-btn"
+              onClick={mariaThinking ? undefined : onSwitchToAssistant}
+              disabled={mariaThinking}
+              title={mariaThinking
+                ? "Hang on — Maria's writing your reply. You can switch as soon as she's done."
+                : "Ask Maria something else — your guided message stays right here"}
+            >
+              {mariaThinking ? 'Maria is writing…' : '← Chat with Maria instead'}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* ── Process bar ─────────────────────────── */}
       {phase !== 'greeting' && (
