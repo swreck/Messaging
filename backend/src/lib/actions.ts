@@ -1196,15 +1196,25 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
               const dirResult = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
 
               // Voice guard: drop suggestions that fail syntactic voice rules
-              // (contrast clauses, word count) before they get written to the DB.
+              // (contrast clauses, word count for tier1/tier2; comparative-without-
+              // anchor for tier3) before they get written to the DB.
               if (dirResult.suggestions) {
-                const { checkStatementVoice } = await import('./voiceGuard.js');
+                const { checkStatementVoice, checkProofBullet } = await import('./voiceGuard.js');
                 dirResult.suggestions = dirResult.suggestions.filter(s => {
-                  if (s.cell !== 'tier1' && !/^tier2-\d+$/.test(s.cell)) return true;
-                  const voiceCheck = checkStatementVoice(s.suggested);
-                  if (!voiceCheck.passed) {
-                    console.log(`[VoiceGuard:edit_tier] Dropping ${s.cell} suggestion "${s.suggested}" — ${voiceCheck.violations.map(v => v.message).join('; ')}`);
-                    return false;
+                  if (s.cell === 'tier1' || /^tier2-\d+$/.test(s.cell)) {
+                    const voiceCheck = checkStatementVoice(s.suggested);
+                    if (!voiceCheck.passed) {
+                      console.log(`[VoiceGuard:edit_tier] Dropping ${s.cell} suggestion "${s.suggested}" — ${voiceCheck.violations.map(v => v.message).join('; ')}`);
+                      return false;
+                    }
+                    return true;
+                  }
+                  if (/^tier3-\d+-\d+$/.test(s.cell) || /^tier3-\d+-add$/.test(s.cell)) {
+                    const proofCheck = checkProofBullet(s.suggested);
+                    if (!proofCheck.passed) {
+                      console.log(`[VoiceGuard:edit_tier] Dropping ${s.cell} proof suggestion "${s.suggested}" — ${proofCheck.violations.map(v => v.message).join('; ')}`);
+                      return false;
+                    }
                   }
                   return true;
                 });

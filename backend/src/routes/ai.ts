@@ -20,7 +20,7 @@ import {
 } from '../services/voiceCheck.js';
 import { checkThreeTier, buildThreeTierFeedback, type ThreeTierInput } from '../services/threeTierCheck.js';
 import { checkFiveChapter, buildFiveChapterFeedback, type FiveChapterInput } from '../services/fiveChapterCheck.js';
-import { checkStatementVoice, buildGuardCorrection } from '../lib/voiceGuard.js';
+import { checkStatementVoice, checkProofBullet, buildGuardCorrection } from '../lib/voiceGuard.js';
 
 import { requireWorkspace, requireEditor, requireStoryteller } from '../middleware/workspace.js';
 
@@ -86,6 +86,15 @@ function filterMaterialSuggestions(
       const voiceCheck = checkStatementVoice(s.suggested);
       if (!voiceCheck.passed) {
         console.log(`[VoiceGuard] Dropping ${s.cell} suggestion "${s.suggested}" — ${voiceCheck.violations.map(v => v.message).join('; ')}`);
+        continue;
+      }
+    }
+    // Tier 3 bullets must be verifiable proof. Drop suggestions that use a
+    // comparative adjective without a specific number, acronym, or named org.
+    if (/^tier3-\d+-\d+$/.test(s.cell) || /^tier3-\d+-add$/.test(s.cell)) {
+      const proofCheck = checkProofBullet(s.suggested);
+      if (!proofCheck.passed) {
+        console.log(`[VoiceGuard] Dropping ${s.cell} proof suggestion "${s.suggested}" — ${proofCheck.violations.map(v => v.message).join('; ')}`);
         continue;
       }
     }
@@ -176,6 +185,17 @@ async function generateTier(
       const t2Check = checkStatementVoice(t2.text);
       if (!t2Check.passed) {
         guardCorrections.push(buildGuardCorrection(t2.text, t2Check, `Tier 2 [${t2.categoryLabel}]`));
+      }
+      // Tier 3 proof: each bullet must be verifiable (has number, acronym, or
+      // named org when it uses comparatives). Comparative-only bullets like
+      // "Faster time-to-treatment" fail the skeptic-verification test.
+      if (Array.isArray(t2.tier3)) {
+        for (const t3 of t2.tier3) {
+          const t3Check = checkProofBullet(t3);
+          if (!t3Check.passed) {
+            guardCorrections.push(buildGuardCorrection(t3, t3Check, `Tier 3 proof [${t2.categoryLabel}]`));
+          }
+        }
       }
     }
   }
