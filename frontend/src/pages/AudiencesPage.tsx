@@ -34,10 +34,10 @@ export function AudiencesPage() {
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{id: string, name: string, draftCount: number} | null>(null);
-  const [copyDropdownId, setCopyDropdownId] = useState<string | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
-  const copyDropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const { workspaces, activeWorkspace } = useWorkspace();
   const otherWorkspaces = activeWorkspace
@@ -147,12 +147,12 @@ export function AudiencesPage() {
     }
   }
 
-  // Close copy dropdown on click outside
+  // Close action menu on click outside
   useEffect(() => {
-    if (!copyDropdownId) return;
+    if (!menuOpenId) return;
     function handleClick(e: MouseEvent | TouchEvent) {
-      if (copyDropdownRef.current && !copyDropdownRef.current.contains(e.target as Node)) {
-        setCopyDropdownId(null);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null);
       }
     }
     document.addEventListener('mousedown', handleClick);
@@ -161,10 +161,10 @@ export function AudiencesPage() {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('touchstart', handleClick);
     };
-  }, [copyDropdownId]);
+  }, [menuOpenId]);
 
   async function copyAudienceTo(audienceId: string, targetWorkspaceId: string, targetName: string) {
-    setCopyDropdownId(null);
+    setMenuOpenId(null);
     try {
       await api.post(`/workspaces/${targetWorkspaceId}/copy-audience`, {
         audienceId,
@@ -193,7 +193,7 @@ export function AudiencesPage() {
           <h1>Audiences</h1>
           <p className="page-description">The people you're building messaging for</p>
         </div>
-        <button className="btn btn-primary" onClick={openNew}>Add Audience</button>
+        <button className="btn btn-primary" onClick={openNew}>+ New Audience</button>
       </header>
 
       {audiences.length === 0 && (
@@ -238,21 +238,23 @@ export function AudiencesPage() {
                 )}
               </div>
               <div className="expandable-card-actions" onClick={e => e.stopPropagation()}>
-                {hasMultipleWorkspaces && (
-                  <div className="copy-to-wrapper" ref={copyDropdownId === a.id ? copyDropdownRef : undefined}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setCopyDropdownId(copyDropdownId === a.id ? null : a.id)}>Copy to...</button>
-                    {copyDropdownId === a.id && (
-                      <div className="copy-to-dropdown">
-                        {otherWorkspaces.map(w => (
-                          <button key={w.id} className="copy-to-option" onClick={() => copyAudienceTo(a.id, w.id, w.name)}>{w.name}</button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <button className="btn btn-ghost btn-sm" onClick={() => duplicateAudience(a.id)}>Duplicate</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => openEdit(a)}>Edit</button>
-                <button className="btn btn-ghost btn-sm btn-danger" onClick={() => requestDelete(a)}>Delete</button>
+                <div className="card-menu-wrapper" ref={menuOpenId === a.id ? menuRef : undefined}>
+                  <button
+                    className="card-menu-trigger"
+                    aria-label="More actions"
+                    onClick={() => setMenuOpenId(menuOpenId === a.id ? null : a.id)}
+                  >•••</button>
+                  {menuOpenId === a.id && (
+                    <div className="card-menu-dropdown">
+                      <button className="card-menu-item" onClick={() => { openEdit(a); setMenuOpenId(null); }}>Edit</button>
+                      <button className="card-menu-item" onClick={() => { duplicateAudience(a.id); setMenuOpenId(null); }}>Duplicate</button>
+                      {hasMultipleWorkspaces && otherWorkspaces.map(w => (
+                        <button key={w.id} className="card-menu-item" onClick={() => copyAudienceTo(a.id, w.id, w.name)}>Copy to {w.name}</button>
+                      ))}
+                      <button className="card-menu-item card-menu-item-danger" onClick={() => { requestDelete(a); setMenuOpenId(null); }}>Delete</button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

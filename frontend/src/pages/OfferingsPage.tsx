@@ -23,9 +23,9 @@ export function OfferingsPage() {
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{id: string, name: string} | null>(null);
-  const [copyDropdownId, setCopyDropdownId] = useState<string | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const copyDropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const { workspaces, activeWorkspace } = useWorkspace();
   const otherWorkspaces = activeWorkspace
@@ -95,12 +95,12 @@ export function OfferingsPage() {
     }
   }
 
-  // Close copy dropdown on click outside
+  // Close action menu on click outside
   useEffect(() => {
-    if (!copyDropdownId) return;
+    if (!menuOpenId) return;
     function handleClick(e: MouseEvent | TouchEvent) {
-      if (copyDropdownRef.current && !copyDropdownRef.current.contains(e.target as Node)) {
-        setCopyDropdownId(null);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null);
       }
     }
     document.addEventListener('mousedown', handleClick);
@@ -109,10 +109,10 @@ export function OfferingsPage() {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('touchstart', handleClick);
     };
-  }, [copyDropdownId]);
+  }, [menuOpenId]);
 
   async function copyOfferingTo(offeringId: string, targetWorkspaceId: string, targetName: string) {
-    setCopyDropdownId(null);
+    setMenuOpenId(null);
     try {
       await api.post(`/workspaces/${targetWorkspaceId}/copy-offering`, {
         offeringId,
@@ -139,9 +139,9 @@ export function OfferingsPage() {
       <header className="page-header">
         <div>
           <h1>Offerings</h1>
-          <p className="page-description">What you're building messaging for</p>
+          <p className="page-description">What you're selling</p>
         </div>
-        <button className="btn btn-primary" onClick={openNew}>Add Offering</button>
+        <button className="btn btn-primary" onClick={openNew}>+ New Offering</button>
       </header>
 
       {offerings.length === 0 ? (
@@ -180,21 +180,23 @@ export function OfferingsPage() {
                 </span>
               </div>
               <div className="list-card-actions" onClick={e => e.stopPropagation()}>
-                {hasMultipleWorkspaces && (
-                  <div className="copy-to-wrapper" ref={copyDropdownId === o.id ? copyDropdownRef : undefined}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setCopyDropdownId(copyDropdownId === o.id ? null : o.id)}>Copy to...</button>
-                    {copyDropdownId === o.id && (
-                      <div className="copy-to-dropdown">
-                        {otherWorkspaces.map(w => (
-                          <button key={w.id} className="copy-to-option" onClick={() => copyOfferingTo(o.id, w.id, w.name)}>{w.name}</button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <button className="btn btn-ghost btn-sm" onClick={() => duplicateOffering(o.id)}>Duplicate</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => openEdit(o)}>Edit</button>
-                <button className="btn btn-ghost btn-sm btn-danger" onClick={() => requestDelete(o)}>Delete</button>
+                <div className="card-menu-wrapper" ref={menuOpenId === o.id ? menuRef : undefined}>
+                  <button
+                    className="card-menu-trigger"
+                    aria-label="More actions"
+                    onClick={() => setMenuOpenId(menuOpenId === o.id ? null : o.id)}
+                  >•••</button>
+                  {menuOpenId === o.id && (
+                    <div className="card-menu-dropdown">
+                      <button className="card-menu-item" onClick={() => { openEdit(o); setMenuOpenId(null); }}>Edit</button>
+                      <button className="card-menu-item" onClick={() => { duplicateOffering(o.id); setMenuOpenId(null); }}>Duplicate</button>
+                      {hasMultipleWorkspaces && otherWorkspaces.map(w => (
+                        <button key={w.id} className="card-menu-item" onClick={() => copyOfferingTo(o.id, w.id, w.name)}>Copy to {w.name}</button>
+                      ))}
+                      <button className="card-menu-item card-menu-item-danger" onClick={() => { requestDelete(o); setMenuOpenId(null); }}>Delete</button>
+                    </div>
+                  )}
+                </div>
               </div>
               <span className="list-card-arrow">&rsaquo;</span>
             </div>

@@ -2160,6 +2160,54 @@ p { line-height: 1.5; color: var(--text-secondary); }
 }
 .list-card-meta { font-size: 14px; color: var(--text-secondary); }
 .list-card-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: 8px; }
+
+/* ─── Card overflow menu (shared by Offerings + Audiences) ─────── */
+.card-menu-wrapper { position: relative; }
+.card-menu-trigger {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary, #8e8e93);
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: 2px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.card-menu-trigger:hover { background: var(--bg-secondary, #f2f2f7); color: var(--text-primary); }
+.card-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border, #d1d1d6);
+  border-radius: var(--radius-sm, 8px);
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,0.12));
+  z-index: 30;
+  padding: 4px 0;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+}
+.card-menu-item {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.card-menu-item:hover { background: var(--bg-secondary, #f2f2f7); }
+.card-menu-item-danger { color: var(--danger, #d70015); }
+.card-menu-item-danger:hover { background: rgba(215, 0, 21, 0.08); }
+
+/* Subtle "+ Add …" placeholder for optional params (5 Ch. Stories shell) */
+.fcs-param-add { color: var(--text-tertiary, #8e8e93); font-style: normal; }
+.fcs-param-add:hover { color: var(--accent, #007aff); }
+
 .list-card-arrow {
   font-size: 22px;
   color: var(--text-tertiary);

@@ -485,7 +485,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
               This is a first draft of a Three Tier Message for {draft.audience.name}.
             </p>
             <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
-              As a first draft, value statements are largely in the "You get [value] because of [our differentiation]" format for your review and edits. At any time, use <strong>Refine Language</strong> to make the words sound more natural. And, if desired, you can then use <strong>Polish</strong> for final refinement. Polish takes a little longer.
+              Statements start in a literal "You get [value] because [our differentiator]" format so the logic is easy to check. Use <strong>Refine Language</strong> to rewrite them in natural voice. Then <strong>Polish</strong> for a final pass — Polish takes a little longer.
             </p>
           </div>
         </div>

@@ -896,7 +896,9 @@ export function FiveChapterShell() {
               </div>
             ) : (
               <span className="fcs-param-clickable" onClick={() => setEditingParam('emphasis')}>
-                Emphasis: {story.emphasis ? story.emphasis.replace('ch', 'Ch ') : 'None'}
+                {story.emphasis
+                  ? <>Emphasis: {story.emphasis.replace('ch', 'Ch ')}</>
+                  : <span className="fcs-param-add">+ Add emphasis</span>}
               </span>
             )}
           </div>

@@ -5,7 +5,7 @@ export function Step1Prep({ draft, nextStep, goToStep }: StepProps) {
 
   return (
     <div className="step-panel">
-      <h2>Before We Begin</h2>
+      <h2>Before we begin</h2>
       <p className="step-description">
         Confirm your offering and audience before building.
       </p>
