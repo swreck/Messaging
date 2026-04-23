@@ -225,7 +225,7 @@ export function DashboardPage() {
         <div className="dashboard-welcome empty-state-enhanced">
           <div className="empty-icon">💬</div>
           <h3>{firstName ? `Hi ${firstName} — I'm Maria.` : `Hi, I'm Maria.`}</h3>
-          <p>Tell me what you're selling and who you're selling to. I'll help you land a clear message and a story your team can use.</p>
+          <p>Tell me what you're working on and who needs to hear it. I'll help you land a clear message and a story you can use — whether you're selling, rallying your team, or persuading a partner.</p>
           <button
             className="btn btn-primary"
             onClick={() => navigate('/express')}
@@ -310,7 +310,7 @@ export function DashboardPage() {
           <div className="nav-tile nav-tile-offerings" onClick={() => navigate('/offerings')}>
             <div className="nav-tile-icon">✨</div>
             <div className="nav-tile-title">Offerings</div>
-            <div className="nav-tile-sub">what you're selling</div>
+            <div className="nav-tile-sub">what you offer</div>
             <div className="nav-tile-stat">
               {offCount > 0 ? `${offCount}` : 'None yet'}
             </div>

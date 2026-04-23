@@ -193,8 +193,8 @@ export function MariaPartner() {
           if (history.length === 0) {
             const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
             const greeting = firstName
-              ? `Hi ${firstName} — what are you working on today? Tell me about your product or who you need to reach, or just ask me anything.`
-              : "Hi — what are you working on today? Tell me about your product or who you need to reach, or just ask me anything.";
+              ? `Hi ${firstName} — what are you working on today? Tell me about what you need to communicate and who needs to hear it, or just ask me anything.`
+              : "Hi — what are you working on today? Tell me about what you need to communicate and who needs to hear it, or just ask me anything.";
             setMessages([{ role: 'assistant', content: greeting }]);
           } else {
             setMessages(history);
@@ -641,7 +641,7 @@ export function MariaPartner() {
       }
       return `Your ${offeringName} work is in good shape${when ? ` — last touched ${when}` : ''}. Want to revisit it or start something new?`;
     }
-    return `What are you working on? Tell me about your product or service, and who needs to hear about it.`;
+    return `What are you working on? Tell me what you need to communicate and who needs to hear it.`;
   }
 
   // ─── Render intro ──────────────────────────────────

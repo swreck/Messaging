@@ -139,7 +139,7 @@ export function OfferingsPage() {
       <header className="page-header">
         <div>
           <h1>Offerings</h1>
-          <p className="page-description">What you're selling</p>
+          <p className="page-description">What you offer</p>
         </div>
         <button className="btn btn-primary" onClick={openNew}>+ New Offering</button>
       </header>

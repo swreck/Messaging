@@ -33,6 +33,16 @@ import {
   buildFabricationFeedback,
   redactChapterViolations,
 } from '../services/fabricationCheck.js';
+import {
+  checkChapterOneAltitude,
+  buildAltitudeFeedback,
+  elevateChapterOne,
+} from '../services/altitudeCheck.js';
+import {
+  extractSocialProof,
+  groupByType,
+  type SocialProofItem,
+} from '../services/socialProofExtract.js';
 import type { ExpressInterpretation } from './expressExtraction.js';
 
 // ─── Medium translation ────────────────────────────────
@@ -716,13 +726,34 @@ AUDIENCE: ${draftWithElements.audience.name}`;
     const hasSocialProofColumn = tier2Labels.some(l =>
       /social|proof|recognition|customer|testimonial|reference/.test(l),
     );
-    const namedCustomers = new Set<string>();
+    // Typed social proof extraction — replaces the narrow customer-suffix regex
+    // that was here before. The regex missed certifications, awards, named
+    // publications, individuals, and adoption numbers — all valid Tier 3 proof
+    // that Chapter 4 should be allowed to cite. We now ask Haiku to type every
+    // named specific in Tier 3 so the Ch4 guardrail can work with the full set.
+    const allTier3Bullets: string[] = [];
     for (const t2 of draftForStory.tier2Statements) {
       for (const b of t2.tier3Bullets) {
-        const m = b.text.match(/\b([A-Z][a-zA-Z&']*(?:\s+(?:[A-Z][a-zA-Z&']*|of|the|and|at|for)){0,4})\s+(?:Bank|Hospital|Clinic|Health|Medical|Regional|Community|Inc|LLC|Ltd|Co|Corporation|University|College|School|Center)\b/);
-        if (m) namedCustomers.add(m[0].trim());
+        if (b.text && b.text.trim().length > 0) {
+          allTier3Bullets.push(b.text.trim());
+        }
       }
     }
+    const socialProof = await extractSocialProof(allTier3Bullets);
+    const grouped = groupByType(socialProof.items);
+    // "namedCustomers" preserves the old variable name so the Ch4 guardrail
+    // keeps working for the customer-citation path. Customer + adoption_number
+    // entries both read as "customers" from a citation standpoint.
+    const namedCustomers = new Set<string>([
+      ...grouped.customer,
+      ...grouped.adoption_number,
+    ]);
+    // Non-customer named specifics — certifications, awards, publications,
+    // individuals, regulators. These are valid Ch4 proof and must NOT be
+    // suppressed just because there are no customer names.
+    const otherNamedSpecifics: SocialProofItem[] = socialProof.items.filter(
+      it => it.type !== 'customer' && it.type !== 'adoption_number',
+    );
 
     function buildChapterGuardrails(chapterNum: number): string {
       // Ch3 — We'll Hold Your Hand (support/reassurance)
@@ -760,46 +791,55 @@ is better than three sentences of fabrication.
 A ONE-SENTENCE chapter is acceptable. Fabrication is not.`;
         }
       }
-      // Ch4 — You're Not Alone (social proof / customer references)
+      // Ch4 — You're Not Alone (social proof / named specifics)
       if (chapterNum === 4) {
         const customerList = [...namedCustomers];
-        if (customerList.length === 0 && !hasSocialProofColumn) {
+        const nonCustomerList = otherNamedSpecifics.map(s => `${s.name} (${s.type})`);
+        if (customerList.length === 0 && nonCustomerList.length === 0 && !hasSocialProofColumn) {
           return `
-CHAPTER 4 GUARDRAIL — THE SOURCE HAS NO CUSTOMER REFERENCES.
+CHAPTER 4 GUARDRAIL — THE SOURCE HAS NO NAMED SPECIFICS.
 
-The Three Tier above names no customers and has no social-proof column. You
-may NOT invent any. Forbidden:
+The Three Tier above names no customers, certifications, awards, publications,
+or regulators. You may NOT invent any. Forbidden:
 - "banks like yours are using the platform"
 - "multiple community banks", "several regional institutions", "pilot
   partners", "beta customers", "early adopters"
 - Any count ("over twenty banks", "dozens of hospitals")
 - Any composite fiction ("a bank roughly your size")
+- Made-up certifications, awards, or regulatory positions
 
 Instead, re-anchor Chapter 4 in what the reader already knows: their OWN
 situation. Write about the pressure they are under, the shape of the decision
 they are making, the risk of inaction. You are giving them confidence that
 they are not being sold into something exotic — you are doing that WITHOUT
-naming other customers you don't have. A short chapter is fine.`;
+naming other proof you don't have. A short chapter is fine.`;
         }
+        const allowedLines: string[] = [];
         if (customerList.length > 0) {
-          return `
-CHAPTER 4 GUARDRAIL — THE SOURCE NAMES ${customerList.length} CUSTOMER${customerList.length === 1 ? '' : 'S'}.
-
-The only customer${customerList.length === 1 ? '' : 's'} you may name in this chapter: ${customerList.join(', ')}.
-
-You may NOT use phrases like "banks like yours are already using it",
-"multiple regional banks", "several community banks", "pilot partners",
-"beta customers", or any count or plural reference that implies more
-customers than are named above. If you want to reinforce credibility beyond
-the named customer, do it through the SPECIFIC results in the Three Tier
-proof bullets — not through manufactured customer quantities.
-
-METRICS MUST BE FROM THE THREE TIER. You may NOT invent timelines
-("accelerating by X quarters"), percentages ("Y% improvement"), or outcomes
-("re-engaged dormant accounts") unless those exact facts appear in Tier 3
-proof bullets. If the proof is thin, write a shorter chapter. Two honest
-sentences beat four sentences with one fabricated metric.`;
+          allowedLines.push(`Named customers / adoption: ${customerList.join(', ')}`);
         }
+        if (nonCustomerList.length > 0) {
+          allowedLines.push(`Other named proof (certifications/awards/publications/individuals/regulators): ${nonCustomerList.join('; ')}`);
+        }
+        return `
+CHAPTER 4 GUARDRAIL — YOU MAY CITE ONLY THE NAMED SPECIFICS LISTED BELOW.
+
+${allowedLines.join('\n')}
+
+That is the complete list of citable named proof. You may NOT use phrases like
+"banks like yours are already using it", "multiple regional banks", "several
+community banks", "pilot partners", "beta customers", or any count or plural
+reference that implies more named proof than is listed above.
+
+Treat certifications, awards, publications, and regulatory positions as
+equally valid social proof to customer names. If the Three Tier gives you
+"FDA approval pending" and no customers, Chapter 4 may be anchored in the
+FDA approval as proof; it does NOT need invented customers to function.
+
+METRICS MUST BE FROM THE THREE TIER. You may NOT invent timelines, percentages,
+or outcomes unless those exact facts appear in Tier 3 proof bullets. If the
+proof is thin, write a shorter chapter. Two honest sentences beat four
+sentences with one fabricated metric.`;
       }
       // Ch5 — Let's Get Started (direction)
       if (chapterNum === 5) {
@@ -1090,6 +1130,84 @@ ${draftForStory.tier2Statements
           `[ExpressPipeline] ${jobId} chapter ${chapterNum} fabrication check error (fail-open):`,
           err,
         );
+      }
+
+      // Altitude check for Chapter 1 only. Runs AFTER fabrication clears so we
+      // evaluate the final text. Chapter 1 drifts into tactical altitude or
+      // accusatory claims about the reader's org even with the pre-generated
+      // thesis as an anchor — this is the final guardrail. Same retry-then-
+      // surgical-edit pattern as the fabrication check.
+      if (chapterNum === 1) {
+        try {
+          const topPriorityText = draftForStory.audience.priorities[0]?.text || '';
+          const topPriorityDriver = draftForStory.audience.priorities[0]?.driver || '';
+          const audienceName = draftForStory.audience.name;
+          const cumulativeAltViolations: string[] = [];
+          let altBrokeClean = false;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const altCheck = await checkChapterOneAltitude({
+              audienceName,
+              topPriority: topPriorityText,
+              driver: topPriorityDriver,
+              chapterContent: content,
+            });
+            if (altCheck.passed || altCheck.violations.length === 0) {
+              if (attempt > 0) {
+                console.log(
+                  `[ExpressPipeline] ${jobId} chapter 1 altitude cleared after ${attempt} retry(s)`,
+                );
+              }
+              altBrokeClean = true;
+              break;
+            }
+            console.log(
+              `[ExpressPipeline] ${jobId} chapter 1 altitude attempt ${attempt + 1}: ${altCheck.violations.length} violations, retrying`,
+            );
+            for (const v of altCheck.violations) cumulativeAltViolations.push(v);
+            const feedback = buildAltitudeFeedback(cumulativeAltViolations);
+            content = await callAI(systemPrompt, userMessage + feedback, 'elite');
+          }
+          if (!altBrokeClean) {
+            const finalAlt = await checkChapterOneAltitude({
+              audienceName,
+              topPriority: topPriorityText,
+              driver: topPriorityDriver,
+              chapterContent: content,
+            });
+            if (finalAlt.passed || finalAlt.violations.length === 0) {
+              console.log(
+                `[ExpressPipeline] ${jobId} chapter 1 post-retry regeneration was already clean on altitude`,
+              );
+            } else {
+              console.log(
+                `[ExpressPipeline] ${jobId} chapter 1 elevating ${finalAlt.violations.length} surviving sentences surgically`,
+              );
+              const elevated = await elevateChapterOne({
+                chapterContent: content,
+                violations: finalAlt.violations,
+                audienceName,
+                topPriority: topPriorityText,
+              });
+              if (elevated && elevated.length > 0) content = elevated;
+              const postAlt = await checkChapterOneAltitude({
+                audienceName,
+                topPriority: topPriorityText,
+                driver: topPriorityDriver,
+                chapterContent: content,
+              });
+              console.log(
+                `[ExpressPipeline] ${jobId} chapter 1 elevation result: ${
+                  postAlt.passed ? 'clean' : `${postAlt.violations.length} surviving`
+                }`,
+              );
+            }
+          }
+        } catch (err) {
+          console.error(
+            `[ExpressPipeline] ${jobId} chapter 1 altitude check error (fail-open):`,
+            err,
+          );
+        }
       }
 
       // Same post-processing as the 2.5 generate-chapter route
@@ -1720,20 +1838,42 @@ async function runDraftPipeline(
     const hasSocialProofColumn = tier2Labels.some((l: string) =>
       /social|proof|recognition|customer|testimonial|reference/.test(l),
     );
-    const namedCustomers = new Set<string>();
+    // Typed social proof extraction (same path as runPipeline). Replaces the
+    // narrow customer-suffix regex that was here — certifications, awards,
+    // publications, individuals, and adoption numbers are now also available
+    // to Chapter 4 as valid citable proof.
+    const allTier3BulletsGuided: string[] = [];
     for (const t2 of draftForStory.tier2Statements) {
       for (const b of t2.tier3Bullets) {
-        const m = b.text.match(/\b([A-Z][a-zA-Z&']*(?:\s+(?:[A-Z][a-zA-Z&']*|of|the|and|at|for)){0,4})\s+(?:Bank|Hospital|Clinic|Health|Medical|Regional|Community|Inc|LLC|Ltd|Co|Corporation|University|College|School|Center)\b/);
-        if (m) namedCustomers.add(m[0].trim());
+        if (b.text && b.text.trim().length > 0) {
+          allTier3BulletsGuided.push(b.text.trim());
+        }
       }
     }
+    const socialProofGuided = await extractSocialProof(allTier3BulletsGuided);
+    const groupedGuided = groupByType(socialProofGuided.items);
+    const namedCustomers = new Set<string>([
+      ...groupedGuided.customer,
+      ...groupedGuided.adoption_number,
+    ]);
+    const otherNamedSpecificsGuided: SocialProofItem[] = socialProofGuided.items.filter(
+      it => it.type !== 'customer' && it.type !== 'adoption_number',
+    );
 
     function buildChapterGuardrails(chapterNum: number): string {
       if (chapterNum === 3 && !hasSupportColumn) {
         return '\nCHAPTER 3 GUARDRAIL: No support content in the Three Tier. Do NOT invent onboarding, pilots, timelines, or team commitments. Write reassurance from facts already in the Three Tier only.';
       }
-      if (chapterNum === 4 && namedCustomers.size === 0 && !hasSocialProofColumn) {
-        return '\nCHAPTER 4 GUARDRAIL: No customer references in the Three Tier. Do NOT invent customer names, counts, or composite references. Re-anchor in the reader\'s own situation.';
+      if (chapterNum === 4) {
+        const customerList = [...namedCustomers];
+        const otherList = otherNamedSpecificsGuided.map(s => `${s.name} (${s.type})`);
+        if (customerList.length === 0 && otherList.length === 0 && !hasSocialProofColumn) {
+          return '\nCHAPTER 4 GUARDRAIL: No named specifics in the Three Tier — no customers, certifications, awards, publications, or regulators. Do NOT invent customer names, counts, or composite references. Re-anchor in the reader\'s own situation. A short chapter is fine.';
+        }
+        const allowed: string[] = [];
+        if (customerList.length > 0) allowed.push(`Customers/adoption: ${customerList.join(', ')}`);
+        if (otherList.length > 0) allowed.push(`Other named specifics: ${otherList.join(', ')}`);
+        return `\nCHAPTER 4 GUARDRAIL: You may cite ONLY these named specifics from the Three Tier — nothing else. No "banks like yours", no "multiple customers", no counts not listed here, no invented metrics.\n${allowed.join('\n')}`;
       }
       if (chapterNum === 5) {
         return `\nCHAPTER 5 GUARDRAIL: CTA is "${cta}". Do NOT invent trial options, sandbox environments, or pilot programs not in the source. For senior executives, offer paths, not directives.`;
@@ -1827,25 +1967,94 @@ ${chapterGuardrail}`;
         console.error(`[GuidedDraft] ch${chapterNum} voice check error (fail-open):`, err);
       }
 
-      // Fabrication check
-      try {
-        const tierTextForCheck = `Tier 1: "${draftForStory.tier1Statement?.text || ''}"
+      // Fabrication check — matches runPipeline: 2 retries with cumulative
+      // violation feedback, then surgical redaction if still dirty. Same
+      // quality both paths (Q2c commitment).
+      const tierTextForCheck = `Tier 1: "${draftForStory.tier1Statement?.text || ''}"
 ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "${t2.text}" Proof: ${t2.tier3Bullets.map((b: any) => b.text).join(', ')}`).join('\n')}`;
-        const prioritiesTextForCheck = draftForStory.audience.priorities
-          .map((p: any) => `[Rank ${p.rank}] "${p.text}"`)
-          .join('\n');
-        const fabCheck = await checkChapterFabrication({
-          situation,
-          tierText: tierTextForCheck,
-          prioritiesText: prioritiesTextForCheck,
-          chapterContent: content,
-        });
-        if (!fabCheck.passed && fabCheck.violations.length > 0) {
-          const feedback = buildFabricationFeedback(fabCheck.violations);
+      const prioritiesTextForCheck = draftForStory.audience.priorities
+        .map((p: any) => `[Rank ${p.rank}] "${p.text}"`)
+        .join('\n');
+      try {
+        const cumulativeViolations: string[] = [];
+        let brokeClean = false;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const fabCheck = await checkChapterFabrication({
+            situation,
+            tierText: tierTextForCheck,
+            prioritiesText: prioritiesTextForCheck,
+            chapterContent: content,
+          });
+          if (fabCheck.passed || fabCheck.violations.length === 0) {
+            brokeClean = true;
+            break;
+          }
+          for (const v of fabCheck.violations) cumulativeViolations.push(v);
+          const feedback = buildFabricationFeedback(cumulativeViolations);
           content = await callAI(systemPrompt, userMessage + feedback, 'elite');
+        }
+        if (!brokeClean) {
+          const finalCheck = await checkChapterFabrication({
+            situation,
+            tierText: tierTextForCheck,
+            prioritiesText: prioritiesTextForCheck,
+            chapterContent: content,
+          });
+          if (!(finalCheck.passed || finalCheck.violations.length === 0)) {
+            const redacted = await redactChapterViolations({
+              chapterContent: content,
+              violations: finalCheck.violations,
+            });
+            if (redacted && redacted.length > 0) content = redacted;
+          }
         }
       } catch (err) {
         console.error(`[GuidedDraft] ch${chapterNum} fabrication check error (fail-open):`, err);
+      }
+
+      // Altitude check — Chapter 1 only, matches runPipeline pattern.
+      if (chapterNum === 1) {
+        try {
+          const topPriorityText = draftForStory.audience.priorities[0]?.text || '';
+          const topPriorityDriver = draftForStory.audience.priorities[0]?.driver || '';
+          const audienceName = draftForStory.audience.name;
+          const cumulativeAltViolations: string[] = [];
+          let altBrokeClean = false;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const altCheck = await checkChapterOneAltitude({
+              audienceName,
+              topPriority: topPriorityText,
+              driver: topPriorityDriver,
+              chapterContent: content,
+            });
+            if (altCheck.passed || altCheck.violations.length === 0) {
+              altBrokeClean = true;
+              break;
+            }
+            for (const v of altCheck.violations) cumulativeAltViolations.push(v);
+            const feedback = buildAltitudeFeedback(cumulativeAltViolations);
+            content = await callAI(systemPrompt, userMessage + feedback, 'elite');
+          }
+          if (!altBrokeClean) {
+            const finalAlt = await checkChapterOneAltitude({
+              audienceName,
+              topPriority: topPriorityText,
+              driver: topPriorityDriver,
+              chapterContent: content,
+            });
+            if (!(finalAlt.passed || finalAlt.violations.length === 0)) {
+              const elevated = await elevateChapterOne({
+                chapterContent: content,
+                violations: finalAlt.violations,
+                audienceName,
+                topPriority: topPriorityText,
+              });
+              if (elevated && elevated.length > 0) content = elevated;
+            }
+          }
+        } catch (err) {
+          console.error(`[GuidedDraft] ch${chapterNum} altitude check error (fail-open):`, err);
+        }
       }
 
       content = content.replace(/^\s*\.{2,}\s*/g, '').trim();
