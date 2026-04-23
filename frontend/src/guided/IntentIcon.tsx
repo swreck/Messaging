@@ -89,21 +89,28 @@ export function IntentIcon({ elementType }: Props) {
         i
       </button>
       {open && pos && createPortal(
-        <div
-          className="intent-icon-popover"
-          style={{ position: 'fixed', top: pos.top, left: pos.left }}
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="intent-icon-section">
-            <span className="intent-icon-label">Intent</span>
-            <p>{info.intent}</p>
+        <>
+          <div
+            className="intent-icon-backdrop"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            className="intent-icon-popover"
+            style={{ position: 'fixed', top: pos.top, left: pos.left }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="intent-icon-section">
+              <span className="intent-icon-label">Intent</span>
+              <p>{info.intent}</p>
+            </div>
+            <div className="intent-icon-section">
+              <span className="intent-icon-label">Quality test</span>
+              <p>{info.quality}</p>
+            </div>
+            <button type="button" className="intent-icon-close" onClick={() => setOpen(false)}>Got it</button>
           </div>
-          <div className="intent-icon-section">
-            <span className="intent-icon-label">Quality test</span>
-            <p>{info.quality}</p>
-          </div>
-          <button type="button" className="intent-icon-close" onClick={() => setOpen(false)}>Got it</button>
-        </div>,
+        </>,
         document.body,
       )}
     </span>

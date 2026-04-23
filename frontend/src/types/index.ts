@@ -4,6 +4,10 @@ export interface User {
   userId: string;
   username: string;
   isAdmin: boolean;
+  // Presentation-only fields from user.settings — used for greetings and
+  // nav display. Fall back to username when absent.
+  displayName?: string;
+  firstName?: string;
 }
 
 export interface AuthResponse {

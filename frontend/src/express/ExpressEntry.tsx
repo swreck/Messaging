@@ -51,7 +51,7 @@ function Maria3Chrome() {
         )}
         {user && (
           <>
-            <span className="express-chrome-user">{user.username}</span>
+            <span className="express-chrome-user">{user.firstName || user.displayName || user.username}</span>
             <button
               type="button"
               className="btn btn-ghost btn-sm"
@@ -161,6 +161,8 @@ export function ExpressEntry() {
   const [input, setInput] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const firstName = user?.firstName || user?.displayName;
   const standalone = isMariaThreeHostname();
 
   useEffect(() => {
@@ -356,7 +358,7 @@ export function ExpressEntry() {
     return wrap(
       <div className="express-entry">
         <div className="express-entry-greeting">
-          <h1 className="express-entry-title">Hi, I'm Maria.</h1>
+          <h1 className="express-entry-title">{firstName ? `Hi ${firstName} — I'm Maria.` : `Hi, I'm Maria.`}</h1>
           <p className="express-entry-subtitle">
             I help people communicate more effectively about what they do — emails, pitch
             narratives, talking points, landing pages, whatever you need. Tell me a little

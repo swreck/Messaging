@@ -165,7 +165,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           >
             Talk to Maria
           </button>
-          <span className="nav-user">{user?.username}</span>
+          <span className="nav-user">{user?.firstName || user?.displayName || user?.username}</span>
           <button
             onClick={() => navigate('/settings')}
             className={`nav-settings-btn ${location.pathname.startsWith('/settings') ? 'active' : ''}`}

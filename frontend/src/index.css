@@ -5608,6 +5608,16 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border-color: #2563eb;
   color: #2563eb;
 }
+.intent-icon-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.25);
+  z-index: 999;
+  animation: guided-fade-in 0.12s ease-out;
+}
 .intent-icon-popover {
   position: fixed;
   z-index: 1000;
@@ -5615,7 +5625,9 @@ p { line-height: 1.5; color: var(--text-secondary); }
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  /* Stronger shadow so the popover reads as clearly separated from the
+     dimmed surface underneath, not blended with it. */
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28), 0 2px 6px rgba(15, 23, 42, 0.16);
   padding: 14px 16px;
   animation: guided-fade-in 0.15s ease-out;
 }
@@ -6007,7 +6019,12 @@ p { line-height: 1.5; color: var(--text-secondary); }
   display: flex;
   justify-content: flex-end;
   align-items: flex-start;
+  flex-wrap: wrap;
   gap: 16px;
+  /* Allow the row to wrap rather than clip the leftmost button when the
+     card is narrow (prior bug: "Open in full editor" was cut off by the
+     card's left padding in panel mode). */
+  min-width: 0;
 }
 .guided-foundation-action-cell {
   display: flex;
@@ -6015,6 +6032,12 @@ p { line-height: 1.5; color: var(--text-secondary); }
   align-items: stretch;
   gap: 4px;
   max-width: 220px;
+  min-width: 0;
+}
+.guided-foundation-action-cell .btn {
+  /* Keep button text inside its cell — prior clip was a width overflow. */
+  min-width: 0;
+  white-space: normal;
 }
 .guided-foundation-action-caption {
   font-size: 11px;

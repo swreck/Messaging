@@ -5,6 +5,7 @@ import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 import { LEAD_TOGGLE_EVENT } from '../shared/leadershipDetection';
+import { useAuth } from '../auth/AuthContext';
 import type { Offering, Audience } from '../types';
 
 interface HierarchyOffering {
@@ -39,6 +40,8 @@ interface ActiveDraft {
 export function DashboardPage() {
   const navigate = useNavigate();
   const { activeWorkspace } = useWorkspace();
+  const { user } = useAuth();
+  const firstName = user?.firstName || user?.displayName;
   const [hierarchy, setHierarchy] = useState<HierarchyOffering[]>([]);
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [audiences, setAudiences] = useState<Audience[]>([]);
@@ -221,7 +224,7 @@ export function DashboardPage() {
       {isNew && (
         <div className="dashboard-welcome empty-state-enhanced">
           <div className="empty-icon">💬</div>
-          <h3>Hi, I'm Maria.</h3>
+          <h3>{firstName ? `Hi ${firstName} — I'm Maria.` : `Hi, I'm Maria.`}</h3>
           <p>Tell me what you're selling and who you're selling to. I'll help you land a clear message and a story your team can use.</p>
           <button
             className="btn btn-primary"

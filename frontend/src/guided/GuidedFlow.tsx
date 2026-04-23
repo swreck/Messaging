@@ -347,7 +347,7 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
     const thinkingId = addMessage({ type: 'thinking' });
     setPhase('extracting');
 
-    addMessage({ type: 'maria', text: "I have what I need. I'm analyzing your offering and audience now — identifying differentiators, mapping priorities, and checking what's strong and what I'll need your help with. About thirty seconds. Then I'll show you everything for review." });
+    addMessage({ type: 'maria', text: "I have what I need. I'm analyzing your offering and audience now — identifying differentiators, mapping priorities, and checking what's strong and what I'll need your help with. About a minute. Then I'll show you everything for review." });
 
     const slowTimer = setTimeout(() => {
       updateMessage(thinkingId, { text: 'Reading carefully — this takes a moment with longer descriptions.' });
@@ -391,7 +391,7 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
     const audName = edited.audiences[0]?.name || 'your audience';
     addMessage({
       type: 'maria',
-      text: `Now I'm going to build your foundational message. Here's what happens next:\n\nI take your differentiators and connect each one to ${audName}'s priorities. The result is a structured message with a key statement at the top — the single most important thing ${audName} needs to hear — and supporting statements underneath, each from a different angle: your product, the ROI, your support, and proof from other customers.\n\nThis takes about thirty seconds. When it's done, I'll walk you through it and point out where I'm strong and where I need your help.`,
+      text: `Now I'm going to build your foundational message. Here's what happens next:\n\nI take your differentiators and connect each one to ${audName}'s priorities. The result is a structured message with a key statement at the top — the single most important thing ${audName} needs to hear — and supporting statements underneath, each from a different angle: your product, the ROI, your support, and proof from other customers.\n\nThis takes about a minute. When it's done, I'll walk you through it and point out where I'm strong and where I need your help.`,
     });
     const progressId = addMessage({ type: 'progress', stage: 'Connecting what you do to what they care about', progress: 30 });
     setPhase('generating_foundation');
@@ -425,7 +425,7 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
           observations.push(`The Focus column is weak. This should show your commitment to people like ${audienceName} — not your credentials, but that you're focused on THEIR world.`);
         }
         if (label.includes('roi') && !/\d/.test(text)) {
-          observations.push(`Your ROI statement doesn't have a number in it. ${audienceName} thinks in dollars and percentages. "Reduce costs" is vague. "Testing drops from $4,000 to under $1" is a conversation starter. Can you add the math?`);
+          observations.push(`Your ROI statement doesn't have a number in it. ${audienceName} thinks in dollars, percentages, hours saved, or risk reduced. A specific number from your own data — savings, payback time, incident reduction, whatever you can defend — is what turns a claim into a conversation. Can you add the math from your world?`);
         }
         if (label.includes('support') && text.length < 20) {
           observations.push(`The Support column is thin. ${audienceName} needs to feel that saying yes won't leave them figuring things out alone. What does your implementation, training, or ongoing support look like?`);
@@ -1007,7 +1007,7 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
             )}
             {user && (
               <>
-                <span className="guided-chrome-user">{user.username}</span>
+                <span className="guided-chrome-user">{user.firstName || user.displayName || user.username}</span>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={logout}>
                   Sign Out
                 </button>
@@ -1059,7 +1059,7 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
                 <div className="guided-greeting-maria">
                   <div className="guided-msg-avatar">M</div>
                   <div className="guided-greeting-bubble">
-                    <h1 className="guided-greeting-title">Hi, I'm Maria.</h1>
+                    <h1 className="guided-greeting-title">{(user?.firstName || user?.displayName) ? `Hi ${user.firstName || user.displayName} — I'm Maria.` : `Hi, I'm Maria.`}</h1>
                     <p className="guided-greeting-subtitle">
                       In about ten minutes, you'll have a first draft that makes your audience lean in — because it speaks to what they actually care about, not what you wish they cared about. Tell me about what you offer and what someone gets from it.
                     </p>

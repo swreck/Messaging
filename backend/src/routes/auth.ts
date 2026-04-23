@@ -6,6 +6,16 @@ import { param } from '../lib/params.js';
 
 const router = Router();
 
+// Pull displayName/firstName from user.settings so the client can greet by
+// real name. Kept out of the JWT payload — this is presentation-only and
+// can change without forcing re-login.
+function presentationNames(settings: unknown): { displayName?: string; firstName?: string } {
+  const s = (settings as Record<string, unknown> | null | undefined) || {};
+  const displayName = typeof s.displayName === 'string' ? s.displayName : undefined;
+  const firstName = typeof s.firstName === 'string' ? s.firstName : undefined;
+  return { displayName, firstName };
+}
+
 // GET /api/auth/invite/:code — look up an invite by shortCode or full code
 router.get('/invite/:code', async (req: Request, res: Response) => {
   const lookupCode = param(req.params.code);
@@ -127,7 +137,7 @@ router.post('/register', async (req: Request, res: Response) => {
   const payload: AuthPayload = { userId: user.id, username: user.username, isAdmin: user.isAdmin };
   const token = signToken(payload);
 
-  res.status(201).json({ token, user: payload });
+  res.status(201).json({ token, user: { ...payload, displayName, firstName } });
 });
 
 // POST /api/auth/login
@@ -153,13 +163,24 @@ router.post('/login', async (req: Request, res: Response) => {
 
   const payload: AuthPayload = { userId: user.id, username: user.username, isAdmin: user.isAdmin };
   const token = signToken(payload);
+  const names = presentationNames(user.settings);
 
-  res.json({ token, user: payload });
+  res.json({ token, user: { ...payload, ...names } });
 });
 
 // GET /api/auth/me
-router.get('/me', requireAuth, (req: Request, res: Response) => {
-  res.json({ user: req.user });
+router.get('/me', requireAuth, async (req: Request, res: Response) => {
+  const u = req.user;
+  if (!u) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  const record = await prisma.user.findUnique({
+    where: { id: u.userId },
+    select: { settings: true },
+  });
+  const names = presentationNames(record?.settings);
+  res.json({ user: { ...u, ...names } });
 });
 
 // POST /api/auth/invite-codes (admin only)
