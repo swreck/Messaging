@@ -1776,6 +1776,255 @@ AUDIENCE: ${audience.name}`;
   };
 }
 
+// Re-run mapping + Tier generation against an existing guided draft.
+// Called after Maria's gap interview adds a new differentiator to the
+// offering — the user wants to see the Tier 1 with the new differentiator
+// included. Wipes prior mappings and tier rows for this draft, then
+// regenerates from the current DB state (so any newly-added differentiators
+// are picked up). Returns the same FoundationResult shape as the initial
+// build, including any remaining gapDescriptions.
+//
+// Note: this duplicates a substantial chunk of commitAndBuildFoundation's
+// post-creation logic. A future refactor should extract the shared
+// mapping + tier generation into a helper. Duplication is accepted here
+// to keep scope bounded.
+export async function rebuildFoundationFromDraft(
+  draftId: string,
+  userId: string,
+  workspaceId: string,
+): Promise<FoundationResult> {
+  const draft = await prisma.threeTierDraft.findFirst({
+    where: {
+      id: draftId,
+      offering: { workspaceId, userId },
+    },
+    include: {
+      offering: { include: { elements: { orderBy: { sortOrder: 'asc' } } } },
+      audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+    },
+  });
+
+  if (!draft) {
+    throw new Error('Draft not found, or does not belong to this workspace.');
+  }
+
+  const offering = draft.offering;
+  const audience = draft.audience;
+
+  if (offering.elements.length === 0) {
+    throw new Error('Offering has no differentiators — add at least one before rebuilding.');
+  }
+  if (audience.priorities.length === 0) {
+    throw new Error('Audience has no priorities — add at least one before rebuilding.');
+  }
+
+  // Wipe existing mappings + tier rows so we regenerate cleanly.
+  await prisma.mapping.deleteMany({ where: { draftId: draft.id } });
+  await prisma.tier3Bullet.deleteMany({
+    where: { tier2: { draftId: draft.id } },
+  });
+  await prisma.tier2Statement.deleteMany({ where: { draftId: draft.id } });
+  await prisma.tier1Statement.deleteMany({ where: { draftId: draft.id } });
+
+  // ── Mapping ────────────────────────────────────
+  const mappingMessage = `PRIORITIES (ranked by importance):
+${audience.priorities
+  .map(p => `- [ID: ${p.id}] [Rank ${p.rank}] "${p.text}"${p.driver ? ` (Driver: ${p.driver})` : ''}`)
+  .join('\n')}
+
+CAPABILITIES/DIFFERENTIATORS:
+${offering.elements
+  .map(e => `- [ID: ${e.id}] "${e.text}"${e.motivatingFactor ? ` (MF: ${e.motivatingFactor})` : ''}`)
+  .join('\n')}`;
+
+  type MappingResult = {
+    mappings: {
+      priorityId: string;
+      elementId: string;
+      confidence: number;
+      mfRationale?: string;
+    }[];
+    gapDescriptions?: { priorityId: string; missingCapability: string }[];
+  };
+
+  const mappingResult = await callAIWithJSON<MappingResult>(
+    MAPPING_SYSTEM,
+    mappingMessage,
+    'fast',
+  );
+
+  const validPriorityIds = new Set(audience.priorities.map(p => p.id));
+  const validElementIds = new Set(offering.elements.map(e => e.id));
+  const cleanMappings = (mappingResult.mappings || []).filter(
+    m => validPriorityIds.has(m.priorityId) && validElementIds.has(m.elementId),
+  );
+
+  const priorityById = new Map(audience.priorities.map(p => [p.id, p] as const));
+  const foundationGaps = (mappingResult.gapDescriptions || [])
+    .filter(g => validPriorityIds.has(g.priorityId) && g.missingCapability)
+    .map(g => ({
+      priorityId: g.priorityId,
+      priorityText: priorityById.get(g.priorityId)?.text || '',
+      missingCapability: g.missingCapability,
+    }));
+
+  for (const m of cleanMappings.filter(m => m.confidence >= 0.5)) {
+    await prisma.mapping.create({
+      data: {
+        draftId: draft.id,
+        priorityId: m.priorityId,
+        elementId: m.elementId,
+        confidence: m.confidence,
+        status: 'confirmed',
+        mfRationale: m.mfRationale || '',
+      },
+    });
+  }
+
+  const confirmedMappings = await prisma.mapping.findMany({
+    where: { draftId: draft.id, status: 'confirmed' },
+    include: { priority: true, element: true },
+  });
+
+  if (confirmedMappings.length === 0) {
+    throw new Error('No mappings could be generated. Try adding a differentiator that speaks to your audience.');
+  }
+
+  const byPriority = new Map<
+    string,
+    { priority: typeof confirmedMappings[0]['priority']; elements: typeof confirmedMappings[0]['element'][] }
+  >();
+  for (const m of confirmedMappings) {
+    if (!byPriority.has(m.priorityId)) {
+      byPriority.set(m.priorityId, { priority: m.priority, elements: [] });
+    }
+    byPriority.get(m.priorityId)!.elements.push(m.element);
+  }
+
+  const mappedElementIds = new Set(confirmedMappings.map(m => m.elementId));
+  const orphanElements = offering.elements.filter(e => !mappedElementIds.has(e.id));
+
+  const convertMessage = `CONFIRMED MAPPINGS (grouped by priority, in rank order):
+${audience.priorities
+  .filter(p => byPriority.has(p.id))
+  .map(p => {
+    const group = byPriority.get(p.id)!;
+    return `Priority [ID: ${p.id}] [Rank ${p.rank}]: "${p.text}"
+  Driver (why this matters to them): ${p.driver || 'not specified'}
+  Mapped capabilities: ${group.elements.map(e => `"${e.text}"`).join(', ')}`;
+  })
+  .join('\n\n')}
+${
+  orphanElements.length > 0
+    ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements
+        .map(e => `- "${e.text}"`)
+        .join('\n')}`
+    : ''
+}
+AUDIENCE: ${audience.name}`;
+
+  type TierResult = {
+    tier1: { text: string; priorityId: string };
+    tier2: {
+      text: string;
+      priorityId?: string;
+      categoryLabel: string;
+      tier3: string[];
+    }[];
+  };
+
+  async function generateTierWithVoiceCheck(): Promise<TierResult> {
+    const first = await callAIWithJSON<TierResult>(
+      CONVERT_LINES_SYSTEM,
+      convertMessage,
+      'elite',
+    );
+    try {
+      const pById = new Map(audience.priorities.map(p => [p.id, p]));
+      const statements: StatementInput[] = [];
+      if (first.tier1?.text) {
+        statements.push({
+          text: first.tier1.text,
+          column: 'Tier 1',
+          priorityText: pById.get(first.tier1.priorityId)?.text,
+        });
+      }
+      for (const t2 of first.tier2 || []) {
+        statements.push({
+          text: t2.text,
+          column: t2.categoryLabel || '',
+          priorityText: t2.priorityId ? pById.get(t2.priorityId)?.text : undefined,
+        });
+      }
+      const check = await checkStatements(statements);
+      if (!check.passed) {
+        console.log(`[GuidedRebuild] voice check found ${check.violations.length} violations, retrying`);
+        const feedback = buildViolationFeedback(check.violations);
+        return await callAIWithJSON<TierResult>(
+          CONVERT_LINES_SYSTEM,
+          convertMessage + feedback,
+          'elite',
+        );
+      }
+    } catch (err) {
+      console.error('[GuidedRebuild] voice check error (fail-open):', err);
+    }
+    return first;
+  }
+
+  const tierResult = await generateTierWithVoiceCheck();
+
+  let tier1Row: { id: string; text: string } | null = null;
+  if (tierResult.tier1?.text) {
+    tier1Row = await prisma.tier1Statement.create({
+      data: { draftId: draft.id, text: tierResult.tier1.text },
+    });
+  }
+
+  const tier2Rows: FoundationResult['tier2'] = [];
+  for (let i = 0; i < (tierResult.tier2 || []).length; i++) {
+    const t2 = tierResult.tier2[i];
+    const validT2Priority = t2.priorityId && validPriorityIds.has(t2.priorityId)
+      ? t2.priorityId
+      : null;
+    const tier2 = await prisma.tier2Statement.create({
+      data: {
+        draftId: draft.id,
+        text: t2.text,
+        sortOrder: i,
+        priorityId: validT2Priority,
+        categoryLabel: t2.categoryLabel || '',
+      },
+    });
+    const t3Rows: { id: string; text: string }[] = [];
+    if (Array.isArray(t2.tier3)) {
+      for (let j = 0; j < t2.tier3.length; j++) {
+        const bullet = await prisma.tier3Bullet.create({
+          data: { tier2Id: tier2.id, text: t2.tier3[j], sortOrder: j },
+        });
+        t3Rows.push({ id: bullet.id, text: bullet.text });
+      }
+    }
+    tier2Rows.push({
+      id: tier2.id,
+      text: tier2.text,
+      categoryLabel: tier2.categoryLabel,
+      priorityId: validT2Priority,
+      tier3: t3Rows,
+    });
+  }
+
+  return {
+    draftId: draft.id,
+    offeringId: offering.id,
+    audienceId: audience.id,
+    tier1: tier1Row,
+    tier2: tier2Rows,
+    audienceName: audience.name,
+    gapDescriptions: foundationGaps.length > 0 ? foundationGaps : undefined,
+  };
+}
+
 // Step 2: Build a Five Chapter draft from a confirmed foundation.
 // Async with polling — takes ~2-3 minutes. Creates an ExpressJob,
 // runs chapters + blend in the background. The frontend polls status.

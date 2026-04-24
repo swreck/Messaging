@@ -22,6 +22,7 @@ import {
   commitInterpretation,
   commitInterpretationForWizard,
   commitAndBuildFoundation,
+  rebuildFoundationFromDraft,
   buildDraftFromFoundation,
   runPipeline,
 } from '../lib/expressPipeline.js';
@@ -354,6 +355,33 @@ router.post('/build-foundation', requireWorkspace, async (req: Request, res: Res
     const message = err instanceof Error ? err.message : 'unknown error';
     console.error('[GuidedFoundation] error:', message);
     res.status(500).json({ error: `Had trouble building the foundation: ${message}` });
+  }
+});
+
+// POST /api/express/rebuild-foundation
+// Re-runs mapping + tier generation against an existing draft using the
+// current DB state. Called when Maria's gap interview has added a new
+// differentiator to the offering and the user wants to see the Tier 1 with
+// the new differentiator included. Same response shape as build-foundation.
+router.post('/rebuild-foundation', requireWorkspace, async (req: Request, res: Response) => {
+  const { draftId } = req.body as { draftId?: string };
+
+  if (!draftId) {
+    res.status(400).json({ error: 'A draftId is required.' });
+    return;
+  }
+
+  try {
+    const result = await rebuildFoundationFromDraft(
+      draftId,
+      req.user!.userId,
+      req.workspaceId!,
+    );
+    res.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error('[GuidedRebuild] error:', message);
+    res.status(500).json({ error: `Had trouble rebuilding the foundation: ${message}` });
   }
 });
 

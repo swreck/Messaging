@@ -90,6 +90,10 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
   // Foundation has Maria suggestions (for live evaluation highlight)
   const [foundationHasSuggestions, setFoundationHasSuggestions] = useState(false);
 
+  // Rebuild-in-flight — used to disable the Rebuild button while mapping +
+  // tier generation runs against the updated offering.
+  const [rebuildingFoundation, setRebuildingFoundation] = useState(false);
+
   // Guidance density — track Maria's message count, ask after ~5
   const mariaMessageCount = useRef(0);
   const [askedAboutLength, setAskedAboutLength] = useState(false);
@@ -494,6 +498,58 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
       console.error('[GuidedFlow] Foundation error:', err);
       addMessage({ type: 'maria', text: "Something went wrong while I was building the foundation — that's on me, not you. Your inputs are still saved in the card above. Click \"Build my message\" again to retry. If it fails again, try editing the card to simplify — sometimes fewer items helps me focus." });
       setPhase('confirming_inputs');
+    }
+  }
+
+  // Regenerate the foundation using the current DB state. The user clicks this
+  // after Maria's gap interview has added a new differentiator — the new
+  // Tier 1 will reflect the added differentiator and any remaining gaps.
+  async function handleRebuildFoundation() {
+    if (!foundation || rebuildingFoundation) return;
+    setRebuildingFoundation(true);
+    const progressId = addMessage({
+      type: 'progress',
+      stage: 'Rebuilding the Tier 1 with your updated offering',
+      progress: 40,
+    });
+    try {
+      const res = await api.post<FoundationData>('/express/rebuild-foundation', {
+        draftId: foundation.draftId,
+      });
+      removeMessage(progressId);
+      setFoundation(res);
+      // Replace the existing foundation-card message so the user sees the
+      // updated Tier 1/Tier 2, not a second copy alongside the old one.
+      setMessages(prev => {
+        const firstCardIdx = prev.findIndex(m => m.type === 'foundation-card');
+        if (firstCardIdx < 0) {
+          return [...prev, { id: crypto.randomUUID(), type: 'foundation-card', foundation: res }];
+        }
+        const next = [...prev];
+        next[firstCardIdx] = { ...next[firstCardIdx], foundation: res };
+        return next;
+      });
+      addMessage({
+        type: 'maria',
+        text: 'Rebuilt. Take a look — the key message should now be closer to what your audience is actually asking.',
+      });
+      // Surface any REMAINING gaps exactly the way the initial build does.
+      if (res.gapDescriptions && res.gapDescriptions.length > 0) {
+        const topGap = res.gapDescriptions[0];
+        const gapIntro = topGap.priorityText
+          ? `Still flagging a gap: "${topGap.priorityText}" — ${topGap.missingCapability} Anything else I'm missing?`
+          : `One priority still has no differentiator that directly answers it. ${topGap.missingCapability}`;
+        addMessage({ type: 'maria', text: gapIntro });
+      }
+    } catch (err) {
+      removeMessage(progressId);
+      console.error('[GuidedFlow] rebuild error:', err);
+      addMessage({
+        type: 'maria',
+        text: "The rebuild hit a snag — your existing foundation is still intact. If you added a differentiator, try clicking Rebuild again in a moment, or edit the offering directly.",
+      });
+    } finally {
+      setRebuildingFoundation(false);
     }
   }
 
@@ -1212,6 +1268,19 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
                         });
                       }}
                     />
+                    {phase === 'reviewing_foundation' && foundation && (
+                      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => handleRebuildFoundation()}
+                          disabled={rebuildingFoundation}
+                          title="Regenerate Tier 1 and Tier 2 using the current offering and audience — pick this up after Maria has added a new differentiator."
+                        >
+                          {rebuildingFoundation ? 'Rebuilding…' : 'Rebuild Tier 1 with updated info'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : null;
 
