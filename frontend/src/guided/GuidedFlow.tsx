@@ -447,6 +447,34 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
       addMessage({ type: 'maria', text: walkthrough });
 
       setPhase('reviewing_foundation');
+
+      // Kick off Refine Language in parallel so naive users get Maria's sharpest
+      // Tier 1 (Thanksgiving / best + alternative) without having to know to ask.
+      // The glow + Accept/Dismiss UI is already wired for the user-requested path;
+      // this just auto-fires the same call and lets the existing UI take over.
+      // Silent on failure — user still has the correct canonical Foundation.
+      void (async () => {
+        try {
+          const refined = await api.post<{
+            suggestions?: { cell: string; suggested: string }[];
+            refinedTier1?: { best: string; alternative: string };
+            refinedTier2?: { index: number; text: string }[];
+          }>('/ai/refine', { draftId: res.draftId });
+          const changes =
+            (refined.suggestions?.length || 0) +
+            (refined.refinedTier2?.length || 0) +
+            (refined.refinedTier1 ? 1 : 0);
+          if (changes > 0) {
+            setFoundationHasSuggestions(true);
+            addMessage({
+              type: 'maria',
+              text: `I had another look — I think I can sharpen a few things. The foundation card is glowing; click it when you want to see the alternatives. Nothing changes until you accept.`,
+            });
+          }
+        } catch {
+          // Silent — canonical Foundation is correct on its own.
+        }
+      })();
     } catch (err) {
       removeMessage(progressId);
       console.error('[GuidedFlow] Foundation error:', err);

@@ -113,6 +113,9 @@ export function MariaPartner() {
   const [showReturnCard, setShowReturnCard] = useState(false);
   const [proactiveOffer, setProactiveOffer] = useState<string | null>(null);
   const [showProactiveCard, setShowProactiveCard] = useState(false);
+  // Active (non-completed) guided session the user walked away from. When set,
+  // Maria offers "resume where you left off" as the highest-priority return offer.
+  const [resumeDraft, setResumeDraft] = useState<{ sessionId: string; summary: string; phase: string } | null>(null);
 
   // Bubble indicators
   const [showDot, setShowDot] = useState(false);
@@ -136,7 +139,7 @@ export function MariaPartner() {
   // Load status on mount — only if logged in
   useEffect(() => {
     if (!user) return;
-    api.get<{ username: string; displayName?: string; introduced: boolean; introStep?: number; returnContext?: ReturnContext | null; proactiveOffer?: string | null }>('/partner/status')
+    api.get<{ username: string; displayName?: string; introduced: boolean; introStep?: number; returnContext?: ReturnContext | null; proactiveOffer?: string | null; resumeDraft?: { sessionId: string; summary: string; phase: string } | null }>('/partner/status')
       .then(status => {
         setIntroduced(status.introduced);
         setIntroStep(status.introStep ?? 0);
@@ -151,10 +154,13 @@ export function MariaPartner() {
         if (status.proactiveOffer) {
           setProactiveOffer(status.proactiveOffer);
         }
+        if (status.resumeDraft) {
+          setResumeDraft(status.resumeDraft);
+        }
 
         if (!status.introduced) {
           setShowDot(true);
-        } else if (status.returnContext || status.proactiveOffer) {
+        } else if (status.returnContext || status.proactiveOffer || status.resumeDraft) {
           setShowGlow(true);
         }
       })
@@ -908,8 +914,30 @@ export function MariaPartner() {
                     </div>
                   ))}
 
+                  {/* Resume draft card — highest priority: user walked away from an in-progress guided session */}
+                  {resumeDraft && (
+                    <div className="partner-return-card" style={{
+                      padding: '12px 16px',
+                      marginBottom: 8,
+                      background: 'var(--bg-secondary, #f8f8fa)',
+                      borderRadius: 'var(--radius-sm, 6px)',
+                      border: '1px solid var(--border-light, #e5e5ea)',
+                    }}>
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
+                        {resumeDraft.summary}
+                      </p>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-primary btn-sm" onClick={() => {
+                          setResumeDraft(null);
+                          navigate('/express');
+                        }}>Resume</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setResumeDraft(null)}>Not now</button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Return context card */}
-                  {showReturnCard && returnContext && (
+                  {showReturnCard && returnContext && !resumeDraft && (
                     <div className="partner-return-card" style={{
                       padding: '12px 16px',
                       marginBottom: 8,
@@ -931,7 +959,7 @@ export function MariaPartner() {
                   )}
 
                   {/* Proactive offer card */}
-                  {showProactiveCard && proactiveOffer && !showReturnCard && (
+                  {showProactiveCard && proactiveOffer && !showReturnCard && !resumeDraft && (
                     <div className="partner-return-card" style={{
                       padding: '12px 16px',
                       marginBottom: 8,

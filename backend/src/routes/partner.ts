@@ -256,22 +256,54 @@ router.get('/status', async (req: Request, res: Response) => {
 
   let returnContext: ReturnContext | null = null;
   let proactiveOffer: string | null = null;
+  let resumeDraft: { sessionId: string; summary: string; phase: string } | null = null;
 
   // Check for 0-to-1 moments — blank canvases Maria can fill
   const wsId = req.workspaceId!;
   if (introduced) {
     try {
-      // Audiences with 0 priorities
-      const emptyAudience = await prisma.audience.findFirst({
-        where: { workspaceId: wsId, priorities: { none: {} } },
-        select: { name: true },
+      // Active guided session — user started a message and walked away before committing.
+      // This is the "drafts bucket" for the guided flow: GuidedSession persists state
+      // continuously, so if the user returns we can offer to pick up where they left off.
+      // Surfacing this FIRST because a half-built message is the most time-sensitive thing.
+      const activeSession = await prisma.guidedSession.findFirst({
+        where: {
+          userId,
+          workspaceId: wsId,
+          completedAt: null,
+          // Only surface if user got past the initial greeting — otherwise there's nothing to resume
+          phase: { in: ['confirming_inputs', 'generating_foundation', 'reviewing_foundation', 'choosing_format', 'generating_draft'] },
+        },
+        orderBy: { updatedAt: 'desc' },
       });
-      if (emptyAudience) {
-        proactiveOffer = `I know what ${emptyAudience.name} typically cares about. Want me to draft the priorities?`;
+      if (activeSession) {
+        const interp = activeSession.interpretation as { offering?: { name?: string }; audiences?: { name?: string }[] } | null;
+        const offeringName = interp?.offering?.name || 'something';
+        const audienceName = interp?.audiences?.[0]?.name || 'your audience';
+        let summary: string;
+        if (activeSession.phase === 'confirming_inputs') {
+          summary = `You were describing ${offeringName} for ${audienceName}. Want to pick that up where we left off?`;
+        } else if (activeSession.phase === 'reviewing_foundation' || activeSession.phase === 'generating_foundation') {
+          summary = `You were reviewing the Three Tier foundation for ${offeringName} → ${audienceName}. Want to go back to it?`;
+        } else {
+          summary = `You were building a draft for ${offeringName} → ${audienceName}. Want to pick that up?`;
+        }
+        resumeDraft = { sessionId: activeSession.id, summary, phase: activeSession.phase };
+      }
+
+      // Audiences with 0 priorities
+      if (!resumeDraft) {
+        const emptyAudience = await prisma.audience.findFirst({
+          where: { workspaceId: wsId, priorities: { none: {} } },
+          select: { name: true },
+        });
+        if (emptyAudience) {
+          proactiveOffer = `I know what ${emptyAudience.name} typically cares about. Want me to draft the priorities?`;
+        }
       }
 
       // Audiences where the TOP priority has no driver, AND an offering exists
-      if (!proactiveOffer) {
+      if (!proactiveOffer && !resumeDraft) {
         const audNoDriver = await prisma.audience.findFirst({
           where: {
             workspaceId: wsId,
@@ -286,7 +318,7 @@ router.get('/status', async (req: Request, res: Response) => {
       }
 
       // Three Tier at step 5 with sparse Tier 3 (fewer than 1 per Tier 2 on average)
-      if (!proactiveOffer) {
+      if (!proactiveOffer && !resumeDraft) {
         const draftWithTiers = await prisma.threeTierDraft.findFirst({
           where: { offering: { workspaceId: wsId }, currentStep: 5 },
           include: {
@@ -341,7 +373,7 @@ router.get('/status', async (req: Request, res: Response) => {
     // Non-critical
   }
 
-  res.json({ username, displayName, introduced, introStep, returnContext, proactiveOffer });
+  res.json({ username, displayName, introduced, introStep, returnContext, proactiveOffer, resumeDraft });
 });
 
 // PUT /api/partner/name — store display name (does NOT complete intro)
