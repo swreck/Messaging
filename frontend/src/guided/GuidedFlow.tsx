@@ -448,6 +448,20 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
 
       setPhase('reviewing_foundation');
 
+      // If mapping flagged any priorities as gaps, Maria asks the user for the
+      // missing differentiator BEFORE the user accepts or builds a deliverable.
+      // The Tier 1 they're looking at was built from what the offering has; if
+      // mapping couldn't find an MF that answers the Driver for a priority,
+      // that priority needs a new differentiator. One gap at a time — top
+      // priority (Rank 1) first, since it drives Tier 1.
+      if (res.gapDescriptions && res.gapDescriptions.length > 0) {
+        const topGap = res.gapDescriptions[0];
+        const gapIntro = topGap.priorityText
+          ? `I need to flag something before we go further. Your audience's priority "${topGap.priorityText}" — I don't see a differentiator in the offering that directly answers what they're really asking about. ${topGap.missingCapability} What am I missing — is there something true about the offering that would speak to that?`
+          : `I need to flag something before we go further. One of the audience's priorities doesn't have a direct answer in the offering. ${topGap.missingCapability} What am I missing?`;
+        addMessage({ type: 'maria', text: gapIntro });
+      }
+
       // Kick off Refine Language in parallel so naive users get Maria's sharpest
       // Tier 1 (Thanksgiving / best + alternative) without having to know to ask.
       // The glow + Accept/Dismiss UI is already wired for the user-requested path;

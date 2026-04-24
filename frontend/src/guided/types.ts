@@ -57,6 +57,12 @@ export interface FoundationTier2 {
   tier3: FoundationTier3[];
 }
 
+export interface FoundationGap {
+  priorityId: string;
+  priorityText: string;
+  missingCapability: string;
+}
+
 export interface FoundationData {
   draftId: string;
   offeringId: string;
@@ -64,6 +70,9 @@ export interface FoundationData {
   tier1: { id: string; text: string } | null;
   tier2: FoundationTier2[];
   audienceName: string;
+  // Priorities that mapping couldn't cleanly answer. When present, Maria
+  // should ask the user for the missing differentiator.
+  gapDescriptions?: FoundationGap[];
 }
 
 export type GuidedPhase =

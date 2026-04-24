@@ -461,6 +461,7 @@ ${draftWithElements.offering.elements
       }[];
       orphanElements?: string[];
       priorityGaps?: string[];
+      gapDescriptions?: { priorityId: string; missingCapability: string }[];
     };
 
     const mappingResult = await callAIWithJSON<MappingResult>(
@@ -479,7 +480,18 @@ ${draftWithElements.offering.elements
       m => validPriorityIds.has(m.priorityId) && validElementIds.has(m.elementId),
     );
 
-    // Express mode: accept all mappings >= 0.5 as confirmed (no clarifying questions)
+    // Capture gap descriptions whose priorityIds are valid — Maria uses these
+    // to interview the user for missing differentiators when Tier 1 can't
+    // cleanly resolve the audience's decision-question.
+    const validGapDescriptions = (mappingResult.gapDescriptions || []).filter(
+      g => validPriorityIds.has(g.priorityId) && g.missingCapability,
+    );
+
+    // The mapping prompt tells the model not to emit below 0.7. If the model
+    // complies, below-threshold items surface as gapDescriptions. This floor
+    // stays at 0.5 as a safety net for the case where the model emits a weak
+    // match anyway — we'd rather show a weak Tier 1 plus Maria's gap
+    // interview than strip Rank 1 entirely and build Tier 1 from Rank 2.
     for (const m of cleanMappings.filter(m => m.confidence >= 0.5)) {
       await prisma.mapping.create({
         data: {
@@ -1487,6 +1499,11 @@ export interface FoundationResult {
     tier3: { id: string; text: string }[];
   }[];
   audienceName: string;
+  // Priorities that mapping couldn't cleanly answer, each with a one-sentence
+  // description of the kind of differentiator that would close the gap.
+  // Maria uses these to interview the user for the missing differentiator.
+  // Empty when every priority got a strict or near-strict match.
+  gapDescriptions?: { priorityId: string; priorityText: string; missingCapability: string }[];
 }
 
 export async function commitAndBuildFoundation(
@@ -1571,6 +1588,7 @@ ${offering.elements
       confidence: number;
       mfRationale?: string;
     }[];
+    gapDescriptions?: { priorityId: string; missingCapability: string }[];
   };
 
   const mappingResult = await callAIWithJSON<MappingResult>(
@@ -1585,6 +1603,21 @@ ${offering.elements
     m => validPriorityIds.has(m.priorityId) && validElementIds.has(m.elementId),
   );
 
+  // Mapping gaps: priorities whose Drivers no differentiator's MF can
+  // honestly answer. Maria uses these to interview the user for what's
+  // missing about the offering.
+  const priorityById = new Map(audience.priorities.map(p => [p.id, p] as const));
+  const foundationGaps = (mappingResult.gapDescriptions || [])
+    .filter(g => validPriorityIds.has(g.priorityId) && g.missingCapability)
+    .map(g => ({
+      priorityId: g.priorityId,
+      priorityText: priorityById.get(g.priorityId)?.text || '',
+      missingCapability: g.missingCapability,
+    }));
+
+  // The mapping prompt tells the model not to emit below 0.7. This floor
+  // stays at 0.5 as a safety net for the case where the model emits a weak
+  // match anyway — see the parallel comment in runPipeline for reasoning.
   for (const m of cleanMappings.filter(m => m.confidence >= 0.5)) {
     await prisma.mapping.create({
       data: {
@@ -1739,6 +1772,7 @@ AUDIENCE: ${audience.name}`;
     tier1: tier1Row,
     tier2: tier2Rows,
     audienceName: audience.name,
+    gapDescriptions: foundationGaps.length > 0 ? foundationGaps : undefined,
   };
 }
 
