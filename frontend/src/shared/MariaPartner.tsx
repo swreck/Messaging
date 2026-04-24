@@ -342,6 +342,10 @@ export function MariaPartner() {
     try {
       await api.put('/partner/name', { displayName: name });
     } catch { /* non-critical */ }
+    // Refresh the name used in subsequent greetings — otherwise the first
+    // conversation greeting still reads "Hi <username>" after the user
+    // just told Maria their real name.
+    setSuggestedName(name.charAt(0).toUpperCase() + name.slice(1));
     setIntroStep(1); // advance past name to Phase 1
   }
 
