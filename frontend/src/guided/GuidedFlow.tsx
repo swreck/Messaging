@@ -979,6 +979,60 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
           type: 'maria',
           text: "The support angle should make the reader feel safe saying yes. What does your onboarding, training, or ongoing support actually look like? Give me specifics — 'dedicated account manager for 90 days' is better than 'full support.'",
         });
+      } else if (foundation) {
+        // Default in reviewing_foundation: route the user's message to Maria.
+        // This is the path gap-interview responses take — Maria adds the new
+        // differentiator via add_capabilities, drafts its MF via
+        // edit_capabilities, then triggers rebuild_foundation and returns the
+        // new Foundation inside a [FOUNDATION_REBUILT]<json> marker we parse
+        // below so the foundation card updates in place.
+        const thinkingId = addMessage({ type: 'thinking' });
+        try {
+          const result = await api.post<{ response: string; actionResult?: string | null }>('/partner/message', {
+            message: text,
+            context: { page: 'three-tier', draftId: foundation.draftId },
+          });
+          removeMessage(thinkingId);
+          const actionResult = result.actionResult || '';
+          const rebuildMatch = actionResult.match(/\[FOUNDATION_REBUILT\](.*)/s);
+          if (rebuildMatch) {
+            try {
+              const newFoundation: FoundationData = JSON.parse(rebuildMatch[1]);
+              setFoundation(newFoundation);
+              setMessages(prev => {
+                const idx = prev.findIndex(m => m.type === 'foundation-card');
+                if (idx < 0) {
+                  return [...prev, { id: crypto.randomUUID(), type: 'foundation-card', foundation: newFoundation }];
+                }
+                const next = [...prev];
+                next[idx] = { ...next[idx], foundation: newFoundation };
+                return next;
+              });
+              if (result.response) {
+                addMessage({ type: 'maria', text: result.response });
+              }
+              if (newFoundation.gapDescriptions && newFoundation.gapDescriptions.length > 0) {
+                const topGap = newFoundation.gapDescriptions[0];
+                const gapIntro = topGap.priorityText
+                  ? `Still flagging a gap: "${topGap.priorityText}" — ${topGap.missingCapability} Anything else I'm missing?`
+                  : `One priority still has no differentiator that directly answers it. ${topGap.missingCapability}`;
+                addMessage({ type: 'maria', text: gapIntro });
+              }
+            } catch (parseErr) {
+              console.error('[GuidedFlow] failed to parse FOUNDATION_REBUILT payload:', parseErr);
+              addMessage({ type: 'maria', text: result.response || "I rebuilt it but ran into a snag updating the card. Try clicking Rebuild Tier 1 manually." });
+            }
+          } else {
+            addMessage({ type: 'maria', text: result.response || "Tell me which part feels off — the key message, a supporting statement, or the proof points." });
+          }
+        } catch (err) {
+          removeMessage(thinkingId);
+          console.error('[GuidedFlow] partner/message error in reviewing_foundation:', err);
+          addMessage({
+            type: 'maria',
+            text: "Tell me which part feels off — the key message at the top, one of the supporting statements, or the proof points? The more specific you are, the more I can help.",
+          });
+        }
       } else {
         addMessage({
           type: 'maria',

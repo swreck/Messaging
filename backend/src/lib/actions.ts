@@ -3,6 +3,7 @@ import { callAI } from '../services/ai.js';
 import {
   commitExistingForPipeline,
   runPipeline,
+  rebuildFoundationFromDraft,
 } from './expressPipeline.js';
 import {
   buildChapterPrompt,
@@ -1483,6 +1484,35 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
         }
       }
 
+      // ─── Rebuild foundation — parity with the Rebuild button in guided UI ──
+      // Called by Maria after she adds a new differentiator in a mapping-gap
+      // interview. Regenerates Tier 1/Tier 2 against the current DB state
+      // (which now includes the new differentiator). Returns the new Foundation
+      // inside a FOUNDATION_REBUILT marker the guided frontend parses to
+      // update the foundation card in place.
+      if (a.type === 'rebuild_foundation') {
+        const draftId = a.params?.draftId || ctx.draftId;
+        if (!draftId) {
+          actionResult = 'Could not rebuild — no draft reference available. Open the foundation first.';
+        } else {
+          try {
+            const result = await rebuildFoundationFromDraft(
+              draftId,
+              userId,
+              workspaceId || '',
+            );
+            // Serialize the new Foundation inside the marker so the frontend
+            // can update the foundation-card state without a second round trip.
+            const payload = JSON.stringify(result);
+            actionResult = `[FOUNDATION_REBUILT]${payload}`;
+            refreshNeeded = false;
+          } catch (err: any) {
+            console.error('[rebuild_foundation] error:', err);
+            actionResult = `Could not rebuild the foundation: ${err.message || 'unknown error'}`;
+          }
+        }
+      }
+
       // ─── Personalization actions ───────────────────────────────
       // Action results for personalization are kept minimal or empty.
       // Maria's system prompt (personalize chat block) guides her response.
@@ -1827,6 +1857,7 @@ export function buildActionList(context: ActionContext): string {
   // Build deliverable — full pipeline from existing offering + audience
   actions.push('- build_deliverable: Build a complete first draft (Three Tier + Five Chapter Story) from an existing offering and audience. Runs the full pipeline autonomously — mapping, message generation, story writing, voice check, polishing. Takes a few minutes. Params: { offeringName: string, audienceName: string, medium: string, situation?: string } — medium options: email, blog, landing_page, in_person, press_release, newsletter, one-pager, report, pitch_deck. situation is the specific context or occasion for this deliverable.');
   actions.push('- check_deliverable: Check status of a deliverable build you started with build_deliverable. When complete, navigates to the finished draft. Params: { jobId?: string } — omit jobId to check the most recent build.');
+  actions.push('- rebuild_foundation: Regenerate the Tier 1 and Tier 2 of an in-progress guided Foundation against the current offering + audience state. Use AFTER you have added a new differentiator (via add_capabilities) in response to a mapping gap — this rebuilds so the user sees the updated Tier 1 that reflects the new differentiator. Takes about 60 seconds. Params: { draftId: string } — the guided draftId. Your response while this runs: "Let me rebuild with that in." Returns a FOUNDATION_REBUILT marker the frontend uses to update the foundation card in place.');
 
   // Cross-workspace copy — always included, dispatch handles errors if user has only 1 workspace
   actions.push('- copy_audience_to_workspace: Copy an audience and its priorities to another workspace. Params: { audienceName: string, targetWorkspaceName: string }');
