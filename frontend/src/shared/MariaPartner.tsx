@@ -63,7 +63,7 @@ function getInitialPanelSize(): PanelSize {
 }
 
 export function MariaPartner() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { pageContext, refreshPage } = useMaria();
@@ -341,6 +341,9 @@ export function MariaPartner() {
   async function confirmName(name: string) {
     try {
       await api.put('/partner/name', { displayName: name });
+      // Pull the new name into the auth user so the top nav and other
+      // user-bound UI stop showing the raw workspace username.
+      await refreshUser();
     } catch { /* non-critical */ }
     // Refresh the name used in subsequent greetings — otherwise the first
     // conversation greeting still reads "Hi <username>" after the user
@@ -689,10 +692,11 @@ export function MariaPartner() {
 
     // Steps 1-2 combined: brief pitch + go
     if (introStep === 1 || introStep === 2) {
+      const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
       return (
         <div className="partner-intro">
           <div className="partner-intro-message">
-            <p>I help people build more persuasive messages and then apply them to almost any medium. Tell me about your work and I'll take it from there.</p>
+            <p>{firstName ? `Nice to meet you, ${firstName}. ` : ''}I help people build more persuasive messages and then apply them to almost any medium. Tell me about your work and I'll take it from there.</p>
           </div>
           <div className="partner-intro-actions">
             <button className="btn btn-primary" onClick={() => advanceIntro(INTRO_DONE)}>Let's go</button>

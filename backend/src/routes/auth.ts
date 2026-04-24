@@ -11,8 +11,14 @@ const router = Router();
 // can change without forcing re-login.
 function presentationNames(settings: unknown): { displayName?: string; firstName?: string } {
   const s = (settings as Record<string, unknown> | null | undefined) || {};
-  const displayName = typeof s.displayName === 'string' ? s.displayName : undefined;
-  const firstName = typeof s.firstName === 'string' ? s.firstName : undefined;
+  const topDisplay = typeof s.displayName === 'string' ? s.displayName : undefined;
+  const topFirst = typeof s.firstName === 'string' ? s.firstName : undefined;
+  // Fall back to partner.displayName for users who set their name through
+  // Maria's intro (/partner/name writes to settings.partner.displayName).
+  const partner = s.partner && typeof s.partner === 'object' ? (s.partner as Record<string, unknown>) : null;
+  const partnerDisplay = partner && typeof partner.displayName === 'string' ? partner.displayName : undefined;
+  const displayName = topDisplay || partnerDisplay;
+  const firstName = topFirst || (displayName ? displayName.split(/\s+/)[0] : undefined);
   return { displayName, firstName };
 }
 

@@ -391,7 +391,7 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
     const audName = edited.audiences[0]?.name || 'your audience';
     addMessage({
       type: 'maria',
-      text: `Now I'm going to build your foundational message. Here's what happens next:\n\nI take your differentiators and connect each one to ${audName}'s priorities. The result is a structured message with a key statement at the top — the single most important thing ${audName} needs to hear — and supporting statements underneath, each from a different angle: your product, the ROI, your support, and proof from other customers.\n\nThis takes about a minute. When it's done, I'll walk you through it and point out where I'm strong and where I need your help.`,
+      text: `Now I'm going to build your foundational message. Here's what happens next:\n\nI take your differentiators and connect each one to what ${audName} cares about most. The result is a structured message with a key statement at the top — the single most important thing for ${audName} to hear — and supporting statements underneath, each from a different angle: your product, the ROI, your support, and proof from other customers.\n\nThis takes about a minute. When it's done, I'll walk you through it and point out where I'm strong and where I need your help.`,
     });
     const progressId = addMessage({ type: 'progress', stage: 'Connecting what you do to what they care about', progress: 30 });
     setPhase('generating_foundation');
@@ -414,7 +414,7 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
 
       const observations: string[] = [];
 
-      observations.push(`Your key message: "${tier1Text}"\n\nThis connects ${audienceName}'s #1 priority to your strongest differentiator. The test: read it as ${audienceName}. Do they think "I can't ignore this"? Not that they need your product — that they need to ACT on this issue. If it sounds like a brochure, it needs work.`);
+      observations.push(`Your key message: "${tier1Text}"\n\nThis connects the #1 priority for ${audienceName} to your strongest differentiator. The test: read it as ${audienceName}. Do they think "I can't ignore this"? Not that they need your product — that they need to ACT on this issue. If it sounds like a brochure, it needs work.`);
 
       for (const col of tier2Cols) {
         const label = (col.categoryLabel || '').toLowerCase();
@@ -1059,7 +1059,7 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
                 <div className="guided-greeting-maria">
                   <div className="guided-msg-avatar">M</div>
                   <div className="guided-greeting-bubble">
-                    <h1 className="guided-greeting-title">{(user?.firstName || user?.displayName) ? `Hi ${user.firstName || user.displayName} — I'm Maria.` : `Hi, I'm Maria.`}</h1>
+                    <h1 className="guided-greeting-title">Let's build your first message.</h1>
                     <p className="guided-greeting-subtitle">
                       In about ten minutes, you'll have a first draft that makes your audience lean in — because it speaks to what they actually care about, not what you wish they cared about. Tell me about what you offer and what someone gets from it.
                     </p>
