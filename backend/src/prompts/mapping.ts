@@ -16,11 +16,13 @@ The MF is the BRIDGE that connects a differentiator to a priority: when an audie
 
 ═══ HOW TO MAP ═══
 
-1. For each priority, look through the differentiators. Use the differentiator's MF as your starting point. If the MF's principle clearly extends to this audience priority — even when the audience isn't named in the MF examples — that's a match. Don't reject just because the persona isn't listed.
+1. THE MATCH TEST IS MF-AGAINST-DRIVER. For each priority, read the Driver — the Driver is the priority with context, and it's where the audience's specific question lives. Then ask of each differentiator: does the MF's benefit principle ANSWER what the Driver reveals the audience is actually asking? That's the match test. A match that holds against the Driver holds against the Priority by extension — Driver is Priority expanded.
 
-2. If a differentiator has NO stored MF, infer one in your head: what would the general benefit principle be, and would it extend to this priority? Maps inferred this way are still valid mappings.
+  Example: priority "more drug candidates per week," Driver "faster compute server = more simulations"; fast-I/O MF "eliminates the choke point feeding compute servers." The MF answers the Driver. Strict match.
 
-3. If a differentiator's MF principle honestly cannot extend to this audience, do NOT force the mapping. Treat the differentiator as orphaned for this audience.
+2. INFER WHAT'S MISSING. If a differentiator has NO stored MF, infer one in your head: what is the general benefit principle? If a priority has NO stored Driver, infer one from the priority text and context: what would the audience ACTUALLY be asking under this priority? Test inferred-MF-against-Driver or MF-against-inferred-Driver the same way. Maps inferred this way are valid.
+
+3. IF NO DIFFERENTIATOR'S MF — STORED OR INFERRED — HONESTLY ANSWERS THE DRIVER, DO NOT MANUFACTURE A MATCH. Do not settle for topical proximity. Do not grasp. Flag the priority as a gap AND describe, in one sentence, what KIND of differentiator would close it. The conversation layer downstream will use that description to interview the user for what's missing about the offering. (For orphan differentiators — those with no priority to map to — leave them in orphanElements as usual.)
 
 4. Direction is always PRIORITY -> CAPABILITY. A priority "pulls" capabilities that support it.
 
@@ -29,10 +31,9 @@ The MF is the BRIDGE that connects a differentiator to a priority: when an audie
 6. If a priority has no matching capability, flag it as a gap.
 
 7. For each mapping, provide a confidence score (0.0 to 1.0):
-   - 0.9-1.0: Very clear, direct connection (the audience is named in the MF examples or is essentially the same job-to-be-done)
-   - 0.7-0.89: Strong connection with some inference (the MF principle clearly extends but the audience isn't directly named)
-   - 0.5-0.69: Plausible connection but needs SME confirmation
-   - Below 0.5: Do NOT suggest -- ask a clarifying question instead
+   - 0.9-1.0: STRICT MATCH. MF directly answers the Driver. Audience is named in the MF examples OR their job-to-be-done IS the Driver's core concern.
+   - 0.7-0.89: NEAR-STRICT. MF answers the Driver with light inference — principle extends naturally even if the audience isn't directly named.
+   - Below 0.7: Not a match. Do not emit a mapping. Either it's a gap (flag the priority in priorityGaps and describe what's missing in gapDescriptions) or it's uncertain and needs SME input (use clarifyingQuestions). Do not settle for a closest-resolution match just to have something.
 
 8. Never invent capabilities or priorities that weren't provided.
 
@@ -57,6 +58,9 @@ RESPOND WITH JSON:
   ],
   "orphanElements": ["elementId1", "elementId2"],
   "priorityGaps": ["priorityId with no matching capability"],
+  "gapDescriptions": [
+    { "priorityId": "...", "missingCapability": "one sentence describing what kind of differentiator would close this gap — something Maria can use to interview the user" }
+  ],
   "clarifyingQuestions": ["question if any mapping is unclear"]
 }`;
 
