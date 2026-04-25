@@ -161,9 +161,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true } }));
             }}
             className="btn btn-primary btn-sm nav-start-draft"
-            title="Talk to Maria about a new message"
+            title="Work with Maria on a new message"
           >
-            Talk to Maria
+            Work with Maria
           </button>
           <span className="nav-user">{user?.firstName || user?.displayName || user?.username}</span>
           <button

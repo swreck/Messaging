@@ -7,16 +7,31 @@ import { ConfirmModal } from '../../shared/ConfirmModal';
 import { useToast } from '../../shared/ToastContext';
 import type { ThreeTierDraft } from '../../types';
 
+// Three-view-mode pattern (Round A1 — orange-highlight system).
+//   no-markup  — clean reading view; observations exist but no orange shows
+//   minimal    — default; orange on every cell with an OPEN observation
+//   all-markup — opt-in busy view; resolved observations also visible (calmer)
+export type ReviewViewMode = 'no-markup' | 'minimal' | 'all-markup';
+
+// Resolution state tracked per cell so all-markup can render resolved
+// observations in a calmer color than open ones.
+export type CellMarkupState = 'open' | 'resolved-change' | 'resolved-ack';
+
 interface ThreeTierTableProps {
   draft: ThreeTierDraft;
   onUpdate: () => void;
   onConflict?: () => void;
   suggestions?: Map<string, string>;
+  /** Per-cell markup state. Only present when all-markup view is active and resolved
+   *  observations have been fetched. Cells with state 'resolved-*' get the calmer
+   *  marker class; cells in `suggestions` always render the open-amber class. */
+  cellStates?: Map<string, CellMarkupState>;
   onAcceptSuggestion?: (cell: string, text: string) => void;
   onDismissSuggestion?: (cell: string) => void;
   tier1Alternative?: string | null;
   focusedCell?: string | null;
   onCellFocus?: (cell: string | null) => void;
+  viewMode?: ReviewViewMode;
 }
 
 interface PendingDelete {
@@ -26,52 +41,40 @@ interface PendingDelete {
   timeout: ReturnType<typeof setTimeout>;
 }
 
-export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, tier1Alternative, focusedCell, onCellFocus }: ThreeTierTableProps) {
+export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, cellStates, onAcceptSuggestion, tier1Alternative, focusedCell, onCellFocus, viewMode = 'minimal' }: ThreeTierTableProps) {
   const { showToast } = useToast();
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Suggestion focus: show one column at a time
-  const [activeReviewCol, setActiveReviewCol] = useState<number>(-1); // -1 = tier1, 0+ = tier2 index
-
-  // Compute which columns have suggestions
-  const colsWithSuggestions: number[] = [];
-  if (suggestions && suggestions.size > 0) {
-    if (suggestions.has('tier1')) colsWithSuggestions.push(-1);
-    for (let i = 0; i < draft.tier2Statements.length; i++) {
-      const hasT2 = suggestions.has(`tier2-${i}`);
-      const hasT3 = draft.tier2Statements[i].tier3Bullets.some((_, j) => suggestions.has(`tier3-${i}-${j}`));
-      const hasAdd = suggestions.has(`tier3-${i}-add`);
-      if (hasT2 || hasT3 || hasAdd) colsWithSuggestions.push(i);
-    }
+  // Three-view-mode helpers. State (suggestions Map) is preserved across mode
+  // switches; viewMode only controls visibility.
+  const showOpenMarkup = viewMode !== 'no-markup';
+  const showResolvedMarkup = viewMode === 'all-markup';
+  function hasOpenSuggestion(cell: string): boolean {
+    return !!(suggestions && suggestions.has(cell));
   }
-
-  // Auto-set active column when suggestions first appear
-  useEffect(() => {
-    if (colsWithSuggestions.length > 0 && !colsWithSuggestions.includes(activeReviewCol)) {
-      setActiveReviewCol(colsWithSuggestions[0]);
+  function cellMarkupClass(cell: string): string {
+    if (hasOpenSuggestion(cell) && showOpenMarkup) return ' cell-evaluation-highlight';
+    if (showResolvedMarkup && cellStates) {
+      const s = cellStates.get(cell);
+      if (s === 'resolved-change' || s === 'resolved-ack') return ' cell-evaluation-resolved';
     }
-    if (colsWithSuggestions.length === 0) {
-      setActiveReviewCol(-1);
-    }
-  }, [suggestions?.size]);
-
-  function isSuggestionVisible(cell: string): boolean {
-    if (!suggestions || suggestions.size === 0) return false;
-    if (colsWithSuggestions.length === 0) return false;
-    if (cell === 'tier1') return activeReviewCol === -1;
-    const match = cell.match(/^tier[23]-(\d+)/);
-    if (match) return parseInt(match[1]) === activeReviewCol;
-    return false;
+    return '';
   }
-
-  function nextReviewCol() {
-    const idx = colsWithSuggestions.indexOf(activeReviewCol);
-    if (idx < colsWithSuggestions.length - 1) setActiveReviewCol(colsWithSuggestions[idx + 1]);
+  // Inline suggestion panel only renders when there's an open observation AND
+  // markup isn't hidden. Replaces the prior column-by-column gating.
+  function shouldShowInline(cell: string): boolean {
+    return hasOpenSuggestion(cell) && showOpenMarkup;
   }
-  function prevReviewCol() {
-    const idx = colsWithSuggestions.indexOf(activeReviewCol);
-    if (idx > 0) setActiveReviewCol(colsWithSuggestions[idx - 1]);
+  // Click on a flagged cell opens Maria scoped to that cell's observation
+  // instead of edit mode (only when markup is visible). Unflagged cells, and
+  // cells in no-markup view, fall through to edit mode.
+  function tryOpenScopedMaria(cell: string, label: string): boolean {
+    if (!shouldShowInline(cell)) return false;
+    document.dispatchEvent(new CustomEvent('maria-toggle', {
+      detail: { open: true, message: `[REVIEW_CELL:${cell}] I want to look at the ${label}.` },
+    }));
+    return true;
   }
   // Conflict confirmation
   const [showConflict, setShowConflict] = useState(false);
@@ -93,6 +96,13 @@ export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcc
 
   function handleCellClick(cellKey: string) {
     if (saving) return;
+    // Flagged cell + markup visible → Maria scoped (Round A1).
+    // Unflagged cell, or no-markup view → edit mode.
+    const labels: Record<string, string> = {
+      tier1: 'Tier 1 suggestion you have',
+    };
+    const label = labels[cellKey] || `suggestion you have on this cell`;
+    if (tryOpenScopedMaria(cellKey, label)) return;
     setEditingCell(cellKey);
     onCellFocus?.(cellKey);
   }
@@ -261,41 +271,8 @@ ${t2s.map(t2 => `<div class="tier2-col">
   return (
     <div>
       <div className={`three-tier-table${suggestions && suggestions.size > 0 ? ' has-suggestions' : ''}`}>
-        {/* Suggestion navigation */}
-        {colsWithSuggestions.length > 0 && (
-          <div style={{
-            padding: '8px 16px',
-            background: 'rgba(0, 122, 255, 0.04)',
-            borderBottom: '1px solid #d1d1d6',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: 13,
-            color: 'var(--text-secondary)',
-          }}>
-            <span>
-              Reviewing {activeReviewCol === -1 ? 'Tier 1' : `column ${activeReviewCol + 1}${draft.tier2Statements[activeReviewCol]?.categoryLabel ? ` (${draft.tier2Statements[activeReviewCol].categoryLabel})` : ''}`}
-              {' '}&middot; {colsWithSuggestions.indexOf(activeReviewCol) + 1} of {colsWithSuggestions.length}
-            </span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ padding: '2px 8px', fontSize: 12 }}
-                onClick={prevReviewCol}
-                disabled={colsWithSuggestions.indexOf(activeReviewCol) <= 0}
-              >&lsaquo; Prev</button>
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ padding: '2px 8px', fontSize: 12 }}
-                onClick={nextReviewCol}
-                disabled={colsWithSuggestions.indexOf(activeReviewCol) >= colsWithSuggestions.length - 1}
-              >Next &rsaquo;</button>
-            </div>
-          </div>
-        )}
-
         {/* Tier 1 */}
-        <div className={`tier1-row${isTier1Focused ? ' cell-focused' : ''}${suggestions?.has('tier1') ? ' cell-evaluation-highlight' : ''}`}>
+        <div className={`tier1-row${isTier1Focused ? ' cell-focused' : ''}${cellMarkupClass('tier1')}`}>
           <div className="tier-header-row">
             <div className="tier-label">Tier 1 <span className="tier-subtitle">Core Value</span> <InfoTooltip text="The single most important statement for your audience. Connects their #1 priority to your strongest differentiator. The test: does the reader think 'I cannot ignore this'?" /></div>
             <div className="tier-header-actions">
@@ -341,15 +318,15 @@ ${t2s.map(t2 => `<div class="tier2-col">
               {draft.tier1Statement?.text || 'Click to add Tier 1 statement'}
             </div>
           )}
-          {suggestions?.has('tier1') && isSuggestionVisible('tier1') && (
+          {shouldShowInline('tier1') && (
             <div className="inline-suggestion">
-              <span className="inline-suggestion-text">{suggestions.get('tier1')}</span>
+              <span className="inline-suggestion-text">{suggestions!.get('tier1')}</span>
               <div className="inline-suggestion-actions">
-                <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.('tier1', suggestions.get('tier1')!)}>Accept</button>
+                <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.('tier1', suggestions!.get('tier1')!)}>Accept</button>
                 <button className="inline-suggestion-dismiss" onClick={(e) => {
                   e.stopPropagation();
-                  // Change 10 — Discuss-with-Maria replaces silent Dismiss. Opens scoped chat
-                  // where the user can either change the cell or acknowledge-as-is.
+                  // Discuss-with-Maria replaces silent Dismiss. Opens scoped chat
+                  // where the user can change the cell or acknowledge-as-is.
                   document.dispatchEvent(new CustomEvent('maria-toggle', {
                     detail: { open: true, message: `[REVIEW_CELL:tier1] I want to look at the Tier 1 suggestion you have.` },
                   }));
@@ -382,7 +359,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
             const t2Key = `tier2-${t2Index}`;
             const isColFocused = focusedCell === t2Key || editingCell === `tier2-${t2.id}`;
             return (
-              <div key={t2.id} className={`tier2-col${isColFocused ? ' cell-focused' : ''}${suggestions?.has(t2Key) ? ' cell-evaluation-highlight' : ''}`}>
+              <div key={t2.id} className={`tier2-col${isColFocused ? ' cell-focused' : ''}${cellMarkupClass(t2Key)}`}>
                 <div
                   className="tier-label tier-label-small"
                   onClick={() => {
@@ -411,11 +388,11 @@ ${t2s.map(t2 => `<div class="tier2-col">
                     {t2.text}
                   </div>
                 )}
-                {suggestions?.has(t2Key) && isSuggestionVisible(t2Key) && (
+                {shouldShowInline(t2Key) && (
                   <div className="inline-suggestion">
-                    <span className="inline-suggestion-text">{suggestions.get(t2Key)}</span>
+                    <span className="inline-suggestion-text">{suggestions!.get(t2Key)}</span>
                     <div className="inline-suggestion-actions">
-                      <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(t2Key, suggestions.get(t2Key)!)}>Accept</button>
+                      <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(t2Key, suggestions!.get(t2Key)!)}>Accept</button>
                       <button className="inline-suggestion-dismiss" onClick={(e) => {
                         e.stopPropagation();
                         const label = t2.categoryLabel || `column ${t2Index + 1}`;
@@ -449,7 +426,16 @@ ${t2s.map(t2 => `<div class="tier2-col">
                             onCancel={() => { setEditingCell(null); onCellFocus?.(null); }}
                           />
                         ) : (
-                          <div className={`tier3-bullet${isPendingDelete ? ' tier3-pending-delete' : ''}${focusedCell === `tier3-${t3.id}` ? ' cell-focused' : ''}`} onClick={() => !isPendingDelete && handleCellClick(`tier3-${t3.id}`)}>
+                          <div
+                            className={`tier3-bullet${isPendingDelete ? ' tier3-pending-delete' : ''}${focusedCell === `tier3-${t3.id}` ? ' cell-focused' : ''}${cellMarkupClass(t3Key)}`}
+                            onClick={() => {
+                              if (isPendingDelete) return;
+                              // Flagged proof point + markup visible → Maria scoped.
+                              // Otherwise → edit mode (uses the bullet id, not the index key).
+                              if (tryOpenScopedMaria(t3Key, 'proof-point suggestion you have')) return;
+                              handleCellClick(`tier3-${t3.id}`);
+                            }}
+                          >
                             <span>{t3.text}</span>
                             {isPendingDelete ? (
                               <span className="tier3-undo" onClick={(e) => { e.stopPropagation(); undoDeleteTier3(); }}>Undo</span>
@@ -464,11 +450,11 @@ ${t2s.map(t2 => `<div class="tier2-col">
                             )}
                           </div>
                         )}
-                        {suggestions?.has(t3Key) && isSuggestionVisible(t3Key) && (
+                        {shouldShowInline(t3Key) && (
                           <div className="inline-suggestion">
-                            <span className="inline-suggestion-text">{suggestions.get(t3Key)}</span>
+                            <span className="inline-suggestion-text">{suggestions!.get(t3Key)}</span>
                             <div className="inline-suggestion-actions">
-                              <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(t3Key, suggestions.get(t3Key)!)}>Accept</button>
+                              <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(t3Key, suggestions!.get(t3Key)!)}>Accept</button>
                               <button className="inline-suggestion-dismiss" onClick={(e) => {
                                 e.stopPropagation();
                                 document.dispatchEvent(new CustomEvent('maria-toggle', {
@@ -489,11 +475,11 @@ ${t2s.map(t2 => `<div class="tier2-col">
                     );
                   })}
                   {/* Suggestion to ADD a new proof point */}
-                  {suggestions?.has(`tier3-${t2Index}-add`) && isSuggestionVisible(`tier3-${t2Index}-add`) && (
+                  {shouldShowInline(`tier3-${t2Index}-add`) && (
                     <div className="inline-suggestion">
-                      <span className="inline-suggestion-text">{suggestions.get(`tier3-${t2Index}-add`)}</span>
+                      <span className="inline-suggestion-text">{suggestions!.get(`tier3-${t2Index}-add`)}</span>
                       <div className="inline-suggestion-actions">
-                        <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(`tier3-${t2Index}-add`, suggestions.get(`tier3-${t2Index}-add`)!)}>Add</button>
+                        <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(`tier3-${t2Index}-add`, suggestions!.get(`tier3-${t2Index}-add`)!)}>Add</button>
                         <button className="inline-suggestion-dismiss" onClick={(e) => {
                           e.stopPropagation();
                           document.dispatchEvent(new CustomEvent('maria-toggle', {

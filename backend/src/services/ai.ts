@@ -7,9 +7,14 @@ const anthropic = new Anthropic({
 
 export type ModelTier = 'fast' | 'deep' | 'elite';
 
+// Quality-floor principle (CLAUDE.md):
+// Sonnet is the floor. Opus is used for reasoning, judgment, voice-shaping.
+// Haiku is not used in this product. The 'fast' tier name is preserved for
+// callers that want the lightest acceptable model, but it now resolves to
+// Sonnet — no Haiku in production paths.
 function getModel(tier: ModelTier): string {
   if (tier === 'elite') return 'claude-opus-4-6';
-  return tier === 'fast' ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6';
+  return 'claude-sonnet-4-6';
 }
 
 export async function callAI(

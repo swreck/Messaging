@@ -50,6 +50,16 @@ function describeWhen(iso?: string): string {
 // Intro steps: 0=name, 1=phase1, 2=phase2, 3=phase3, 4=done
 const INTRO_DONE = 4;
 
+// Synthetic-marker pattern. Internal triggers like [STATE_RECAP],
+// [OPEN_ON_PAGE], [REVIEW_TIER2_COLUMN:Focus], [TIME_THRESHOLD_REACHED:...]
+// are dispatched as user-role messages so Maria's prompt rules can react,
+// but the user must never see them as message bubbles. Match a single
+// all-caps bracketed token, optionally with a colon-prefixed payload.
+const SYNTHETIC_MARKER_RE = /^\s*\[[A-Z_]+(?:\s*:[^\]]*)?\]\s*$/;
+function isSyntheticMarker(content: string): boolean {
+  return SYNTHETIC_MARKER_RE.test(content);
+}
+
 type PanelSize = 'compact' | 'medium' | 'full';
 
 function getInitialPanelSize(): PanelSize {
@@ -593,7 +603,20 @@ export function MariaPartner() {
             displayResponse = "Working on it.";
           }
         }
-        setMessages(prev => [...prev, { role: 'assistant', content: displayResponse || result.response, actionResult: result.actionResult }]);
+        // Round A1 — Maria-equivalent path: scan for [SET_VIEW_MODE:...] marker
+        // and dispatch a frontend event so the Three Tier review's view mode
+        // updates without the user touching the segmented control. Strip the
+        // marker from the visible text so it doesn't render as a bracketed token.
+        let cleanedResponse = displayResponse || result.response;
+        if (cleanedResponse) {
+          const vmMatch = cleanedResponse.match(/\[SET_VIEW_MODE:(no-markup|minimal|all-markup)\]/);
+          if (vmMatch) {
+            const mode = vmMatch[1] as 'no-markup' | 'minimal' | 'all-markup';
+            document.dispatchEvent(new CustomEvent('three-tier-view-mode', { detail: { mode } }));
+            cleanedResponse = cleanedResponse.replace(/\s*\[SET_VIEW_MODE:[^\]]+\]\s*/g, '').trim();
+          }
+        }
+        setMessages(prev => [...prev, { role: 'assistant', content: cleanedResponse || result.response, actionResult: result.actionResult }]);
       }
 
       if (result.actionResult) {
@@ -1036,7 +1059,15 @@ export function MariaPartner() {
                   {messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && !introduced && (
                     <div className="partner-empty">What's on your mind?</div>
                   )}
-                  {messages.map((msg, i) => (
+                  {messages.map((msg, i) => {
+                    // Suppress synthetic-marker bubbles from the user's view.
+                    // The marker still lives in the conversation history Maria
+                    // reads — only the visible bubble is hidden. Apply to both
+                    // roles in case Maria ever echoes a marker before her reply.
+                    if (isSyntheticMarker(msg.content)) {
+                      return null;
+                    }
+                    return (
                     <div key={i} className={`partner-msg partner-msg-${msg.role}`}>
                       {formatContent(msg.content)}
                       {msg.actionResult && (() => {
@@ -1056,7 +1087,8 @@ export function MariaPartner() {
                         return simple ? <span className="partner-action-badge">{simple}</span> : null;
                       })()}
                     </div>
-                  ))}
+                    );
+                  })}
                   {sending && (
                     <div className="partner-msg partner-msg-assistant partner-typing">
                       <span /><span /><span />

@@ -578,7 +578,7 @@ export async function dispatchActions(
           if (chapter) {
             const ch = CHAPTER_CRITERIA[a.params.chapterNum - 1];
             const userMsg = `CHAPTER ${a.params.chapterNum}: "${ch.name}"\nCURRENT CONTENT:\n${chapter.content}\n\nUSER FEEDBACK: ${a.params.feedback}\n\nPlease revise this chapter based on the feedback.`;
-            const revised = await callAI(REFINE_CHAPTER_SYSTEM, userMsg, 'fast');
+            const revised = await callAI(REFINE_CHAPTER_SYSTEM, userMsg, 'elite');
             await prisma.chapterContent.update({
               where: { id: chapter.id },
               data: { content: revised },
@@ -991,13 +991,13 @@ Write Chapter ${chNum}: "${ch.name}"${avoidInstruction}`;
 
           const spec = getMediumSpec(story.medium);
           const userMessage = `CONTENT FORMAT: ${spec.label}\nUSER'S REQUEST: ${a.params.instruction}\n\nCURRENT CONTENT:\n${story.blendedText}\n\nApply the requested changes.`;
-          let revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'fast');
+          let revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'elite');
 
           // Verify the edit actually changed something — AI sometimes returns identical text
           // when the instruction is subtle. Retry once with a stronger nudge if so.
           if (normalize(revised) === originalNorm) {
             const retryMessage = `CONTENT FORMAT: ${spec.label}\nUSER'S REQUEST: ${a.params.instruction}\n\nCURRENT CONTENT:\n${story.blendedText}\n\nCRITICAL: Your previous attempt returned text identical to the original. You MUST actually apply the requested change. If the request is about rewording a specific sentence or opening, rewrite that sentence. Return the FULL content with the change applied.`;
-            revised = await callAI(COPY_EDIT_SYSTEM, retryMessage, 'fast');
+            revised = await callAI(COPY_EDIT_SYSTEM, retryMessage, 'elite');
           }
 
           // If it STILL hasn't changed, don't pretend — tell the user honestly

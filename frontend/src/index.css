@@ -2011,7 +2011,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .tier1-row .inline-suggestion { text-align: left; }
 .tier1-row .inline-suggestion-actions { justify-content: center; }
 
-/* Live evaluation — orange glow for cells Maria has suggestions about */
+/* Live evaluation — orange glow for cells Maria has open observations on */
 .cell-evaluation-highlight {
   position: relative;
 }
@@ -2026,9 +2026,96 @@ p { line-height: 1.5; color: var(--text-secondary); }
   border-radius: 2px;
   animation: eval-glow 3s ease-in-out infinite;
 }
+/* Resolved-marker — calmer gray for cells whose observations were resolved.
+ * Only visible in the All-markup view mode. Static (no glow) since the
+ * cell no longer needs attention. */
+.cell-evaluation-resolved {
+  position: relative;
+}
+.cell-evaluation-resolved::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #c7c7cc;
+  border-radius: 2px;
+  opacity: 0.7;
+}
 @keyframes eval-glow {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
+}
+
+/* View-mode selector (Round A1 — three-view-mode pattern).
+ * Sits at top of Three Tier review where the suggestion banner lived. */
+.review-view-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-md, 10px);
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.review-view-mode-label {
+  font-weight: 500;
+  margin-right: 4px;
+}
+.review-view-mode-segmented {
+  display: inline-flex;
+  border: 1px solid #d1d1d6;
+  border-radius: 8px;
+  background: var(--bg-card, #fff);
+  overflow: hidden;
+}
+.review-view-mode-segmented button {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+}
+.review-view-mode-segmented button:not(:last-child) {
+  border-right: 1px solid #d1d1d6;
+}
+.review-view-mode-segmented button.active {
+  background: #f59e0b;
+  color: #fff;
+}
+.review-view-mode-segmented button:not(.active):hover {
+  background: rgba(245, 158, 11, 0.1);
+}
+.review-view-mode-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.review-view-mode-orientation {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-light, #e5e5ea);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.review-view-mode-orientation button {
+  padding: 2px 8px;
+  font-size: 12px;
 }
 
 /* ─── Overlay Panels ──────────────────────────────── */

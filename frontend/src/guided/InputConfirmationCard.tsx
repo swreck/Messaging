@@ -24,6 +24,38 @@ export function InputConfirmationCard({ interpretation, onConfirm }: Props) {
     });
   }
 
+  // Approval flips the visual cue (rose → no border) and removes the
+  // verification card, matching the spec's user-authorship gate. After
+  // approval, the item is treated as user-authored.
+  function approveDiff(index: number) {
+    markVerified(`diff-${index}`);
+    setState(s => ({
+      ...s,
+      offering: {
+        ...s.offering,
+        differentiators: s.offering.differentiators.map((d, i) =>
+          i === index ? { ...d, source: 'stated' as FactSource } : d,
+        ),
+      },
+    }));
+  }
+  function approvePriority(index: number) {
+    markVerified(`pri-${index}`);
+    setState(s => ({
+      ...s,
+      audiences: s.audiences.map((a, ai) =>
+        ai === 0
+          ? {
+              ...a,
+              priorities: a.priorities.map((p, pi) =>
+                pi === index ? { ...p, source: 'stated' as FactSource } : p,
+              ),
+            }
+          : a,
+      ),
+    }));
+  }
+
   // ── Differentiator editing ──────────────────────────
   function updateDiff(index: number, field: 'text' | 'motivatingFactor', value: string) {
     // When a user edits an inferred item, that's verification by edit — the
@@ -205,7 +237,7 @@ export function InputConfirmationCard({ interpretation, onConfirm }: Props) {
                     type="button"
                     className="btn btn-sm"
                     style={{ flex: 1 }}
-                    onClick={() => markVerified(`diff-${i}`)}
+                    onClick={() => approveDiff(i)}
                   >
                     Looks right
                   </button>
@@ -287,7 +319,7 @@ export function InputConfirmationCard({ interpretation, onConfirm }: Props) {
                     type="button"
                     className="btn btn-sm"
                     style={{ flex: 1 }}
-                    onClick={() => markVerified(`pri-${i}`)}
+                    onClick={() => approvePriority(i)}
                   >
                     Looks right
                   </button>

@@ -428,11 +428,22 @@ export function ExpressEntry() {
 
   if (phase.name === 'building') {
     const pct = Math.max(3, Math.min(100, phase.progress));
+    // Honest per-format time estimate. Source the medium label and resolve to
+    // the same scale as GuidedFlow.tsx so estimates stay consistent across
+    // entry points.
+    const lower = (phase.mediumLabel || '').toLowerCase();
+    let estimate = 'a few minutes';
+    if (lower.includes('report')) estimate = 'four to six minutes — Report is the longest format';
+    else if (lower.includes('pitch') || lower.includes('deck')) estimate = 'four to five minutes';
+    else if (lower.includes('press')) estimate = 'three to four minutes';
+    else if (lower.includes('one-pager') || lower.includes('one pager') || lower.includes('landing')) estimate = 'three to four minutes';
+    else if (lower.includes('newsletter')) estimate = 'two to three minutes';
+    else if (lower.includes('email') || lower.includes('blog') || lower.includes('in-person') || lower.includes('in person')) estimate = 'about two minutes';
     return wrap(
       <div className="express-entry">
         <div className="express-entry-building">
           <h2 className="express-entry-building-title">
-            I'll have a first draft for you in a few minutes.
+            I'll have a first draft for you in {estimate}.
           </h2>
           <div className="express-entry-progress-bar" aria-hidden="true">
             <div

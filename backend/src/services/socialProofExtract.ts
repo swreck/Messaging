@@ -143,7 +143,7 @@ export async function extractSocialProof(
     const result = await callAIWithJSON<SocialProofExtraction>(
       EXTRACTOR_SYSTEM,
       userMessage,
-      'fast', // Haiku is sufficient for this structured extraction task
+      'fast', // Sonnet floor — structured extraction, no judgment needed
     );
     return {
       items: Array.isArray(result.items) ? result.items : [],

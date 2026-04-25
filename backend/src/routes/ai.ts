@@ -345,7 +345,7 @@ router.post('/coach', requireEditor, async (req: Request, res: Response) => {
     content: m.content,
   }));
 
-  const response = await callAI(systemPrompt, fullMessage, 'fast', conversationHistory);
+  const response = await callAI(systemPrompt, fullMessage, 'elite', conversationHistory);
 
   // Change 3 — Contrarian extraction: when Maria includes "* [CONTRARIAN] ..."
   // in her reply, persist the scenario on the offering and mark it asked. The
@@ -912,8 +912,14 @@ router.get('/observations/:draftId', async (req: Request, res: Response) => {
     select: { id: true },
   });
   if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
+  // includeResolved=true returns RESOLVED_BY_CHANGE / RESOLVED_BY_ACKNOWLEDGE
+  // observations alongside open ones — used by the All-markup view mode in the
+  // Three Tier review so the user can see resolved history on opt-in.
+  const includeResolved = String(req.query.includeResolved || '') === 'true';
+  const where: any = { draftId };
+  if (!includeResolved) where.state = 'OPEN';
   const observations = await prisma.observation.findMany({
-    where: { draftId, state: 'OPEN' },
+    where,
     orderBy: { createdAt: 'desc' },
   });
   res.json({ observations });
@@ -1788,7 +1794,7 @@ USER FEEDBACK: ${feedback}
 
 Please revise this chapter based on the feedback while respecting the chapter rules above.`;
 
-  let content = await callAI(REFINE_CHAPTER_SYSTEM, userMessage, 'fast');
+  let content = await callAI(REFINE_CHAPTER_SYSTEM, userMessage, 'elite');
 
   // Voice check refined chapter
   if (await isVoiceCheckEnabled(req.user!.userId)) {
@@ -1797,7 +1803,7 @@ Please revise this chapter based on the feedback while respecting the chapter ru
       if (!check.passed) {
         console.log(`[VoiceCheck] Refine chapter ${chapterNum}: ${check.violations.length} violations, retrying`);
         const feedback2 = buildProseViolationFeedback(check.violations);
-        content = await callAI(REFINE_CHAPTER_SYSTEM, userMessage + feedback2, 'fast');
+        content = await callAI(REFINE_CHAPTER_SYSTEM, userMessage + feedback2, 'elite');
       } else {
         console.log(`[VoiceCheck] Refined chapter ${chapterNum} passed`);
       }
@@ -1988,7 +1994,7 @@ ${content}
 
 Apply the requested changes.`;
 
-  let revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'fast');
+  let revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'elite');
 
   // If the AI returned identical text, retry once with a stronger nudge.
   if (normalize(revised) === originalNorm) {
@@ -2000,7 +2006,7 @@ CURRENT CONTENT:
 ${content}
 
 CRITICAL: Your previous attempt returned text identical to the original. You MUST actually apply the requested change. If the request is about rewording a specific sentence or opening, rewrite that sentence. Return the FULL content with the change applied.`;
-    revised = await callAI(COPY_EDIT_SYSTEM, retryMessage, 'fast');
+    revised = await callAI(COPY_EDIT_SYSTEM, retryMessage, 'elite');
   }
 
   // Voice check copy-edited text
@@ -2010,7 +2016,7 @@ CRITICAL: Your previous attempt returned text identical to the original. You MUS
       if (!check.passed) {
         console.log(`[VoiceCheck] Copy edit: ${check.violations.length} violations, retrying`);
         const feedback = buildProseViolationFeedback(check.violations);
-        revised = await callAI(COPY_EDIT_SYSTEM, userMessage + feedback, 'fast');
+        revised = await callAI(COPY_EDIT_SYSTEM, userMessage + feedback, 'elite');
       } else {
         console.log('[VoiceCheck] Copy edit passed');
       }

@@ -1329,7 +1329,7 @@ export function FiveChapterShell() {
                 {isGenerating && !chapterContent && (
                   <div className="fcs-chapter-loading">
                     <Spinner size={16} />
-                    <span>Writing chapter {ch.num}...</span>
+                    <span>Chapter {ch.num} of 5 — drafting now</span>
                   </div>
                 )}
 

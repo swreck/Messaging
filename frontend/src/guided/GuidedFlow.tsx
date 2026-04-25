@@ -605,7 +605,7 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
       'one-pager': 'three to four minutes',
       press_release: 'three to four minutes',
       pitch_deck: 'four to five minutes',
-      report: 'five to six minutes — Report is the longest format',
+      report: 'four to six minutes — Report is the longest format',
     };
     const estimate = formatEstimate[medium] || 'a few minutes';
 
@@ -703,12 +703,12 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
         generatingRef.current = false;
       } else {
         const stageDescriptions: Record<string, string> = {
-          'Writing section 1 of 5': 'Writing the opening — the truth your reader has been avoiding',
-          'Writing section 2 of 5': 'Building your approach — what changes in their world',
-          'Writing section 3 of 5': 'Adding trust — why saying yes is safe',
-          'Writing section 4 of 5': 'Adding proof — evidence from people who made this choice',
-          'Writing section 5 of 5': 'Writing the close — what they can do this week',
-          'Blending chapters': 'Blending sections into one cohesive piece',
+          'Writing section 1 of 5': 'Chapter 1 of 5 — drafting the opening (the truth your reader has been avoiding)',
+          'Writing section 2 of 5': 'Chapter 2 of 5 — drafting your approach (what changes in their world)',
+          'Writing section 3 of 5': 'Chapter 3 of 5 — drafting trust (why saying yes is safe)',
+          'Writing section 4 of 5': 'Chapter 4 of 5 — drafting proof (evidence from people who made this choice)',
+          'Writing section 5 of 5': 'Chapter 5 of 5 — drafting the close (what they can do this week)',
+          'Blending chapters': 'Blending all five chapters into one cohesive piece',
         };
         const humanStage = stageDescriptions[status.stage] || status.stage || 'Working on it';
         updateMessage(progressId, {

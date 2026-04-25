@@ -2,8 +2,9 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { StepProps } from './types';
 import { api } from '../../api/client';
-import { ThreeTierTable } from '../components/ThreeTierTable';
+import { ThreeTierTable, type ReviewViewMode, type CellMarkupState } from '../components/ThreeTierTable';
 import { Spinner } from '../../shared/Spinner';
+import { RotatingPhrases } from '../../shared/RotatingPhrases';
 import { CompareModal } from '../components/CompareModal';
 import { Modal } from '../../shared/Modal';
 import { ConfirmModal } from '../../shared/ConfirmModal';
@@ -36,48 +37,115 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Map<string, string>>(new Map());
 
-  // Change 10 — Persistent observations: load Maria's open observations for this draft
-  // on mount so the orange highlight survives across sessions. Each observation is
-  // converted into an entry in the suggestions Map so the existing inline panel and
-  // the new highlight class both pick it up.
+  // Round A1 — Three-view-mode pattern. Persists per-user (not per-draft) so the
+  // user's preference carries from one foundation to the next. State of
+  // observations is server-side; viewMode is purely a frontend visibility setting.
+  const VIEW_MODE_KEY = 'three-tier-view-mode';
+  const [viewMode, setViewModeState] = useState<ReviewViewMode>(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_MODE_KEY);
+      if (saved === 'no-markup' || saved === 'minimal' || saved === 'all-markup') return saved;
+    } catch {}
+    return 'minimal';
+  });
+  function setViewMode(next: ReviewViewMode) {
+    setViewModeState(next);
+    try { localStorage.setItem(VIEW_MODE_KEY, next); } catch {}
+  }
+
+  // Per-cell markup state. Populated alongside `suggestions` whenever observations
+  // load. Contains an entry for every observation (open AND resolved) when
+  // viewMode='all-markup'; only OPEN entries otherwise.
+  const [cellStates, setCellStates] = useState<Map<string, CellMarkupState>>(new Map());
+
+  // Helper — convert an observation row to a UI cell key (tier1, tier2-i, tier3-i-j).
+  function observationToCellKey(obs: { cellType: string; cellId: string }): string | null {
+    if (obs.cellType === 'tier1') return 'tier1';
+    if (obs.cellType === 'tier2') {
+      const idx = draft.tier2Statements.findIndex(t2 => t2.id === obs.cellId);
+      return idx >= 0 ? `tier2-${idx}` : null;
+    }
+    if (obs.cellType === 'tier3') {
+      const [t2Id, bulletIdxStr] = obs.cellId.split(':');
+      const t2Idx = draft.tier2Statements.findIndex(t2 => t2.id === t2Id);
+      if (t2Idx < 0) return null;
+      const bIdx = parseInt(bulletIdxStr);
+      return Number.isNaN(bIdx) ? null : `tier3-${t2Idx}-${bIdx}`;
+    }
+    return null;
+  }
+
+  // Load Maria's observations for this draft on mount and whenever viewMode
+  // changes between minimal and all-markup (which controls whether we fetch
+  // resolved observations too).
   useEffect(() => {
     if (!draft?.id) return;
-    api.get<{ observations: Array<{ id: string; cellType: string; cellId: string; suggestion: string }> }>(
-      `/ai/observations/${draft.id}`,
-    )
+    const path = viewMode === 'all-markup'
+      ? `/ai/observations/${draft.id}?includeResolved=true`
+      : `/ai/observations/${draft.id}`;
+    api.get<{ observations: Array<{ id: string; cellType: string; cellId: string; suggestion: string; state?: string }> }>(path)
       .then(({ observations }) => {
-        if (!observations || observations.length === 0) return;
-        // Convert observation cellType+cellId back to UI cell keys.
-        const map = new Map<string, string>();
+        if (!observations || observations.length === 0) {
+          setCellStates(new Map());
+          return;
+        }
+        const openMap = new Map<string, string>();
+        const stateMap = new Map<string, CellMarkupState>();
         for (const obs of observations) {
-          if (obs.cellType === 'tier1') {
-            map.set('tier1', obs.suggestion);
-          } else if (obs.cellType === 'tier2') {
-            // Find the tier2 index from cellId
-            const idx = draft.tier2Statements.findIndex(t2 => t2.id === obs.cellId);
-            if (idx >= 0) map.set(`tier2-${idx}`, obs.suggestion);
-          } else if (obs.cellType === 'tier3') {
-            // cellId format: "tier2Id:bulletIndex"
-            const [t2Id, bulletIdxStr] = obs.cellId.split(':');
-            const t2Idx = draft.tier2Statements.findIndex(t2 => t2.id === t2Id);
-            if (t2Idx >= 0) {
-              const bIdx = parseInt(bulletIdxStr);
-              map.set(`tier3-${t2Idx}-${bIdx}`, obs.suggestion);
-            }
+          const key = observationToCellKey(obs);
+          if (!key) continue;
+          const state = obs.state || 'OPEN';
+          if (state === 'OPEN') {
+            openMap.set(key, obs.suggestion);
+            stateMap.set(key, 'open');
+          } else if (state === 'RESOLVED_BY_CHANGE') {
+            stateMap.set(key, 'resolved-change');
+          } else if (state === 'RESOLVED_BY_ACKNOWLEDGE') {
+            stateMap.set(key, 'resolved-ack');
           }
         }
-        if (map.size > 0) {
+        // Merge open observations into suggestions; preserve any in-flight
+        // suggestions the user hasn't seen yet.
+        if (openMap.size > 0) {
           setSuggestions(prev => {
             const merged = new Map(prev);
-            for (const [k, v] of map) {
+            for (const [k, v] of openMap) {
               if (!merged.has(k)) merged.set(k, v);
             }
             return merged;
           });
         }
+        setCellStates(stateMap);
       })
       .catch(() => {/* non-fatal */});
-  }, [draft?.id]);
+  }, [draft?.id, viewMode]);
+
+  // Brad-impact tooltip — first-encounter orientation for the new view-mode UX.
+  // Replaces the implicit Dismiss-all-as-clear behavior; explains that markup
+  // is hidden, not dropped. Persisted per-user so it never re-fires.
+  const VIEW_MODE_ORIENTATION_KEY = 'three-tier-view-mode-oriented';
+  const [showViewModeOrientation, setShowViewModeOrientation] = useState(() => {
+    try { return !localStorage.getItem(VIEW_MODE_ORIENTATION_KEY); } catch { return false; }
+  });
+  function dismissViewModeOrientation() {
+    try { localStorage.setItem(VIEW_MODE_ORIENTATION_KEY, '1'); } catch {}
+    setShowViewModeOrientation(false);
+  }
+
+  // Maria-equivalent path — switch view mode via chat command. MariaPartner
+  // dispatches `three-tier-view-mode` with the requested mode after stripping
+  // the `[SET_VIEW_MODE:...]` marker from her response.
+  useEffect(() => {
+    function handleViewModeEvent(e: Event) {
+      const detail = (e as CustomEvent).detail as { mode?: ReviewViewMode } | undefined;
+      const mode = detail?.mode;
+      if (mode === 'no-markup' || mode === 'minimal' || mode === 'all-markup') {
+        setViewMode(mode);
+      }
+    }
+    document.addEventListener('three-tier-view-mode', handleViewModeEvent as EventListener);
+    return () => document.removeEventListener('three-tier-view-mode', handleViewModeEvent as EventListener);
+  }, []);
   const [reviewing, setReviewing] = useState(false);
   const [revising, setRevising] = useState(false);
   const [refining, setRefining] = useState(false);
@@ -447,12 +515,39 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           </button>
         </div>
       )}
-      {suggestions.size > 0 && (
-        <div className="suggestion-banner">
-          <span>I'd adjust {suggestions.size} cell{suggestions.size !== 1 ? 's' : ''}. Take a look?</span>
-          <button className="suggestion-banner-dismiss" onClick={() => { setSuggestions(new Map()); setTier1Alternative(null); previousStateRef.current = captureState(); }}>
-            Dismiss all
-          </button>
+      {(suggestions.size > 0 || (viewMode === 'all-markup' && cellStates.size > 0)) && (
+        <div className="review-view-mode" role="group" aria-label="Review view mode">
+          <span className="review-view-mode-label">
+            {suggestions.size > 0
+              ? `I'd adjust ${suggestions.size} cell${suggestions.size !== 1 ? 's' : ''}.`
+              : 'No open observations.'}
+          </span>
+          <span className="review-view-mode-segmented">
+            <button
+              type="button"
+              className={viewMode === 'no-markup' ? 'active' : ''}
+              onClick={() => setViewMode('no-markup')}
+              title="Hide all markup. Observations stay; only the visual indicators are hidden."
+            >Hide markup</button>
+            <button
+              type="button"
+              className={viewMode === 'minimal' ? 'active' : ''}
+              onClick={() => setViewMode('minimal')}
+              title="Show open observations only."
+            >Minimal</button>
+            <button
+              type="button"
+              className={viewMode === 'all-markup' ? 'active' : ''}
+              onClick={() => setViewMode('all-markup')}
+              title="Show every observation, including ones already resolved."
+            >All markup</button>
+          </span>
+          {showViewModeOrientation && (
+            <div className="review-view-mode-orientation">
+              <span><strong>New:</strong> "Dismiss all" is now <em>Hide markup</em>. Observations are preserved — just hidden. Switch view modes anytime.</span>
+              <button className="btn btn-ghost btn-sm" onClick={dismissViewModeOrientation}>Got it</button>
+            </div>
+          )}
         </div>
       )}
       <h2 style={{ marginBottom: 4 }}>Foundational Message</h2>
@@ -614,23 +709,23 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           disabled={anyBusy}
           title="Rewrite statements to sound more natural while keeping the meaning"
         >
-          {refining ? <><Spinner size={12} /> Refining...</> : 'Refine Language'}
+          {refining ? <><Spinner size={12} /> <RotatingPhrases phase="generic" intervalMs={3500} /></> : 'Refine Language'}
         </button>
         <button className="btn btn-secondary btn-sm" onClick={polish} disabled={anyBusy} title="Results are usually better, but take a little longer">
-          {polishing ? <><Spinner size={12} /> Polishing...</> : 'Polish'}
+          {polishing ? <><Spinner size={12} /> <RotatingPhrases phase="generic" intervalMs={3500} /></> : 'Polish'}
         </button>
         {/* Divider */}
         <span aria-hidden="true" style={{ display: 'inline-block', width: 1, height: 20, background: 'var(--border-light, #e5e5ea)', margin: '0 4px', alignSelf: 'center' }} />
         {/* Cluster 2: review + state */}
         <button className="btn btn-secondary btn-sm" onClick={askMaria} disabled={anyBusy} title="Maria reviews your message and tells you what she'd improve">
-          {reviewing ? <><Spinner size={12} /> Reviewing...</> : 'Ask Maria to review'}
+          {reviewing ? <><Spinner size={12} /> <RotatingPhrases phase="mapping" intervalMs={3500} /></> : 'Ask Maria to review'}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={createSnapshot} title="Save the current state as a checkpoint you can return to">
           {showCheckpointSaved ? 'Checkpoint saved' : 'Save checkpoint'}
         </button>
         {hasEdited && (
           <button className="btn btn-secondary btn-sm" onClick={reviseFromEdits} disabled={anyBusy} title="Maria revises other cells to match your edits">
-            {revising ? <><Spinner size={12} /> Revising...</> : 'Match the rest to my edits'}
+            {revising ? <><Spinner size={12} /> <RotatingPhrases phase="rebuild" intervalMs={3500} /></> : 'Match the rest to my edits'}
           </button>
         )}
         <div style={{ position: 'relative' }} ref={moreToolsRef}>
@@ -676,11 +771,13 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         onUpdate={handleTableUpdate}
         onConflict={handleConflict}
         suggestions={suggestions}
+        cellStates={cellStates}
         onAcceptSuggestion={handleAcceptSuggestion}
         onDismissSuggestion={handleDismissSuggestion}
         tier1Alternative={tier1Alternative}
         focusedCell={focusedCell}
         onCellFocus={setFocusedCell}
+        viewMode={viewMode}
       />
 
       {/* Checkpoint slide-out panel */}
