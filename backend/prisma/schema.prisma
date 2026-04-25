@@ -223,6 +223,12 @@ model FiveChapterStory {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
+  // Round B4 — pre-Chapter-4 peer prompt. Optional named-peer context the user
+  // contributed via Maria's pause before Ch4 generation. Empty string = user
+  // declined or skipped; non-empty = use as named-peer evidence in Ch4.
+  peerInfo    String         @default("")
+  peerAsked   Boolean        @default(false)
+
   chapters      ChapterContent[]
   storyVersions StoryVersion[]
 }

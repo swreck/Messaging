@@ -55,13 +55,30 @@ function similarity(a: string, b: string): number {
 
 /**
  * Check if a suggestion adds material improvement over the current text.
- * Rejects: exact match, normalized match, or >=0.85 token-overlap similarity.
- * Ken's rule: Maria must add value or do nothing.
+ * Rejects: exact match, normalized match, suggestion that's a strict subset
+ * of the current (only removes content), or >=0.85 token-overlap similarity.
+ * Ken's rule: Maria must add value or do nothing. F1 follow-up: stricter
+ * subset-rejection so "Snowflake" can't surface as a "suggestion" against
+ * an existing cell reading "Snowflake [for data plane]".
  */
 function isMaterialImprovement(suggested: string, current: string, threshold = 0.85): boolean {
   if (!suggested || !current) return !!suggested;
   if (suggested.trim() === current.trim()) return false;
-  if (normalizeForCompare(suggested) === normalizeForCompare(current)) return false;
+  const suggNorm = normalizeForCompare(suggested);
+  const currNorm = normalizeForCompare(current);
+  if (suggNorm === currNorm) return false;
+  // Strict subset: every content token of `suggested` is also in `current`
+  // AND `current` has more content tokens. The suggestion only REMOVES — not
+  // an improvement, drop it. (Allows the inverse: suggestion adds tokens.)
+  const stop = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'at', 'for', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'that', 'this', 'these', 'those', 'it', 'its']);
+  const toks = (s: string) => new Set(s.split(' ').filter(w => w.length > 2 && !stop.has(w)));
+  const suggToks = toks(suggNorm);
+  const currToks = toks(currNorm);
+  if (suggToks.size > 0 && suggToks.size < currToks.size) {
+    let allInCurrent = true;
+    for (const t of suggToks) if (!currToks.has(t)) { allInCurrent = false; break; }
+    if (allInCurrent) return false;
+  }
   return similarity(suggested, current) < threshold;
 }
 
@@ -940,6 +957,106 @@ router.post('/observations/:id/resolve', requireEditor, async (req: Request, res
   }
 });
 
+// ─── Round B5 — pitch-deck export to .pptx ───────────────
+// Two-step flow: preview returns the slide-title list (the trust gate Maria
+// reads back to the user in chat); export returns the actual .pptx binary
+// for download once the user confirms.
+
+router.post('/stories/:storyId/pptx-preview', requireStoryteller, async (req: Request, res: Response) => {
+  const storyId = String(req.params.storyId || '');
+  if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
+  const story = await prisma.fiveChapterStory.findFirst({
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
+    include: {
+      draft: { include: { audience: true } },
+      chapters: { orderBy: { chapterNum: 'asc' } },
+    },
+  });
+  if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+  if (story.medium !== 'pitch_deck') {
+    res.status(400).json({ error: 'pptx export is only available for pitch_deck format' });
+    return;
+  }
+  if (story.chapters.length < 5) {
+    res.status(400).json({ error: 'All five chapters must be drafted before exporting to slides' });
+    return;
+  }
+  try {
+    const { generateSkeleton } = await import('../services/pptxExport.js');
+    const skeleton = await generateSkeleton({
+      storyTitle: story.customName || `${story.draft.audience.name} pitch deck`,
+      audienceName: story.draft.audience.name,
+      cta: story.cta,
+      chapters: story.chapters,
+    });
+    res.json({ slides: skeleton.slides });
+  } catch (err: any) {
+    console.error('[pptx-preview] error:', err);
+    res.status(500).json({ error: err?.message || 'Could not build slide skeleton' });
+  }
+});
+
+router.post('/stories/:storyId/pptx-export', requireStoryteller, async (req: Request, res: Response) => {
+  const storyId = String(req.params.storyId || '');
+  if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
+  const story = await prisma.fiveChapterStory.findFirst({
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
+    include: {
+      draft: { include: { audience: true } },
+      chapters: { orderBy: { chapterNum: 'asc' } },
+    },
+  });
+  if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+  if (story.medium !== 'pitch_deck') {
+    res.status(400).json({ error: 'pptx export is only available for pitch_deck format' });
+    return;
+  }
+  if (story.chapters.length < 5) {
+    res.status(400).json({ error: 'All five chapters must be drafted before exporting to slides' });
+    return;
+  }
+  try {
+    const { generateSkeleton, renderPptx } = await import('../services/pptxExport.js');
+    const source = {
+      storyTitle: story.customName || `${story.draft.audience.name} pitch deck`,
+      audienceName: story.draft.audience.name,
+      cta: story.cta,
+      chapters: story.chapters,
+    };
+    const skeleton = await generateSkeleton(source);
+    const buffer = await renderPptx(source, skeleton);
+    const filename = (source.storyTitle || 'pitch-deck').replace(/[^A-Za-z0-9._-]+/g, '-') + '.pptx';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err: any) {
+    console.error('[pptx-export] error:', err);
+    res.status(500).json({ error: err?.message || 'Could not generate .pptx' });
+  }
+});
+
+// ─── Round B4 — pre-Chapter-4 peer prompt ───────────────
+// Save the user's named-peer context for a story before Chapter 4 generates.
+// Body: { peerInfo: string }. Empty string = the user explicitly skipped;
+// non-empty = use as named-peer evidence. Either way, peerAsked flips so
+// Maria doesn't re-pause for this story.
+router.post('/stories/:storyId/peer-info', requireStoryteller, async (req: Request, res: Response) => {
+  const storyId = String(req.params.storyId || '');
+  if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
+  const peerInfo = typeof req.body?.peerInfo === 'string' ? req.body.peerInfo : '';
+  const story = await prisma.fiveChapterStory.findFirst({
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
+    select: { id: true },
+  });
+  if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+  const updated = await prisma.fiveChapterStory.update({
+    where: { id: storyId },
+    data: { peerInfo: peerInfo.trim(), peerAsked: true },
+    select: { id: true, peerInfo: true, peerAsked: true },
+  });
+  res.json(updated);
+});
+
 // ─── Refine Language ────────────────────────────────────
 
 router.post('/refine-language', requireEditor, async (req: Request, res: Response) => {
@@ -1524,12 +1641,19 @@ Tier 3, or Priority it derives from. If you cannot point to a specific
 source, the sentence is fabricated — cut it. A one-sentence chapter that
 is completely honest is better than three sentences with one fabricated line.`;
 
+  // Round B4 — pre-Chapter-4 peer prompt: when the user has supplied
+  // named-peer context for Chapter 4, weave it through as evidence the
+  // chapter can rely on. Empty string = user skipped or hasn't been asked yet.
+  const peerInfoBlock = (chapterNum === 4 && story.peerInfo && story.peerInfo.trim())
+    ? `\nNAMED PEER EVIDENCE (use this as Chapter 4's primary social proof — the user contributed it directly):\n${story.peerInfo.trim()}\n`
+    : '';
+
   const userMessage = `${chapterNum === 1 ? '' : `OFFERING: ${story.draft.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${story.draft.audience.name}
 CONTENT FORMAT: ${spec.label} (${spec.wordRange[0]}-${spec.wordRange[1]} words total)
 ${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${story.emphasis ? `EMPHASIS: ${story.emphasis}\n` : ''}${readerDirective}${threeTierBlock}
 AUDIENCE PRIORITIES:
 ${story.draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"${p.driver ? ` — Driver: "${p.driver}"` : ''}${p.whatAudienceThinks ? ` — Audience thinks: "${p.whatAudienceThinks}"` : ''}`).join('\n')}
-
+${peerInfoBlock}
 ${prevChapterBlock}
 Write Chapter ${chapterNum}: "${ch.name}"
 IMPORTANT: Start this chapter fresh. Do NOT begin with "..." or any continuation from a previous chapter. Each chapter is self-contained.

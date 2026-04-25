@@ -52,6 +52,9 @@ export function FiveChapterShell() {
   const [polishing, setPolishing] = useState(false);
   const [polishImproved, setPolishImproved] = useState(false);
 
+  // Round B5 — pitch-deck export to .pptx
+  const [pptxBuilding, setPptxBuilding] = useState(false);
+
   // Track the refinement stage of the blended text for heading display
   const [blendedStage, setBlendedStage] = useState<'blended' | 'polished' | 'personalized'>('blended');
   // Previous stage snapshots — ordered list of user actions, each collapsible
@@ -220,13 +223,17 @@ export function FiveChapterShell() {
     if (!cta) return;
     setCreating(true);
     try {
-      const { story: s } = await api.post<{ story: FiveChapterStory }>('/stories', {
-        draftId,
-        medium,
-        cta,
-        emphasis,
-        sourceStoryId: sourceStoryIdForCreate || undefined,
-      });
+      let s: FiveChapterStory;
+      {
+        const created = await api.post<{ story: FiveChapterStory }>('/stories', {
+          draftId,
+          medium,
+          cta,
+          emphasis,
+          sourceStoryId: sourceStoryIdForCreate || undefined,
+        });
+        s = created.story;
+      }
       setStories(prev => [s, ...prev]);
       setStory(s);
       setShowCreateForm(false);
@@ -238,6 +245,14 @@ export function FiveChapterShell() {
       if (sourceStoryIdForCreate) {
         setGenerating(true);
         for (let i = 1; i <= 5; i++) {
+          // Round B4 — pause once before Ch4 for the peer prompt.
+          if (i === 4 && !s.peerAsked && draft) {
+            await waitForPeerInfo(s.id, draft.audience.name);
+            try {
+              const refreshed = await api.get<{ story: FiveChapterStory }>(`/stories/${s.id}`);
+              if (refreshed?.story) s = refreshed.story;
+            } catch {/* non-fatal */}
+          }
           setGeneratingChapter(i);
           const { chapter } = await api.post<{ chapter: ChapterContent }>('/ai/generate-chapter', {
             storyId: s.id,
@@ -281,6 +296,75 @@ export function FiveChapterShell() {
     } catch { showToast('Could not delete'); }
     setConfirmDeleteStory(null);
   }
+
+  // Round B5 — pitch-deck export. Trust gate: preview slide titles in chat,
+  // user confirms ("yes" / "go ahead" / "build it"), then download fires.
+  // The user can also drive this entirely through chat ("export this as a slide deck").
+  async function previewPptxExport() {
+    if (!story) return;
+    if (story.medium !== 'pitch_deck') return;
+    setPptxBuilding(true);
+    try {
+      const result = await api.post<{ slides: Array<{ title: string; bullets: string[]; chapterNum?: number }> }>(`/ai/stories/${story.id}/pptx-preview`, {});
+      const titles = (result.slides || []).map((s, i) => `${i + 1}. ${s.title}`).join('\n');
+      const slideCount = result.slides?.length || 0;
+      const previewMsg = `I'll produce a ${slideCount}-slide first-draft skeleton to save you time. Titles below — scan and tell me to go ahead, or cancel.\n\n${titles}\n\nThe deck comes unstyled. Open it in PowerPoint or Keynote, then apply your template (Design → Themes) to style the whole deck in one click.`;
+      // Open Maria's chat with the trust-gate preview message AND a confirmation prompt.
+      // The user replies "yes" / "go" / "cancel" — Maria's prompt routes the confirm to triggerPptxDownload.
+      document.dispatchEvent(new CustomEvent('maria-toggle', {
+        detail: {
+          open: true,
+          message: `[PPTX_PREVIEW:${story.id}] ${previewMsg}\n\nReady to download? Reply "yes" or "go ahead" — I'll deliver the file.`,
+          hint: true,
+        },
+      }));
+    } catch (err: any) {
+      showToast(err?.message || 'Could not build the slide preview');
+    } finally {
+      setPptxBuilding(false);
+    }
+  }
+
+  async function triggerPptxDownload(storyId: string) {
+    setPptxBuilding(true);
+    try {
+      const res = await fetch(`/api/ai/stories/${storyId}/pptx-export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Download failed');
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const fnMatch = cd.match(/filename="([^"]+)"/);
+      const filename = fnMatch?.[1] || 'pitch-deck.pptx';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err: any) {
+      showToast(err?.message || 'Could not download the slides');
+    } finally {
+      setPptxBuilding(false);
+    }
+  }
+
+  // Listen for Maria's confirmation marker after the user agrees to the trust-gate preview.
+  useEffect(() => {
+    function handler(e: Event) {
+      const detail = (e as CustomEvent).detail as { storyId?: string } | undefined;
+      if (detail?.storyId) triggerPptxDownload(detail.storyId);
+    }
+    document.addEventListener('pptx-export-confirmed', handler as EventListener);
+    return () => document.removeEventListener('pptx-export-confirmed', handler as EventListener);
+  }, []);
 
   async function polishStory() {
     if (!story) return;
@@ -391,6 +475,55 @@ export function FiveChapterShell() {
     }, 500);
   }
 
+  // Round B4 — pre-Chapter-4 peer prompt. Open Maria with the synthetic
+  // marker [PRE_CHAPTER_4:storyId:audienceName:audienceType], then resolve
+  // when MariaPartner dispatches 'chapter4-peer-info-saved' for this story.
+  // Conservative entity-type heuristic: role-like nouns in the audience name
+  // (CTO, CFO, physician, director, manager, etc.) → individual; otherwise
+  // organizational; if neither matches → unknown.
+  function classifyAudienceEntity(audienceName: string): 'organizational' | 'individual' | 'unknown' {
+    const lower = (audienceName || '').toLowerCase();
+    const roleHints = [
+      'cto', 'cio', 'ceo', 'cfo', 'coo', 'cmo', 'cso', 'cpo',
+      'director', 'manager', 'physician', 'doctor', 'nurse', 'engineer',
+      'developer', 'designer', 'analyst', 'partner', 'principal',
+      'researcher', 'professor', 'teacher', 'consultant', 'attorney',
+      'lawyer', 'architect', 'leader', 'head of', 'vp ', 'vice president',
+    ];
+    const orgHints = [
+      'company', 'corp', 'inc', 'llc', 'ltd', 'firm', 'agency', 'team',
+      'board', 'committee', 'department', 'hospital', 'clinic', 'school',
+      'district', 'university', 'college', 'nonprofit', 'foundation',
+      'manufacturer', 'studio', 'startup', 'enterprise',
+    ];
+    if (roleHints.some(h => lower.includes(h))) return 'individual';
+    if (orgHints.some(h => lower.includes(h))) return 'organizational';
+    return 'unknown';
+  }
+
+  function waitForPeerInfo(storyId: string, audienceName: string): Promise<void> {
+    return new Promise((resolve) => {
+      const entityType = classifyAudienceEntity(audienceName);
+      function handler(e: Event) {
+        const detail = (e as CustomEvent).detail as { storyId?: string } | undefined;
+        if (detail?.storyId === storyId) {
+          document.removeEventListener('chapter4-peer-info-saved', handler as EventListener);
+          resolve();
+        }
+      }
+      document.addEventListener('chapter4-peer-info-saved', handler as EventListener);
+      // Open Maria's chat with the synthetic marker. partner.ts handles the
+      // PRE_CHAPTER_4 marker to ask the entity-type-aware peer question.
+      // Marker is suppressed from user view by A5's marker filter.
+      document.dispatchEvent(new CustomEvent('maria-toggle', {
+        detail: {
+          open: true,
+          message: `[PRE_CHAPTER_4:${storyId}:${audienceName}:${entityType}]`,
+        },
+      }));
+    });
+  }
+
   async function generateAllChapters(skipMFCheck = false) {
     if (!story) return;
 
@@ -403,6 +536,19 @@ export function FiveChapterShell() {
     setGenerating(true);
     try {
       for (let i = 1; i <= 5; i++) {
+        // Round B4 — pre-Chapter-4 peer prompt. Pause once before Chapter 4 to
+        // let the user contribute named-peer evidence. Maria asks the question
+        // in chat (entity-type-aware) and emits [SAVE_PEER_INFO:storyId:summary]
+        // when the user answers; the marker handler in MariaPartner dispatches
+        // 'chapter4-peer-info-saved' which resolves the wait below.
+        if (i === 4 && !story.peerAsked && draft) {
+          await waitForPeerInfo(story.id, draft.audience.name);
+          // Reload story so peerAsked / peerInfo flow into the chapter request.
+          try {
+            const refreshed = await api.get<{ story: FiveChapterStory }>(`/stories/${story.id}`);
+            if (refreshed?.story) setStory(refreshed.story);
+          } catch {/* non-fatal */}
+        }
         setGeneratingChapter(i);
         const resp = await api.post<{ chapter: ChapterContent; dedupApplied?: boolean; allChapters?: ChapterContent[] }>('/ai/generate-chapter', {
           storyId: story.id,
@@ -1194,6 +1340,23 @@ export function FiveChapterShell() {
                 {personalizing
                   ? <><Spinner size={12} /> Personalizing...</>
                   : <>Personalize <InfoTooltip text="Revises the text, including applying your personal style." /></>
+                }
+              </button>
+            )}
+
+            {/* Round B5 — Export to slides (Pitch Deck format only). Two-step:
+                preview shows the slide-title list in chat (the trust gate);
+                user confirms; the actual .pptx download triggers. */}
+            {story.medium === 'pitch_deck' && story.chapters.length === 5 && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={previewPptxExport}
+                disabled={generating || blending || polishing || personalizing || pptxBuilding}
+                title="Generate a 13-slide first-draft skeleton — open in PowerPoint or Keynote and apply your template"
+              >
+                {pptxBuilding
+                  ? <><Spinner size={12} /> Building slides...</>
+                  : <>Export to slides <InfoTooltip text="Maria builds a 13-slide first-draft skeleton (titles + bullets, no styling). You apply your template after." /></>
                 }
               </button>
             )}

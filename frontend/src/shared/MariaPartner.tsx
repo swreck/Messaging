@@ -60,6 +60,43 @@ function isSyntheticMarker(content: string): boolean {
   return SYNTHETIC_MARKER_RE.test(content);
 }
 
+// Round B6 — time-aware session pacing. Per-tab session state lives in
+// localStorage so reloads preserve the budget and trigger-once semantics.
+// Keys are date-stamped so a fresh day always asks again.
+type TimeContext = {
+  sessionStartMs?: number;
+  budgetMin?: number;
+  thresholdTriggered?: boolean;
+};
+function getSessionDateKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+function loadTimeContext(): TimeContext {
+  try {
+    const raw = localStorage.getItem(`time-context-${getSessionDateKey()}`);
+    if (raw) return JSON.parse(raw) as TimeContext;
+  } catch {}
+  return {};
+}
+function saveTimeContext(tc: TimeContext) {
+  try {
+    localStorage.setItem(`time-context-${getSessionDateKey()}`, JSON.stringify(tc));
+  } catch {}
+}
+function hasAskedTimeBudget(): boolean {
+  try {
+    return !!localStorage.getItem(`time-budget-asked-${getSessionDateKey()}`);
+  } catch {
+    return true; // err on the side of not re-asking
+  }
+}
+function markTimeBudgetAsked() {
+  try {
+    localStorage.setItem(`time-budget-asked-${getSessionDateKey()}`, '1');
+  } catch {}
+}
+
 type PanelSize = 'compact' | 'medium' | 'full';
 
 function getInitialPanelSize(): PanelSize {
@@ -117,6 +154,10 @@ export function MariaPartner() {
   const [customName, setCustomName] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [suggestedName, setSuggestedName] = useState('');
+
+  // Round B6 — time-aware session pacing
+  const [timeContext, setTimeContext] = useState<TimeContext>(() => loadTimeContext());
+  const [showBudgetCard, setShowBudgetCard] = useState<boolean>(() => !hasAskedTimeBudget());
 
   // Return context and proactive offers
   const [returnContext, setReturnContext] = useState<ReturnContext | null>(null);
@@ -522,11 +563,22 @@ export function MariaPartner() {
         actionResult: string | null;
         refreshNeeded: boolean;
         needsPageContent?: boolean;
+        timeThresholdFired?: boolean;
       }>('/partner/message', {
         message: pageContent ? `[PAGE CONTENT]\n${pageContent}\n\n[USER QUESTION]\n${text}` : text,
         context: pageContext,
         ...(pendingFiles.length === 1 ? { attachment: pendingFiles[0] } : pendingFiles.length > 1 ? { attachments: pendingFiles } : {}),
+        // Round B6 — send time context so the backend can decide whether to inject
+        // the [TIME_THRESHOLD_REACHED] marker. Only sent if the user set a budget.
+        ...(timeContext.budgetMin && timeContext.sessionStartMs ? { timeContext } : {}),
       });
+      // Round B6 — backend tells us when the threshold marker fired this turn so
+      // we can persist thresholdTriggered=true and avoid re-firing on later messages.
+      if (result.timeThresholdFired && !timeContext.thresholdTriggered) {
+        const updated: TimeContext = { ...timeContext, thresholdTriggered: true };
+        setTimeContext(updated);
+        saveTimeContext(updated);
+      }
       setPendingFiles([]);
 
       if (result.needsPageContent) {
@@ -614,6 +666,31 @@ export function MariaPartner() {
             const mode = vmMatch[1] as 'no-markup' | 'minimal' | 'all-markup';
             document.dispatchEvent(new CustomEvent('three-tier-view-mode', { detail: { mode } }));
             cleanedResponse = cleanedResponse.replace(/\s*\[SET_VIEW_MODE:[^\]]+\]\s*/g, '').trim();
+          }
+          // Round B5 — pitch-deck export: scan for [CONFIRM_PPTX:storyId] which
+          // Maria emits when the user agrees to the trust-gate preview. Trigger
+          // the download via FiveChapterShell. Strip the marker from visible text.
+          const pptxConfirmMatch = cleanedResponse.match(/\[CONFIRM_PPTX:([^\]]+)\]/);
+          if (pptxConfirmMatch) {
+            const storyId = pptxConfirmMatch[1];
+            document.dispatchEvent(new CustomEvent('pptx-export-confirmed', { detail: { storyId } }));
+            cleanedResponse = cleanedResponse.replace(/\s*\[CONFIRM_PPTX:[^\]]+\]\s*/g, '').trim();
+          }
+
+          // Round B4 — pre-Chapter-4 peer prompt: scan for [SAVE_PEER_INFO:storyId:summary]
+          // marker emitted by Maria once she has the user's peer answer (or skip).
+          // POST to the backend to save peerInfo + peerAsked, then dispatch event
+          // so FiveChapterShell resumes Chapter 4 generation. Strip the marker.
+          const peerMatch = cleanedResponse.match(/\[SAVE_PEER_INFO:([^:\]]+):([^\]]*)\]/);
+          if (peerMatch) {
+            const storyId = peerMatch[1];
+            const peerSummary = peerMatch[2] || '';
+            api.post(`/ai/stories/${storyId}/peer-info`, { peerInfo: peerSummary })
+              .catch((e) => console.error('[peer-info] save failed', e))
+              .finally(() => {
+                document.dispatchEvent(new CustomEvent('chapter4-peer-info-saved', { detail: { storyId, peerInfo: peerSummary } }));
+              });
+            cleanedResponse = cleanedResponse.replace(/\s*\[SAVE_PEER_INFO:[^\]]+\]\s*/g, '').trim();
           }
         }
         setMessages(prev => [...prev, { role: 'assistant', content: cleanedResponse || result.response, actionResult: result.actionResult }]);
@@ -1056,8 +1133,67 @@ export function MariaPartner() {
                     </div>
                   )}
 
-                  {messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && !introduced && (
-                    <div className="partner-empty">What's on your mind?</div>
+                  {/* Round B6 — time-aware session pacing chips. Render once at session
+                      start (when chat is opened with no messages and no budget yet).
+                      User picks 15/30/45/Skip; budget saves to localStorage and the
+                      backend reads it on each subsequent message. */}
+                  {showBudgetCard && messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && !introduced && (
+                    <div className="partner-return-card" style={{
+                      padding: '12px 16px',
+                      marginBottom: 8,
+                      background: 'var(--bg-secondary, #f8f8fa)',
+                      borderRadius: 'var(--radius-sm, 6px)',
+                      border: '1px solid var(--border-light, #e5e5ea)',
+                    }}>
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
+                        What's your time budget for this session? I'll pace accordingly.
+                      </p>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {[15, 30, 45].map((mins) => (
+                          <button
+                            key={mins}
+                            className="btn btn-ghost btn-sm"
+                            style={{ minHeight: 32, padding: '4px 12px' }}
+                            onClick={() => {
+                              const tc: TimeContext = { sessionStartMs: Date.now(), budgetMin: mins, thresholdTriggered: false };
+                              setTimeContext(tc);
+                              saveTimeContext(tc);
+                              markTimeBudgetAsked();
+                              setShowBudgetCard(false);
+                            }}
+                          >{mins} min</button>
+                        ))}
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ minHeight: 32, padding: '4px 12px' }}
+                          onClick={() => {
+                            const m = window.prompt('How many minutes?');
+                            const n = m ? parseInt(m, 10) : NaN;
+                            if (!isNaN(n) && n > 0 && n <= 240) {
+                              const tc: TimeContext = { sessionStartMs: Date.now(), budgetMin: n, thresholdTriggered: false };
+                              setTimeContext(tc);
+                              saveTimeContext(tc);
+                              markTimeBudgetAsked();
+                              setShowBudgetCard(false);
+                            }
+                          }}
+                        >Other</button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ minHeight: 32, padding: '4px 12px' }}
+                          onClick={() => {
+                            markTimeBudgetAsked();
+                            setShowBudgetCard(false);
+                          }}
+                        >Skip</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && !introduced && !showBudgetCard && (
+                    <div className="partner-empty">
+                      Tell me about your work — or if you have notes, a discovery doc, or an old draft, drop them here and I'll work from those.
+                    </div>
                   )}
                   {messages.map((msg, i) => {
                     // Suppress synthetic-marker bubbles from the user's view.
@@ -1220,7 +1356,7 @@ export function MariaPartner() {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={sending}
                     aria-label="Attach file"
-                    title="Attach files (images, PDFs, Word docs, text)"
+                    title="Drop a doc — Maria reads PDFs, Word, plain text, screenshots."
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />

@@ -486,11 +486,20 @@ router.get('/history', async (req: Request, res: Response) => {
 // Optionally accepts an attachment: { data: base64string, mimeType: string, filename: string }
 // Images are sent to Claude via vision. PDFs and text files are extracted and prepended.
 router.post('/message', async (req: Request, res: Response) => {
-  const { message, context, attachment, attachments: rawAttachments } = req.body as {
+  const { message, context, attachment, attachments: rawAttachments, timeContext } = req.body as {
     message?: string;
     context?: ActionContext;
     attachment?: { data: string; mimeType: string; filename: string };
     attachments?: { data: string; mimeType: string; filename: string }[];
+    // Round B6 — time-aware session pacing. Frontend tracks the session-start
+    // timestamp + the user's time budget in localStorage and includes them on
+    // every partner message. Backend computes elapsed and decides whether to
+    // inject the [TIME_THRESHOLD_REACHED:...] trigger into the system prompt.
+    timeContext?: {
+      sessionStartMs?: number;   // Date.now() at session start
+      budgetMin?: number;         // null = no budget set / unlimited
+      thresholdTriggered?: boolean; // true once the 80% trigger has fired this session
+    };
   };
   // Normalize: single attachment or array of attachments
   const allAttachments: { data: string; mimeType: string; filename: string }[] =
@@ -559,6 +568,40 @@ router.post('/message', async (req: Request, res: Response) => {
   } else if (personalizeProfile.observations.length > 0 || personalizeProfile.interviewStep > 0) {
     // Profile exists or interview complete — append as context
     systemPrompt += buildPersonalizeChatBlock(personalizeProfile);
+  }
+
+  // Round B6 — time-aware session pacing. Compute elapsed and decide whether
+  // to inject the threshold marker. Two cases:
+  //   1. budgetMin set + elapsed >= 80% + thresholdTriggered=false → emit
+  //      [TIME_THRESHOLD_REACHED:...] and respond signaling the boundary so
+  //      the frontend can flip thresholdTriggered=true for subsequent calls.
+  //   2. budgetMin set + elapsed/budget tracked but no trigger needed → soft
+  //      "TIME CONTEXT" line so Maria can factor remaining time into framing.
+  let timeThresholdFiredThisTurn = false;
+  if (timeContext?.budgetMin && timeContext?.sessionStartMs) {
+    const elapsedMs = Date.now() - timeContext.sessionStartMs;
+    const elapsedMin = Math.floor(elapsedMs / 60000);
+    const budgetMin = timeContext.budgetMin;
+    const remainingMin = Math.max(0, budgetMin - elapsedMin);
+    const pctElapsed = elapsedMin / budgetMin;
+    const tightBudget = pctElapsed >= 0.7 && pctElapsed < 0.8;
+    const crossedThreshold = pctElapsed >= 0.8 && !timeContext.thresholdTriggered;
+    if (crossedThreshold) {
+      timeThresholdFiredThisTurn = true;
+      systemPrompt = `TIME THRESHOLD ALERT — surface this NOW, in this turn, before any other content:
+[TIME_THRESHOLD_REACHED: elapsed=${elapsedMin}min, budget=${budgetMin}min, remaining=${remainingMin}min]
+
+The user set a ${budgetMin}-minute budget at session start. They've used ${elapsedMin} minutes; ${remainingMin} remaining. Surface the threshold-intervention with elapsed/done/remaining/two-paths framing using these EXACT numbers. Voice: partnership, not surveillance. Example shape: "${remainingMin} minutes left in your budget. Where we are: [what's done]. Two paths — [ship now with the lighter version] or [push past your budget by ~${Math.round(remainingMin * 1.5)} minutes to do them properly]. What's the call?"
+
+After this turn, the frontend marks thresholdTriggered=true so this alert won't re-fire. If the user blows past budget without intervening, you'll see another alert at the over-budget threshold.
+
+` + systemPrompt;
+    } else if (tightBudget) {
+      // Soft awareness — no forced surfacing, but Maria knows the budget is tight.
+      // High-leverage pauses (Topic 3 contrarian, Topic 22 peer prompt, foundation walkthrough)
+      // should add time-cost framing. See "TIME-AWARE PACING" section in partner prompt.
+      systemPrompt += `\n\nTIME CONTEXT — budget is tight: elapsed=${elapsedMin}min of ${budgetMin}min, remaining=${remainingMin}min. If you're about to ask a high-leverage question (contrarian, peer prompt, optional column review), include the time cost in your framing so the user can pick.`;
+    }
   }
 
   // Build conversation history for the AI.
@@ -949,6 +992,7 @@ router.post('/message', async (req: Request, res: Response) => {
     actionResult,
     refreshNeeded,
     needsPageContent: false,
+    timeThresholdFired: timeThresholdFiredThisTurn,
   });
 });
 

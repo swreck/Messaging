@@ -163,6 +163,9 @@ export interface FiveChapterStory {
   createdAt: string;
   updatedAt: string;
   chapters: ChapterContent[];
+  // Round B4 — pre-Chapter-4 peer prompt
+  peerInfo?: string;
+  peerAsked?: boolean;
 }
 
 // ─── Versions ────────────────────────────────────────
