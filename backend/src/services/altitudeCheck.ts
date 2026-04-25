@@ -212,24 +212,34 @@ export interface AltitudeEditInput {
   violations: string[];
   audienceName: string;
   topPriority: string;
+  // Change 4 (Topic 4) — when the user has read the opening as their audience
+  // and named what's missing ("she doesn't realize that her best people are
+  // already interviewing"), pass that text here. The rebuild treats it as a
+  // directed input rather than a blind regenerate: the new opening anchors
+  // on the cost-of-not-acting the user named, in their words.
+  directedInput?: string;
 }
 
 export async function elevateChapterOne(
   input: AltitudeEditInput,
 ): Promise<string> {
-  if (input.violations.length === 0) return input.chapterContent;
+  // If there are no flagged violations AND no directed input, nothing to do.
+  if (input.violations.length === 0 && !input.directedInput) return input.chapterContent;
+
+  const directedBlock = input.directedInput
+    ? `\nDIRECTED REWRITE — the user just told you what's actually costing the audience: "${input.directedInput}". The new opening MUST anchor on this. Rewrite Chapter 1 so the audience reads it and feels they need to act on what the user named, in their language. Other altitude rules still apply.\n`
+    : '';
+
+  const violationsBlock = input.violations.length > 0
+    ? `\nFLAGGED SENTENCES — each is at the wrong altitude. Rewrite each one into a strategic market truth, or cut it. Keep all other sentences verbatim.\n\n${input.violations.map((v, i) => `${i + 1}. ${v}`).join('\n')}\n`
+    : '';
 
   const userMessage = `AUDIENCE: ${input.audienceName}
 TOP PRIORITY: "${input.topPriority}"
 
 DRAFTED CHAPTER 1:
 ${input.chapterContent}
-
-FLAGGED SENTENCES — each is at the wrong altitude. Rewrite each one into a
-strategic market truth, or cut it. Keep all other sentences verbatim.
-
-${input.violations.map((v, i) => `${i + 1}. ${v}`).join('\n')}
-
+${directedBlock}${violationsBlock}
 Return the rewritten Chapter 1 text only.`;
 
   const elevated = await callAI(ALTITUDE_EDIT_SYSTEM, userMessage, 'elite');

@@ -35,6 +35,49 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Map<string, string>>(new Map());
+
+  // Change 10 — Persistent observations: load Maria's open observations for this draft
+  // on mount so the orange highlight survives across sessions. Each observation is
+  // converted into an entry in the suggestions Map so the existing inline panel and
+  // the new highlight class both pick it up.
+  useEffect(() => {
+    if (!draft?.id) return;
+    api.get<{ observations: Array<{ id: string; cellType: string; cellId: string; suggestion: string }> }>(
+      `/ai/observations/${draft.id}`,
+    )
+      .then(({ observations }) => {
+        if (!observations || observations.length === 0) return;
+        // Convert observation cellType+cellId back to UI cell keys.
+        const map = new Map<string, string>();
+        for (const obs of observations) {
+          if (obs.cellType === 'tier1') {
+            map.set('tier1', obs.suggestion);
+          } else if (obs.cellType === 'tier2') {
+            // Find the tier2 index from cellId
+            const idx = draft.tier2Statements.findIndex(t2 => t2.id === obs.cellId);
+            if (idx >= 0) map.set(`tier2-${idx}`, obs.suggestion);
+          } else if (obs.cellType === 'tier3') {
+            // cellId format: "tier2Id:bulletIndex"
+            const [t2Id, bulletIdxStr] = obs.cellId.split(':');
+            const t2Idx = draft.tier2Statements.findIndex(t2 => t2.id === t2Id);
+            if (t2Idx >= 0) {
+              const bIdx = parseInt(bulletIdxStr);
+              map.set(`tier3-${t2Idx}-${bIdx}`, obs.suggestion);
+            }
+          }
+        }
+        if (map.size > 0) {
+          setSuggestions(prev => {
+            const merged = new Map(prev);
+            for (const [k, v] of map) {
+              if (!merged.has(k)) merged.set(k, v);
+            }
+            return merged;
+          });
+        }
+      })
+      .catch(() => {/* non-fatal */});
+  }, [draft?.id]);
   const [reviewing, setReviewing] = useState(false);
   const [revising, setRevising] = useState(false);
   const [refining, setRefining] = useState(false);

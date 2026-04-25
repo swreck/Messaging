@@ -331,7 +331,9 @@ router.post('/coach', requireEditor, async (req: Request, res: Response) => {
     draft.offering.name,
     draft.offering.smeRole,
     draft.offering.elements.map((e) => e.text),
-    draft.audience.priorities.map((p) => ({ text: p.text, rank: p.rank, driver: p.driver }))
+    draft.audience.priorities.map((p) => ({ text: p.text, rank: p.rank, driver: p.driver })),
+    (draft.offering as any).contrarianAsked === true,
+    (draft.offering as any).contrarianScenario || undefined,
   );
 
   const fullMessage = history.length === 0
@@ -345,15 +347,36 @@ router.post('/coach', requireEditor, async (req: Request, res: Response) => {
 
   const response = await callAI(systemPrompt, fullMessage, 'fast', conversationHistory);
 
+  // Change 3 — Contrarian extraction: when Maria includes "* [CONTRARIAN] ..."
+  // in her reply, persist the scenario on the offering and mark it asked. The
+  // marker is stripped from what the user sees so the response reads cleanly.
+  let displayResponse = response;
+  if (step === 2) {
+    const contrarianRegex = /\*\s*\[CONTRARIAN\]\s*([^\n]+)/i;
+    const match = response.match(contrarianRegex);
+    if (match) {
+      const scenario = match[1].trim();
+      try {
+        await prisma.offering.update({
+          where: { id: draft.offering.id },
+          data: { contrarianScenario: scenario, contrarianAsked: true },
+        });
+      } catch (err) {
+        console.error('[coach] Failed to persist contrarian scenario:', err);
+      }
+      displayResponse = response.replace(contrarianRegex, '').replace(/\n{3,}/g, '\n\n').trim();
+    }
+  }
+
   // Save both messages
   await prisma.conversationMessage.createMany({
     data: [
       { draftId, step, role: 'user', content: message },
-      { draftId, step, role: 'assistant', content: response },
+      { draftId, step, role: 'assistant', content: displayResponse },
     ],
   });
 
-  res.json({ response });
+  res.json({ response: displayResponse });
 });
 
 // ─── Suggest Mappings (Step 5) ──────────────────────────
@@ -386,10 +409,11 @@ ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"${e.motivatingF
 MAPPING GUIDE: A differentiator's "why someone would care" is its motivating factor. When that MF aligns with an audience priority, that's the connection — the Driver on the priority adds persona-specific context for how hard they'll push on it.`;
 
   const result = await callAIWithJSON<{
-    mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string; mfRationale?: string }[];
+    mappings: { priorityId: string; elementId: string; confidence: number; strengthSignal?: string | null; failurePattern?: string | null; reasoning: string; mfRationale?: string }[];
     orphanElements: string[];
     priorityGaps: string[];
     clarifyingQuestions: string[];
+    noStrongPairings?: boolean;
   }>(MAPPING_SYSTEM, userMessage, 'fast');
 
   res.json(result);
@@ -423,10 +447,11 @@ CAPABILITIES/DIFFERENTIATORS:
 ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`;
 
   const mappingResult = await callAIWithJSON<{
-    mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string; mfRationale?: string }[];
+    mappings: { priorityId: string; elementId: string; confidence: number; strengthSignal?: string | null; failurePattern?: string | null; reasoning: string; mfRationale?: string }[];
     orphanElements: string[];
     priorityGaps: string[];
     clarifyingQuestions: string[];
+    noStrongPairings?: boolean;
   }>(MAPPING_SYSTEM, mappingMessage, 'fast');
 
   // Validate IDs — filter out AI hallucinations
@@ -488,10 +513,11 @@ CAPABILITIES/DIFFERENTIATORS:
 ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`;
 
   const mappingResult = await callAIWithJSON<{
-    mappings: { priorityId: string; elementId: string; confidence: number; reasoning: string; mfRationale?: string }[];
+    mappings: { priorityId: string; elementId: string; confidence: number; strengthSignal?: 'STRONG' | 'HONEST_BUT_THIN' | 'EXAGGERATED' | null; failurePattern?: string | null; reasoning: string; mfRationale?: string }[];
     orphanElements: string[];
     priorityGaps: string[];
     clarifyingQuestions: string[];
+    noStrongPairings?: boolean;
   }>(MAPPING_SYSTEM, mappingMessage, 'fast');
 
   // Validate IDs — filter out AI hallucinations
@@ -502,26 +528,40 @@ ${draft.offering.elements.map((e) => `- [ID: ${e.id}] "${e.text}"`).join('\n')}`
     validPriorityIds.has(m.priorityId) && validElementIds.has(m.elementId)
   );
 
+  // EXAGGERATED mappings (caught failure patterns) flow through gapDescriptions to
+  // the resolution loop — they are NOT stored as confirmed. Filter them out here.
+  const usableMappings = allValidMappings.filter(m => m.strengthSignal !== 'EXAGGERATED');
+
   // Step 2: Auto-confirm high-confidence, collect low-confidence (dynamic threshold)
   const learning = await getLearning(req.user!.userId);
   const threshold = learning.questionThreshold;
-  const highConfidence = allValidMappings.filter(m => m.confidence >= threshold);
-  const lowConfidence = allValidMappings.filter(m => m.confidence < threshold && m.confidence >= 0.5);
+  const highConfidence = usableMappings.filter(m => m.confidence >= threshold);
+  const lowConfidence = usableMappings.filter(m => m.confidence < threshold && m.confidence >= 0.5);
 
   // Filter orphans and gaps too
   const validOrphans = (mappingResult.orphanElements || []).filter(id => validElementIds.has(id));
   const validGaps = (mappingResult.priorityGaps || []).filter(id => validPriorityIds.has(id));
 
+  // Audience-fit signal — persist on draft for Maria's downstream context.
+  const computedNoStrong = !usableMappings.some(m => m.strengthSignal === 'STRONG');
+  const noStrongPairings = mappingResult.noStrongPairings === undefined
+    ? computedNoStrong
+    : Boolean(mappingResult.noStrongPairings);
+  await prisma.threeTierDraft.update({
+    where: { id: draftId },
+    data: { noStrongPairings },
+  });
+
   // Save all mappings, including the per-mapping mfRationale Maria wrote
   await prisma.mapping.deleteMany({ where: { draftId, status: 'suggested' } });
   for (const m of highConfidence) {
     await prisma.mapping.create({
-      data: { draftId, priorityId: m.priorityId, elementId: m.elementId, confidence: m.confidence, status: 'confirmed', mfRationale: m.mfRationale || '' },
+      data: { draftId, priorityId: m.priorityId, elementId: m.elementId, confidence: m.confidence, status: 'confirmed', mfRationale: m.mfRationale || '', strengthSignal: m.strengthSignal || null, failurePattern: m.failurePattern || null },
     });
   }
   for (const m of lowConfidence) {
     await prisma.mapping.create({
-      data: { draftId, priorityId: m.priorityId, elementId: m.elementId, confidence: m.confidence, status: 'suggested', mfRationale: m.mfRationale || '' },
+      data: { draftId, priorityId: m.priorityId, elementId: m.elementId, confidence: m.confidence, status: 'suggested', mfRationale: m.mfRationale || '', strengthSignal: m.strengthSignal || null, failurePattern: m.failurePattern || null },
     });
   }
 
@@ -813,7 +853,85 @@ ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"`).join('\n'
     result.suggestions = filterMaterialSuggestions(result.suggestions, draft);
   }
 
+  // Change 10 — Persist suggestions as Observations so they survive across sessions.
+  // Reset existing OPEN observations on this draft (replace with current Maria's read)
+  // and create a new OPEN observation per suggestion. Resolved observations are kept.
+  if (result.suggestions && result.suggestions.length > 0) {
+    try {
+      await prisma.observation.deleteMany({ where: { draftId, state: 'OPEN' } });
+      for (const sug of result.suggestions) {
+        // Derive cellType + cellId from cell key. Cell keys: "tier1", "tier2-N", "tier3-N-M", "tier3-N-add".
+        let cellType: string;
+        let cellId: string;
+        if (sug.cell === 'tier1') {
+          cellType = 'tier1';
+          cellId = draft.tier1Statement?.id || '';
+        } else if (sug.cell.startsWith('tier2-')) {
+          const idx = parseInt(sug.cell.split('-')[1]);
+          cellType = 'tier2';
+          cellId = draft.tier2Statements[idx]?.id || '';
+        } else if (sug.cell.startsWith('tier3-')) {
+          // For tier3-N-M, point to the parent tier2 cell (the bullet's owning column)
+          const parts = sug.cell.split('-');
+          const t2Idx = parseInt(parts[1]);
+          cellType = 'tier3';
+          // Use cellKey itself as cellId stand-in — bullets don't have stable IDs we can guarantee here.
+          cellId = `${draft.tier2Statements[t2Idx]?.id || ''}:${parts[2]}`;
+        } else {
+          continue;
+        }
+        if (!cellId) continue;
+        await prisma.observation.create({
+          data: {
+            draftId,
+            cellType,
+            cellId,
+            suggestion: sug.suggested,
+            state: 'OPEN',
+          },
+        });
+      }
+    } catch (err) {
+      console.error('[review] failed to persist observations:', err);
+      // Non-fatal; the in-memory suggestions still flow back to the frontend.
+    }
+  }
+
   res.json(result);
+});
+
+// ─── Observations (Change 10) ───────────────────────────
+// Persistent per-cell suggestions Maria has on Three Tier cells. Survives across
+// sessions until resolved (change-the-cell or explicit acknowledge-as-is).
+
+router.get('/observations/:draftId', async (req: Request, res: Response) => {
+  const draftId = String(req.params.draftId || '');
+  if (!draftId) { res.status(400).json({ error: 'draftId required' }); return; }
+  const draft = await prisma.threeTierDraft.findFirst({
+    where: { id: draftId, offering: { workspaceId: req.workspaceId } },
+    select: { id: true },
+  });
+  if (!draft) { res.status(404).json({ error: 'Draft not found' }); return; }
+  const observations = await prisma.observation.findMany({
+    where: { draftId, state: 'OPEN' },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ observations });
+});
+
+router.post('/observations/:id/resolve', requireEditor, async (req: Request, res: Response) => {
+  const id = String(req.params.id || '');
+  if (!id) { res.status(400).json({ error: 'id required' }); return; }
+  const kind = req.body?.kind === 'acknowledge' ? 'RESOLVED_BY_ACKNOWLEDGE' : 'RESOLVED_BY_CHANGE';
+  try {
+    await prisma.observation.update({
+      where: { id },
+      data: { state: kind, resolvedAt: new Date() },
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(404).json({ error: err.message || 'Observation not found' });
+  }
 });
 
 // ─── Refine Language ────────────────────────────────────

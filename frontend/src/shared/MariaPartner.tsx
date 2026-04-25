@@ -195,13 +195,66 @@ export function MariaPartner() {
   useEffect(() => {
     if (open && !loaded && introduced) {
       api.get<{ messages: Message[] }>('/partner/history')
-        .then(({ messages: history }) => {
+        .then(async ({ messages: history }) => {
           if (history.length === 0) {
             const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
-            const greeting = firstName
-              ? `Hi ${firstName} — what are you working on today? Tell me about what you need to communicate and who needs to hear it, or just ask me anything.`
-              : "Hi — what are you working on today? Tell me about what you need to communicate and who needs to hear it, or just ask me anything.";
-            setMessages([{ role: 'assistant', content: greeting }]);
+            const onEntityDetailPage =
+              pageContext &&
+              ['offering', 'audience', 'three-tier', 'five-chapter'].includes(pageContext.page) &&
+              (pageContext.offeringId || pageContext.audienceId || pageContext.draftId || pageContext.storyId);
+            // Change 11 — if Maria is opening on an entity-detail page that already
+            // has the user's context, she should reference the entity by name and
+            // propose next moves rather than ask "what are you working on?" The
+            // synthetic message below tells the partner endpoint to compose a
+            // context-aware greeting using the partner system prompt's existing
+            // page-awareness; partner.ts is updated to handle this trigger.
+            if (onEntityDetailPage) {
+              try {
+                const result = await api.post<{ response: string }>('/partner/message', {
+                  message: '[OPEN_ON_PAGE]',
+                  context: pageContext,
+                });
+                if (result.response) {
+                  setMessages([{ role: 'assistant', content: result.response }]);
+                } else {
+                  // Fallback to generic greeting if partner returns nothing.
+                  const fallback = firstName
+                    ? `Hi ${firstName} — I see you're here. Tell me what you'd like to work on.`
+                    : 'I see you\'re here. Tell me what you\'d like to work on.';
+                  setMessages([{ role: 'assistant', content: fallback }]);
+                }
+              } catch {
+                // Network error: still show something rather than nothing.
+                const fallback = firstName
+                  ? `Hi ${firstName} — I see you're here. Tell me what you'd like to work on.`
+                  : 'I see you\'re here. Tell me what you\'d like to work on.';
+                setMessages([{ role: 'assistant', content: fallback }]);
+              }
+            } else if (returnContext) {
+              // Change 16 — Returning-user briefing: send [STATE_RECAP] for a
+              // catch-up briefing with equal-weight next-move options. Same
+              // synthetic-message handler covers Change 14's toggle-ON activation.
+              try {
+                const result = await api.post<{ response: string }>('/partner/message', {
+                  message: '[STATE_RECAP]',
+                  context: pageContext,
+                });
+                if (result.response) {
+                  setMessages([{ role: 'assistant', content: result.response }]);
+                } else {
+                  const fallback = firstName ? `Welcome back, ${firstName}.` : 'Welcome back.';
+                  setMessages([{ role: 'assistant', content: fallback }]);
+                }
+              } catch {
+                const fallback = firstName ? `Welcome back, ${firstName}.` : 'Welcome back.';
+                setMessages([{ role: 'assistant', content: fallback }]);
+              }
+            } else {
+              const greeting = firstName
+                ? `Hi ${firstName} — what are you working on today? Tell me about what you need to communicate and who needs to hear it, or just ask me anything.`
+                : "Hi — what are you working on today? Tell me about what you need to communicate and who needs to hear it, or just ask me anything.";
+              setMessages([{ role: 'assistant', content: greeting }]);
+            }
           } else {
             setMessages(history);
           }

@@ -8,11 +8,27 @@ interface Props {
 
 export function InputConfirmationCard({ interpretation, onConfirm }: Props) {
   const [state, setState] = useState<EnrichedInterpretation>(interpretation);
+  // Change 8 — Provenance verification: track which inferred items the user has
+  // explicitly verified (either tapped "looks right" or edited). Build is gated
+  // on all inferred items being verified so Maria's authorship doesn't sneak
+  // into Tier 1 by default.
+  const [verifiedKeys, setVerifiedKeys] = useState<Set<string>>(new Set());
   const dragItem = useRef<number | null>(null);
   const dragOver = useRef<number | null>(null);
 
+  function markVerified(key: string) {
+    setVerifiedKeys(prev => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  }
+
   // ── Differentiator editing ──────────────────────────
   function updateDiff(index: number, field: 'text' | 'motivatingFactor', value: string) {
+    // When a user edits an inferred item, that's verification by edit — the
+    // text is now user-authored, so we mark it verified AND flip source to 'stated'.
+    markVerified(`diff-${index}`);
     setState(s => ({
       ...s,
       offering: {
@@ -46,6 +62,7 @@ export function InputConfirmationCard({ interpretation, onConfirm }: Props) {
 
   // ── Priority editing (first audience) ──────────────
   function updatePriority(index: number, field: 'text' | 'driver', value: string) {
+    markVerified(`pri-${index}`);
     setState(s => ({
       ...s,
       audiences: s.audiences.map((a, ai) =>
@@ -113,11 +130,34 @@ export function InputConfirmationCard({ interpretation, onConfirm }: Props) {
   const audience = state.audiences[0];
   if (!audience) return null;
 
+  // Change 8 — Provenance breakdown for the headline.
+  const totalDiffs = state.offering.differentiators.length;
+  const statedDiffs = state.offering.differentiators.filter(d => d.source === 'stated').length;
+  const inferredDiffs = totalDiffs - statedDiffs;
+
+  const totalPriorities = audience.priorities.length;
+  const statedPriorities = audience.priorities.filter(p => p.source === 'stated').length;
+  const inferredPriorities = totalPriorities - statedPriorities;
+
+  // Inferred items still pending verification — used to gate the Build button.
+  const pendingInferredDiffs = state.offering.differentiators
+    .map((d, i) => ({ d, i }))
+    .filter(({ d, i }) => d.source === 'inferred' && !verifiedKeys.has(`diff-${i}`));
+  const pendingInferredPriorities = audience.priorities
+    .map((p, i) => ({ p, i }))
+    .filter(({ p, i }) => p.source === 'inferred' && !verifiedKeys.has(`pri-${i}`));
+  const allInferredVerified = pendingInferredDiffs.length === 0 && pendingInferredPriorities.length === 0;
+
   return (
     <div className="guided-input-card">
       {/* ── Summary ────────────────────────────────── */}
       <div className="guided-card-summary">
-        Here's what I understood. Edit anything that's off — especially the "why" notes underneath each item. Getting the reason right is what makes the final message land.
+        Before I draft Tier 1, I want to check a couple of things I drew from context — quick yes/no on each.
+        {(inferredDiffs > 0 || inferredPriorities > 0) && (
+          <div style={{ marginTop: 8, fontSize: '0.92em', opacity: 0.85 }}>
+            I found {totalDiffs} {totalDiffs === 1 ? 'differentiator' : 'differentiators'} — {statedDiffs} from what you told me, {inferredDiffs} I drafted from context. And {totalPriorities} {totalPriorities === 1 ? 'priority' : 'priorities'} — {statedPriorities} stated, {inferredPriorities} drafted.
+          </div>
+        )}
       </div>
 
       {/* ── Capabilities with MFs ──────────────────── */}
@@ -158,6 +198,33 @@ export function InputConfirmationCard({ interpretation, onConfirm }: Props) {
                   rows={2}
                 />
               </div>
+              {/* Change 8 — Provenance verification: only inferred items show this surface. */}
+              {d.source === 'inferred' && !verifiedKeys.has(`diff-${i}`) && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px dashed rgba(0,0,0,0.08)' }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ flex: 1 }}
+                    onClick={() => markVerified(`diff-${i}`)}
+                  >
+                    Looks right
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      // Tap-to-edit: focus the textarea above so the user can adjust.
+                      // Editing it will mark verified via updateDiff.
+                      const ta = document.querySelectorAll('.guided-card-item-textarea')[i] as HTMLTextAreaElement | undefined;
+                      ta?.focus();
+                      ta?.select();
+                    }}
+                  >
+                    Not quite — let me edit
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -213,6 +280,33 @@ export function InputConfirmationCard({ interpretation, onConfirm }: Props) {
                   rows={2}
                 />
               </div>
+              {/* Change 8 — Provenance verification: only inferred priorities show this surface. */}
+              {p.source === 'inferred' && !verifiedKeys.has(`pri-${i}`) && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px dashed rgba(0,0,0,0.08)' }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ flex: 1 }}
+                    onClick={() => markVerified(`pri-${i}`)}
+                  >
+                    Looks right
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      // Focus the priority textarea so the user can adjust.
+                      const tas = document.querySelectorAll('.guided-card-priority .guided-card-item-textarea');
+                      const ta = tas[i] as HTMLTextAreaElement | undefined;
+                      ta?.focus();
+                      ta?.select();
+                    }}
+                  >
+                    Not quite — let me edit
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -232,11 +326,18 @@ export function InputConfirmationCard({ interpretation, onConfirm }: Props) {
           onClick={() => onConfirm(state)}
           disabled={
             state.offering.differentiators.filter(d => d.text.trim()).length === 0 ||
-            audience.priorities.filter(p => p.text.trim()).length === 0
+            audience.priorities.filter(p => p.text.trim()).length === 0 ||
+            !allInferredVerified
           }
+          title={!allInferredVerified ? `Quick yes/no on ${pendingInferredDiffs.length + pendingInferredPriorities.length} drafted item(s) above first` : undefined}
         >
           Build my message
         </button>
+        {!allInferredVerified && (
+          <p style={{ fontSize: '0.85em', opacity: 0.7, marginTop: 8, textAlign: 'center' }}>
+            {pendingInferredDiffs.length + pendingInferredPriorities.length} drafted {pendingInferredDiffs.length + pendingInferredPriorities.length === 1 ? 'item is' : 'items are'} still waiting on a quick yes/no above.
+          </p>
+        )}
       </div>
     </div>
   );

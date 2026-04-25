@@ -592,10 +592,27 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
     if (!foundation || generatingRef.current) return;
     generatingRef.current = true;
 
+    // Change 13 — Honest per-format estimates. Report is the longest; pitch deck
+    // and press release sit in the middle; short formats (email, in-person, blog)
+    // stay in the 2-minute neighborhood. The hierarchy says: tell the truth Maria
+    // actually knows, don't fall back to "about two minutes" for every format.
+    const formatEstimate: Record<string, string> = {
+      email: 'about two minutes',
+      in_person: 'about two minutes',
+      blog: 'about two minutes',
+      newsletter: 'two to three minutes',
+      landing_page: 'three to four minutes',
+      'one-pager': 'three to four minutes',
+      press_release: 'three to four minutes',
+      pitch_deck: 'four to five minutes',
+      report: 'five to six minutes — Report is the longest format',
+    };
+    const estimate = formatEstimate[medium] || 'a few minutes';
+
     addMessage({ type: 'user', text: `${medium}. CTA: ${cta}` });
     addMessage({
       type: 'maria',
-      text: `Writing your ${medium}. Here's how I build it:\n\nI write in five sections. The opening creates urgency — a truth ${interpretation?.audiences[0]?.name || 'your reader'} already suspects but hasn't acted on. Then your approach, then trust and proof, then a clear next step. Each section has a specific job. I write them separately and blend them into one cohesive piece.\n\nThis takes about two minutes. When it's done, I'll show you the full draft AND the sections broken out so you can see how each one works.`,
+      text: `Writing your ${medium}. Here's how I build it:\n\nI write in five sections. The opening creates urgency — a truth ${interpretation?.audiences[0]?.name || 'your reader'} already suspects but hasn't acted on. Then your approach, then trust and proof, then a clear next step. Each section has a specific job. I write them separately and blend them into one cohesive piece.\n\nThis takes ${estimate}. When it's done, I'll show you the full draft AND the sections broken out so you can see how each one works.`,
     });
     const progressId = addMessage({ type: 'progress', stage: 'Starting', progress: 5 });
     setPhase('generating_draft');

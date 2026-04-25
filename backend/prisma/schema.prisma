@@ -75,6 +75,8 @@ model Offering {
   name        String
   smeRole     String   @default("")
   description String   @default("")
+  contrarianScenario String? // Captured from the contrarian-question turn in the offering interview — kept as honest-framing material the deliverable can use ("we're not the right choice if you're doing X")
+  contrarianAsked    Boolean @default(false) // Whether the contrarian question has been asked for this offering — gates re-asking
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -104,6 +106,7 @@ model Audience {
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   description String   @default("")
+  situation   String?  // Audience-specific situation captured durably so Maria doesn't re-ask in future sessions
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -138,6 +141,7 @@ model ThreeTierDraft {
   status      String   @default("in_progress") // in_progress | completed
   version     Int      @default(1)
   archived    Boolean  @default(false)
+  noStrongPairings Boolean? // True if the most recent mapping evaluation found no STRONG pairings — drives Maria's audience-fit conversation
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -147,20 +151,23 @@ model ThreeTierDraft {
   tableVersions  TableVersion[]
   stories        FiveChapterStory[]
   conversations  ConversationMessage[]
+  observations   Observation[]
 }
 
 model Mapping {
-  id          String          @id @default(cuid())
-  draftId     String
-  draft       ThreeTierDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  priorityId  String
-  priority    Priority        @relation(fields: [priorityId], references: [id], onDelete: Cascade)
-  elementId   String
-  element     OfferingElement @relation(fields: [elementId], references: [id], onDelete: Cascade)
-  confidence  Float           @default(0.0)
-  status      String          @default("suggested") // suggested | confirmed | rejected
-  mfRationale String          @default("") // Maria's per-mapping reasoning: how the differentiator's MF principle applies to this specific audience priority
-  createdAt   DateTime        @default(now())
+  id             String          @id @default(cuid())
+  draftId        String
+  draft          ThreeTierDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  priorityId     String
+  priority       Priority        @relation(fields: [priorityId], references: [id], onDelete: Cascade)
+  elementId      String
+  element        OfferingElement @relation(fields: [elementId], references: [id], onDelete: Cascade)
+  confidence     Float           @default(0.0)
+  status         String          @default("suggested") // suggested | confirmed | rejected
+  mfRationale    String          @default("") // Maria's per-mapping reasoning: how the differentiator's MF principle applies to this specific audience priority
+  strengthSignal String? // STRONG | HONEST_BUT_THIN | EXAGGERATED — the truth-principle rating for this pairing
+  failurePattern String? // PATTERN-FROM-HISTORY | CHAIN-OF-REASONING | AUDIENCE-SCOPE-MISMATCH | COMMODITY-CAPABILITY — set when strengthSignal is EXAGGERATED
+  createdAt      DateTime        @default(now())
 }
 
 // ─── Tier Statements ────────────────────────────────────
@@ -317,6 +324,26 @@ model ChapterVersion {
   versionNum       Int
   changeSource     String         @default("manual")
   createdAt        DateTime       @default(now())
+}
+
+// ─── Observations (Maria's per-cell suggestions) ──────
+// Persistent suggestions Maria has on Three Tier cells. Resolution requires
+// either change-the-cell or explicit acknowledge-as-is — the dismiss-without-
+// resolution path is gone. Persists across sessions until resolved.
+model Observation {
+  id          String         @id @default(cuid())
+  draftId     String
+  draft       ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  cellType    String         // tier1 | tier2 | tier3
+  cellId      String         // Tier1Statement.id or Tier2Statement.id or Tier3Bullet.id
+  suggestion  String         // Maria's suggestion text — what she'd flag if user clicks
+  state       String         @default("OPEN") // OPEN | RESOLVED_BY_CHANGE | RESOLVED_BY_ACKNOWLEDGE
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  resolvedAt  DateTime?
+
+  @@index([draftId, state])
+  @@index([cellType, cellId])
 }
 
 // ─── Express Flow Jobs (Maria 3.0) ─────────────────────

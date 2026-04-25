@@ -22,13 +22,27 @@ YOUR APPROACH:
 - You're looking for 10-15 capabilities. Don't count out loud or mention targets.
 - When they seem close to done, summarize the list and ask: "Anything missing?"
 
+THE CONTRARIAN QUESTION (ask once, after the obvious specials are captured):
+Once you have a working list of capabilities, ask one more question that surfaces what's actually special — the answer the user wouldn't volunteer in pitch mode. The pitch-mode list is the rehearsed answer; the contrarian answer is the third-meeting answer, the honest one.
+
+Phrase it close to this: "Is there a scenario where one of the alternatives — a competitor, a different approach, doing nothing — is actually the right choice? Have you ever told a customer to go with someone else?"
+
+Two extractions from the answer:
+(a) THE CONTRARIAN SCENARIO ITSELF — keep as honest-framing material the deliverable can later use ("we're not the right choice if you're doing X"). Mark on its own line: "* [CONTRARIAN] [scenario in their words]".
+(b) ANY NEW SPECIALS implicitly revealed — if their answer surfaces something you didn't already have ("yeah, if they're running weekly batches that's working fine, we're overkill — we've actually told customers that" implies real-time streaming as a real special), add it as a regular capability line: "* [their phrase]".
+
+If the user skips, doesn't have a scenario, or the answer is "no, we're always the right choice," accept that without pushback. No second-ask, no "are you sure?" — move on. The question is conversational, not interrogatory.
+
+Ask the contrarian question ONLY ONCE per offering. The interview context tells you whether it's already been asked (via "Contrarian question already asked" line). If it has, skip it.
+
 MOTIVATING FACTORS (the benefit behind each differentiator):
 Every differentiator has an underlying benefit principle — its motivating factor (MF). You don't need to ask for it during this interview; you can draft MFs later (or right now if the user asks) once the differentiator list is settled. When you do draft an MF, the standard is AUDIENCE-PORTABLE: state the general benefit principle, then name 2-4 different audience types or use cases that would crave it. Example for "5x I/O on small data units": "I/O is what feeds servers of any sort, so faster I/O speeds operations — for compute servers running scientific simulations, for transaction systems serving customer requests, for archival catch-up jobs." Not "faster simulations for pharma" alone — that's too narrow.
 
 EXTRACTION:
 - When you identify a capability or differentiator, put it on its own line prefixed with "* "
+- For a contrarian-scenario answer, use the marker: "* [CONTRARIAN] [scenario in their words]"
 - Use their words. Don't polish or rewrite.
-- Never invent capabilities they haven't stated.`;
+- Never invent capabilities or scenarios they haven't stated.`;
 
 export const YOUR_AUDIENCE_SYSTEM = `You are Maria, a colleague helping a subject matter expert understand their target audience's priorities. You know the Three Tier methodology and your colleague does too, so skip the tutorials.
 
@@ -67,13 +81,19 @@ export function buildCoachingUserContext(
   offeringName: string,
   smeRole: string,
   existingElements: string[],
-  existingPriorities: { text: string; rank: number; driver: string }[]
+  existingPriorities: { text: string; rank: number; driver: string }[],
+  contrarianAsked?: boolean,
+  contrarianScenario?: string,
 ): string {
   let context = `Offering: "${offeringName}"`;
   if (smeRole) context += `\nSME Role: ${smeRole}`;
 
   if (existingElements.length > 0) {
     context += `\n\nCapabilities already identified:\n${existingElements.map((e) => `* ${e}`).join('\n')}`;
+  }
+
+  if (contrarianAsked) {
+    context += `\n\nContrarian question already asked${contrarianScenario ? ` (captured: "${contrarianScenario}")` : ''}. Do not ask it again.`;
   }
 
   if (existingPriorities.length > 0) {

@@ -26,7 +26,7 @@ interface PendingDelete {
   timeout: ReturnType<typeof setTimeout>;
 }
 
-export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, onDismissSuggestion, tier1Alternative, focusedCell, onCellFocus }: ThreeTierTableProps) {
+export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, onAcceptSuggestion, tier1Alternative, focusedCell, onCellFocus }: ThreeTierTableProps) {
   const { showToast } = useToast();
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -295,7 +295,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
         )}
 
         {/* Tier 1 */}
-        <div className={`tier1-row${isTier1Focused ? ' cell-focused' : ''}`}>
+        <div className={`tier1-row${isTier1Focused ? ' cell-focused' : ''}${suggestions?.has('tier1') ? ' cell-evaluation-highlight' : ''}`}>
           <div className="tier-header-row">
             <div className="tier-label">Tier 1 <span className="tier-subtitle">Core Value</span> <InfoTooltip text="The single most important statement for your audience. Connects their #1 priority to your strongest differentiator. The test: does the reader think 'I cannot ignore this'?" /></div>
             <div className="tier-header-actions">
@@ -346,7 +346,14 @@ ${t2s.map(t2 => `<div class="tier2-col">
               <span className="inline-suggestion-text">{suggestions.get('tier1')}</span>
               <div className="inline-suggestion-actions">
                 <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.('tier1', suggestions.get('tier1')!)}>Accept</button>
-                <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.('tier1'); }}>Dismiss</button>
+                <button className="inline-suggestion-dismiss" onClick={(e) => {
+                  e.stopPropagation();
+                  // Change 10 — Discuss-with-Maria replaces silent Dismiss. Opens scoped chat
+                  // where the user can either change the cell or acknowledge-as-is.
+                  document.dispatchEvent(new CustomEvent('maria-toggle', {
+                    detail: { open: true, message: `[REVIEW_CELL:tier1] I want to look at the Tier 1 suggestion you have.` },
+                  }));
+                }}>Discuss</button>
               </div>
               {tier1Alternative && (
                 <div
@@ -375,8 +382,21 @@ ${t2s.map(t2 => `<div class="tier2-col">
             const t2Key = `tier2-${t2Index}`;
             const isColFocused = focusedCell === t2Key || editingCell === `tier2-${t2.id}`;
             return (
-              <div key={t2.id} className={`tier2-col${isColFocused ? ' cell-focused' : ''}`}>
-                <div className="tier-label tier-label-small">Tier 2 {t2.categoryLabel ? <span className="tier-subtitle">{t2.categoryLabel}</span> : <span className="tier-subtitle">Supporting Value</span>} {t2Index === 0 && <InfoTooltip text="Each supporting statement reinforces your key message from a different angle — your focus, product, ROI, support commitment, and proof from other customers." />}</div>
+              <div key={t2.id} className={`tier2-col${isColFocused ? ' cell-focused' : ''}${suggestions?.has(t2Key) ? ' cell-evaluation-highlight' : ''}`}>
+                <div
+                  className="tier-label tier-label-small"
+                  onClick={() => {
+                    // Change 1 — Foundation walkthrough: tapping a Tier 2 column header
+                    // opens Maria scoped to that column with the column-specific question
+                    // pre-loaded. partner.ts handles the [REVIEW_TIER2_COLUMN:Label] marker.
+                    const label = t2.categoryLabel || 'Supporting Value';
+                    document.dispatchEvent(new CustomEvent('maria-toggle', {
+                      detail: { open: true, message: `[REVIEW_TIER2_COLUMN:${label}]` },
+                    }));
+                  }}
+                  style={{ cursor: 'pointer' }}
+                  title="Tap to ask Maria about this column"
+                >Tier 2 {t2.categoryLabel ? <span className="tier-subtitle">{t2.categoryLabel}</span> : <span className="tier-subtitle">Supporting Value</span>} {t2Index === 0 && <InfoTooltip text="Each supporting statement reinforces your key message from a different angle — your focus, product, ROI, support commitment, and proof from other customers." />}</div>
                 {editingCell === `tier2-${t2.id}` ? (
                   <div style={{ padding: 8 }}>
                     <CellEditor
@@ -396,7 +416,13 @@ ${t2s.map(t2 => `<div class="tier2-col">
                     <span className="inline-suggestion-text">{suggestions.get(t2Key)}</span>
                     <div className="inline-suggestion-actions">
                       <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(t2Key, suggestions.get(t2Key)!)}>Accept</button>
-                      <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(t2Key); }}>Dismiss</button>
+                      <button className="inline-suggestion-dismiss" onClick={(e) => {
+                        e.stopPropagation();
+                        const label = t2.categoryLabel || `column ${t2Index + 1}`;
+                        document.dispatchEvent(new CustomEvent('maria-toggle', {
+                          detail: { open: true, message: `[REVIEW_CELL:${t2Key}] I want to look at the suggestion you have on the ${label} column.` },
+                        }));
+                      }}>Discuss</button>
                     </div>
                   </div>
                 )}
@@ -443,7 +469,12 @@ ${t2s.map(t2 => `<div class="tier2-col">
                             <span className="inline-suggestion-text">{suggestions.get(t3Key)}</span>
                             <div className="inline-suggestion-actions">
                               <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(t3Key, suggestions.get(t3Key)!)}>Accept</button>
-                              <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(t3Key); }}>Dismiss</button>
+                              <button className="inline-suggestion-dismiss" onClick={(e) => {
+                                e.stopPropagation();
+                                document.dispatchEvent(new CustomEvent('maria-toggle', {
+                                  detail: { open: true, message: `[REVIEW_CELL:${t3Key}] I want to look at the proof-point suggestion you have.` },
+                                }));
+                              }}>Discuss</button>
                             </div>
                           </div>
                         )}
@@ -463,7 +494,12 @@ ${t2s.map(t2 => `<div class="tier2-col">
                       <span className="inline-suggestion-text">{suggestions.get(`tier3-${t2Index}-add`)}</span>
                       <div className="inline-suggestion-actions">
                         <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(`tier3-${t2Index}-add`, suggestions.get(`tier3-${t2Index}-add`)!)}>Add</button>
-                        <button className="inline-suggestion-dismiss" onClick={(e) => { e.stopPropagation(); onDismissSuggestion?.(`tier3-${t2Index}-add`); }}>Dismiss</button>
+                        <button className="inline-suggestion-dismiss" onClick={(e) => {
+                          e.stopPropagation();
+                          document.dispatchEvent(new CustomEvent('maria-toggle', {
+                            detail: { open: true, message: `[REVIEW_CELL:tier3-${t2Index}-add] I want to look at the proof-point you'd add.` },
+                          }));
+                        }}>Discuss</button>
                       </div>
                     </div>
                   )}

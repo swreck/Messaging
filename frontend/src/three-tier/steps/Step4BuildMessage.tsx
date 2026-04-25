@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { StepProps } from './types';
 import { api } from '../../api/client';
 import { Spinner } from '../../shared/Spinner';
+import { RotatingPhrases } from '../../shared/RotatingPhrases';
 
 interface Question {
   question: string;
@@ -351,7 +352,9 @@ export function Step4BuildMessage({ draft, loadDraft, nextStep, prevStep }: Step
         <div style={{ padding: '60px 0' }}>
           <Spinner size={32} />
           <h2 style={{ marginTop: 24 }}>Generating your Three Tier</h2>
-          <p className="step-description">Almost there...</p>
+          <p className="step-description">
+            <RotatingPhrases phase="mapping" />
+          </p>
         </div>
       )}
 

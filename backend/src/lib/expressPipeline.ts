@@ -456,12 +456,15 @@ ${draftWithElements.offering.elements
         priorityId: string;
         elementId: string;
         confidence: number;
+        strengthSignal?: 'STRONG' | 'HONEST_BUT_THIN' | 'EXAGGERATED' | null;
+        failurePattern?: string | null;
         reasoning?: string;
         mfRationale?: string;
       }[];
       orphanElements?: string[];
       priorityGaps?: string[];
       gapDescriptions?: { priorityId: string; missingCapability: string }[];
+      noStrongPairings?: boolean;
     };
 
     const mappingResult = await callAIWithJSON<MappingResult>(
@@ -487,12 +490,29 @@ ${draftWithElements.offering.elements
       g => validPriorityIds.has(g.priorityId) && g.missingCapability,
     );
 
-    // The mapping prompt tells the model not to emit below 0.7. If the model
-    // complies, below-threshold items surface as gapDescriptions. This floor
-    // stays at 0.5 as a safety net for the case where the model emits a weak
-    // match anyway — we'd rather show a weak Tier 1 plus Maria's gap
+    // Audience-fit signal (Change 2): the model emits noStrongPairings=true when
+    // every emitted pairing is HONEST_BUT_THIN or EXAGGERATED — none directly
+    // resolves the audience's priorities. We also compute it locally as a fallback
+    // in case the model omits the flag. Maria uses this downstream to fire the
+    // humble-curiosity audience-fit conversation.
+    const computedNoStrong = !cleanMappings.some(m => m.strengthSignal === 'STRONG');
+    const noStrongPairings = mappingResult.noStrongPairings === undefined
+      ? computedNoStrong
+      : Boolean(mappingResult.noStrongPairings);
+    await prisma.threeTierDraft.update({
+      where: { id: draftWithElements.id },
+      data: { noStrongPairings },
+    });
+
+    // The mapping prompt tells the model not to emit below 0.4 (post Change 2).
+    // This floor stays at 0.5 as a safety net for the case where the model emits
+    // a weak match anyway — we'd rather show a weak Tier 1 plus Maria's gap
     // interview than strip Rank 1 entirely and build Tier 1 from Rank 2.
-    for (const m of cleanMappings.filter(m => m.confidence >= 0.5)) {
+    // EXAGGERATED mappings (caught failure patterns) are NOT stored as confirmed —
+    // they flow through gapDescriptions to the resolution loop, like before.
+    for (const m of cleanMappings.filter(
+      m => m.confidence >= 0.5 && m.strengthSignal !== 'EXAGGERATED',
+    )) {
       await prisma.mapping.create({
         data: {
           draftId: draftWithElements.id,
@@ -501,6 +521,8 @@ ${draftWithElements.offering.elements
           confidence: m.confidence,
           status: 'confirmed',
           mfRationale: m.mfRationale || '',
+          strengthSignal: m.strengthSignal || null,
+          failurePattern: m.failurePattern || null,
         },
       });
     }
@@ -1586,9 +1608,12 @@ ${offering.elements
       priorityId: string;
       elementId: string;
       confidence: number;
+      strengthSignal?: 'STRONG' | 'HONEST_BUT_THIN' | 'EXAGGERATED' | null;
+      failurePattern?: string | null;
       mfRationale?: string;
     }[];
     gapDescriptions?: { priorityId: string; missingCapability: string }[];
+    noStrongPairings?: boolean;
   };
 
   const mappingResult = await callAIWithJSON<MappingResult>(
@@ -1615,10 +1640,24 @@ ${offering.elements
       missingCapability: g.missingCapability,
     }));
 
-  // The mapping prompt tells the model not to emit below 0.7. This floor
-  // stays at 0.5 as a safety net for the case where the model emits a weak
-  // match anyway — see the parallel comment in runPipeline for reasoning.
-  for (const m of cleanMappings.filter(m => m.confidence >= 0.5)) {
+  // Audience-fit signal (Change 2): persist on the draft so Maria's downstream
+  // context can fire the humble-curiosity audience-fit conversation when
+  // every pairing is non-STRONG.
+  const computedNoStrong = !cleanMappings.some(m => m.strengthSignal === 'STRONG');
+  const noStrongPairings = mappingResult.noStrongPairings === undefined
+    ? computedNoStrong
+    : Boolean(mappingResult.noStrongPairings);
+  await prisma.threeTierDraft.update({
+    where: { id: draft.id },
+    data: { noStrongPairings },
+  });
+
+  // The mapping prompt tells the model not to emit below 0.4. This floor
+  // stays at 0.5 as a safety net for weak emissions. EXAGGERATED mappings
+  // are not stored as confirmed — they flow through gapDescriptions.
+  for (const m of cleanMappings.filter(
+    m => m.confidence >= 0.5 && m.strengthSignal !== 'EXAGGERATED',
+  )) {
     await prisma.mapping.create({
       data: {
         draftId: draft.id,
@@ -1627,6 +1666,8 @@ ${offering.elements
         confidence: m.confidence,
         status: 'confirmed',
         mfRationale: m.mfRationale || '',
+        strengthSignal: m.strengthSignal || null,
+        failurePattern: m.failurePattern || null,
       },
     });
   }
@@ -1792,6 +1833,11 @@ export async function rebuildFoundationFromDraft(
   draftId: string,
   userId: string,
   workspaceId: string,
+  // leadHint: when the user gives positional direction (e.g. "lead with X"),
+  // this carries their words verbatim. Tier 1 generation receives it as a
+  // hard constraint: the because-clause must start with the named element.
+  // Optional — undefined means no positional bias, normal generation.
+  leadHint?: string,
 ): Promise<FoundationResult> {
   const draft = await prisma.threeTierDraft.findFirst({
     where: {
@@ -1842,9 +1888,12 @@ ${offering.elements
       priorityId: string;
       elementId: string;
       confidence: number;
+      strengthSignal?: 'STRONG' | 'HONEST_BUT_THIN' | 'EXAGGERATED' | null;
+      failurePattern?: string | null;
       mfRationale?: string;
     }[];
     gapDescriptions?: { priorityId: string; missingCapability: string }[];
+    noStrongPairings?: boolean;
   };
 
   const mappingResult = await callAIWithJSON<MappingResult>(
@@ -1868,7 +1917,18 @@ ${offering.elements
       missingCapability: g.missingCapability,
     }));
 
-  for (const m of cleanMappings.filter(m => m.confidence >= 0.5)) {
+  const computedNoStrong = !cleanMappings.some(m => m.strengthSignal === 'STRONG');
+  const noStrongPairings = mappingResult.noStrongPairings === undefined
+    ? computedNoStrong
+    : Boolean(mappingResult.noStrongPairings);
+  await prisma.threeTierDraft.update({
+    where: { id: draft.id },
+    data: { noStrongPairings },
+  });
+
+  for (const m of cleanMappings.filter(
+    m => m.confidence >= 0.5 && m.strengthSignal !== 'EXAGGERATED',
+  )) {
     await prisma.mapping.create({
       data: {
         draftId: draft.id,
@@ -1877,6 +1937,8 @@ ${offering.elements
         confidence: m.confidence,
         status: 'confirmed',
         mfRationale: m.mfRationale || '',
+        strengthSignal: m.strengthSignal || null,
+        failurePattern: m.failurePattern || null,
       },
     });
   }
@@ -1919,6 +1981,10 @@ ${
     ? `\nORPHAN CAPABILITIES (not mapped to any priority — use for Social Proof or Focus columns):\n${orphanElements
         .map(e => `- "${e.text}"`)
         .join('\n')}`
+    : ''
+}${
+  leadHint
+    ? `\n\nLEAD DIRECTIVE FROM USER (HONOR THIS PRECISELY): The user has explicitly directed that Tier 1 lead with "${leadHint}". This is a position constraint, not a content suggestion. The Tier 1 because-clause MUST anchor on this element — start it with this idea, in the user's words or close to them. Other mapped capabilities can support but cannot displace the lead. If the directive does not align with any mapped capability, treat the directive as the lead anyway and let the Tier 2 columns carry the supporting capabilities.`
     : ''
 }
 AUDIENCE: ${audience.name}`;

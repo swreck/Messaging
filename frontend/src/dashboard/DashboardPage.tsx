@@ -193,7 +193,25 @@ export function DashboardPage() {
     try {
       document.dispatchEvent(new CustomEvent(LEAD_TOGGLE_EVENT, { detail: { value: next ? 'on' : 'off' } }));
     } catch {}
-    if (next) navigate('/express');
+
+    // Change 14 — Bifurcated toggle behavior. ON opens chat with a state recap
+    // and next-move proposals (same content as Change 16's returning-user briefing).
+    // OFF closes chat (banner renders inline below) and suppresses proactive speech.
+    if (next) {
+      // ON: open chat with the shared state-recap synthetic message.
+      try {
+        document.dispatchEvent(new CustomEvent('maria-toggle', {
+          detail: { open: true, message: '[STATE_RECAP]' },
+        }));
+      } catch {}
+    } else {
+      // OFF: close chat if it's open. Banner below renders based on `consultation` state.
+      try {
+        document.dispatchEvent(new CustomEvent('maria-toggle', {
+          detail: { open: false },
+        }));
+      } catch {}
+    }
   }
 
   return (
@@ -219,6 +237,23 @@ export function DashboardPage() {
           </button>
         </label>
       </div>
+
+      {/* Change 14 — Toggle OFF banner: visible signal that Maria is waiting. */}
+      {!consultation && (
+        <div
+          style={{
+            background: 'var(--bg-secondary, #f5f5f7)',
+            border: '1px solid var(--border-subtle, rgba(0,0,0,0.08))',
+            borderRadius: 'var(--radius-md, 10px)',
+            padding: '10px 16px',
+            marginBottom: 16,
+            fontSize: 14,
+            color: 'var(--text-secondary)',
+          }}
+        >
+          You're driving. I'll wait until you ask.
+        </div>
+      )}
 
       {/* New user — Maria's voice, one forward button */}
       {isNew && (

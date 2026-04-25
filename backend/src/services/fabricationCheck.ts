@@ -226,6 +226,64 @@ routines, reviews, sign-offs, meetings, team responsibilities — the
 specifics must trace to the source. Vague "we care about quality" is
 fine; specific "our QA team reviews every message" is not.
 
+INDUSTRY-PREVALENCE CLAIMS WITHOUT SOURCE. Drafts often pad authority by
+asserting that a category-wide pattern is happening — "specialty
+manufacturers across the industry are facing this exact decision," "this is
+a pattern across regional banks," "most mid-market firms today are weighing
+the same trade-off," "industry consensus is that...". Each is fabrication
+unless the source explicitly establishes the prevalence.
+
+The pattern: a sentence containing "[industry/vertical/category]" + a
+generalizing verb ("are facing," "are weighing," "are confronting," "have
+adopted," "are moving toward") + a claim about scale or consensus. Even if
+the underlying observation might be true in the writer's general experience,
+the chapter is the user's voice — the user has not testified that this
+prevalence is real, and the audience cannot verify it from the source.
+
+Examples of industry-prevalence sentences that are FABRICATION unless the
+source provided supporting evidence:
+- "Specialty manufacturers across the industry are facing this exact
+  decision right now." → fabrication unless source documents the trend.
+- "Most regional banks are confronting this same examiner pressure." →
+  fabrication unless source establishes prevalence.
+- "60% of compliance teams are still using spreadsheets." → fabrication
+  unless source quotes or links the survey.
+- "Industry consensus is that the old model has expired." → fabrication.
+  "Consensus" is unfalsifiable rhetoric without a citation.
+
+The fix is to either remove the prevalence claim entirely or rewrite it as
+something the source does support (often a single specific example, or a
+named customer's experience). When in doubt, flag.
+
+THIRD-PARTY-VENDOR CAPABILITY CLAIMS WITHOUT SOURCE. Drafts also slip in
+claims about what specific named vendors or third-party companies do,
+have, or support — "Siemens has a documented migration path for exactly
+this scenario," "Salesforce supports this integration out of the box,"
+"Snowflake ships a connector for this," "Oracle's [Product] handles X."
+Unless the source explicitly establishes the named third party's named
+capability, the chapter cannot make the claim. The user has no way to
+defend it; the audience cannot trust it; the writer is borrowing
+authority that is not theirs to lend.
+
+The pattern: a sentence naming a specific third-party company or product
++ a capability/feature/policy assertion + no supporting source. Apply the
+test even when the third party is plausibly known to have such a
+capability. Plausibility is not supporting evidence.
+
+Examples of third-party-vendor capability sentences that are FABRICATION
+unless the source provided supporting material:
+- "Siemens has a documented migration path for exactly this scenario."
+  → fabrication unless source contains documentation or testimony.
+- "Snowflake supports this directly." → fabrication unless stated.
+- "Oracle's Cloud Financials handles multi-entity consolidation natively."
+  → fabrication unless source establishes it.
+- "AWS provides this out of the box." → fabrication unless stated.
+
+The fix is to remove the named-vendor claim and either generalize ("most
+modern platforms now support this kind of integration" — itself only OK
+if source backs it; see industry-prevalence above) or remove the
+sentence entirely. When in doubt, flag.
+
 Reasonable tonal framing ("your membership is valued", "we know this is a
 change") is NOT fabrication. Specific claims about people, numbers, processes,
 programs, roles, actor behaviors, or product behaviors ARE fabrication.

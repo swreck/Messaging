@@ -1094,7 +1094,7 @@ export function FiveChapterShell() {
       {showMFPanel && (
         <div className="mf-panel">
           <p className="mf-panel-intro">
-            Maria needs one more thing before writing: why does <strong>{draft.audience.priorities[0]?.text}</strong> matter so much to this person? That context shapes the story.
+            Quick context check before I write. Your audience's #1 priority is <strong>‘{draft.audience.priorities[0]?.text}’</strong>. What makes that the right framing for this specific {draft.audience.name} — versus something like financial discipline or strategic alignment?
           </p>
           <p className="mf-panel-offer">
             You can explain it yourself, or let Maria take her best informed guess from what she knows about this kind of audience. You can always change it later.

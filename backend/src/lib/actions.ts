@@ -230,8 +230,15 @@ export async function dispatchActions(
                 },
               });
             }
-            const targetLabel = targetAudienceId !== ctx.audienceId ? ` to "${audience.name}"` : '';
-            actionResult = `Added ${a.params.texts.length} priorities${targetLabel}`;
+            // Conversational echo (same pattern as add_capabilities — Topic 13
+            // in the cycle handoff). User verifies exactly what landed in chat
+            // and can edit by ordinal or content without navigating away.
+            const audienceLabel = `"${audience.name}"`;
+            const lines = (a.params.texts as string[]).map(t => `— ${t}`).join('\n');
+            const headline = a.params.texts.length === 1
+              ? `Added this priority to ${audienceLabel}:`
+              : `Added these ${a.params.texts.length} priorities to ${audienceLabel}:`;
+            actionResult = `${headline}\n${lines}\nAnything off? I can edit any of them in place — just tell me which.`;
             refreshNeeded = true;
           }
         }
@@ -449,8 +456,17 @@ export async function dispatchActions(
                 },
               });
             }
-            const targetLabel = targetOfferingId !== ctx.offeringId ? ` to "${offering.name}"` : '';
-            actionResult = `Added ${a.params.texts.length} capabilit${a.params.texts.length === 1 ? 'y' : 'ies'}${targetLabel}`;
+            // Conversational echo: list each item inline so the user can verify
+            // exactly what landed without leaving chat. The user can edit any
+            // item by ordinal ("the second one") or by content ("the one about
+            // real-time"). Maria's confirmation voice is the consultant who
+            // lists what she did, not a software form returning items for sign-off.
+            const offeringLabel = `"${offering.name}"`;
+            const lines = (a.params.texts as string[]).map(t => `— ${t}`).join('\n');
+            const headline = a.params.texts.length === 1
+              ? `Added this to ${offeringLabel}:`
+              : `Added these ${a.params.texts.length} to ${offeringLabel}:`;
+            actionResult = `${headline}\n${lines}\nAnything off? I can edit any of them in place — just tell me which.`;
             refreshNeeded = true;
           }
         }
@@ -1492,6 +1508,12 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
       // update the foundation card in place.
       if (a.type === 'rebuild_foundation') {
         const draftId = a.params?.draftId || ctx.draftId;
+        // leadHint carries positional direction from the user (e.g., "use X as
+        // the headline"). Tier 1 generation will use the named element as the
+        // because-clause anchor. Optional — undefined means no positional bias.
+        const leadHint = typeof a.params?.leadHint === 'string' && a.params.leadHint.trim()
+          ? a.params.leadHint.trim()
+          : undefined;
         if (!draftId) {
           actionResult = 'Could not rebuild — no draft reference available. Open the foundation first.';
         } else {
@@ -1500,6 +1522,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
               draftId,
               userId,
               workspaceId || '',
+              leadHint,
             );
             // Serialize the new Foundation inside the marker so the frontend
             // can update the foundation-card state without a second round trip.
@@ -1509,6 +1532,73 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           } catch (err: any) {
             console.error('[rebuild_foundation] error:', err);
             actionResult = `Could not rebuild the foundation: ${err.message || 'unknown error'}`;
+          }
+        }
+      }
+
+      // ─── Acknowledge observation (Change 10) — user reviews and accepts as-is ──
+      // Used inside Maria's scoped-to-observation chat. The user has chosen NOT to
+      // change the cell after Maria flagged it; this marks the observation
+      // RESOLVED_BY_ACKNOWLEDGE so the orange clears and Maria stops re-surfacing.
+      if (a.type === 'acknowledge_observation' && a.params?.observationId) {
+        try {
+          await prisma.observation.update({
+            where: { id: String(a.params.observationId) },
+            data: { state: 'RESOLVED_BY_ACKNOWLEDGE', resolvedAt: new Date() },
+          });
+          actionResult = "Got it — I won't re-surface that one.";
+          refreshNeeded = true;
+        } catch (err: any) {
+          console.error('[acknowledge_observation] error:', err);
+          actionResult = `Could not acknowledge: ${err.message || 'unknown error'}`;
+        }
+      }
+
+      // ─── Durable memory: save context Maria just heard (Change 5) ────
+      // The user's substantive answer to a why-this-priority-matters or
+      // tell-me-about-this-audience question is durable knowledge worth saving
+      // so Maria doesn't re-ask next session. Maria offers the save in chat
+      // ("OK to save?") and on user-yes calls this with the appropriate target.
+      // Targets:
+      //   priority_driver: { priorityId, content }
+      //   audience_situation: { audienceId, content }
+      //   offering_contrarian: { offeringId, content }
+      if (a.type === 'save_durable_context' && a.params?.target && a.params?.content) {
+        const target = String(a.params.target);
+        const content = String(a.params.content).trim();
+        if (!content) {
+          actionResult = 'Nothing to save — the content was empty.';
+          refreshNeeded = false;
+        } else {
+          try {
+            if (target === 'priority_driver' && a.params.priorityId) {
+              await prisma.priority.update({
+                where: { id: String(a.params.priorityId) },
+                data: { driver: content },
+              });
+              actionResult = 'Saved as the driver.';
+              refreshNeeded = true;
+            } else if (target === 'audience_situation' && a.params.audienceId) {
+              await prisma.audience.update({
+                where: { id: String(a.params.audienceId) },
+                data: { situation: content },
+              });
+              actionResult = 'Saved.';
+              refreshNeeded = true;
+            } else if (target === 'offering_contrarian' && a.params.offeringId) {
+              await prisma.offering.update({
+                where: { id: String(a.params.offeringId) },
+                data: { contrarianScenario: content, contrarianAsked: true },
+              });
+              actionResult = 'Saved.';
+              refreshNeeded = true;
+            } else {
+              actionResult = `Could not save — missing target ID for "${target}".`;
+              refreshNeeded = false;
+            }
+          } catch (err: any) {
+            console.error('[save_durable_context] error:', err);
+            actionResult = `Could not save: ${err.message || 'unknown error'}`;
           }
         }
       }
@@ -1858,6 +1948,12 @@ export function buildActionList(context: ActionContext): string {
   actions.push('- build_deliverable: Build a complete first draft (Three Tier + Five Chapter Story) from an existing offering and audience. Runs the full pipeline autonomously — mapping, message generation, story writing, voice check, polishing. Takes a few minutes. Params: { offeringName: string, audienceName: string, medium: string, situation?: string } — medium options: email, blog, landing_page, in_person, press_release, newsletter, one-pager, report, pitch_deck. situation is the specific context or occasion for this deliverable.');
   actions.push('- check_deliverable: Check status of a deliverable build you started with build_deliverable. When complete, navigates to the finished draft. Params: { jobId?: string } — omit jobId to check the most recent build.');
   actions.push('- rebuild_foundation: Regenerate the Tier 1 and Tier 2 of an in-progress guided Foundation against the current offering + audience state. Use AFTER you have added a new differentiator (via add_capabilities) in response to a mapping gap — this rebuilds so the user sees the updated Tier 1 that reflects the new differentiator. Takes about 60 seconds. Params: { draftId: string } — the guided draftId. Your response while this runs: "Let me rebuild with that in." Returns a FOUNDATION_REBUILT marker the frontend uses to update the foundation card in place.');
+
+  // Durable memory — save substantive context Maria just heard so it persists across sessions
+  actions.push('- save_durable_context: Persist a substantive answer the user just gave so Maria does not re-ask next session. Use ONLY after the user has confirmed the save (e.g., "yes save that"). Params: { target: "priority_driver" | "audience_situation" | "offering_contrarian", content: string, priorityId?: string, audienceId?: string, offeringId?: string }. Choose target by the kind of knowledge: priority_driver = why a priority matters to this audience (Driver); audience_situation = audience-specific situation/context worth carrying across deliverables; offering_contrarian = scenario where the offering is NOT the right choice. Match the ID to the target.');
+
+  // Acknowledge observation — user accepts cell as-is despite Maria's open suggestion (Change 10)
+  actions.push('- acknowledge_observation: Mark a Maria-flagged cell suggestion as resolved-by-acknowledge — the user reviewed it and chose not to act on it. Use only inside the scoped Maria conversation a user opens by tapping a flagged (orange) cell. Params: { observationId: string }. Result: orange clears, suggestion stops re-surfacing in future sessions, but stays retrievable if the user asks "what was that thing you flagged?"');
 
   // Cross-workspace copy — always included, dispatch handles errors if user has only 1 workspace
   actions.push('- copy_audience_to_workspace: Copy an audience and its priorities to another workspace. Params: { audienceName: string, targetWorkspaceName: string }');

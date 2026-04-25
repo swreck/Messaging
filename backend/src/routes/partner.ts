@@ -121,6 +121,7 @@ async function buildCurrentContext(context: Record<string, any>): Promise<string
         select: {
           currentStep: true,
           status: true,
+          noStrongPairings: true,
           offering: { select: { name: true } },
           audience: { select: { name: true } },
         },
@@ -128,6 +129,11 @@ async function buildCurrentContext(context: Record<string, any>): Promise<string
       if (draft) {
         const stepLabel = draft.currentStep >= 5 ? 'complete (step 5)' : `in progress (step ${draft.currentStep}/5)`;
         parts.push(`Viewing Three Tier draft: ${draft.offering.name} → ${draft.audience.name}, ${stepLabel}`);
+        // Audience-fit signal: when no pairing came back STRONG, surface this so
+        // Maria's audience-fit conversation logic in partner.ts can fire.
+        if (draft.noStrongPairings === true) {
+          parts.push('noStrongPairings: true — none of the priority/special-thing pairings on this draft came back STRONG. Apply the AUDIENCE-FIT CONVERSATION pattern from your system prompt: humble curiosity about the offering, NEVER a verdict on audience choice.');
+        }
       } else {
         parts.push('Viewing a Three Tier draft');
       }
@@ -151,9 +157,13 @@ interface ReturnContext {
   lastActivityAt?: string;
 }
 
-async function buildReturnContext(workspaceId: string): Promise<ReturnContext | null> {
+async function buildReturnContext(workspaceId: string, userId: string): Promise<ReturnContext | null> {
+  // CROSS-ACCOUNT ISOLATION: scope by BOTH workspaceId AND offering.userId. The
+  // workspace is a multi-user surface; without the userId filter the most-recent
+  // draft surfaced here could belong to any user in the workspace, which has been
+  // observed to leak content across demo accounts. Tested via Sofia/Tom regression.
   const recentDraft = await prisma.threeTierDraft.findFirst({
-    where: { offering: { workspaceId }, archived: false },
+    where: { offering: { workspaceId, userId }, archived: false },
     orderBy: { updatedAt: 'desc' },
     include: {
       offering: { select: { name: true } },
@@ -177,8 +187,12 @@ async function buildReturnContext(workspaceId: string): Promise<ReturnContext | 
 }
 
 async function buildSurfacingHint(workspaceId: string, userId?: string): Promise<string | undefined> {
+  // CROSS-ACCOUNT ISOLATION: filter drafts by the current user's offerings, not
+  // the entire workspace. Without this, a multi-user workspace would let one
+  // user's drafts surface as another user's hints. Same-bug pattern as
+  // buildReturnContext above.
   const drafts = await prisma.threeTierDraft.findMany({
-    where: { offering: { workspaceId } },
+    where: { offering: { workspaceId, ...(userId ? { userId } : {}) } },
     include: {
       offering: { select: { name: true } },
       audience: { select: { name: true } },
@@ -346,7 +360,7 @@ router.get('/status', async (req: Request, res: Response) => {
 
     if (gap > TWENTY_FOUR_HOURS) {
       try {
-        returnContext = await buildReturnContext(req.workspaceId!);
+        returnContext = await buildReturnContext(req.workspaceId!, userId);
       } catch {
         // Non-critical
       }
