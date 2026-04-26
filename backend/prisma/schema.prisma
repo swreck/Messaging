@@ -257,8 +257,52 @@ model ChapterContent {
   content    String
 
   chapterVersions ChapterVersion[]
+  claims          Claim[]
 
   @@unique([storyId, chapterNum])
+}
+
+// Round D — Per-claim provenance. Each substantive claim in a generated
+// chapter is tagged with its origin (what backs it). The deliverable view
+// surfaces unsourced claims in the lead-with-action banner; the user can
+// resolve via Edit / Cut / Add source / Own it.
+//
+// origin enum stored as a string for migration simplicity (matches the
+// rest of the schema's pattern):
+//   USER_WORDS  — verbatim from the user's own input (interview, paste).
+//   USER_DOC    — pulled from a document the user attached (with locator).
+//   RESEARCH    — verified external source (URL); set after Add-source
+//                 validation succeeds.
+//   INFERENCE   — Maria-drafted from general knowledge or pattern-match;
+//                 these are the unsourced claims that need attention.
+//   AUTHORED    — user owned it via the "Own it" action.
+//
+// state enum:
+//   OPEN              — awaiting attention (only INFERENCE-origin claims).
+//   RESOLVED_EDITED   — user edited the sentence to resolve.
+//   RESOLVED_CUT      — sentence removed.
+//   RESOLVED_SOURCED  — Add source succeeded; origin flipped to RESEARCH.
+//   RESOLVED_OWNED    — user owned it; origin flipped to AUTHORED.
+model Claim {
+  id          String         @id @default(cuid())
+  chapterContentId String
+  chapter     ChapterContent @relation(fields: [chapterContentId], references: [id], onDelete: Cascade)
+  // The exact sentence text in the chapter content this claim covers.
+  // Stored as the literal string so the frontend can locate it for marker
+  // placement and the auto-flow scroll-to-next behavior.
+  sentence    String
+  // Position in the chapter content for stable ordering. Approximate
+  // character offset; recomputed on chapter regeneration.
+  charOffset  Int            @default(0)
+  origin      String         @default("INFERENCE")
+  // sourceRef varies by origin: doc id+page for USER_DOC, URL for RESEARCH,
+  // empty for USER_WORDS / INFERENCE / AUTHORED.
+  sourceRef   String         @default("")
+  state       String         @default("OPEN")
+  resolvedAt  DateTime?
+  createdAt   DateTime       @default(now())
+
+  @@index([chapterContentId, state])
 }
 
 // ─── Version History ────────────────────────────────────

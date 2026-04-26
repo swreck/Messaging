@@ -21,6 +21,52 @@ function renderLightMarkdown(text: string): string {
     .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
 }
 
+// Round D — wrap claimed sentences in <span data-claim-id> spans so the
+// frontend can render inline markers and route click events to the four-
+// action resolution tooltip. The wrap runs BEFORE markdown rendering so the
+// sentence text matches what the user sees; the span itself escapes through
+// because we encode the wrapped content as raw HTML separators that survive
+// the light-markdown pass (no special chars in our sentinels).
+//
+// Implementation: tokenize the chapter content by claim sentence; for each
+// claim, replace the first occurrence of its sentence with a span tag whose
+// inner text is the sentence. We use a placeholder sentinel pair (rare unicode
+// brackets) so HTML escaping doesn't mangle the span structure, then swap
+// sentinels back to real angle brackets after markdown.
+type RenderClaim = { id: string; sentence: string; origin: string; state: string };
+type ProvenanceViewMode = 'no-markup' | 'minimal' | 'all-markup';
+
+function renderChapterWithClaims(content: string, claims: RenderClaim[], viewMode: ProvenanceViewMode): string {
+  if (!content) return '';
+  if (viewMode === 'no-markup' || claims.length === 0) return renderLightMarkdown(content);
+  // Sentinel pair survives the markdown HTML-escape pass.
+  const O = '❨'; // ❨
+  const C = '❩'; // ❩
+  let buf = content;
+  // Sort by descending sentence length so longer matches are wrapped first
+  // (avoids a longer sentence being chopped by a shorter one's earlier replacement).
+  const ordered = [...claims].sort((a, b) => b.sentence.length - a.sentence.length);
+  for (const claim of ordered) {
+    if (!claim.sentence || !claim.sentence.trim()) continue;
+    if (viewMode === 'minimal') {
+      // Only wrap unsourced (INFERENCE-origin, OPEN-state) claims in Minimal mode.
+      if (!(claim.state === 'OPEN' && claim.origin === 'INFERENCE')) continue;
+    }
+    const idx = buf.indexOf(claim.sentence);
+    if (idx === -1) continue;
+    const before = buf.slice(0, idx);
+    const after = buf.slice(idx + claim.sentence.length);
+    const cls = (claim.state === 'OPEN' && claim.origin === 'INFERENCE')
+      ? 'claim-marker claim-marker-unsourced'
+      : `claim-marker claim-marker-${claim.origin.toLowerCase()}`;
+    buf = `${before}${O}span class="${cls}" data-claim-id="${claim.id}"${C}${claim.sentence}${O}/span${C}${after}`;
+  }
+  let html = renderLightMarkdown(buf);
+  // Swap sentinels back to real angle brackets to materialize the spans.
+  html = html.replace(new RegExp(O, 'g'), '<').replace(new RegExp(C, 'g'), '>');
+  return html;
+}
+
 export function FiveChapterShell() {
   const { draftId } = useParams<{ draftId: string }>();
   const navigate = useNavigate();
@@ -58,6 +104,157 @@ export function FiveChapterShell() {
 
   // Round B5 — pitch-deck export to .pptx
   const [pptxBuilding, setPptxBuilding] = useState(false);
+
+  // Round D — Provenance system. Per-claim metadata is loaded into a flat
+  // map keyed by chapter id; view mode follows the same Hide/Minimal/All
+  // pattern as Round A1's orange-highlight system.
+  type ProvenanceClaim = {
+    id: string;
+    chapterContentId: string;
+    sentence: string;
+    charOffset: number;
+    origin: 'USER_WORDS' | 'USER_DOC' | 'RESEARCH' | 'INFERENCE' | 'AUTHORED' | string;
+    sourceRef: string;
+    state: 'OPEN' | 'RESOLVED_EDITED' | 'RESOLVED_CUT' | 'RESOLVED_SOURCED' | 'RESOLVED_OWNED' | string;
+    resolvedAt?: string | null;
+  };
+  const [claims, setClaims] = useState<ProvenanceClaim[]>([]);
+  const [provenanceLoaded, setProvenanceLoaded] = useState(false);
+  const PROV_VIEW_KEY = 'provenance-view-mode';
+  const [provViewMode, setProvViewModeState] = useState<ProvenanceViewMode>(() => {
+    try {
+      const saved = localStorage.getItem(PROV_VIEW_KEY);
+      if (saved === 'no-markup' || saved === 'minimal' || saved === 'all-markup') return saved;
+    } catch {}
+    return 'minimal';
+  });
+  function setProvViewMode(next: ProvenanceViewMode) {
+    setProvViewModeState(next);
+    try { localStorage.setItem(PROV_VIEW_KEY, next); } catch {}
+  }
+  // First-encounter Brad-impact tooltip for the provenance banner.
+  const PROV_ORIENT_KEY = 'provenance-oriented';
+  const [showProvOrientation, setShowProvOrientation] = useState(() => {
+    try { return !localStorage.getItem(PROV_ORIENT_KEY); } catch { return false; }
+  });
+  function dismissProvOrientation() {
+    try { localStorage.setItem(PROV_ORIENT_KEY, '1'); } catch {}
+    setShowProvOrientation(false);
+  }
+  // Tooltip state — which claim is open + its anchor rect for positioning.
+  const [openTooltipClaim, setOpenTooltipClaim] = useState<{ claim: ProvenanceClaim; anchor: DOMRect } | null>(null);
+  // Pulse-on-scroll for the auto-flow target claim.
+  const [pulseClaimId, setPulseClaimId] = useState<string | null>(null);
+
+  async function loadClaims(storyId: string) {
+    try {
+      const res = await api.get<{ claims: ProvenanceClaim[] }>(`/ai/stories/${storyId}/claims`);
+      setClaims(res?.claims || []);
+    } catch (err) {
+      console.error('[provenance] load failed', err);
+    } finally {
+      setProvenanceLoaded(true);
+    }
+  }
+  useEffect(() => {
+    if (!story?.id) return;
+    setProvenanceLoaded(false);
+    loadClaims(story.id);
+  }, [story?.id]);
+
+  // Reload claims when chapter content changes (regeneration or edit/cut).
+  // Triggers conservatively on chapter count change or after explicit refresh.
+  useEffect(() => {
+    if (!story?.id || !provenanceLoaded) return;
+    // Re-fetch on chapter content shift — best-effort.
+    const t = setTimeout(() => loadClaims(story.id), 150);
+    return () => clearTimeout(t);
+  }, [story?.chapters?.length, story?.blendedText]);
+
+  // Banner counts.
+  const openUnsourced = claims.filter(c => c.state === 'OPEN' && c.origin === 'INFERENCE');
+  const totalClaims = claims.length;
+  const sortedUnsourced = [...openUnsourced].sort((a, b) => {
+    if (a.chapterContentId !== b.chapterContentId) return a.chapterContentId.localeCompare(b.chapterContentId);
+    return a.charOffset - b.charOffset;
+  });
+  function scrollToClaim(claim: ProvenanceClaim) {
+    const node = document.querySelector<HTMLElement>(`[data-claim-id="${claim.id}"]`);
+    if (!node) return;
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setPulseClaimId(claim.id);
+    setTimeout(() => setPulseClaimId((cur) => (cur === claim.id ? null : cur)), 1600);
+  }
+  function jumpToFirstUnsourced() {
+    if (sortedUnsourced.length === 0) return;
+    scrollToClaim(sortedUnsourced[0]);
+  }
+  // After resolving one claim, auto-scroll to the next unsourced (D4).
+  function autoFlowAfterResolve(resolvedClaimId: string) {
+    const remaining = sortedUnsourced.filter(c => c.id !== resolvedClaimId);
+    if (remaining.length === 0) return;
+    setTimeout(() => scrollToClaim(remaining[0]), 250);
+  }
+
+  // PATCH a claim and update local state. Returns the server response so the
+  // caller can branch on Add-source's "supported / reason" payload.
+  async function patchClaim(claimId: string, body: Record<string, unknown>): Promise<any> {
+    const res = await api.patch<any>(`/ai/claims/${claimId}`, body);
+    if (res?.claim) {
+      setClaims(prev => prev.map(c => (c.id === claimId ? { ...c, ...res.claim } : c)));
+    }
+    return res;
+  }
+
+  // Click-handler for inline claim markers. Captures the click target's rect
+  // so the tooltip can anchor next to it.
+  function onChapterContentClick(e: React.MouseEvent<HTMLDivElement>) {
+    const target = (e.target as HTMLElement).closest<HTMLElement>('[data-claim-id]');
+    if (!target) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const id = target.getAttribute('data-claim-id');
+    const claim = claims.find(c => c.id === id);
+    if (!claim) return;
+    const anchor = target.getBoundingClientRect();
+    setOpenTooltipClaim({ claim, anchor });
+  }
+  useEffect(() => {
+    function close(e: MouseEvent) {
+      const node = e.target as HTMLElement;
+      if (node.closest('.provenance-tooltip') || node.closest('[data-claim-id]')) return;
+      setOpenTooltipClaim(null);
+    }
+    if (openTooltipClaim) document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [openTooltipClaim]);
+
+  // Maria-equivalent path event listener (D5).
+  useEffect(() => {
+    function onProvenanceEvent(e: Event) {
+      const detail = (e as CustomEvent).detail as { mode?: ProvenanceViewMode };
+      if (detail?.mode === 'no-markup' || detail?.mode === 'minimal' || detail?.mode === 'all-markup') {
+        setProvViewMode(detail.mode);
+      }
+    }
+    document.addEventListener('provenance-view-mode', onProvenanceEvent as EventListener);
+    return () => document.removeEventListener('provenance-view-mode', onProvenanceEvent as EventListener);
+  }, []);
+
+  // After Maria's chat resolves a claim, refresh both the claim list and the
+  // story content so any cut/edit shows in the chapter prose immediately.
+  useEffect(() => {
+    function onResolved(e: Event) {
+      const detail = (e as CustomEvent).detail as { storyId?: string };
+      if (!story?.id || detail?.storyId !== story.id) return;
+      loadClaims(story.id);
+      api.get<{ story: FiveChapterStory }>(`/stories/${story.id}`)
+        .then((r) => { if (r?.story) setStory(r.story); })
+        .catch(() => {/* non-fatal */});
+    }
+    document.addEventListener('provenance-claim-resolved', onResolved as EventListener);
+    return () => document.removeEventListener('provenance-claim-resolved', onResolved as EventListener);
+  }, [story?.id]);
 
   // Track the refinement stage of the blended text for heading display
   const [blendedStage, setBlendedStage] = useState<'blended' | 'polished' | 'personalized'>('blended');
@@ -1189,6 +1386,37 @@ export function FiveChapterShell() {
         </div>
       )}
 
+      {/* Round D — lead-with-action provenance banner (Topic 21).
+          Shows once any chapters have been classified. Reads "clear to send"
+          when every claim is sourced; reads "[N] claim(s) need your attention"
+          when unsourced INFERENCE-origin claims remain. Includes the
+          three-view-mode selector parallel to Round A1's orange-highlight
+          pattern (No markup / Minimal / All markup) and a one-time
+          orientation tooltip on first encounter. */}
+      {story && !showCreateForm && provenanceLoaded && totalClaims > 0 && (
+        <div className={`provenance-banner ${openUnsourced.length > 0 ? 'has-unsourced' : 'is-clean'}`} role="region" aria-label="Provenance">
+          <span>
+            {openUnsourced.length === 0
+              ? <>You're clear to send. All {totalClaims} {totalClaims === 1 ? 'claim has' : 'claims have'} a source.</>
+              : <><strong>{openUnsourced.length}</strong> {openUnsourced.length === 1 ? 'claim needs' : 'claims need'} your attention before sending.</>}
+          </span>
+          <span className="review-view-mode-segmented" style={{ marginLeft: 8 }}>
+            <button type="button" className={provViewMode === 'no-markup' ? 'active' : ''} onClick={() => setProvViewMode('no-markup')} title="Hide all markup. Claim metadata stays in place — only the indicators are hidden.">Hide markup</button>
+            <button type="button" className={provViewMode === 'minimal' ? 'active' : ''} onClick={() => setProvViewMode('minimal')} title="Highlight only the claims that need attention.">Minimal</button>
+            <button type="button" className={provViewMode === 'all-markup' ? 'active' : ''} onClick={() => setProvViewMode('all-markup')} title="Show provenance for every classified claim.">All markup</button>
+          </span>
+          {openUnsourced.length > 0
+            ? <button className="btn btn-primary btn-sm provenance-banner-cta" onClick={jumpToFirstUnsourced}>Show me</button>
+            : <button className="btn btn-ghost btn-sm provenance-banner-cta" onClick={() => setProvViewMode(provViewMode === 'all-markup' ? 'minimal' : 'all-markup')}>{provViewMode === 'all-markup' ? 'Hide details' : 'See provenance'}</button>}
+          {showProvOrientation && (
+            <div className="provenance-banner-orientation">
+              <span><strong>New:</strong> Maria now shows where each claim came from. The banner tells you if anything needs your attention before sending. Click any flagged sentence for options.</span>
+              <button className="btn btn-ghost btn-sm" onClick={dismissProvOrientation}>Got it</button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Content-first: show the draft ABOVE controls when it exists */}
       {story && !showCreateForm && showCompleteDraft && story.blendedText && (
         <div className="fcs-content-first" style={{ marginBottom: 16 }}>
@@ -1640,8 +1868,28 @@ export function FiveChapterShell() {
                 ) : chapterContent ? (
                   <div
                     className="fcs-chapter-content"
-                    onClick={() => { setEditingChapter(ch.num); setEditText(chapterContent.content); }}
-                    dangerouslySetInnerHTML={{ __html: renderLightMarkdown(chapterContent.content) }}
+                    onClick={(e) => {
+                      // If the click landed on a claim marker, open the
+                      // four-action tooltip (D3) instead of jumping into edit
+                      // mode. Edit-mode is still reachable by clicking outside
+                      // any marker.
+                      const target = (e.target as HTMLElement).closest<HTMLElement>('[data-claim-id]');
+                      if (target) {
+                        onChapterContentClick(e);
+                        return;
+                      }
+                      setEditingChapter(ch.num);
+                      setEditText(chapterContent.content);
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: renderChapterWithClaims(
+                        chapterContent.content,
+                        claims
+                          .filter(c => c.chapterContentId === chapterContent.id)
+                          .map(c => ({ id: c.id, sentence: c.sentence, origin: c.origin, state: c.state })),
+                        provViewMode,
+                      ),
+                    }}
                   />
                 ) : !isGenerating ? (
                   <div className="fcs-chapter-empty">
@@ -1788,6 +2036,165 @@ export function FiveChapterShell() {
         confirmLabel="Delete"
         confirmDanger
       />
+
+      {/* Round D — four-action provenance resolution tooltip (D3) */}
+      {openTooltipClaim && (
+        <ProvenanceTooltip
+          claim={openTooltipClaim.claim}
+          anchor={openTooltipClaim.anchor}
+          onClose={() => setOpenTooltipClaim(null)}
+          onEdit={async (newSentence) => {
+            const id = openTooltipClaim.claim.id;
+            await patchClaim(id, { action: 'edit', newSentence });
+            setOpenTooltipClaim(null);
+            await loadClaims(story!.id);
+            // Refresh story content so the in-place edit shows immediately.
+            try {
+              const refreshed = await api.get<{ story: FiveChapterStory }>(`/stories/${story!.id}`);
+              if (refreshed?.story) setStory(refreshed.story);
+            } catch {/* non-fatal */}
+            autoFlowAfterResolve(id);
+          }}
+          onCut={async () => {
+            const id = openTooltipClaim.claim.id;
+            await patchClaim(id, { action: 'cut' });
+            setOpenTooltipClaim(null);
+            await loadClaims(story!.id);
+            try {
+              const refreshed = await api.get<{ story: FiveChapterStory }>(`/stories/${story!.id}`);
+              if (refreshed?.story) setStory(refreshed.story);
+            } catch {/* non-fatal */}
+            autoFlowAfterResolve(id);
+          }}
+          onOwn={async () => {
+            const id = openTooltipClaim.claim.id;
+            await patchClaim(id, { action: 'own' });
+            setOpenTooltipClaim(null);
+            await loadClaims(story!.id);
+            autoFlowAfterResolve(id);
+          }}
+          onAddSource={async (sourceUrl, sourceText) => {
+            const id = openTooltipClaim.claim.id;
+            const result = await patchClaim(id, { action: 'add-source', sourceUrl, sourceText });
+            if (result?.supported === false) {
+              return { supported: false, reason: result.reason };
+            }
+            setOpenTooltipClaim(null);
+            await loadClaims(story!.id);
+            autoFlowAfterResolve(id);
+            return { supported: true, reason: result?.reason };
+          }}
+        />
+      )}
+      {/* Pulse animation hook — toggle a class on the active marker so it
+          briefly highlights when auto-flow scrolls to it. */}
+      {pulseClaimId && (
+        <style dangerouslySetInnerHTML={{ __html: `[data-claim-id="${pulseClaimId}"] { animation: provenance-pulse 1.4s ease-out 1; }` }} />
+      )}
+    </div>
+  );
+}
+
+// Round D — provenance four-action tooltip component. Anchored to the clicked
+// marker via fixed positioning. Add-source is a two-input form (URL or pasted
+// text); validation runs server-side and the unsupported-reason flows back here.
+interface ProvenanceTooltipProps {
+  claim: { id: string; sentence: string; origin: string; state: string; sourceRef?: string };
+  anchor: DOMRect;
+  onClose: () => void;
+  onEdit: (newSentence: string) => Promise<void>;
+  onCut: () => Promise<void>;
+  onOwn: () => Promise<void>;
+  onAddSource: (sourceUrl: string, sourceText: string) => Promise<{ supported: boolean; reason?: string }>;
+}
+function ProvenanceTooltip({ claim, anchor, onClose, onEdit, onCut, onOwn, onAddSource }: ProvenanceTooltipProps) {
+  const [mode, setMode] = useState<'menu' | 'edit' | 'add-source'>('menu');
+  const [editText, setEditText] = useState(claim.sentence);
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [sourceText, setSourceText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Position the tooltip — prefer below the anchor, flip above if it would go off-screen.
+  const top = anchor.bottom + 6;
+  const left = Math.min(Math.max(8, anchor.left), window.innerWidth - 340);
+  const style: React.CSSProperties = { top, left };
+  // Flip above if too low.
+  if (top + 220 > window.innerHeight) {
+    style.top = Math.max(8, anchor.top - 220);
+  }
+  const isUnsourced = claim.state === 'OPEN' && claim.origin === 'INFERENCE';
+  return (
+    <div className="provenance-tooltip" style={style} role="dialog" aria-label="Resolve claim">
+      <div className="provenance-tooltip-quote">{claim.sentence}</div>
+      {!isUnsourced && (
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 8 }}>
+          Origin: <strong>{claim.origin.replace('_', ' ')}</strong>
+          {claim.sourceRef ? <> · <a href={claim.sourceRef} target="_blank" rel="noreferrer">source</a></> : null}
+        </div>
+      )}
+      {mode === 'menu' && (
+        <>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px' }}>
+            {isUnsourced
+              ? "I wrote this from general knowledge, not from a source you gave me. Choose: Edit, Cut, Add source, or Own it."
+              : 'This claim is sourced. You can still edit, cut, or replace its source.'}
+          </p>
+          <div className="provenance-tooltip-actions">
+            <button className="btn btn-secondary btn-sm" onClick={() => setMode('edit')} disabled={busy}>Edit</button>
+            <button className="btn btn-secondary btn-sm" onClick={async () => { setBusy(true); try { await onCut(); } catch (e: any) { setError(e?.message || 'Cut failed'); } finally { setBusy(false); } }} disabled={busy}>Cut</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setMode('add-source')} disabled={busy}>Add source</button>
+            <button className="btn btn-secondary btn-sm" onClick={async () => { setBusy(true); try { await onOwn(); } catch (e: any) { setError(e?.message || 'Own failed'); } finally { setBusy(false); } }} disabled={busy}>Own it</button>
+          </div>
+          {error && <div className="provenance-tooltip-error">{error}</div>}
+          <div style={{ marginTop: 10, textAlign: 'right' }}>
+            <button className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
+          </div>
+        </>
+      )}
+      {mode === 'edit' && (
+        <div>
+          <textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            rows={4}
+            style={{ width: '100%', fontSize: 13, padding: 8, border: '1px solid var(--border-light, #e5e5ea)', borderRadius: 6, fontFamily: 'inherit' }}
+          />
+          {error && <div className="provenance-tooltip-error">{error}</div>}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 8 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setMode('menu')} disabled={busy}>Back</button>
+            <button className="btn btn-primary btn-sm" disabled={busy || !editText.trim()} onClick={async () => {
+              setBusy(true); setError(null);
+              try { await onEdit(editText.trim()); } catch (e: any) { setError(e?.message || 'Edit failed'); } finally { setBusy(false); }
+            }}>Save edit</button>
+          </div>
+        </div>
+      )}
+      {mode === 'add-source' && (
+        <div className="provenance-tooltip-add-source">
+          <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Source URL</label>
+          <input type="url" placeholder="https://..." value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} />
+          <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Or paste the relevant passage</label>
+          <textarea rows={3} value={sourceText} onChange={(e) => setSourceText(e.target.value)} placeholder="The exact text from the source that backs this claim." />
+          {error && <div className="provenance-tooltip-error">{error}</div>}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setMode('menu')} disabled={busy}>Back</button>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={busy || (!sourceUrl.trim() && !sourceText.trim())}
+              onClick={async () => {
+                setBusy(true); setError(null);
+                try {
+                  const result = await onAddSource(sourceUrl.trim(), sourceText.trim());
+                  if (!result.supported) {
+                    setError(result.reason || "I read that source but it doesn't seem to support this claim. Want to look again or rewrite?");
+                  }
+                } catch (e: any) { setError(e?.message || 'Validation failed'); } finally { setBusy(false); }
+              }}
+            >Validate &amp; add</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

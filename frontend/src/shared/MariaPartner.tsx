@@ -732,6 +732,68 @@ export function MariaPartner() {
             document.dispatchEvent(new CustomEvent('three-tier-view-mode', { detail: { mode } }));
             cleanedResponse = cleanedResponse.replace(/\s*\[SET_VIEW_MODE:[^\]]+\]\s*/g, '').trim();
           }
+          // Round D — provenance Maria-equivalent path (Topic 21). Maria emits
+          // one of several markers when the user drives the provenance system
+          // through chat. These all share the storyId-substitution rules from
+          // Bug #3: the FE rejects placeholder cuids before dispatching.
+          // [SET_PROVENANCE_VIEW_MODE:no-markup|minimal|all-markup]
+          const provViewMatch = cleanedResponse.match(/\[SET_PROVENANCE_VIEW_MODE:(no-markup|minimal|all-markup)\]/);
+          if (provViewMatch) {
+            const mode = provViewMatch[1];
+            document.dispatchEvent(new CustomEvent('provenance-view-mode', { detail: { mode } }));
+            cleanedResponse = cleanedResponse.replace(/\s*\[SET_PROVENANCE_VIEW_MODE:[^\]]+\]\s*/g, '').trim();
+          }
+          // [PROVENANCE_CUT:storyId:claimId], [PROVENANCE_OWN:storyId:claimId],
+          // [PROVENANCE_EDIT:storyId:claimId:new sentence],
+          // [PROVENANCE_ADD_SOURCE:storyId:claimId:URL]
+          const provResolveMatch = cleanedResponse.match(/\[PROVENANCE_(CUT|OWN|EDIT|ADD_SOURCE):([^:\]]+):([^:\]]+)(?::([^\]]*))?\]/);
+          if (provResolveMatch) {
+            const action = provResolveMatch[1];
+            const storyId = provResolveMatch[2].trim();
+            const claimId = provResolveMatch[3].trim();
+            const payload = provResolveMatch[4] || '';
+            if (isValidStoryId(storyId) && claimId && claimId.length >= 5 && claimId !== 'claimId') {
+              const body: Record<string, unknown> = {
+                CUT: { action: 'cut' },
+                OWN: { action: 'own' },
+                EDIT: { action: 'edit', newSentence: payload },
+                ADD_SOURCE: { action: 'add-source', sourceUrl: payload },
+              }[action] || {};
+              api.patch<any>(`/ai/claims/${claimId}`, body)
+                .then((r) => {
+                  document.dispatchEvent(new CustomEvent('provenance-claim-resolved', { detail: { storyId, claimId, action, result: r } }));
+                })
+                .catch((e) => console.error('[provenance] action failed', e));
+            } else {
+              console.warn(`[PROVENANCE_${action}] ignored placeholder ids:`, storyId, claimId);
+            }
+            cleanedResponse = cleanedResponse.replace(/\s*\[PROVENANCE_[A-Z_]+:[^\]]+\]\s*/g, '').trim();
+          }
+          // [PROVENANCE_OWN_ALL:storyId] — bulk-own every OPEN INFERENCE claim.
+          const provOwnAllMatch = cleanedResponse.match(/\[PROVENANCE_OWN_ALL:([^\]]+)\]/);
+          if (provOwnAllMatch) {
+            const storyId = provOwnAllMatch[1].trim();
+            if (isValidStoryId(storyId)) {
+              api.get<{ claims: Array<{ id: string; state: string; origin: string }> }>(`/ai/stories/${storyId}/claims`)
+                .then(async ({ claims }) => {
+                  const targets = (claims || []).filter(c => c.state === 'OPEN' && c.origin === 'INFERENCE');
+                  await Promise.all(targets.map(c => api.patch(`/ai/claims/${c.id}`, { action: 'own' }).catch(() => {})));
+                  document.dispatchEvent(new CustomEvent('provenance-claim-resolved', { detail: { storyId, action: 'OWN_ALL', count: targets.length } }));
+                })
+                .catch((e) => console.error('[provenance] own-all failed', e));
+            } else {
+              console.warn('[PROVENANCE_OWN_ALL] ignored placeholder storyId:', storyId);
+            }
+            cleanedResponse = cleanedResponse.replace(/\s*\[PROVENANCE_OWN_ALL:[^\]]+\]\s*/g, '').trim();
+          }
+          // [PROVENANCE_LIST_REQUEST:storyId] — Maria asked the system to surface
+          // the unsourced claim list for her next reply. We don't act on this
+          // synchronously; the system already surfaces claims via STORY_CONTEXT.
+          // Strip it so the user doesn't see a routing token in chat.
+          if (/\[PROVENANCE_LIST_REQUEST:/.test(cleanedResponse)) {
+            cleanedResponse = cleanedResponse.replace(/\s*\[PROVENANCE_LIST_REQUEST:[^\]]+\]\s*/g, '').trim();
+          }
+
           // Round C3 — chat-direction style override. Maria emits
           // [SET_STORY_STYLE:storyId:STYLE] when the user asks to change a
           // deliverable's style via chat. Persist via the PATCH endpoint and

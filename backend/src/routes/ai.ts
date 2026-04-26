@@ -1059,6 +1059,144 @@ router.post('/stories/:storyId/peer-info', requireStoryteller, async (req: Reque
   res.json(updated);
 });
 
+// ─── Round D — Provenance system (Topic 21) ────────────
+// GET claims for a story, broken down by chapter. Used by the lead-with-action
+// banner, the inline marker layer, and the auto-flow.
+router.get('/stories/:storyId/claims', requireStoryteller, async (req: Request, res: Response) => {
+  const storyId = String(req.params.storyId || '');
+  if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
+  const story = await prisma.fiveChapterStory.findFirst({
+    where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
+    select: { id: true, chapters: { select: { id: true, chapterNum: true } } },
+  });
+  if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+  const chapterIds = story.chapters.map((c) => c.id);
+  const claims = chapterIds.length > 0
+    ? await prisma.claim.findMany({
+        where: { chapterContentId: { in: chapterIds } },
+        orderBy: [{ chapterContentId: 'asc' }, { charOffset: 'asc' }, { createdAt: 'asc' }],
+      })
+    : [];
+  // Counts the banner needs: total claims + count of OPEN claims with INFERENCE origin (the unsourced set).
+  const totalClaims = claims.length;
+  const unsourcedOpen = claims.filter((c) => c.state === 'OPEN' && c.origin === 'INFERENCE').length;
+  res.json({ storyId, totalClaims, unsourcedOpen, claims, chapters: story.chapters });
+});
+
+// PATCH a single claim to resolve it. Body shapes:
+//   { action: 'edit',     newSentence: string }   → state RESOLVED_EDITED, origin AUTHORED
+//   { action: 'cut' }                              → state RESOLVED_CUT
+//   { action: 'own' }                              → state RESOLVED_OWNED, origin AUTHORED
+//   { action: 'add-source', sourceUrl: string, sourceText?: string }
+//                                                  → run validateSourceForClaim;
+//                                                    on success: state RESOLVED_SOURCED,
+//                                                    origin RESEARCH, sourceRef = url;
+//                                                    on failure: return { supported: false, reason } and DO NOT change state.
+router.patch('/claims/:claimId', requireStoryteller, async (req: Request, res: Response) => {
+  const claimId = String(req.params.claimId || '');
+  if (!claimId) { res.status(400).json({ error: 'claimId required' }); return; }
+  const claim = await prisma.claim.findUnique({
+    where: { id: claimId },
+    include: { chapter: { include: { story: { include: { draft: { include: { offering: { select: { workspaceId: true } } } } } } } } },
+  });
+  if (!claim || claim.chapter.story.draft.offering.workspaceId !== req.workspaceId) {
+    res.status(404).json({ error: 'Claim not found' });
+    return;
+  }
+  const action = String(req.body?.action || '').toLowerCase();
+  if (action === 'edit') {
+    const newSentence = typeof req.body?.newSentence === 'string' ? req.body.newSentence.trim() : '';
+    if (!newSentence) { res.status(400).json({ error: 'newSentence required for edit action' }); return; }
+    // Replace the old sentence in the chapter content (first occurrence).
+    const oldText = claim.chapter.content || '';
+    const replaced = oldText.replace(claim.sentence, newSentence);
+    await prisma.chapterContent.update({ where: { id: claim.chapter.id }, data: { content: replaced } });
+    const updated = await prisma.claim.update({
+      where: { id: claimId },
+      data: { sentence: newSentence, state: 'RESOLVED_EDITED', origin: 'AUTHORED', resolvedAt: new Date() },
+    });
+    res.json({ claim: updated });
+    return;
+  }
+  if (action === 'cut') {
+    const oldText = claim.chapter.content || '';
+    // Remove the sentence; collapse double-spaces + multiple blank lines so the
+    // paragraph reflows naturally. Conservative: only strips a single occurrence.
+    let next = oldText.replace(claim.sentence, '');
+    next = next.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    await prisma.chapterContent.update({ where: { id: claim.chapter.id }, data: { content: next } });
+    const updated = await prisma.claim.update({
+      where: { id: claimId },
+      data: { state: 'RESOLVED_CUT', resolvedAt: new Date() },
+    });
+    res.json({ claim: updated });
+    return;
+  }
+  if (action === 'own') {
+    const updated = await prisma.claim.update({
+      where: { id: claimId },
+      data: { state: 'RESOLVED_OWNED', origin: 'AUTHORED', resolvedAt: new Date() },
+    });
+    res.json({ claim: updated });
+    return;
+  }
+  if (action === 'add-source') {
+    const sourceUrl = typeof req.body?.sourceUrl === 'string' ? req.body.sourceUrl.trim() : '';
+    let sourceText = typeof req.body?.sourceText === 'string' ? req.body.sourceText.trim() : '';
+    if (!sourceUrl && !sourceText) { res.status(400).json({ error: 'sourceUrl or sourceText required' }); return; }
+    // If a URL is provided, fetch it (best-effort; if the fetch fails the
+    // user can paste sourceText as a fallback).
+    if (sourceUrl && !sourceText) {
+      try {
+        const fetched = await fetch(sourceUrl);
+        if (fetched.ok) {
+          const html = await fetched.text();
+          sourceText = html
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 12000);
+        }
+      } catch (err) {
+        console.error('[add-source] fetch failed:', err);
+      }
+    }
+    if (!sourceText) {
+      res.status(400).json({ error: "I couldn't read that URL. Try pasting the relevant passage instead." });
+      return;
+    }
+    try {
+      const { validateSourceForClaim } = await import('../services/provenanceClassify.js');
+      const result = await validateSourceForClaim({ claim: claim.sentence, sourceUrl, sourceText });
+      if (!result.supported) {
+        res.json({
+          supported: false,
+          reason: result.reason || `I read ${sourceUrl || 'that source'} but it doesn't seem to support this claim. Want me to look again or rewrite?`,
+        });
+        return;
+      }
+      const updated = await prisma.claim.update({
+        where: { id: claimId },
+        data: {
+          state: 'RESOLVED_SOURCED',
+          origin: 'RESEARCH',
+          sourceRef: sourceUrl || '',
+          resolvedAt: new Date(),
+        },
+      });
+      res.json({ supported: true, reason: result.reason, claim: updated });
+      return;
+    } catch (err: any) {
+      console.error('[add-source] validation failed:', err);
+      res.status(500).json({ error: err?.message || 'Validation failed' });
+      return;
+    }
+  }
+  res.status(400).json({ error: 'action must be one of: edit, cut, own, add-source' });
+});
+
 // ─── Refine Language ────────────────────────────────────
 
 router.post('/refine-language', requireEditor, async (req: Request, res: Response) => {
@@ -1799,6 +1937,50 @@ ${chapterGuardrail}`;
       changeSource: 'ai_generate',
     },
   });
+
+  // Round D — classify per-claim provenance and persist. Wipe any prior
+  // open claims for this chapter (regeneration replaces them) and replace
+  // with a fresh classification. Wrapped non-fatally so a classifier hiccup
+  // doesn't break the chapter pipeline.
+  try {
+    const { classifyClaims } = await import('../services/provenanceClassify.js');
+    const userInputBlocks: string[] = [];
+    if (story.draft.audience.priorities[0]?.driver) userInputBlocks.push(`Driver for top priority: ${story.draft.audience.priorities[0].driver}`);
+    for (const p of story.draft.audience.priorities) {
+      if (p.text) userInputBlocks.push(`Priority [Rank ${p.rank}]: ${p.text}`);
+    }
+    if ((story.draft as any).audience?.situation) userInputBlocks.push(`Audience situation: ${(story.draft as any).audience.situation}`);
+    if ((story.draft as any).offering?.contrarianScenario) userInputBlocks.push(`Contrarian scenario: ${(story.draft as any).offering.contrarianScenario}`);
+    const threeTierLines: string[] = [];
+    if (story.draft.tier1Statement?.text) threeTierLines.push(`Tier 1: ${story.draft.tier1Statement.text}`);
+    for (const t2 of story.draft.tier2Statements) {
+      threeTierLines.push(`Tier 2 (${t2.categoryLabel || ''}): ${t2.text}`);
+      for (const t3 of t2.tier3Bullets) threeTierLines.push(`  Tier 3: ${t3.text}`);
+    }
+    const classified = await classifyClaims({
+      chapterContent: content,
+      sourceMaterials: {
+        userInput: userInputBlocks.join('\n'),
+        peerInfo: story.peerInfo || undefined,
+        threeTier: threeTierLines.join('\n'),
+      },
+    });
+    await prisma.claim.deleteMany({ where: { chapterContentId: chapter.id, state: 'OPEN' } });
+    if (classified.length > 0) {
+      await prisma.claim.createMany({
+        data: classified.map((c) => ({
+          chapterContentId: chapter.id,
+          sentence: c.sentence,
+          charOffset: typeof c.charOffset === 'number' ? c.charOffset : 0,
+          origin: ['USER_WORDS', 'USER_DOC', 'RESEARCH', 'INFERENCE', 'AUTHORED'].includes(c.origin) ? c.origin : 'INFERENCE',
+          sourceRef: c.sourceRef || '',
+          state: 'OPEN',
+        })),
+      });
+    }
+  } catch (err) {
+    console.error(`[Provenance] Chapter ${chapterNum} classification failed (non-fatal):`, err);
+  }
 
   // Cross-chapter dedup: after generating chapter 5, scan all chapters for repeated phrases
   if (chapterNum === 5) {

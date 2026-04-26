@@ -2118,6 +2118,150 @@ p { line-height: 1.5; color: var(--text-secondary); }
   font-size: 12px;
 }
 
+/* ─── Round D — Provenance system styling ───────────────────── */
+/* Lead-with-action banner at top of deliverable. Single line; calmer color when
+ * everything is sourced, amber when something needs attention. */
+.provenance-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-md, 10px);
+  font-size: 13px;
+  flex-wrap: wrap;
+  border: 1px solid transparent;
+}
+.provenance-banner.is-clean {
+  background: rgba(52, 199, 89, 0.06);
+  border-color: rgba(52, 199, 89, 0.2);
+  color: var(--text-secondary);
+}
+.provenance-banner.has-unsourced {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.25);
+  color: var(--text-primary);
+}
+.provenance-banner-cta {
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.provenance-banner-orientation {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-light, #e5e5ea);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Inline marker visual. Unsourced (INFERENCE-origin OPEN) sentences get a
+ * calm amber background + a small ⓘ glyph at the end via ::after. All other
+ * origin classes (USER_WORDS, USER_DOC, RESEARCH, AUTHORED) get a small dot
+ * in the right margin only when the All-markup view mode is active. */
+.claim-marker {
+  position: relative;
+  cursor: pointer;
+}
+.claim-marker-unsourced {
+  background: rgba(245, 158, 11, 0.12);
+  border-bottom: 1px dotted rgba(245, 158, 11, 0.6);
+  padding: 0 1px;
+  border-radius: 2px;
+}
+.claim-marker-unsourced::after {
+  content: 'ⓘ';
+  display: inline-block;
+  margin-left: 4px;
+  color: #d97706;
+  font-size: 0.85em;
+  vertical-align: baseline;
+}
+.claim-marker-unsourced.is-pulse {
+  animation: provenance-pulse 1.4s ease-out 1;
+}
+@keyframes provenance-pulse {
+  0%   { background: rgba(245, 158, 11, 0.45); }
+  100% { background: rgba(245, 158, 11, 0.12); }
+}
+.claim-marker-user_words::after,
+.claim-marker-user_doc::after,
+.claim-marker-research::after,
+.claim-marker-authored::after {
+  content: '·';
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--text-tertiary);
+  font-size: 1em;
+  opacity: 0;
+  transition: opacity 120ms ease-in-out;
+}
+.claim-marker:hover.claim-marker-user_words::after,
+.claim-marker:hover.claim-marker-user_doc::after,
+.claim-marker:hover.claim-marker-research::after,
+.claim-marker:hover.claim-marker-authored::after {
+  opacity: 1;
+}
+
+/* Four-action resolution tooltip rendered next to the clicked marker. */
+.provenance-tooltip {
+  position: fixed;
+  z-index: 200;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-light, #e5e5ea);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.10);
+  padding: 12px;
+  width: 320px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.provenance-tooltip-quote {
+  background: var(--bg-secondary, #f8f8fa);
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  color: var(--text-primary);
+  font-style: italic;
+  font-size: 12px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+.provenance-tooltip-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.provenance-tooltip-actions button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.provenance-tooltip-add-source {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.provenance-tooltip-add-source input,
+.provenance-tooltip-add-source textarea {
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-light, #e5e5ea);
+  border-radius: 6px;
+}
+.provenance-tooltip-error {
+  font-size: 12px;
+  color: #b91c1c;
+  margin-top: 6px;
+}
+
 /* ─── Overlay Panels ──────────────────────────────── */
 .overlay-panel {
   position: fixed;
