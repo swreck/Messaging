@@ -14,6 +14,7 @@ import {
   getOverrideCount,
   type LeadDirection,
 } from './leadershipDetection';
+import { VoiceInputButton } from './VoiceInputButton';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -636,6 +637,18 @@ export function MariaPartner() {
         // Round B6 — send time context so the backend can decide whether to inject
         // the [TIME_THRESHOLD_REACHED] marker. Only sent if the user set a budget.
         ...(timeContext.budgetMin && timeContext.sessionStartMs ? { timeContext } : {}),
+        // Round E3 — flag persistent-intent voice input so Maria's prompt rule
+        // surfaces the explicit summary-back. Cleared after one trip.
+        ...(((): Record<string, unknown> => {
+          try {
+            const v = localStorage.getItem('voice-persistent-intent-pending');
+            if (v) {
+              localStorage.removeItem('voice-persistent-intent-pending');
+              return { voicePersistentIntent: v };
+            }
+          } catch {}
+          return {};
+        })()),
       });
       // Round B6 — backend tells us when the threshold marker fired this turn so
       // we can persist thresholdTriggered=true and avoid re-firing on later messages.
@@ -794,6 +807,55 @@ export function MariaPartner() {
             cleanedResponse = cleanedResponse.replace(/\s*\[PROVENANCE_LIST_REQUEST:[^\]]+\]\s*/g, '').trim();
           }
 
+          // Round E2 — Maria emits [SAVE_STYLE_RULE:audienceType:format:rule text]
+          // when the user accepts a detected edit-pattern question. Persist via
+          // /api/settings/style-rules POST and dispatch an event so the
+          // SettingsPage refreshes if it's open.
+          const ruleMatch = cleanedResponse.match(/\[SAVE_STYLE_RULE:([^:\]]*):([^:\]]*):([^\]]+)\]/);
+          if (ruleMatch) {
+            const scopeAudienceType = ruleMatch[1].trim();
+            const scopeFormat = ruleMatch[2].trim();
+            const ruleText = ruleMatch[3].trim();
+            if (ruleText && ruleText !== 'rule text') {
+              api.post('/settings/style-rules', { rule: ruleText, scopeAudienceType, scopeFormat })
+                .then((r) => {
+                  document.dispatchEvent(new CustomEvent('user-style-rule-added', { detail: r }));
+                })
+                .catch((e) => console.error('[E2] style-rule save failed', e));
+            }
+            cleanedResponse = cleanedResponse.replace(/\s*\[SAVE_STYLE_RULE:[^\]]+\]\s*/g, '').trim();
+          }
+          // Round E4 — Maria emits [APPLY_FOUNDATIONAL_SHIFT:draftId:targetCell:newText]
+          // when the user confirms her proposed Tier update. Persist via the
+          // existing tier1/tier2/tier3 PUT endpoints.
+          const shiftMatch = cleanedResponse.match(/\[APPLY_FOUNDATIONAL_SHIFT:([^:\]]+):([^:\]]+):([^\]]+)\]/);
+          if (shiftMatch) {
+            const draftId = shiftMatch[1].trim();
+            const targetCell = shiftMatch[2].trim();
+            const newText = shiftMatch[3].trim();
+            if (draftId && draftId.length >= 5 && draftId !== 'draftId' && draftId !== 'cmEXAMPLE0000000000000000' && newText && targetCell) {
+              if (targetCell === 'tier1') {
+                api.put(`/tiers/${draftId}/tier1`, { text: newText, changeSource: 'foundational_shift' })
+                  .then(() => document.dispatchEvent(new CustomEvent('three-tier-updated', { detail: { draftId, targetCell } })))
+                  .catch((e) => console.error('[E4] tier1 apply failed', e));
+              } else if (targetCell.startsWith('tier2-')) {
+                // The targetCell shape is "tier2-N" referring to sortOrder index.
+                // Resolve the actual tier2Statement id by reading the draft.
+                const idx = parseInt(targetCell.split('-')[1], 10);
+                api.get<{ draft: { tier2Statements: Array<{ id: string; sortOrder: number }> } }>(`/drafts/${draftId}`)
+                  .then(({ draft }) => {
+                    const t2 = (draft.tier2Statements || [])[idx];
+                    if (!t2) throw new Error('tier2 cell not found');
+                    return api.put(`/tiers/${draftId}/tier2/${t2.id}`, { text: newText, changeSource: 'foundational_shift' });
+                  })
+                  .then(() => document.dispatchEvent(new CustomEvent('three-tier-updated', { detail: { draftId, targetCell } })))
+                  .catch((e) => console.error('[E4] tier2 apply failed', e));
+              }
+            } else {
+              console.warn('[APPLY_FOUNDATIONAL_SHIFT] ignored placeholder ids:', draftId, targetCell);
+            }
+            cleanedResponse = cleanedResponse.replace(/\s*\[APPLY_FOUNDATIONAL_SHIFT:[^\]]+\]\s*/g, '').trim();
+          }
           // Round C3 — chat-direction style override. Maria emits
           // [SET_STORY_STYLE:storyId:STYLE] when the user asks to change a
           // deliverable's style via chat. Persist via the PATCH endpoint and
@@ -812,6 +874,35 @@ export function MariaPartner() {
               console.warn('[SET_STORY_STYLE] ignored placeholder storyId:', storyId);
             }
             cleanedResponse = cleanedResponse.replace(/\s*\[SET_STORY_STYLE:[^\]]+\]\s*/g, '').trim();
+          }
+
+          // Round s8 — chat-only B5 entry path. When Maria emits
+          // [PPTX_PREVIEW_REQUEST:<storyId>] from a chat-only request ("export
+          // this to slides"), route through the visual preview path so the
+          // [PPTX_PREVIEW:realId] priming gets dispatched and the trust gate
+          // fires the same way a button click does.
+          const pptxRequestMatch = cleanedResponse.match(/\[PPTX_PREVIEW_REQUEST:([^\]]+)\]/);
+          if (pptxRequestMatch) {
+            const storyId = pptxRequestMatch[1].trim();
+            if (isValidStoryId(storyId)) {
+              api.post<{ slides: Array<{ title: string; bullets: string[]; chapterNum?: number }> }>(`/ai/stories/${storyId}/pptx-preview`, {})
+                .then((result) => {
+                  const titles = (result.slides || []).map((s, i) => `${i + 1}. ${s.title}`).join('\n');
+                  const slideCount = result.slides?.length || 0;
+                  const previewMsg = `I'll produce a ${slideCount}-slide first-draft skeleton to save you time. Titles below — scan and tell me to go ahead, or cancel.\n\n${titles}\n\nThe deck comes unstyled. Open it in PowerPoint or Keynote, then apply your template (Design → Themes) to style the whole deck in one click.`;
+                  document.dispatchEvent(new CustomEvent('maria-toggle', {
+                    detail: {
+                      open: true,
+                      message: `[PPTX_PREVIEW:${storyId}] ${previewMsg}\n\nReady to download? Reply "yes" or "go ahead" — I'll deliver the file.`,
+                      hint: true,
+                    },
+                  }));
+                })
+                .catch((e) => console.error('[s8] chat-only pptx preview failed', e));
+            } else {
+              console.warn('[PPTX_PREVIEW_REQUEST] ignored placeholder storyId:', storyId);
+            }
+            cleanedResponse = cleanedResponse.replace(/\s*\[PPTX_PREVIEW_REQUEST:[^\]]+\]\s*/g, '').trim();
           }
 
           // Round B5 — pitch-deck export: scan for [CONFIRM_PPTX:storyId] which
@@ -1538,6 +1629,27 @@ export function MariaPartner() {
                       });
                       e.target.value = '';
                     }}
+                  />
+                  {/* Round E3 — voice-IN button. Tap-and-hold to dictate; release
+                      to send the transcript into the input. Whole utterance
+                      processed as one turn (no breaking on pauses). On iOS
+                      uses webkitSpeechRecognition; on desktop uses standard
+                      SpeechRecognition. Falls back to keyboard with a tooltip
+                      if neither is available. */}
+                  <VoiceInputButton
+                    onTranscript={(text, persistentIntent) => {
+                      // Append to current input rather than replacing — the user
+                      // may have typed something before tapping the mic.
+                      setInput((prev) => (prev ? `${prev} ${text}` : text));
+                      // If the heuristic identified a persistent intent, hand it
+                      // off so the substantive-direction summary-back rule fires.
+                      if (persistentIntent) {
+                        try {
+                          localStorage.setItem('voice-persistent-intent-pending', persistentIntent);
+                        } catch {}
+                      }
+                    }}
+                    disabled={sending}
                   />
                   <button
                     className="partner-attach"

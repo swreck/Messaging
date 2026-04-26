@@ -1194,7 +1194,23 @@ router.patch('/claims/:claimId', requireStoryteller, async (req: Request, res: R
       return;
     }
   }
-  res.status(400).json({ error: 'action must be one of: edit, cut, own, add-source' });
+  // Round E1 — "find one for me." Maria proposes a citable source for the
+  // claim; if the user accepts (next call applies the URL via add-source),
+  // the claim resolves with origin = RESEARCH. Honors the methodology
+  // guardrail: won't fabricate a source, returns supported=false instead.
+  if (action === 'find-source') {
+    try {
+      const { researchSource } = await import('../services/research.js');
+      const result = await researchSource({ claim: claim.sentence });
+      res.json(result);
+      return;
+    } catch (err: any) {
+      console.error('[find-source] research failed:', err);
+      res.status(502).json({ error: err?.message || 'Source research failed' });
+      return;
+    }
+  }
+  res.status(400).json({ error: 'action must be one of: edit, cut, own, add-source, find-source' });
 });
 
 // ─── Refine Language ────────────────────────────────────
@@ -1334,7 +1350,22 @@ router.post('/polish', requireEditor, async (req: Request, res: Response) => {
     isRefined: true, // Polish runs on refined/edited text, not first draft
   };
 
-  const ttCheck = await checkThreeTier(ttInput);
+  // Round s7 — graceful degradation. Polish runs two sequential Opus calls
+  // (checkThreeTier + DIRECTION_SYSTEM). If either times out, return 200
+  // with an honest message instead of throwing — the user can retry; the
+  // Three Tier doesn't change.
+  let ttCheck;
+  try {
+    ttCheck = await checkThreeTier(ttInput);
+  } catch (err: any) {
+    console.error('[Polish] checkThreeTier failed:', err);
+    res.json({
+      suggestions: [],
+      message: "Polish is taking longer than usual — give it a moment and try again.",
+      error: 'evaluator_failed',
+    });
+    return;
+  }
 
   // Convert evaluator findings into suggestions via a direction call
   if (ttCheck.passed) {
@@ -1361,10 +1392,23 @@ ${draft.audience.priorities.map(p => `[Rank ${p.rank}] "${p.text}"`).join('\n')}
 OFFERING CAPABILITIES:
 ${draft.offering.elements.map(e => `"${e.text}"`).join('\n')}`;
 
-  const result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
+  let result;
+  try {
+    result = await callAIWithJSON<{ suggestions: { cell: string; suggested: string }[] }>(DIRECTION_SYSTEM, dirMessage, 'elite');
+  } catch (err: any) {
+    console.error('[Polish] direction call failed (second of two Opus calls):', err);
+    // The first call (checkThreeTier) already succeeded; surface its findings
+    // so the user keeps that progress and can retry the second call.
+    res.json({
+      suggestions: [],
+      message: "Found issues, but couldn't draft fixes this round. Retry — we'll keep what we already learned.",
+      error: 'direction_failed',
+      findings: ttCheck.checks.filter(c => !c.pass).map(c => c.detail),
+    });
+    return;
+  }
 
   // Drop suggestions that don't materially improve on what's already there.
-  // Maria's job is to add value or do nothing — identical or near-identical suggestions are noise.
   if (result.suggestions) {
     const before = result.suggestions.length;
     result.suggestions = filterMaterialSuggestions(result.suggestions, draft);
@@ -1373,7 +1417,6 @@ ${draft.offering.elements.map(e => `"${e.text}"`).join('\n')}`;
     }
   }
 
-  // If every suggestion was filtered out, tell the user nothing meaningful is to be improved
   if (!result.suggestions || result.suggestions.length === 0) {
     res.json({ suggestions: [], message: 'Nothing meaningful to improve right now.' });
     return;
@@ -1694,7 +1737,20 @@ router.post('/generate-chapter', requireStoryteller, async (req: Request, res: R
     }
   }
 
-  const systemPrompt = buildChapterPrompt(chapterNum, story.medium, emphasisChapter, sourceContent);
+  const baseSystemPrompt = buildChapterPrompt(chapterNum, story.medium, emphasisChapter, sourceContent);
+  // Round E2 — append matching UserStyleRule overrides (if any) so generation
+  // honors the user's accumulated voice rules on top of the base style.
+  const rulesBlock = await (async () => {
+    try {
+      const { fetchMatchingRules, buildRulesBlock } = await import('../lib/userStyleRules.js');
+      const matched = await fetchMatchingRules({ userId: req.user!.userId, audienceType: story.draft.audience.name, format: story.medium });
+      return buildRulesBlock(matched);
+    } catch (err) {
+      console.error('[E2] rules block build failed (non-fatal):', err);
+      return '';
+    }
+  })();
+  const systemPrompt = baseSystemPrompt + rulesBlock;
   const ch = CHAPTER_CRITERIA[chapterNum - 1];
   const spec = getMediumSpec(story.medium);
 
@@ -2082,7 +2138,11 @@ router.post('/refine-chapter', requireStoryteller, async (req: Request, res: Res
 
   const story = await prisma.fiveChapterStory.findFirst({
     where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
-    include: { chapters: true },
+    include: {
+      chapters: true,
+      // Round E2 — need audience.name + medium for rule scoping.
+      draft: { include: { audience: { select: { name: true } } } },
+    },
   });
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
 
@@ -2113,7 +2173,15 @@ Please revise this chapter based on the feedback while respecting the chapter ru
 
   // Round C5 — apply the deliverable's effective style.
   const effectiveStyle = await resolveStyleForStory(storyId, req.user!.userId);
-  const refineSystem = buildRefineChapterSystem(effectiveStyle);
+  // Round E2 — layer user-style rules on top of the base style.
+  const e2Rules = await (async () => {
+    try {
+      const { fetchMatchingRules, buildRulesBlock } = await import('../lib/userStyleRules.js');
+      const matched = await fetchMatchingRules({ userId: req.user!.userId, audienceType: story.draft.audience.name, format: story.medium });
+      return buildRulesBlock(matched);
+    } catch { return ''; }
+  })();
+  const refineSystem = buildRefineChapterSystem(effectiveStyle) + e2Rules;
 
   let content = await callAI(refineSystem, userMessage, 'elite');
 
@@ -2304,6 +2372,7 @@ router.post('/copy-edit', requireStoryteller, async (req: Request, res: Response
 
   const story = await prisma.fiveChapterStory.findFirst({
     where: { id: storyId, draft: { offering: { workspaceId: req.workspaceId } } },
+    include: { draft: { include: { audience: { select: { name: true } } } } },
   });
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
 
@@ -2320,7 +2389,15 @@ Apply the requested changes.`;
 
   // Round C5 — apply the deliverable's effective style.
   const effectiveStyle = await resolveStyleForStory(storyId, req.user!.userId);
-  const copyEditSystem = buildCopyEditSystem(effectiveStyle);
+  // Round E2 — layer user-style rules on top of the base style.
+  const e2Rules = await (async () => {
+    try {
+      const { fetchMatchingRules, buildRulesBlock } = await import('../lib/userStyleRules.js');
+      const matched = await fetchMatchingRules({ userId: req.user!.userId, audienceType: story.draft.audience.name, format: story.medium });
+      return buildRulesBlock(matched);
+    } catch { return ''; }
+  })();
+  const copyEditSystem = buildCopyEditSystem(effectiveStyle) + e2Rules;
 
   let revised = await callAI(copyEditSystem, userMessage, 'elite');
 

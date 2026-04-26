@@ -14,6 +14,10 @@ The following files encode Ken Rosen's proprietary messaging methodologies. They
 - `backend/src/prompts/engineeringVoice.ts` — ENGINEERING_VOICE (28-rule Engineering Table style guide)
 - `backend/src/services/voiceCheck.ts` — Voice quality evaluation rules
 - `backend/src/services/engineeringStyleCheck.ts` — Engineering Table audit (single-pass 28-rule evaluator)
+- `backend/src/services/research.ts` — Round E1 research prompts (researchWebsite, researchAudience, researchSource, testDifferentiation)
+- `backend/src/services/editPatternDetect.ts` — Round E2 edit-shape characterizer
+- `backend/src/services/foundationalShift.ts` — Round E4 foundational-shift detector
+- `backend/src/services/provenanceClassify.ts` — Round D claim-origin classifier + Add-source validator
 - `backend/src/services/threeTierCheck.ts` — Three Tier structural/doctrinal evaluator
 - `backend/src/services/fiveChapterCheck.ts` — Five Chapter boundary/structure evaluator
 

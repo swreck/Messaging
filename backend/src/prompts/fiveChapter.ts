@@ -128,6 +128,7 @@ SELF-CHECK: Read every sentence. Does any sentence tell the reader something abo
 - Tailor proof to the desired call to action.
 - If no specific customer stories are available, describe the TYPE of results typical customers see.
 - NEVER invent specific company names, metrics, or quotes.
+- ROUND E1 GUARDRAIL — refuse to invent customer-specific numbers. When you'd ordinarily write a claim about the user's own product results ("our customers cut crashes 42%", "average savings of $X", "94% retention rate") and you have no user-supplied data backing it, do NOT invent a number. Two acceptable moves: (a) ask the user inline for the real number ("do you have a real number for this?"), OR (b) write a clearly-labeled placeholder ("placeholder: cite your own measurement") that surfaces in the deliverable as obviously needing the user's data. Customer-specific numbers are the user's measurement, not category research — Maria has no business making them up.
 - Describe RESULTS other organizations achieved, not HOW the product works mechanically. "Under 30-minute incident response" is a result — it belongs here. "Working from one screen" is a product mechanism — it belongs in Chapter 2. Social proof answers "what happened for them?" not "how does the product work?"`,
 
     5: `CHAPTER 5 RULES:

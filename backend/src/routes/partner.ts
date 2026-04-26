@@ -529,7 +529,7 @@ router.get('/history', async (req: Request, res: Response) => {
 // Optionally accepts an attachment: { data: base64string, mimeType: string, filename: string }
 // Images are sent to Claude via vision. PDFs and text files are extracted and prepended.
 router.post('/message', async (req: Request, res: Response) => {
-  const { message, context, attachment, attachments: rawAttachments, timeContext } = req.body as {
+  const { message, context, attachment, attachments: rawAttachments, timeContext, voicePersistentIntent } = req.body as {
     message?: string;
     context?: ActionContext;
     attachment?: { data: string; mimeType: string; filename: string };
@@ -543,6 +543,11 @@ router.post('/message', async (req: Request, res: Response) => {
       budgetMin?: number;         // null = no budget set / unlimited
       thresholdTriggered?: boolean; // true once the 80% trigger has fired this session
     };
+    // Round E3 — flagged when the user's voice input contained persistent-
+    // intent phrasing ("from now on", "going forward", "remember to").
+    // The system prompt surfaces it so Maria explicitly summary-backs the
+    // persistent intent before saving the rule.
+    voicePersistentIntent?: string;
   };
   // Normalize: single attachment or array of attachments
   const allAttachments: { data: string; mimeType: string; filename: string }[] =
@@ -601,6 +606,55 @@ router.post('/message', async (req: Request, res: Response) => {
     isNewUser,
     userRole,
   });
+
+  // Round E3 — surface persistent-intent voice flag so the prompt rule's
+  // explicit summary-back fires.
+  if (voicePersistentIntent && typeof voicePersistentIntent === 'string') {
+    systemPrompt += `\n\nVOICE PERSISTENT-INTENT FLAG — the user's last voice input contained phrasing that suggests a persistent rule ("from now on", "going forward", "remember to", etc.). Surface the rule explicitly in your summary-back: "...and I'll remember to apply this to future [audience-type/format] — got it right?" — then on user yes, emit [SAVE_STYLE_RULE:scopeAudienceType:scopeFormat:rule text]. Original phrasing: "${voicePersistentIntent.slice(0, 500).replace(/"/g, '\\"')}"`;
+  }
+
+  // Round E4 — surface the foundationalShift detection result from the most
+  // recent chapter edit, if one happened in the last 90 seconds. The chapter
+  // PUT handler stashes the result on User.settings.pendingFoundationalShift
+  // (transient, cleared on read) so Maria can propose the Tier update on her
+  // very next reply. Same-trip flow: the user edits chapter content; the PUT
+  // returns foundationalShift; the next chat request surfaces it here.
+  try {
+    const userRow = await prisma.user.findUnique({ where: { id: userId }, select: { settings: true } });
+    const settings = (userRow?.settings as Record<string, any>) || {};
+    const pending = settings.pendingFoundationalShift as { draftId?: string; targetCell?: string; oldText?: string; newText?: string; reason?: string; setAt?: string } | undefined;
+    if (pending && pending.draftId && pending.targetCell && pending.oldText && pending.newText) {
+      const ageMs = pending.setAt ? Date.now() - new Date(pending.setAt).getTime() : Infinity;
+      if (ageMs < 90_000) {
+        systemPrompt += `\n\nFOUNDATIONAL SHIFT DETECTED — the user just edited a chapter in a way that reframes a Tier. Surface the proposal explicitly per the FOUNDATIONAL-SHIFT DETECTION rule. Target: ${pending.targetCell}. Old: "${pending.oldText.slice(0, 300).replace(/"/g, '\\"')}". New: "${pending.newText.slice(0, 300).replace(/"/g, '\\"')}". Reason: ${pending.reason || ''}. On user yes, emit [APPLY_FOUNDATIONAL_SHIFT:${pending.draftId}:${pending.targetCell}:<the newText above>].`;
+      }
+      // Clear the pending shift after surfacing once.
+      const next = { ...settings };
+      delete next.pendingFoundationalShift;
+      await prisma.user.update({ where: { id: userId }, data: { settings: next } });
+    }
+  } catch (err) { console.error('[E4] surface pending shift failed:', err); }
+
+  // Round E2 — surface the detectedPattern from the most recent chapter edit
+  // if one fired in the last 90 seconds. Mirror of the E4 mechanism above.
+  try {
+    const userRow2 = await prisma.user.findUnique({ where: { id: userId }, select: { settings: true } });
+    const s2 = (userRow2?.settings as Record<string, any>) || {};
+    const pendingPattern = s2.pendingEditPattern as { shape?: string; scopeAudienceType?: string; scopeFormat?: string; occurrences?: number; setAt?: string } | undefined;
+    if (pendingPattern && pendingPattern.shape && pendingPattern.occurrences && pendingPattern.occurrences >= 3) {
+      const ageMs = pendingPattern.setAt ? Date.now() - new Date(pendingPattern.setAt).getTime() : Infinity;
+      if (ageMs < 90_000) {
+        const scopeBits: string[] = [];
+        if (pendingPattern.scopeAudienceType) scopeBits.push(`audience: ${pendingPattern.scopeAudienceType}`);
+        if (pendingPattern.scopeFormat) scopeBits.push(`format: ${pendingPattern.scopeFormat}`);
+        const scopeLabel = scopeBits.length > 0 ? scopeBits.join(' / ') : 'this kind of work';
+        systemPrompt += `\n\nEDIT PATTERN DETECTED — the user has made similar edits ${pendingPattern.occurrences} times in ${scopeLabel}. Shape: "${pendingPattern.shape.replace(/"/g, '\\"')}". Ask the scoped question per EDIT-PATTERN LEARNING. On user yes, emit [SAVE_STYLE_RULE:${pendingPattern.scopeAudienceType || ''}:${pendingPattern.scopeFormat || ''}:<rule text in user-affirmed phrasing>].`;
+      }
+      const next = { ...s2 };
+      delete next.pendingEditPattern;
+      await prisma.user.update({ where: { id: userId }, data: { settings: next } });
+    }
+  } catch (err) { console.error('[E2] surface pending pattern failed:', err); }
 
   // Personalization context — interview questions PREPEND to override conversational tone
   const personalizeProfile = await getPersonalize(userId);

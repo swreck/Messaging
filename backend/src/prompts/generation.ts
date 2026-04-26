@@ -329,6 +329,12 @@ For column labels:
 For Social proof column:
 □ Does the statement NAME specific customers, adoption numbers, or peer institutions? If not, rewrite.
 
+ROUND E1 GUARDRAIL — refuse to invent customer-specific numbers.
+When a claim describes the user's own product results ("our customers cut crashes 42%", "94% retention", "average savings of $X"), do NOT fabricate the number. Customer-specific numbers are the user's measurement, not category research. Two acceptable moves:
+- Surface it as a labeled placeholder the user can fill in ("placeholder: cite your own measurement"), or
+- Drop the specific number entirely and rely on the user's framing.
+Category-level numbers from named industry research (Gartner, Forrester, IDC, FDIC, NHTSA, etc.) are different — those are research findings, citable, fair to use when the user has not disputed them.
+
 ═══════════════════════════════════════════════════════════
 STOP — CHECK YOUR TIER 1 BEFORE OUTPUTTING
 ═══════════════════════════════════════════════════════════

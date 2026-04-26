@@ -27,6 +27,33 @@ model User {
   audiences         Audience[]
   assistantMessages AssistantMessage[]
   workspaces        WorkspaceMember[]
+  styleRules        UserStyleRule[]
+}
+
+// Round E2 — Maria learns from your edits.
+// When the user makes the same shape of edit three times across recent
+// generations, Maria asks one scoped question and (on yes) saves the answer
+// here. Rules are scoped to the audience-type and/or format Maria observed
+// the pattern in; the user can later broaden them via chat or Settings.
+//
+// rule:        free-text description of the rule, in user-affirmed phrasing.
+// scopeAudienceType / scopeFormat: optional narrowing — empty string means
+//   "applies to any audience-type / format" (i.e. broadened scope). The
+//   refine/copy-edit pipeline reads matching rules and layers them on top of
+//   the active base style + Personalize profile.
+// lastApplied: bumped each time a generation actually used the rule. The
+//   Settings 30-day-stale prompt reads this.
+model UserStyleRule {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rule              String
+  scopeAudienceType String   @default("")
+  scopeFormat       String   @default("")
+  createdAt         DateTime @default(now())
+  lastApplied       DateTime?
+
+  @@index([userId])
 }
 
 // ─── Workspaces ──────────────────────────────────────────

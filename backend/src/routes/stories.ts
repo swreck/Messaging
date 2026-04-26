@@ -185,6 +185,19 @@ router.patch('/:id/style', requireStoryteller, async (req: Request, res: Respons
 router.put('/:storyId/chapters/:chapterNum', requireStoryteller, async (req: Request, res: Response) => {
   const story = await prisma.fiveChapterStory.findFirst({
     where: { id: param(req.params.storyId), draft: { offering: { workspaceId: req.workspaceId } } },
+    // Round E2 — also load the chapter's most recent ai_generate version so
+    // we can characterize the user's edit (BEFORE = ai_generate, AFTER = save).
+    // Round E4 — also load the current Three Tier so foundational-shift
+    // detection can compare the edit against current Tier wording.
+    include: {
+      draft: {
+        include: {
+          audience: { select: { name: true } },
+          tier1Statement: { select: { id: true, text: true } },
+          tier2Statements: { orderBy: { sortOrder: 'asc' }, select: { id: true, text: true, categoryLabel: true } },
+        },
+      },
+    },
   });
   if (!story) {
     res.status(404).json({ error: 'Story not found' });
@@ -211,10 +224,20 @@ router.put('/:storyId/chapters/:chapterNum', requireStoryteller, async (req: Req
   });
 
   // Create chapter version for manual edits
+  let detectedPattern: any = null;
+  let foundationalShift: any = null;
   if (content) {
     const maxVer = await prisma.chapterVersion.aggregate({
       where: { chapterContentId: chapter.id },
       _max: { versionNum: true },
+    });
+    // Find the most recent ai_generate version to use as BEFORE for E2 pattern
+    // detection AND E4 foundational-shift detection. If none exists, skip
+    // detection — there's no Maria-authored baseline to compare against.
+    const lastAi = await prisma.chapterVersion.findFirst({
+      where: { chapterContentId: chapter.id, changeSource: 'ai_generate' },
+      orderBy: { versionNum: 'desc' },
+      select: { content: true },
     });
     await prisma.chapterVersion.create({
       data: {
@@ -225,13 +248,89 @@ router.put('/:storyId/chapters/:chapterNum', requireStoryteller, async (req: Req
         changeSource: 'manual',
       },
     });
+    // Round E2 + E4 — fire pattern detection AND foundational-shift detection
+    // in parallel against the ai_generate baseline. Both wrapped non-fatally.
+    if (lastAi?.content && lastAi.content !== content) {
+      const [patternResult, shiftResult] = await Promise.allSettled([
+        (async () => {
+          const { recordEditObservation } = await import('../lib/userStyleRules.js');
+          return recordEditObservation({
+            userId: req.user!.userId,
+            before: lastAi.content,
+            after: content,
+            audienceType: story.draft?.audience?.name,
+            format: story.medium,
+          });
+        })(),
+        (async () => {
+          const { detectFoundationalShift } = await import('../services/foundationalShift.js');
+          return detectFoundationalShift({
+            beforeChapterContent: lastAi.content,
+            afterChapterContent: content,
+            chapterNum,
+            threeTier: {
+              tier1: story.draft?.tier1Statement?.text || '',
+              tier2: (story.draft?.tier2Statements || []).map((t: any) => ({ categoryLabel: t.categoryLabel || '', text: t.text || '' })),
+            },
+            audienceName: story.draft?.audience?.name || '',
+          });
+        })(),
+      ]);
+      if (patternResult.status === 'fulfilled') detectedPattern = patternResult.value;
+      else console.error('[E2] pattern detection failed:', patternResult.reason);
+      if (shiftResult.status === 'fulfilled' && shiftResult.value.shouldUpdate) foundationalShift = shiftResult.value;
+      else if (shiftResult.status === 'rejected') console.error('[E4] shift detection failed:', shiftResult.reason);
+      // Stash pending detections on User.settings so the next partner-message
+      // request can surface them in Maria's prompt context. Cleared on read
+      // (one-shot). 90-second freshness window in the partner route.
+      if (detectedPattern || foundationalShift) {
+        try {
+          const userRow = await prisma.user.findUnique({
+            where: { id: req.user!.userId },
+            select: { settings: true },
+          });
+          const settings = (userRow?.settings as Record<string, any>) || {};
+          if (detectedPattern) {
+            settings.pendingEditPattern = {
+              shape: detectedPattern.shape,
+              scopeAudienceType: detectedPattern.scopeAudienceType || '',
+              scopeFormat: detectedPattern.scopeFormat || '',
+              occurrences: detectedPattern.occurrences,
+              setAt: new Date().toISOString(),
+            };
+          }
+          if (foundationalShift) {
+            settings.pendingFoundationalShift = {
+              draftId: story.draftId,
+              targetCell: foundationalShift.targetCell,
+              oldText: foundationalShift.oldText,
+              newText: foundationalShift.newText,
+              reason: foundationalShift.reason,
+              setAt: new Date().toISOString(),
+            };
+          }
+          await prisma.user.update({
+            where: { id: req.user!.userId },
+            data: { settings },
+          });
+        } catch (err) {
+          console.error('[E2/E4] stash pending detection failed:', err);
+        }
+      }
+    }
   }
 
   const updatedStory = await prisma.fiveChapterStory.update({
     where: { id: param(req.params.storyId) },
     data: { version: { increment: 1 } },
   });
-  res.json({ chapter, story: updatedStory });
+  // detectedPattern is non-null when the user has hit threshold-3 of similar
+  // edits — frontend prompts Maria to ask the scoped question; user accepts
+  // via /api/settings/style-rules POST.
+  // foundationalShift is non-null when Maria detects the edit reframes a Tier
+  // — frontend prompts Maria to propose the exact new Tier wording; user
+  // accepts via /api/tiers/:draftId/tier1 (or tier2/tier3) PUT.
+  res.json({ chapter, story: updatedStory, detectedPattern, foundationalShift });
 });
 
 // PATCH /api/stories/:id/rename
