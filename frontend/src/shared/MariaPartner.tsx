@@ -820,6 +820,9 @@ export function MariaPartner() {
               api.post('/settings/style-rules', { rule: ruleText, scopeAudienceType, scopeFormat })
                 .then((r) => {
                   document.dispatchEvent(new CustomEvent('user-style-rule-added', { detail: r }));
+                  // Bug #5 — clear the pending E2 entry server-side so the
+                  // surfacing block stops re-firing on subsequent replies.
+                  return api.post('/partner/clear-pending', { kind: 'editPattern' });
                 })
                 .catch((e) => console.error('[E2] style-rule save failed', e));
             }
@@ -834,9 +837,13 @@ export function MariaPartner() {
             const targetCell = shiftMatch[2].trim();
             const newText = shiftMatch[3].trim();
             if (draftId && draftId.length >= 5 && draftId !== 'draftId' && draftId !== 'cmEXAMPLE0000000000000000' && newText && targetCell) {
+              const clearPending = () => api.post('/partner/clear-pending', { kind: 'foundationalShift' }).catch((e) => console.error('[E4] clear-pending failed', e));
               if (targetCell === 'tier1') {
                 api.put(`/tiers/${draftId}/tier1`, { text: newText, changeSource: 'foundational_shift' })
-                  .then(() => document.dispatchEvent(new CustomEvent('three-tier-updated', { detail: { draftId, targetCell } })))
+                  .then(() => {
+                    document.dispatchEvent(new CustomEvent('three-tier-updated', { detail: { draftId, targetCell } }));
+                    return clearPending();
+                  })
                   .catch((e) => console.error('[E4] tier1 apply failed', e));
               } else if (targetCell.startsWith('tier2-')) {
                 // The targetCell shape is "tier2-N" referring to sortOrder index.
@@ -848,7 +855,10 @@ export function MariaPartner() {
                     if (!t2) throw new Error('tier2 cell not found');
                     return api.put(`/tiers/${draftId}/tier2/${t2.id}`, { text: newText, changeSource: 'foundational_shift' });
                   })
-                  .then(() => document.dispatchEvent(new CustomEvent('three-tier-updated', { detail: { draftId, targetCell } })))
+                  .then(() => {
+                    document.dispatchEvent(new CustomEvent('three-tier-updated', { detail: { draftId, targetCell } }));
+                    return clearPending();
+                  })
                   .catch((e) => console.error('[E4] tier2 apply failed', e));
               }
             } else {
