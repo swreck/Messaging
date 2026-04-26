@@ -474,6 +474,19 @@ RESPOND WITH JSON:
   ]
 }`;
 
+// Round C5 — style-parameterized variant. The original constant stays for
+// callers that haven't been migrated, plus to keep the Three Tier coaching
+// flow on Table for 2. New call sites (Refine Language, Polish on a story
+// with an Engineering Table effective style) call buildRefineLanguageSystem.
+import { ENGINEERING_VOICE as _ENGINEERING_VOICE_FOR_REFINE } from './engineeringVoice.js';
+
+type RefineStyle = 'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED';
+
+export function buildRefineLanguageSystem(style: RefineStyle): string {
+  const voice = style === 'ENGINEERING_TABLE' ? _ENGINEERING_VOICE_FOR_REFINE : KENS_VOICE;
+  return REFINE_LANGUAGE_SYSTEM.replace(KENS_VOICE, voice);
+}
+
 export const REFINE_LANGUAGE_SYSTEM = `You are Maria, a colleague helping polish a Three Tier message.
 
 ${KENS_VOICE}

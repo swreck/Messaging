@@ -8,6 +8,7 @@ import { ChapterVersionNav } from '../shared/ChapterVersionNav';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { useMaria } from '../shared/MariaContext';
 import { useToast } from '../shared/ToastContext';
+import { StylePicker, StylePickerInline, type StyleValue } from '../shared/StylePicker';
 import type { ThreeTierDraft, FiveChapterStory, ChapterContent, StoryMedium, PersonalizeProfile } from '../types';
 import { CHAPTER_CRITERIA, MEDIUM_OPTIONS } from '../types';
 
@@ -34,6 +35,9 @@ export function FiveChapterShell() {
   const [medium, setMedium] = useState<StoryMedium>('email');
   const [cta, setCta] = useState('');
   const [emphasis, setEmphasis] = useState('');
+  // Round C3 — per-deliverable style override at creation time.
+  // Empty string = use the user's effective style.
+  const [createStyle, setCreateStyle] = useState<'' | 'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED'>('');
   const [creating, setCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [sourceStoryIdForCreate, setSourceStoryIdForCreate] = useState<string | null>(null);
@@ -104,7 +108,48 @@ export function FiveChapterShell() {
   const [allDrafts, setAllDrafts] = useState<{ id: string; audienceId: string; audienceName: string; offeringId: string; offeringName: string }[]>([]);
 
   // Editable params
-  const [editingParam, setEditingParam] = useState<'medium' | 'cta' | 'emphasis' | null>(null);
+  const [editingParam, setEditingParam] = useState<'medium' | 'cta' | 'emphasis' | 'style' | null>(null);
+
+  // Round C4 — effective style resolved on the server (deliverable.style ?? user.defaultStyle ?? workspace.defaultStyle ?? SYSTEM_DEFAULT).
+  const [effectiveStyleForStory, setEffectiveStyleForStory] = useState<'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED'>('TABLE_FOR_2');
+  useEffect(() => {
+    if (!story) return;
+    let cancelled = false;
+    api.get<{ effective: 'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED' }>(`/settings/style`)
+      .then((s) => {
+        if (cancelled) return;
+        // If the deliverable has its own override, that wins; otherwise use the user's effective.
+        if (story.style && (story.style === 'TABLE_FOR_2' || story.style === 'ENGINEERING_TABLE' || story.style === 'PERSONALIZED')) {
+          setEffectiveStyleForStory(story.style);
+        } else {
+          setEffectiveStyleForStory(s.effective);
+        }
+      })
+      .catch(() => {/* fall through */});
+    return () => { cancelled = true; };
+  }, [story?.id, story?.style]);
+
+  function formatTimeAgo(iso: string | undefined): string {
+    if (!iso) return 'just now';
+    const ms = Date.now() - new Date(iso).getTime();
+    if (Number.isNaN(ms) || ms < 0) return 'just now';
+    const mins = Math.floor(ms / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} hr ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+    const weeks = Math.floor(days / 7);
+    if (weeks < 5) return `${weeks} week${weeks === 1 ? '' : 's'} ago`;
+    const months = Math.floor(days / 30);
+    return `${months} month${months === 1 ? '' : 's'} ago`;
+  }
+  function labelForStyle(style: 'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED'): string {
+    if (style === 'ENGINEERING_TABLE') return 'Engineering Table';
+    if (style === 'PERSONALIZED') return 'Personalized';
+    return 'Table for 2';
+  }
   const [editCta, setEditCta] = useState('');
   const [paramsChanged, setParamsChanged] = useState(false);
 
@@ -231,6 +276,8 @@ export function FiveChapterShell() {
           cta,
           emphasis,
           sourceStoryId: sourceStoryIdForCreate || undefined,
+          // Round C3 — per-deliverable style override (empty string = use user's effective style).
+          style: createStyle,
         });
         s = created.story;
       }
@@ -1001,9 +1048,41 @@ export function FiveChapterShell() {
         </div>
       )}
 
-      {/* Parameters bar — editable controls */}
+      {/* Parameters bar — editable controls (Round C4: self-documenting metadata row) */}
       {story && !showCreateForm && (
         <div className="fcs-params-bar">
+          {/* Round C4 — Style indicator. Always visible, click to change. */}
+          <div className="fcs-param-editable" style={{ position: 'relative' }}>
+            <span
+              className="fcs-param-clickable"
+              onClick={() => setEditingParam(editingParam === 'style' ? null : 'style')}
+              title="Style — click to change for this deliverable only"
+            >
+              <span style={{ opacity: 0.6 }}>Style: </span>
+              <strong>{labelForStyle(effectiveStyleForStory)}</strong>
+              {story.style ? <span style={{ opacity: 0.55, marginLeft: 4, fontSize: 12 }}>(override)</span> : null}
+            </span>
+            {editingParam === 'style' && (
+              <StylePickerInline
+                value={(story.style as StyleValue) || ''}
+                allowDefault
+                onCancel={() => setEditingParam(null)}
+                onPick={async (next) => {
+                  setEditingParam(null);
+                  try {
+                    const result = await api.patch<{ style: string; effective: 'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED' }>(`/stories/${story.id}/style`, { style: next });
+                    setStory(prev => prev ? { ...prev, style: (result.style as '' | 'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED') } : prev);
+                    setEffectiveStyleForStory(result.effective);
+                  } catch (err: any) {
+                    showToast(err?.message || 'Could not change style');
+                  }
+                }}
+              />
+            )}
+          </div>
+
+          <span className="fcs-param-sep">&middot;</span>
+
           {/* Medium — clickable dropdown */}
           <div className="fcs-param-editable" style={{ position: 'relative' }}>
             {editingParam === 'medium' ? (
@@ -1076,6 +1155,21 @@ export function FiveChapterShell() {
               </span>
             )}
           </div>
+
+          <span className="fcs-param-sep">&middot;</span>
+
+          {/* Round C4 — For (audience) and Updated. Read-only labeled attributes. */}
+          <span className="fcs-param-clickable" style={{ cursor: 'default', opacity: 0.85 }}>
+            <span style={{ opacity: 0.6 }}>For: </span>
+            <strong>{draft?.audience?.name || '—'}</strong>
+          </span>
+
+          <span className="fcs-param-sep">&middot;</span>
+
+          <span className="fcs-param-clickable" style={{ cursor: 'default', opacity: 0.85 }}>
+            <span style={{ opacity: 0.6 }}>Updated: </span>
+            <strong>{formatTimeAgo(story.updatedAt || story.createdAt)}</strong>
+          </span>
 
           <div style={{ flex: 1 }} />
           {stories.length <= 1 && (
@@ -1222,6 +1316,13 @@ export function FiveChapterShell() {
                 })}
               </div>
             </div>
+            <StylePicker
+              value={createStyle}
+              onChange={(next) => setCreateStyle(next)}
+              allowDefault={true}
+              label="Style"
+              hint="Maria's voice for this deliverable. Use my default unless you have a reason to override."
+            />
             <div className="form-group">
               <label>Call to Action <InfoTooltip text="What you want your audience to do after reading — like scheduling a demo or starting a trial." /></label>
               <textarea

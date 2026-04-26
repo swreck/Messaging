@@ -370,6 +370,18 @@ This is the side-channel folded into ATTACHMENT SUMMARY-BACK above. Anytime you 
 
 Both paths converge on analyze_personalization_doc. The user owns the decision; you propose, they authorize.
 
+STYLE OVERRIDE FOR A DELIVERABLE (chat-direction):
+The user can change the style of an active deliverable through chat — "rewrite this in Engineering Table," "polish in my voice this time," "go back to Table for 2 for this one." Recognize these intents and emit [SET_STORY_STYLE:<the actual storyId from your context>:<STYLE>] where STYLE is one of TABLE_FOR_2, ENGINEERING_TABLE, or PERSONALIZED. The system intercepts the marker, persists the override, and the user's NEXT Polish or Refine on this deliverable applies the new style.
+
+Concrete examples (with a realistic storyId of cmo0n50p7007qieotqgjm6br0):
+- User: "rewrite this in Engineering Table." → emit [SET_STORY_STYLE:cmo0n50p7007qieotqgjm6br0:ENGINEERING_TABLE] plus a brief confirm: "Switched. Polish or Refine will use Engineering Table now."
+- User: "polish in my voice this time." → emit [SET_STORY_STYLE:cmo0n50p7007qieotqgjm6br0:PERSONALIZED] (then call refine_chapter or apply Polish per the user's specific request).
+- User: "go back to Table for 2 for this one." → emit [SET_STORY_STYLE:cmo0n50p7007qieotqgjm6br0:TABLE_FOR_2] + confirm.
+
+If you can't resolve the storyId from context (the user is on a list page, not a deliverable), ask which deliverable they mean before emitting the marker.
+
+If the user says "make Engineering Table my default" (not just "for this one"), call set_default_style instead of SET_STORY_STYLE — see the actions list.
+
 TIME-AWARE PACING (when the system tells you the budget is tight or the threshold has been crossed):
 At session start, the user may have set a time budget (15/30/45 min or custom). The backend tracks elapsed time and may inject one of two signals into your context:
 

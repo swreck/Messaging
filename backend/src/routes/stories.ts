@@ -69,7 +69,14 @@ router.post('/', requireStoryteller, async (req: Request, res: Response) => {
     return;
   }
 
-  const { sourceStoryId, customName } = req.body;
+  const { sourceStoryId, customName, style } = req.body;
+  // Round C3 — per-deliverable style override (optional). Empty string = use
+  // user's effective style; explicit value overrides for this deliverable only.
+  const styleValidation = (await import('../lib/styleResolver.js')).validateStyleInput(style);
+  if (!styleValidation.ok) {
+    res.status(400).json({ error: styleValidation.error });
+    return;
+  }
 
   // Auto-generate persistent name if not provided
   let name = customName || '';
@@ -94,6 +101,7 @@ router.post('/', requireStoryteller, async (req: Request, res: Response) => {
       emphasis: emphasis || '',
       customName: name,
       sourceStoryId: sourceStoryId || null,
+      style: styleValidation.value || '',
     },
     include: { chapters: true },
   });
@@ -148,6 +156,29 @@ router.put('/:id', requireStoryteller, async (req: Request, res: Response) => {
     include: { chapters: { orderBy: { chapterNum: 'asc' } } },
   });
   res.json({ story: updated });
+});
+
+// Round C3 — per-deliverable style override (post-creation). Used by the
+// metadata-row Style picker click. Empty string = clear the override and
+// fall back to the user's effective style.
+router.patch('/:id/style', requireStoryteller, async (req: Request, res: Response) => {
+  const story = await prisma.fiveChapterStory.findFirst({
+    where: { id: param(req.params.id), draft: { offering: { workspaceId: req.workspaceId } } },
+    select: { id: true },
+  });
+  if (!story) {
+    res.status(404).json({ error: 'Story not found' });
+    return;
+  }
+  const v = (await import('../lib/styleResolver.js')).validateStyleInput(req.body?.style);
+  if (!v.ok) { res.status(400).json({ error: v.error }); return; }
+  const updated = await prisma.fiveChapterStory.update({
+    where: { id: param(req.params.id) },
+    data: { style: v.value || '' },
+    select: { id: true, style: true },
+  });
+  const effective = await (await import('../lib/styleResolver.js')).resolveStyleForStory(updated.id, req.user!.userId);
+  res.json({ id: updated.id, style: updated.style, effective });
 });
 
 // PUT /api/stories/:storyId/chapters/:chapterNum

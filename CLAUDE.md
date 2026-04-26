@@ -11,7 +11,9 @@ The following files encode Ken Rosen's proprietary messaging methodologies. They
 - `backend/src/prompts/coaching.ts` — Interview prompts for capability/priority extraction
 - `backend/src/prompts/mapping.ts` — Priority → capability mapping logic
 - `backend/src/prompts/partner.ts` — METHODOLOGY_CORE (Maria's deep understanding)
+- `backend/src/prompts/engineeringVoice.ts` — ENGINEERING_VOICE (28-rule Engineering Table style guide)
 - `backend/src/services/voiceCheck.ts` — Voice quality evaluation rules
+- `backend/src/services/engineeringStyleCheck.ts` — Engineering Table audit (single-pass 28-rule evaluator)
 - `backend/src/services/threeTierCheck.ts` — Three Tier structural/doctrinal evaluator
 - `backend/src/services/fiveChapterCheck.ts` — Five Chapter boundary/structure evaluator
 
@@ -108,7 +110,7 @@ cd backend && npx tsx prisma/seed.ts    # Seed admin + invite codes
 The user's standard stack is documented in the global CLAUDE.md under "Standard tooling." Unless this project departs from it, assume:
 - **Frontend**: React 19 + TypeScript + Vite
 - **Backend**: Express 5 + TypeScript + Prisma ORM → PostgreSQL (Neon cloud)
-- **AI**: Anthropic SDK (Haiku for speed, Sonnet for depth) — API key is in `.env`
+- **AI**: Anthropic SDK — see *Model selection* section below for Maria's quality-floor principle (Sonnet floor, Opus for any reasoning, Haiku not used). API key is in `.env`.
 - **Deployment**: Railway (CLI is installed and authenticated), backend serves pre-built frontend from `backend/public/`
 - **PWA**: vite-plugin-pwa with injectManifest strategy, web-push for notifications
 - **Database**: Neon cloud PostgreSQL — connection string goes in `.env` as `DATABASE_URL`
@@ -168,9 +170,21 @@ The user tests on their phone. Keep these in mind:
 
 ## AI integration patterns
 
-When building features that use the Anthropic API:
-- Use Haiku for high-volume, low-latency tasks (parsing user input, classification, summarization)
-- Use Sonnet for tasks requiring deeper reasoning (web search analysis, complex decision-making)
-- Structure AI prompts as numbered instructions — easier to iterate on individual behaviors
-- Track AI confidence scores and route low-confidence results for user review
-- Consider a tuning/feedback loop: let users correct AI mistakes, feed corrections back into the prompt
+### Model selection — the quality-floor principle
+
+**Maria's use volume is low and per-response quality is paramount.** Maria is a guided professional tool used by senior experts producing high-stakes deliverables. Every Maria response carries the user's professional credibility. Per-token cost and latency are explicitly subordinate to output quality.
+
+**Model selection rules:**
+- **Opus** is used for any task requiring reasoning, judgment, or voice-shaping. This includes: every evaluator (mapping evaluator with strength signals, fabrication check, altitude check, voice check, three-tier check, five-chapter check, MF check), every user-facing generation that shapes Maria's voice (chat assistant, refine, copy edit, chapter generation, blend, join), audience-fit conversation, contrarian extraction, personalization synthesis.
+- **Sonnet** is the floor for any other API call. Used for structured extraction, parsing, classification — places where the output is mostly mechanical conversion of inputs into structured data with little judgment (express extraction, website content extraction, social proof extraction, simple driver drafting).
+- **Haiku is not used in this product.** Generic Anthropic-SDK guidance ("Haiku for speed, Sonnet for depth") does not apply here. The product owner has explicitly chosen quality over per-call cost.
+
+**Why this principle.** This product is not an at-scale consumer chatbot. It's a guided professional tool where one bad Maria response degrades the user's trust in the entire methodology. The cost differential between Sonnet/Opus and Haiku is meaningless at Maria's volume; the quality differential is decisive.
+
+**For new features.** When adding a new AI call site, classify the task and select the model accordingly. If uncertain whether a task needs Opus or Sonnet, default to Opus and let measurement (not assumption) drive any future de-escalation.
+
+### Other AI integration practices
+
+- Structure AI prompts as numbered instructions — easier to iterate on individual behaviors.
+- Track AI confidence scores and route low-confidence results for user review.
+- Consider a tuning/feedback loop: let users correct AI mistakes, feed corrections back into the prompt.

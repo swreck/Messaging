@@ -4,6 +4,7 @@ import { ConfirmModal } from '../shared/ConfirmModal';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { AdminPanel } from '../admin/AdminPanel';
+import { StylePicker, type StyleValue } from '../shared/StylePicker';
 import type { PersonalizeProfile } from '../types';
 
 interface LearningData {
@@ -12,6 +13,13 @@ interface LearningData {
   questionThreshold: number;
   columnEdits: Record<string, number>;
   corrections: { aiText: string; userText: string; column: string; createdAt: string }[];
+}
+
+// Round C — human label for a style enum value.
+function labelFor(style: 'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED'): string {
+  if (style === 'ENGINEERING_TABLE') return 'Engineering Table';
+  if (style === 'PERSONALIZED') return 'Personalized';
+  return 'Table for 2';
 }
 
 export function SettingsPage() {
@@ -25,11 +33,48 @@ export function SettingsPage() {
   const [resettingPersonalize, setResettingPersonalize] = useState(false);
   const [showAllObservations, setShowAllObservations] = useState(false);
 
+  // Round C2 — default style settings.
+  const [styleSettings, setStyleSettings] = useState<{
+    user: { defaultStyle: StyleValue };
+    workspace: { id: string; name: string; defaultStyle: StyleValue } | null;
+    effective: 'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED';
+  } | null>(null);
+  const [styleSaving, setStyleSaving] = useState(false);
+  const [orgStyleSaving, setOrgStyleSaving] = useState(false);
+
   useEffect(() => {
     setPageContext({ page: 'settings' });
     loadSettings();
     loadPersonalize();
+    loadStyle();
   }, [setPageContext]);
+
+  async function loadStyle() {
+    try {
+      const data = await api.get<typeof styleSettings extends infer T ? T : never>('/settings/style');
+      setStyleSettings(data as any);
+    } catch {/* non-fatal */}
+  }
+
+  async function saveDefaultStyle(next: StyleValue) {
+    setStyleSaving(true);
+    try {
+      await api.put('/settings/style', { defaultStyle: next });
+      await loadStyle();
+    } catch {/* non-fatal */} finally {
+      setStyleSaving(false);
+    }
+  }
+
+  async function saveOrgStyle(next: StyleValue) {
+    setOrgStyleSaving(true);
+    try {
+      await api.put('/settings/workspace-style', { defaultStyle: next });
+      await loadStyle();
+    } catch {/* non-fatal */} finally {
+      setOrgStyleSaving(false);
+    }
+  }
 
   async function loadSettings() {
     const { settings } = await api.get<{ settings: { learning?: LearningData; voiceCheckEnabled?: boolean } }>('/settings');
@@ -95,6 +140,49 @@ export function SettingsPage() {
         <div style={{ marginTop: 24 }}>
           <AdminPanel />
           <hr className="settings-divider" />
+        </div>
+      )}
+
+      {styleSettings && (
+        <div style={{ marginTop: 32 }}>
+          <h2 style={{ fontSize: 18, marginBottom: 8 }}>Default Style</h2>
+          <p className="text-secondary" style={{ marginBottom: 16, lineHeight: 1.5 }}>
+            Maria's voice for everything she generates. You can override this on any individual deliverable.
+            {styleSettings.user.defaultStyle === '' && styleSettings.workspace?.defaultStyle ? (
+              <> Right now your default falls through to your organization's setting (<strong>{labelFor(styleSettings.effective)}</strong>).</>
+            ) : (
+              <> Active: <strong>{labelFor(styleSettings.effective)}</strong>.</>
+            )}
+          </p>
+          <StylePicker
+            value={styleSettings.user.defaultStyle}
+            onChange={saveDefaultStyle}
+            allowDefault={!!styleSettings.workspace}
+            label="Your default style"
+            hint={styleSettings.workspace ? `Your organization's default is ${labelFor((styleSettings.workspace.defaultStyle || 'TABLE_FOR_2') as any)}. Pick "Use my default" to follow it.` : undefined}
+            disabled={styleSaving}
+          />
+          {styleSettings.workspace && user?.isAdmin && (
+            <div style={{ marginTop: 24 }}>
+              <h3 style={{ fontSize: 16, margin: '0 0 8px' }}>Organization default ({styleSettings.workspace.name})</h3>
+              <p className="text-secondary" style={{ marginBottom: 8, lineHeight: 1.5 }}>
+                Sets the default for new users in this workspace. Each member can override their own setting above.
+              </p>
+              <StylePicker
+                value={styleSettings.workspace.defaultStyle}
+                onChange={saveOrgStyle}
+                allowDefault={false}
+                label="Organization default"
+                disabled={orgStyleSaving}
+              />
+            </div>
+          )}
+          {styleSettings.effective === 'PERSONALIZED' && personalizeProfile && personalizeProfile.observations.length === 0 && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--accent-light, #eaf4ff)', border: '1px solid var(--accent, #007aff)', borderRadius: 8, fontSize: 13, lineHeight: 1.5 }}>
+              Personalized active, but I don't have your voice profile yet. Maria falls back to Table for 2 until you train her — drop two or three emails into chat to start.
+            </div>
+          )}
+          <hr className="settings-divider" style={{ marginTop: 32 }} />
         </div>
       )}
 

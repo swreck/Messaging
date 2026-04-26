@@ -715,6 +715,24 @@ export function MariaPartner() {
             document.dispatchEvent(new CustomEvent('three-tier-view-mode', { detail: { mode } }));
             cleanedResponse = cleanedResponse.replace(/\s*\[SET_VIEW_MODE:[^\]]+\]\s*/g, '').trim();
           }
+          // Round C3 — chat-direction style override. Maria emits
+          // [SET_STORY_STYLE:storyId:STYLE] when the user asks to change a
+          // deliverable's style via chat. Persist via the PATCH endpoint and
+          // dispatch an event so any open FCS view refreshes its metadata row.
+          const styleMatch = cleanedResponse.match(/\[SET_STORY_STYLE:([^:\]]+):(TABLE_FOR_2|ENGINEERING_TABLE|PERSONALIZED|)\]/);
+          if (styleMatch) {
+            const storyId = styleMatch[1].trim();
+            const newStyle = styleMatch[2];
+            if (storyId && storyId !== 'storyId' && storyId.length >= 5) {
+              api.patch<{ style?: string; effective?: string }>(`/stories/${storyId}/style`, { style: newStyle })
+                .then((r) => {
+                  document.dispatchEvent(new CustomEvent('story-style-changed', { detail: { storyId, style: r?.style, effective: r?.effective } }));
+                })
+                .catch((e) => console.error('[set-story-style] save failed', e));
+            }
+            cleanedResponse = cleanedResponse.replace(/\s*\[SET_STORY_STYLE:[^\]]+\]\s*/g, '').trim();
+          }
+
           // Round B5 — pitch-deck export: scan for [CONFIRM_PPTX:storyId] which
           // Maria emits when the user agrees to the trust-gate preview. Trigger
           // the download via FiveChapterShell. Strip the marker from visible text.

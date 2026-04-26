@@ -17,6 +17,11 @@ model User {
   settings     Json     @default("{}")
   createdAt    DateTime @default(now())
 
+  // Round C2 — per-user default style for Refine/Polish/generation.
+  // Empty string = unset (fall through to org default, then SYSTEM_DEFAULT = TABLE_FOR_2).
+  // Values: "" | "TABLE_FOR_2" | "ENGINEERING_TABLE" | "PERSONALIZED"
+  defaultStyle String @default("")
+
   inviteCodeUsed    InviteCode?
   offerings         Offering[]
   audiences         Audience[]
@@ -31,6 +36,11 @@ model Workspace {
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Round C2 — org-level default style. Org admins set this; users can override
+  // per-user in their own Settings. Empty string = unset (fall through to
+  // SYSTEM_DEFAULT = TABLE_FOR_2). Values: "" | "TABLE_FOR_2" | "ENGINEERING_TABLE" | "PERSONALIZED"
+  defaultStyle String @default("")
 
   members     WorkspaceMember[]
   offerings   Offering[]
@@ -228,6 +238,11 @@ model FiveChapterStory {
   // declined or skipped; non-empty = use as named-peer evidence in Ch4.
   peerInfo    String         @default("")
   peerAsked   Boolean        @default(false)
+
+  // Round C3 — per-deliverable style override. Empty string = use the user's
+  // effective style (user → org → SYSTEM_DEFAULT). Set = override for this
+  // deliverable only. Values: "" | "TABLE_FOR_2" | "ENGINEERING_TABLE" | "PERSONALIZED"
+  style       String         @default("")
 
   chapters      ChapterContent[]
   storyVersions StoryVersion[]

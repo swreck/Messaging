@@ -2,6 +2,7 @@
 
 import { KENS_VOICE } from './generation.js';
 import { getMediumSpec } from './mediums.js';
+import { ENGINEERING_VOICE } from './engineeringVoice.js';
 
 export const CHAPTER_NAMES = [
   'You Need This Category',
@@ -230,6 +231,22 @@ RULES:
 
 Respond with the blended story as plain text.`;
 
+// Round C5 — style-parameterized prompts. The voice directive is selected
+// at call time based on the deliverable's effective style. The rest of the
+// instruction body is identical across styles. Backwards compat: the original
+// constants stay (Table for 2 default) so any caller that hasn't been
+// migrated to the builder still works.
+
+type StyleVoice = 'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED';
+
+function selectVoice(style: StyleVoice): string {
+  if (style === 'ENGINEERING_TABLE') return ENGINEERING_VOICE;
+  // PERSONALIZED still uses KENS_VOICE as the BASE; the personalize layer
+  // sits on top via the existing personalizeService. The standalone
+  // Personalize button stacks user-voice on whichever base style is active.
+  return KENS_VOICE;
+}
+
 export const REFINE_CHAPTER_SYSTEM = `You are Maria, a story editor. The user wants to refine a specific chapter of their Five Chapter Story.
 
 ${KENS_VOICE}
@@ -237,6 +254,16 @@ ${KENS_VOICE}
 Respond to their feedback and produce a revised version of the chapter. Follow all the same rules as the original generation — maintain the chapter's goal, stay within word limits for the medium, and never invent facts.
 
 Respond with the revised chapter content as plain text.`;
+
+export function buildRefineChapterSystem(style: StyleVoice): string {
+  return `You are Maria, a story editor. The user wants to refine a specific chapter of their Five Chapter Story.
+
+${selectVoice(style)}
+
+Respond to their feedback and produce a revised version of the chapter. Follow all the same rules as the original generation — maintain the chapter's goal, stay within word limits for the medium, and never invent facts.
+
+Respond with the revised chapter content as plain text.`;
+}
 
 export const COPY_EDIT_SYSTEM = `You are Maria, a copy editor. The user has given you a piece of content and a specific request about what to change.
 
@@ -257,3 +284,25 @@ RULES:
 4. Stay within the appropriate length for the content format.
 
 Respond with the revised content as plain text.`;
+
+export function buildCopyEditSystem(style: StyleVoice): string {
+  return `You are Maria, a copy editor. The user has given you a piece of content and a specific request about what to change.
+
+${selectVoice(style)}
+
+YOUR TASK: Apply the user's requested changes to the content. This might be:
+- Tightening language
+- Changing tone or emphasis
+- Fixing awkward phrasing
+- Restructuring sections
+- Adding or removing detail
+- Any other editorial request
+
+RULES:
+1. Only change what the user asks you to change. Don't rewrite everything.
+2. Preserve the overall structure and content format.
+3. Never invent facts not in the original.
+4. Stay within the appropriate length for the content format.
+
+Respond with the revised content as plain text.`;
+}

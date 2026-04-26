@@ -166,6 +166,8 @@ export interface FiveChapterStory {
   // Round B4 — pre-Chapter-4 peer prompt
   peerInfo?: string;
   peerAsked?: boolean;
+  // Round C3 — per-deliverable style override (empty string = use user's effective style)
+  style?: '' | 'TABLE_FOR_2' | 'ENGINEERING_TABLE' | 'PERSONALIZED';
 }
 
 // ─── Versions ────────────────────────────────────────

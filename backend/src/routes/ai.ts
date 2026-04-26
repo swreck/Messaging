@@ -4,8 +4,10 @@ import { requireAuth } from '../middleware/auth.js';
 import { callAI, callAIWithJSON } from '../services/ai.js';
 import { ALL_ABOUT_YOU_SYSTEM, ALL_ABOUT_AUDIENCE_SYSTEM, buildCoachingUserContext } from '../prompts/coaching.js';
 import { MAPPING_SYSTEM, LOW_CONFIDENCE_QUESTIONS_SYSTEM } from '../prompts/mapping.js';
-import { CONVERT_LINES_SYSTEM, REVIEW_SYSTEM, REVISE_FROM_EDITS_SYSTEM, DIRECTION_SYSTEM, REFINE_LANGUAGE_SYSTEM } from '../prompts/generation.js';
-import { buildChapterPrompt, BLEND_SYSTEM, JOIN_CHAPTERS_SYSTEM, REFINE_CHAPTER_SYSTEM, COPY_EDIT_SYSTEM, CHAPTER_CRITERIA } from '../prompts/fiveChapter.js';
+import { CONVERT_LINES_SYSTEM, REVIEW_SYSTEM, REVISE_FROM_EDITS_SYSTEM, DIRECTION_SYSTEM, REFINE_LANGUAGE_SYSTEM, buildRefineLanguageSystem } from '../prompts/generation.js';
+import { resolveStyleForUser } from '../lib/styleResolver.js';
+import { buildChapterPrompt, BLEND_SYSTEM, JOIN_CHAPTERS_SYSTEM, REFINE_CHAPTER_SYSTEM, COPY_EDIT_SYSTEM, CHAPTER_CRITERIA, buildRefineChapterSystem, buildCopyEditSystem } from '../prompts/fiveChapter.js';
+import { resolveStyleForStory } from '../lib/styleResolver.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import { AUDIENCE_DISCOVERY_SYSTEM } from '../prompts/audienceDiscovery.js';
 import { getLearning, updateLearning, buildLearningPromptBlock } from '../lib/learning.js';
@@ -1087,12 +1089,19 @@ ${draft.tier2Statements.map((t2, i) => `[${i}] "${t2.text}"`).join('\n')}
 AUDIENCE PRIORITIES (for reference — the priority text must remain visible in each statement):
 ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"${p.driver ? ` (Driver: ${p.driver})` : ''}`).join('\n')}`;
 
+  // Round C5 — Three Tier Refine Language reads the user's effective style
+  // (Three Tier drafts don't have per-deliverable style). Workspace default
+  // applies if the user has no per-user override.
+  const effStyle = await resolveStyleForUser(req.user!.userId, req.workspaceId || null);
+  const refineSystem = buildRefineLanguageSystem(effStyle);
+
   let result = await callAIWithJSON<{
     refinedTier1?: { best: string; alternative: string };
     refinedTier2: { index: number; text: string }[];
-  }>(REFINE_LANGUAGE_SYSTEM, userMessage, 'elite');
+  }>(refineSystem, userMessage, 'elite');
 
-  // Voice check refined statements (with priority context for P1/P2)
+  // Voice check refined statements — Engineering Table uses its own audit;
+  // Table for 2 / Personalized fall through to the existing voice check.
   if (await isVoiceCheckEnabled(req.user!.userId)) {
     try {
       const statements: StatementInput[] = result.refinedTier2.map(r => ({
@@ -1100,15 +1109,17 @@ ${draft.audience.priorities.map((p) => `[Rank ${p.rank}] "${p.text}"${p.driver ?
         column: draft.tier2Statements[r.index]?.categoryLabel || 'Product',
         priorityText: (draft.tier2Statements[r.index] as any)?.priority?.text,
       }));
-      const check = await checkStatements(statements);
+      const check = effStyle === 'ENGINEERING_TABLE'
+        ? await (await import('../services/engineeringStyleCheck.js')).checkStatementsEngineering(statements)
+        : await checkStatements(statements);
       if (!check.passed) {
-        console.log(`[VoiceCheck] Refine language: ${check.violations.length} violations, retrying`);
+        console.log(`[VoiceCheck:${effStyle}] Refine language: ${check.violations.length} violations, retrying`);
         const feedback = buildViolationFeedback(check.violations);
         result = await callAIWithJSON<{
           refinedTier2: { index: number; text: string }[];
-        }>(REFINE_LANGUAGE_SYSTEM, userMessage + feedback, 'elite');
+        }>(refineSystem, userMessage + feedback, 'elite');
       } else {
-        console.log('[VoiceCheck] Refined statements all passed');
+        console.log(`[VoiceCheck:${effStyle}] Refined statements all passed`);
       }
     } catch (err) {
       console.error('[VoiceCheck] Refine language evaluation failed, returning original:', err);
@@ -1918,18 +1929,25 @@ USER FEEDBACK: ${feedback}
 
 Please revise this chapter based on the feedback while respecting the chapter rules above.`;
 
-  let content = await callAI(REFINE_CHAPTER_SYSTEM, userMessage, 'elite');
+  // Round C5 — apply the deliverable's effective style.
+  const effectiveStyle = await resolveStyleForStory(storyId, req.user!.userId);
+  const refineSystem = buildRefineChapterSystem(effectiveStyle);
 
-  // Voice check refined chapter
+  let content = await callAI(refineSystem, userMessage, 'elite');
+
+  // Voice check refined chapter — Engineering Table uses its own audit;
+  // Table for 2 and Personalized fall through to the existing voice check.
   if (await isVoiceCheckEnabled(req.user!.userId)) {
     try {
-      const check = await checkProse(content, `Chapter ${chapterNum}: ${ch.name} (refinement)`);
-      if (!check.passed) {
-        console.log(`[VoiceCheck] Refine chapter ${chapterNum}: ${check.violations.length} violations, retrying`);
-        const feedback2 = buildProseViolationFeedback(check.violations);
-        content = await callAI(REFINE_CHAPTER_SYSTEM, userMessage + feedback2, 'elite');
+      const proseCheck = effectiveStyle === 'ENGINEERING_TABLE'
+        ? await (await import('../services/engineeringStyleCheck.js')).checkProseEngineering(content, `Chapter ${chapterNum}: ${ch.name} (refinement, Engineering Table)`)
+        : await checkProse(content, `Chapter ${chapterNum}: ${ch.name} (refinement)`);
+      if (!proseCheck.passed) {
+        console.log(`[VoiceCheck:${effectiveStyle}] Refine chapter ${chapterNum}: ${proseCheck.violations.length} violations, retrying`);
+        const feedback2 = buildProseViolationFeedback(proseCheck.violations);
+        content = await callAI(refineSystem, userMessage + feedback2, 'elite');
       } else {
-        console.log(`[VoiceCheck] Refined chapter ${chapterNum} passed`);
+        console.log(`[VoiceCheck:${effectiveStyle}] Refined chapter ${chapterNum} passed`);
       }
     } catch (err) {
       console.error('[VoiceCheck] Refine chapter evaluation failed, returning original:', err);
@@ -2118,7 +2136,11 @@ ${content}
 
 Apply the requested changes.`;
 
-  let revised = await callAI(COPY_EDIT_SYSTEM, userMessage, 'elite');
+  // Round C5 — apply the deliverable's effective style.
+  const effectiveStyle = await resolveStyleForStory(storyId, req.user!.userId);
+  const copyEditSystem = buildCopyEditSystem(effectiveStyle);
+
+  let revised = await callAI(copyEditSystem, userMessage, 'elite');
 
   // If the AI returned identical text, retry once with a stronger nudge.
   if (normalize(revised) === originalNorm) {
@@ -2130,19 +2152,21 @@ CURRENT CONTENT:
 ${content}
 
 CRITICAL: Your previous attempt returned text identical to the original. You MUST actually apply the requested change. If the request is about rewording a specific sentence or opening, rewrite that sentence. Return the FULL content with the change applied.`;
-    revised = await callAI(COPY_EDIT_SYSTEM, retryMessage, 'elite');
+    revised = await callAI(copyEditSystem, retryMessage, 'elite');
   }
 
-  // Voice check copy-edited text
+  // Voice check copy-edited text — Engineering Table uses its own audit.
   if (await isVoiceCheckEnabled(req.user!.userId)) {
     try {
-      const check = await checkProse(revised, 'Copy edit');
+      const check = effectiveStyle === 'ENGINEERING_TABLE'
+        ? await (await import('../services/engineeringStyleCheck.js')).checkProseEngineering(revised, 'Copy edit (Engineering Table)')
+        : await checkProse(revised, 'Copy edit');
       if (!check.passed) {
-        console.log(`[VoiceCheck] Copy edit: ${check.violations.length} violations, retrying`);
+        console.log(`[VoiceCheck:${effectiveStyle}] Copy edit: ${check.violations.length} violations, retrying`);
         const feedback = buildProseViolationFeedback(check.violations);
-        revised = await callAI(COPY_EDIT_SYSTEM, userMessage + feedback, 'elite');
+        revised = await callAI(copyEditSystem, userMessage + feedback, 'elite');
       } else {
-        console.log('[VoiceCheck] Copy edit passed');
+        console.log(`[VoiceCheck:${effectiveStyle}] Copy edit passed`);
       }
     } catch (err) {
       console.error('[VoiceCheck] Copy edit evaluation failed, returning original:', err);
