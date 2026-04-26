@@ -538,6 +538,13 @@ export function DashboardPage() {
                   className="list-card"
                   onClick={() => navigate(`/three-tier/${d.draftId}`)}
                   style={{
+                    // Bug B fix — .list-card defaults to flex row + center
+                    // alignment, which collapses the stacked title/subtitle/
+                    // preview/footer into one overlapping row. Override to a
+                    // column so each region stacks cleanly at every width.
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
                     padding: '14px 18px',
                     background: 'var(--bg-primary, #fff)',
                     borderRadius: 'var(--radius-sm, 6px)',

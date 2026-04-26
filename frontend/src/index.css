@@ -2141,6 +2141,54 @@ p { line-height: 1.5; color: var(--text-secondary); }
   font-size: 12px;
 }
 
+/* B-7 — chat scope chip. Lives at the top of the partner messages
+ * scroll area, names the current surface scope, and exposes the
+ * one-click toggle to "Everything" and back. Matches the metadata-row
+ * style language used elsewhere (small, secondary text + accent link). */
+.partner-scope {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+  border-bottom: 1px solid var(--border-light, #e5e5ea);
+  background: var(--bg-card, #fff);
+}
+.partner-scope-label {
+  font-weight: 500;
+  color: var(--text-primary, #1d1d1f);
+}
+.partner-scope-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, #007aff);
+  cursor: pointer;
+  text-align: left;
+}
+.partner-scope-link:hover {
+  text-decoration: underline;
+}
+.partner-empty-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, #007aff);
+  cursor: pointer;
+  text-decoration: underline;
+}
+@media (max-width: 600px) {
+  .partner-scope {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+}
+
 /* B-4 — first-encounter voice-button orientation, mirrors the view-mode
  * orientation pattern. Lives just above the partner-input-area so it
  * visually points at the mic button without absolute positioning. */
@@ -3883,7 +3931,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
 
 /* ─── Large Desktop (1200px+) ────────────────────── */
 @media (min-width: 1200px) {
-  .partner-panel { width: 440px; }
+  .partner-panel { width: 460px; }
 }
 
 /* ─── Tablet Portrait (601-768px) ────────────────────── */
@@ -3893,6 +3941,42 @@ p { line-height: 1.5; color: var(--text-secondary); }
   .entity-card { padding: 16px; }
   .draft-card { padding: 16px; }
   .list-card { padding: 14px 16px; }
+}
+
+/* ─── Bug A — iPad portrait + landscape (769-1199px). Widen the
+       partner panel so the in-panel guided process bar ("The basics
+       → Your message → First draft → + New") doesn't clip its right
+       edge, and so the chat input placeholder stays fully readable.
+       The desktop default (400px) is too tight for the bar at this
+       viewport range. main-content margin-right tracks the panel
+       width so dashboard "+ New message" is never obscured. */
+@media (min-width: 769px) and (max-width: 1199px) {
+  .partner-panel { width: 480px; }
+  body.maria-panel-open .main-content { margin-right: 500px; }
+}
+
+/* ─── Bug A — guided process bar inside the partner panel must
+       never clip. Allow horizontal scroll fallback (rare, only when
+       even 480px isn't enough) and tighten connector spacing so the
+       3 stages + reset button fit cleanly. The full-page guided
+       shell (outside the panel) keeps its airy spacing. */
+.partner-panel .guided-process-bar {
+  padding: 12px 14px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.partner-panel .guided-process-connector {
+  width: 24px;
+  margin: 0 2px;
+}
+.partner-panel .guided-process-stage {
+  padding: 6px 10px;
+  flex-shrink: 0;
+}
+.partner-panel .guided-process-reset {
+  flex-shrink: 0;
 }
 
 /* ─── Touch Devices (1024px) ─────────────────────── */

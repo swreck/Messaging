@@ -370,15 +370,22 @@ export function FiveChapterShell() {
     if (draftId) loadData();
   }, [draftId]);
 
-  // Register page context for Maria assistant
+  // Register page context for Maria assistant. B-7 — also pass the
+  // medium's user-facing label so MariaPartner can render "On this
+  // email" / "On this pitch deck" instead of a generic Five Chapter
+  // Story label.
   useEffect(() => {
+    const mediumLabel = story?.medium
+      ? MEDIUM_OPTIONS.find(m => m.id === story.medium)?.label.toLowerCase()
+      : undefined;
     setPageContext({
       page: 'five-chapter',
       draftId: draftId || undefined,
       storyId: story?.id,
+      mediumLabel,
     });
     registerRefresh(loadData);
-  }, [draftId, story?.id]);
+  }, [draftId, story?.id, story?.medium]);
 
   async function loadData() {
     setLoading(true);

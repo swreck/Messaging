@@ -6,6 +6,12 @@ export interface PageContext {
   draftId?: string;
   audienceId?: string;
   offeringId?: string;
+  // B-7 — optional user-facing label for the chat scope chip. The FCS
+  // shell sets this from MEDIUM_OPTIONS so the label reads "On this
+  // email" / "On this pitch deck" rather than "On this Five Chapter
+  // Story". Other surfaces leave it undefined and MariaPartner falls
+  // back to a default per-page label.
+  mediumLabel?: string;
 }
 
 export function pageKey(ctx: PageContext): string {

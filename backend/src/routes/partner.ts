@@ -11,9 +11,18 @@ const router = Router();
 router.use(requireAuth);
 router.use(requireWorkspace);
 
-// Channel marker — now includes workspaceId for conversation partitioning
-function partnerChannel(workspaceId: string) {
-  return { channel: 'partner', workspaceId };
+// Channel marker — now includes workspaceId for conversation partitioning.
+// B-7 — also persists the active surface's primary entity IDs so the
+// /history endpoint can scope-filter by surface (Three Tier draftId,
+// FCS storyId, Audience audienceId, Offering offeringId). Filtering is
+// purely user-visible; system-prompt history loaded for Maria is full.
+function partnerChannel(workspaceId: string, ctx?: { storyId?: string; draftId?: string; audienceId?: string; offeringId?: string }): Record<string, string> {
+  const out: Record<string, string> = { channel: 'partner', workspaceId };
+  if (ctx?.storyId) out.storyId = ctx.storyId;
+  if (ctx?.draftId) out.draftId = ctx.draftId;
+  if (ctx?.audienceId) out.audienceId = ctx.audienceId;
+  if (ctx?.offeringId) out.offeringId = ctx.offeringId;
+  return out;
 }
 
 // ─── Helpers ─────────────────────────────────────────────
@@ -508,8 +517,21 @@ router.put('/intro-step', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-// GET /api/partner/history — load persistent conversation
+// GET /api/partner/history — load persistent conversation.
+// B-7 — accepts optional scope query params (scopeStoryId, scopeDraftId,
+// scopeAudienceId, scopeOfferingId). When provided, returns only messages
+// whose persisted context matched the same primary entity. NOTE: this is
+// PURELY a user-visible filter — the backend's system-prompt construction
+// in /message still loads the full unfiltered history so Maria's
+// continuity reasoning isn't affected by what the user happens to be
+// looking at right now.
 router.get('/history', async (req: Request, res: Response) => {
+  const { scopeStoryId, scopeDraftId, scopeAudienceId, scopeOfferingId } = req.query as {
+    scopeStoryId?: string;
+    scopeDraftId?: string;
+    scopeAudienceId?: string;
+    scopeOfferingId?: string;
+  };
   // Load partner messages for current workspace + legacy messages without workspaceId
   const allPartner = await prisma.assistantMessage.findMany({
     where: {
@@ -518,14 +540,31 @@ router.get('/history', async (req: Request, res: Response) => {
     },
     select: { role: true, content: true, createdAt: true, context: true },
     orderBy: { createdAt: 'desc' },
-    take: 200,
+    take: 500,
   });
-  // Filter: include messages for this workspace OR legacy messages (no workspaceId field)
   const wsId = req.workspaceId!;
-  const messages = allPartner.filter(m => {
+  let filtered = allPartner.filter(m => {
     const ctx = m.context as any;
     return !ctx?.workspaceId || ctx.workspaceId === wsId;
-  }).map(({ role, content, createdAt }) => ({ role, content, createdAt }));
+  });
+  // B-7 scope filter — match on whichever scope arg was provided. A message
+  // matches when its persisted context's primary-entity ID equals the
+  // requested scope. We tolerate the possibility that older messages were
+  // logged WITHOUT the entity ID in their context (legacy rows pre-Round B);
+  // those are surfaced under "Everything" only, never under a scoped view.
+  if (scopeStoryId || scopeDraftId || scopeAudienceId || scopeOfferingId) {
+    filtered = filtered.filter(m => {
+      const ctx = (m.context as any) || {};
+      if (scopeStoryId && ctx.storyId === scopeStoryId) return true;
+      if (scopeDraftId && ctx.draftId === scopeDraftId) return true;
+      if (scopeAudienceId && ctx.audienceId === scopeAudienceId) return true;
+      if (scopeOfferingId && ctx.offeringId === scopeOfferingId) return true;
+      return false;
+    });
+  }
+  const messages = filtered
+    .slice(0, 200)
+    .map(({ role, content, createdAt }) => ({ role, content, createdAt }));
   messages.reverse();
   res.json({ messages });
 });
@@ -894,7 +933,7 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
   if (normalizedActions.length === 1 && normalizedActions[0].type === 'read_page') {
     // Store the user message but not the response yet (will retry with page content)
     await prisma.assistantMessage.create({
-      data: { userId, role: 'user', content: message || '', context: partnerChannel(workspaceId) },
+      data: { userId, role: 'user', content: message || '', context: partnerChannel(workspaceId, ctx) },
     });
 
     res.json({
@@ -1135,8 +1174,8 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
 
   await prisma.assistantMessage.createMany({
     data: [
-      { userId, role: 'user', content: userQuestion, context: partnerChannel(workspaceId) },
-      { userId, role: 'assistant', content: storedResponse, context: partnerChannel(workspaceId) },
+      { userId, role: 'user', content: userQuestion, context: partnerChannel(workspaceId, ctx) },
+      { userId, role: 'assistant', content: storedResponse, context: partnerChannel(workspaceId, ctx) },
     ],
   });
 

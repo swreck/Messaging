@@ -142,6 +142,41 @@ function markTimeBudgetAsked() {
 
 type PanelSize = 'compact' | 'medium' | 'full';
 
+// B-7 — chat scope filter helpers. Picks the primary entity ID from the
+// current pageContext. Default-on; users toggle to "Everything" via the
+// scope chip at the top of the chat panel. Filtering is purely
+// user-visible — the backend system-prompt history is unfiltered so
+// Maria's continuity reasoning still sees full context.
+type ScopeKind = 'storyId' | 'draftId' | 'audienceId' | 'offeringId' | null;
+function getScope(ctx: { storyId?: string; draftId?: string; audienceId?: string; offeringId?: string; mediumLabel?: string } | null | undefined): { kind: ScopeKind; id?: string; label: string; typeLabel: string } {
+  if (!ctx) return { kind: null, label: '', typeLabel: '' };
+  if (ctx.storyId) {
+    const label = ctx.mediumLabel || 'Five Chapter Story';
+    return { kind: 'storyId', id: ctx.storyId, label, typeLabel: label };
+  }
+  if (ctx.draftId) return { kind: 'draftId', id: ctx.draftId, label: 'Three Tier', typeLabel: 'Three Tier' };
+  if (ctx.audienceId) return { kind: 'audienceId', id: ctx.audienceId, label: 'audience', typeLabel: 'audience' };
+  if (ctx.offeringId) return { kind: 'offeringId', id: ctx.offeringId, label: 'offering', typeLabel: 'offering' };
+  return { kind: null, label: '', typeLabel: '' };
+}
+function scopePrefKey(userId: string | undefined, scope: { kind: ScopeKind; id?: string }): string | null {
+  if (!userId || !scope.kind || !scope.id) return null;
+  return `chat-scope-${userId}-${scope.kind}-${scope.id}`;
+}
+function loadScopePref(userId: string | undefined, scope: { kind: ScopeKind; id?: string }): 'scoped' | 'everything' {
+  const key = scopePrefKey(userId, scope);
+  if (!key) return 'scoped';
+  try {
+    const v = localStorage.getItem(key);
+    return v === 'everything' ? 'everything' : 'scoped';
+  } catch { return 'scoped'; }
+}
+function saveScopePref(userId: string | undefined, scope: { kind: ScopeKind; id?: string }, mode: 'scoped' | 'everything') {
+  const key = scopePrefKey(userId, scope);
+  if (!key) return;
+  try { localStorage.setItem(key, mode); } catch {}
+}
+
 function getInitialPanelSize(): PanelSize {
   try {
     const saved = localStorage.getItem('maria-panel-size') as PanelSize | null;
@@ -214,6 +249,13 @@ export function MariaPartner() {
   // Bubble indicators
   const [showDot, setShowDot] = useState(false);
   const [showGlow, setShowGlow] = useState(false);
+
+  // B-7 — chat scope filter. Default-on; persisted per surface so the
+  // user's choice (scoped vs. everything) sticks across the session for
+  // that surface. Refetches the visible history when scope or surface
+  // changes; the backend system prompt always sees full history.
+  const currentScope = getScope(pageContext);
+  const [scopeMode, setScopeMode] = useState<'scoped' | 'everything'>(() => loadScopePref(user?.userId, currentScope));
 
   // B-4 — first-encounter voice-button orientation. Renders an inline
   // hint above the input row when the user opens Maria for the first
@@ -300,12 +342,41 @@ export function MariaPartner() {
     return () => { wakeLock?.release().catch(() => {}); };
   }, [open]);
 
-  // Load conversation history when panel first opens and intro is done
+  // B-7 — when surface changes (different draftId / storyId / etc.),
+  // re-load the user's persisted scope preference for the new surface
+  // and reset `loaded` so the history-load effect refetches with the
+  // right scope. Without this, navigating from Three Tier A to Three
+  // Tier B would keep showing A's filtered history under B's chip.
+  useEffect(() => {
+    setScopeMode(loadScopePref(user?.userId, currentScope));
+    setLoaded(false);
+  }, [user?.userId, currentScope.kind, currentScope.id]);
+
+  // Load conversation history when panel first opens and intro is done.
+  // B-7 — fetches with scope params when scope is active and mode is
+  // 'scoped'; otherwise fetches full history. Refetches when scopeMode
+  // toggles via the scope chip.
   useEffect(() => {
     if (open && !loaded && introduced) {
-      api.get<{ messages: Message[] }>('/partner/history')
+      const scopeParams: Record<string, string> = {};
+      if (scopeMode === 'scoped' && currentScope.kind && currentScope.id) {
+        if (currentScope.kind === 'storyId') scopeParams.scopeStoryId = currentScope.id;
+        else if (currentScope.kind === 'draftId') scopeParams.scopeDraftId = currentScope.id;
+        else if (currentScope.kind === 'audienceId') scopeParams.scopeAudienceId = currentScope.id;
+        else if (currentScope.kind === 'offeringId') scopeParams.scopeOfferingId = currentScope.id;
+      }
+      const qs = new URLSearchParams(scopeParams).toString();
+      const url = qs ? `/partner/history?${qs}` : '/partner/history';
+      const isScoped = scopeMode === 'scoped' && !!currentScope.kind;
+      api.get<{ messages: Message[] }>(url)
         .then(async ({ messages: history }) => {
-          if (history.length === 0) {
+          // B-7 — when in scoped mode and the scoped history is empty,
+          // skip the auto-greeting injection. The render layer shows the
+          // empty-state UI ("No messages on this [type] yet — start a
+          // conversation, or Show everything") instead. The greeting
+          // injection only runs in the unscoped path so first-touch users
+          // on the dashboard still get welcomed.
+          if (history.length === 0 && !isScoped) {
             const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
             const onEntityDetailPage =
               pageContext &&
@@ -378,7 +449,7 @@ export function MariaPartner() {
         })
         .catch(() => setLoaded(true));
     }
-  }, [open, loaded, introduced, introStep]);
+  }, [open, loaded, introduced, introStep, scopeMode, currentScope.kind, currentScope.id]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -1371,6 +1442,40 @@ export function MariaPartner() {
             {statusLoaded && !showIntro && !showGuidedInPanel && (
               <>
                 <div className="partner-messages">
+                  {/* B-7 — chat scope chip. Only renders when the current
+                      surface has a primary entity (Three Tier draftId,
+                      FCS storyId, audience, offering). On Dashboard /
+                      Settings / etc. there's no scope to apply, so the
+                      chip is hidden and the chat shows full history. */}
+                  {currentScope.kind && (
+                    <div className="partner-scope">
+                      {scopeMode === 'scoped' ? (
+                        <>
+                          <span className="partner-scope-label">On this {currentScope.label}</span>
+                          <button
+                            className="partner-scope-link"
+                            onClick={() => {
+                              setScopeMode('everything');
+                              saveScopePref(user?.userId, currentScope, 'everything');
+                              setLoaded(false);
+                            }}
+                          >Show everything →</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="partner-scope-label">Everything</span>
+                          <button
+                            className="partner-scope-link"
+                            onClick={() => {
+                              setScopeMode('scoped');
+                              saveScopePref(user?.userId, currentScope, 'scoped');
+                              setLoaded(false);
+                            }}
+                          >Back to this {currentScope.typeLabel} →</button>
+                        </>
+                      )}
+                    </div>
+                  )}
                   {/* Guided entry card — shows one of two states:
                       - Active session in background (user chose assistant view temporarily):
                         "Return to your guided message" — clears preferAssistant and flips back
@@ -1541,7 +1646,21 @@ export function MariaPartner() {
 
                   {messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && !showBudgetCard && (
                     <div className="partner-empty">
-                      Tell me about your work — or if you have notes, a discovery doc, or an old draft, drop them here and I'll work from those.
+                      {scopeMode === 'scoped' && currentScope.kind ? (
+                        <>
+                          No messages on this {currentScope.typeLabel} yet — start a conversation, or{' '}
+                          <button
+                            className="partner-empty-link"
+                            onClick={() => {
+                              setScopeMode('everything');
+                              saveScopePref(user?.userId, currentScope, 'everything');
+                              setLoaded(false);
+                            }}
+                          >show everything</button>.
+                        </>
+                      ) : (
+                        "Tell me about your work — or if you have notes, a discovery doc, or an old draft, drop them here and I'll work from those."
+                      )}
                     </div>
                   )}
                   {messages.map((msg, i) => {
