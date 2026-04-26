@@ -113,44 +113,20 @@ async function buildWorkSummary(workspaceId: string): Promise<string> {
 async function buildCurrentContext(context: Record<string, any>, userId?: string): Promise<string> {
   if (!context?.page) return 'Unknown page';
   const parts = [`Page: ${context.page}`];
-  if (context.draftId) {
-    // Include draft completion status so Maria knows whether work is done or in progress
-    try {
-      const draft = await prisma.threeTierDraft.findUnique({
-        where: { id: context.draftId },
-        select: {
-          currentStep: true,
-          status: true,
-          noStrongPairings: true,
-          offering: { select: { name: true } },
-          audience: { select: { name: true } },
-        },
-      });
-      if (draft) {
-        const stepLabel = draft.currentStep >= 5 ? 'complete (step 5)' : `in progress (step ${draft.currentStep}/5)`;
-        parts.push(`Viewing Three Tier draft: ${draft.offering.name} → ${draft.audience.name}, ${stepLabel}`);
-        // Audience-fit signal: when no pairing came back STRONG, surface this so
-        // Maria's audience-fit conversation logic in partner.ts can fire.
-        if (draft.noStrongPairings === true) {
-          parts.push('noStrongPairings: true — none of the priority/special-thing pairings on this draft came back STRONG. Apply the AUDIENCE-FIT CONVERSATION pattern from your system prompt: humble curiosity about the offering, NEVER a verdict on audience choice.');
-        }
-      } else {
-        parts.push('Viewing a Three Tier draft');
-      }
-    } catch {
-      parts.push('Viewing a Three Tier draft');
-    }
-  }
+  // Bug #4 — explicit primary-page signal when both draftId and storyId are
+  // present. /five-chapter/<draftId>?story=<storyId> URLs carry both IDs but
+  // the FCS is the active page; without this signal Maria treated the Three
+  // Tier as primary and ignored the FCS metadata block right below.
   if (context.storyId) {
-    // Round C Bug #3 — inject the active storyId as a [STORY_CONTEXT:<realId>]
-    // line so storyId-payload markers (SET_STORY_STYLE, SAVE_PEER_INFO,
-    // CONFIRM_PPTX, PPTX_PREVIEW_REQUEST, future Round D markers) read from
-    // a fresh real ID instead of copying the prompt's example sentinel.
-    //
-    // Wave 2 cleanup — also surface the deliverable's current effective style,
-    // medium, and CTA so the "chat memory vs DB state" rule has concrete
-    // values to defer to. When the user contradicts Maria about state, the
-    // context block now contains the canonical answer.
+    parts.push('PRIMARY PAGE: Five Chapter Story (the FCS metadata block below — current style, format, audience, peer-info — is the canonical source of truth for the active deliverable; the Three Tier reference below is contextual)');
+  } else if (context.draftId) {
+    parts.push('PRIMARY PAGE: Three Tier draft');
+  }
+  // Bug #4 — when both storyId and draftId are present, surface the FCS
+  // block FIRST so Maria reads the canonical metadata at the top instead
+  // of treating the Three Tier as primary. Three Tier becomes "related"
+  // context below.
+  if (context.storyId) {
     let storyDetails = '';
     try {
       const story = await prisma.fiveChapterStory.findUnique({
@@ -183,7 +159,36 @@ async function buildCurrentContext(context: Record<string, any>, userId?: string
         storyDetails = ` (${detailParts.join('; ')})`;
       }
     } catch {/* non-fatal */}
-    parts.push(`Viewing a Five Chapter Story${storyDetails}. [STORY_CONTEXT:${context.storyId}]`);
+    parts.push(`Active Five Chapter Story${storyDetails}. [STORY_CONTEXT:${context.storyId}]`);
+  }
+  if (context.draftId) {
+    // Include draft completion status so Maria knows whether work is done or in progress.
+    // Labeled "Related Three Tier" when an FCS is also active so Maria treats it as
+    // contextual reference, not the primary surface.
+    const label = context.storyId ? 'Related Three Tier' : 'Viewing Three Tier draft';
+    try {
+      const draft = await prisma.threeTierDraft.findUnique({
+        where: { id: context.draftId },
+        select: {
+          currentStep: true,
+          status: true,
+          noStrongPairings: true,
+          offering: { select: { name: true } },
+          audience: { select: { name: true } },
+        },
+      });
+      if (draft) {
+        const stepLabel = draft.currentStep >= 5 ? 'complete (step 5)' : `in progress (step ${draft.currentStep}/5)`;
+        parts.push(`${label}: ${draft.offering.name} → ${draft.audience.name}, ${stepLabel}`);
+        if (draft.noStrongPairings === true) {
+          parts.push('noStrongPairings: true — none of the priority/special-thing pairings on this draft came back STRONG. Apply the AUDIENCE-FIT CONVERSATION pattern from your system prompt: humble curiosity about the offering, NEVER a verdict on audience choice.');
+        }
+      } else {
+        parts.push(label);
+      }
+    } catch {
+      parts.push(label);
+    }
   }
   if (context.audienceId) parts.push('An audience is selected');
   if (context.offeringId) parts.push('An offering is selected');

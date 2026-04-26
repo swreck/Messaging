@@ -1697,6 +1697,160 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
         refreshNeeded = false;
       }
 
+      // ─── Round E1 — Maria-as-researcher actions ─────────────
+      // Bug #1 fix: invoke through dispatch (matching the existing pattern
+      // used by other Opus-tier actions). The action result is a structured
+      // text block Maria reads back to the user inline.
+      if (a.type === 'research_website' && a.params?.url) {
+        try {
+          const cleanUrl = String(a.params.url).startsWith('http')
+            ? String(a.params.url)
+            : `https://${String(a.params.url)}`;
+          const response = await fetch(cleanUrl, {
+            headers: { 'User-Agent': 'Maria-Research/1.0' },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!response.ok) {
+            actionResult = `I tried to read ${cleanUrl} but got back status ${response.status}. Want to try a different URL, or paste the content directly?`;
+          } else {
+            const html = await response.text();
+            const pageText = html
+              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 12000);
+            const { researchWebsite } = await import('../services/research.js');
+            const result = await researchWebsite({ url: cleanUrl, pageText });
+            const lines: string[] = [];
+            lines.push(`I read ${cleanUrl}. Here's what I pulled — confirm or correct each piece:`);
+            lines.push('');
+            if (result.offering?.name || result.offering?.description) {
+              lines.push(`OFFERING: ${result.offering.name || ''}${result.offering.description ? ` — ${result.offering.description}` : ''}`);
+            }
+            if (result.audiences?.length) {
+              lines.push(`AUDIENCES: ${result.audiences.map((a: any) => a.name).filter(Boolean).join('; ')}`);
+            }
+            if (result.differentiators?.length) {
+              lines.push('CANDIDATE DIFFERENTIATORS:');
+              for (const d of result.differentiators) {
+                lines.push(`  • ${d.text}${d.evidence ? ` (page: "${d.evidence.slice(0, 100)}")` : ''}${d.confidence === 'low' ? ' [low confidence — confirm]' : ''}`);
+              }
+            }
+            if (result.uncertainty) {
+              lines.push(`UNCERTAIN: ${result.uncertainty}`);
+            }
+            actionResult = lines.join('\n');
+          }
+        } catch (err: any) {
+          console.error('[research_website] failed:', err);
+          actionResult = `I couldn't read that URL: ${err?.message || 'fetch error'}. Want to paste the content directly so I can work from it?`;
+        }
+        refreshNeeded = false;
+      }
+
+      if (a.type === 'research_audience' && a.params?.audienceName) {
+        try {
+          const { researchAudience } = await import('../services/research.js');
+          const result = await researchAudience(
+            String(a.params.audienceName),
+            typeof a.params.situation === 'string' ? a.params.situation : undefined,
+          );
+          const lines: string[] = [];
+          lines.push(`Sub-segments I see for "${a.params.audienceName}" right now:`);
+          for (let i = 0; i < (result.subsegments || []).length; i++) {
+            const seg: any = result.subsegments[i];
+            lines.push('');
+            lines.push(`${i + 1}. ${seg.label}`);
+            if (seg.contrast) lines.push(`   What's distinct: ${seg.contrast}`);
+            if (Array.isArray(seg.priorities) && seg.priorities.length) {
+              lines.push(`   Priorities: ${seg.priorities.join('; ')}`);
+            }
+            if (Array.isArray(seg.citations) && seg.citations.length) {
+              lines.push(`   ${seg.citations.join(' · ')}`);
+            }
+          }
+          if (result.uncertainty) {
+            lines.push('');
+            lines.push(`To pick: ${result.uncertainty}`);
+          }
+          actionResult = lines.join('\n');
+        } catch (err: any) {
+          console.error('[research_audience] failed:', err);
+          actionResult = `I couldn't pull research on that audience this round: ${err?.message || 'unknown error'}. Try again, or tell me what you already know about them.`;
+        }
+        refreshNeeded = false;
+      }
+
+      if (a.type === 'test_differentiation' && Array.isArray(a.params?.competitors) && Array.isArray(a.params?.claimedDifferentiators)) {
+        try {
+          const competitors: { name: string; url: string }[] = a.params.competitors
+            .filter((c: any) => c && typeof c.url === 'string')
+            .map((c: any) => ({ name: String(c.name || c.url), url: String(c.url) }));
+          const claimed: string[] = a.params.claimedDifferentiators
+            .filter((d: any) => typeof d === 'string' && d.trim())
+            .map((d: any) => String(d));
+          if (competitors.length === 0 || claimed.length === 0) {
+            actionResult = "I need at least one competitor URL and one claimed differentiator to run the test.";
+          } else {
+            // Fetch each competitor's page text in parallel; tolerate per-site failures.
+            const fetched = await Promise.all(competitors.map(async (c) => {
+              try {
+                const cleanUrl = c.url.startsWith('http') ? c.url : `https://${c.url}`;
+                const r = await fetch(cleanUrl, {
+                  headers: { 'User-Agent': 'Maria-Research/1.0' },
+                  signal: AbortSignal.timeout(15000),
+                });
+                if (!r.ok) return { name: c.name, url: cleanUrl, pageText: '' };
+                const html = await r.text();
+                const pageText = html
+                  .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                  .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                  .replace(/<[^>]+>/g, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim()
+                  .slice(0, 6000);
+                return { name: c.name, url: cleanUrl, pageText };
+              } catch {
+                return { name: c.name, url: c.url, pageText: '' };
+              }
+            }));
+            const reachable = fetched.filter((c) => c.pageText && c.pageText.length > 200);
+            if (reachable.length === 0) {
+              actionResult = "I couldn't reach any of those competitor sites. Want to paste the relevant pages, or try different URLs?";
+            } else {
+              const { testDifferentiation } = await import('../services/research.js');
+              const result = await testDifferentiation({ competitors: reachable, claimedDifferentiators: claimed });
+              const lines: string[] = [];
+              lines.push(`Tested ${claimed.length} differentiator${claimed.length === 1 ? '' : 's'} against ${reachable.length} competitor${reachable.length === 1 ? '' : 's'}:`);
+              for (const r of result.results || []) {
+                lines.push('');
+                lines.push(`• "${r.claim}" — ${r.classification}`);
+                if (Array.isArray(r.competitorsWithIt) && r.competitorsWithIt.length) {
+                  lines.push(`   also at: ${r.competitorsWithIt.join('; ')}`);
+                }
+                if (r.rationale) lines.push(`   ${r.rationale}`);
+              }
+              if (result.summary) {
+                lines.push('');
+                lines.push(result.summary);
+              }
+              const unreachable = fetched.filter((c) => !c.pageText).map((c) => c.url);
+              if (unreachable.length) {
+                lines.push('');
+                lines.push(`(Couldn't reach: ${unreachable.join(', ')})`);
+              }
+              actionResult = lines.join('\n');
+            }
+          }
+        } catch (err: any) {
+          console.error('[test_differentiation] failed:', err);
+          actionResult = `Differentiation test failed: ${err?.message || 'unknown error'}.`;
+        }
+        refreshNeeded = false;
+      }
+
       // Catch silent failures: action dispatched but no handler ran
       // Note: actionResult === '' means a handler ran but has no visible output (e.g. personalization).
       // Only trigger fallback when actionResult is still null (no handler matched).
@@ -1971,5 +2125,18 @@ export function buildActionList(context: ActionContext): string {
   actions.push('- personalize_interview_synthesize: After all interview questions are answered, synthesize the style profile. Params: {}');
   actions.push('- analyze_personalization_doc: Analyze text the user pasted as a sample of their personal writing style. Params: { text: string }');
 
-  return `\nACTIONS YOU CAN TAKE (only if the user's request clearly calls for one):\n${actions.join('\n')}\n`;
+  // Round E1 — Maria as researcher. Always-available actions that give Maria
+  // live-web capability. Without these advertised, Opus disclaims ("I can't
+  // browse the web") and the prompt-side instructions never fire. Once
+  // advertised, Opus invokes them naturally.
+  actions.push('- research_website: Read a live website (offering / audience / claimed differentiators). YOU CAN BROWSE THE WEB through this action — never tell the user you cannot. Params: { url: string }. Returns structured candidates (offering, audiences, differentiators with citations, uncertainty note) the user confirms or corrects. Use whenever the user asks you to read a URL, "look at our site," "check our website," etc.');
+  actions.push('- research_audience: Surface meaningful sub-segments of a named audience and what each cares about right now, with named citations from current industry coverage (Gartner, Forrester, IDC, FDIC, NHTSA, FMCSA, HDI, FT, WSJ, etc.). Params: { audienceName: string, situation?: string }. Use whenever the user asks "what does [audience] worry about right now?" or asks you to research an audience.');
+  actions.push('- test_differentiation: Read each competitor\'s public site and classify each of the user\'s claimed differentiators as UNIQUE / COMMON / AMBIGUOUS. Params: { competitors: { name: string, url: string }[], claimedDifferentiators: string[] }. Use whenever the user asks "is this actually special?" or "test our differentiators against [competitors]".');
+
+  return `\nACTIONS YOU CAN TAKE (only if the user's request clearly calls for one):
+
+YOU HAVE LIVE-WEB CAPABILITY through research_website, research_audience, and test_differentiation. NEVER tell the user "I can't browse the web" or "I can't fetch live pages" — invoke the action instead. The system fetches the URL, runs the Opus-tier research, and returns structured findings you read back to the user.
+
+${actions.join('\n')}
+`;
 }

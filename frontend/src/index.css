@@ -1211,6 +1211,13 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .three-tier-table.has-suggestions .tier2-col {
   min-width: 260px;
 }
+/* Bug #3 — when suggestions are present, .tier2-col widens to 260px but
+ * the tier2-row's grid track was still minmax(220px, 1fr), leaving columns
+ * 40px wider than their tracks and overlapping neighbors. Bump the track
+ * size in lock-step so column widths match grid track widths. */
+.three-tier-table.has-suggestions .tier2-row {
+  grid-auto-columns: minmax(260px, 1fr);
+}
 /* Mobile: stack tier2 columns vertically so content is always readable and scrolling is simple */
 @media (max-width: 600px) {
   .three-tier-table {

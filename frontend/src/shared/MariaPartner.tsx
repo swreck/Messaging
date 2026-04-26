@@ -1411,8 +1411,15 @@ export function MariaPartner() {
                   {/* Round B6 — time-aware session pacing chips. Render once at session
                       start (when chat is opened with no messages and no budget yet).
                       User picks 15/30/45/Skip; budget saves to localStorage and the
-                      backend reads it on each subsequent message. */}
-                  {showBudgetCard && messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && !introduced && (
+                      backend reads it on each subsequent message.
+                      Bug #2 fix: removed the !introduced gate. The intro panel
+                      renders OUTSIDE the messages container, so this card was
+                      already invisible during intro; the !introduced gate only
+                      blocked it from appearing AFTER intro completes (which is
+                      precisely when a fresh user reaches a real chat input).
+                      With that gate gone, the card shows the moment the user
+                      lands on an empty chat with no budget set today. */}
+                  {showBudgetCard && messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && (
                     <div className="partner-return-card" style={{
                       padding: '12px 16px',
                       marginBottom: 8,
@@ -1465,7 +1472,7 @@ export function MariaPartner() {
                     </div>
                   )}
 
-                  {messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && !introduced && !showBudgetCard && (
+                  {messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && !showBudgetCard && (
                     <div className="partner-empty">
                       Tell me about your work — or if you have notes, a discovery doc, or an old draft, drop them here and I'll work from those.
                     </div>
