@@ -50,6 +50,23 @@ function describeWhen(iso?: string): string {
 // Intro steps: 0=name, 1=phase1, 2=phase2, 3=phase3, 4=done
 const INTRO_DONE = 4;
 
+// Round C Bug #3 — placeholder-storyId guard. Reject the literal "storyId"
+// AND the obviously-fake example sentinel "cmEXAMPLE0000000000000000" so a
+// marker-handler never fires against a non-existent story when Maria copies
+// a prompt example verbatim.
+const PLACEHOLDER_STORY_IDS: ReadonlySet<string> = new Set([
+  'storyId',
+  'cmEXAMPLE0000000000000000',
+]);
+function isValidStoryId(id: string | undefined | null): boolean {
+  if (!id) return false;
+  const trimmed = id.trim();
+  if (!trimmed) return false;
+  if (trimmed.length < 5) return false;
+  if (PLACEHOLDER_STORY_IDS.has(trimmed)) return false;
+  return true;
+}
+
 // Synthetic-marker patterns. Internal routing tokens like [STATE_RECAP],
 // [OPEN_ON_PAGE], [REVIEW_TIER2_COLUMN:Focus], [PPTX_PREVIEW:storyId],
 // [CONFIRM_PPTX:...], [PRE_CHAPTER_4:...], [SAVE_PEER_INFO:...],
@@ -723,12 +740,14 @@ export function MariaPartner() {
           if (styleMatch) {
             const storyId = styleMatch[1].trim();
             const newStyle = styleMatch[2];
-            if (storyId && storyId !== 'storyId' && storyId.length >= 5) {
+            if (isValidStoryId(storyId)) {
               api.patch<{ style?: string; effective?: string }>(`/stories/${storyId}/style`, { style: newStyle })
                 .then((r) => {
                   document.dispatchEvent(new CustomEvent('story-style-changed', { detail: { storyId, style: r?.style, effective: r?.effective } }));
                 })
                 .catch((e) => console.error('[set-story-style] save failed', e));
+            } else {
+              console.warn('[SET_STORY_STYLE] ignored placeholder storyId:', storyId);
             }
             cleanedResponse = cleanedResponse.replace(/\s*\[SET_STORY_STYLE:[^\]]+\]\s*/g, '').trim();
           }
@@ -741,7 +760,7 @@ export function MariaPartner() {
           const pptxConfirmMatch = cleanedResponse.match(/\[CONFIRM_PPTX:([^\]]+)\]/);
           if (pptxConfirmMatch) {
             const storyId = pptxConfirmMatch[1].trim();
-            if (storyId && storyId !== 'storyId' && storyId.length >= 5) {
+            if (isValidStoryId(storyId)) {
               document.dispatchEvent(new CustomEvent('pptx-export-confirmed', { detail: { storyId } }));
             } else {
               console.warn('[CONFIRM_PPTX] ignored placeholder storyId:', storyId);
@@ -755,16 +774,19 @@ export function MariaPartner() {
           // so FiveChapterShell resumes Chapter 4 generation. Strip the marker.
           const peerMatch = cleanedResponse.match(/\[SAVE_PEER_INFO:([^:\]]+):([^\]]*)\]/);
           if (peerMatch) {
-            const storyId = peerMatch[1];
+            const storyId = peerMatch[1].trim();
             const peerSummary = peerMatch[2] || '';
-            // Reject placeholder storyIds the same way we do for CONFIRM_PPTX.
-            if (storyId !== 'storyId' && storyId.length >= 5) {
+            // Reject placeholder storyIds — the literal "storyId" or the
+            // example sentinel — same as for CONFIRM_PPTX and SET_STORY_STYLE.
+            if (isValidStoryId(storyId)) {
               api.post(`/ai/stories/${storyId}/peer-info`, { peerInfo: peerSummary })
                 .catch((e) => console.error('[peer-info] save failed', e))
                 .finally(() => {
                   document.dispatchEvent(new CustomEvent('chapter4-peer-info-saved', { detail: { storyId, peerInfo: peerSummary } }));
                 });
               peerPromptContextRef.current = null;
+            } else {
+              console.warn('[SAVE_PEER_INFO] ignored placeholder storyId:', storyId);
             }
             cleanedResponse = cleanedResponse.replace(/\s*\[SAVE_PEER_INFO:[^\]]+\]\s*/g, '').trim();
           } else if (peerPromptContextRef.current) {

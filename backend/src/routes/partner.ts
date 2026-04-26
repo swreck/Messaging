@@ -141,7 +141,13 @@ async function buildCurrentContext(context: Record<string, any>): Promise<string
       parts.push('Viewing a Three Tier draft');
     }
   }
-  if (context.storyId) parts.push('Viewing a Five Chapter Story');
+  if (context.storyId) {
+    // Round C Bug #3 — inject the active storyId as a [STORY_CONTEXT:<realId>]
+    // line so storyId-payload markers (SET_STORY_STYLE, SAVE_PEER_INFO,
+    // CONFIRM_PPTX, PPTX_PREVIEW_REQUEST, future Round D markers) read from
+    // a fresh real ID instead of copying the prompt's example sentinel.
+    parts.push(`Viewing a Five Chapter Story. [STORY_CONTEXT:${context.storyId}]`);
+  }
   if (context.audienceId) parts.push('An audience is selected');
   if (context.offeringId) parts.push('An offering is selected');
   return parts.join('. ');

@@ -14,7 +14,34 @@ router.use(requireAuth);
 
 router.get('/style', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const workspaceId = req.workspaceId || null;
+  // Round C S3 — the settings router does not run requireWorkspace, so
+  // req.workspaceId is usually undefined here. Resolve it explicitly from the
+  // x-workspace-id header (if the user is a member) or the user's first
+  // membership. Without this, the workspace block is null even when the user
+  // has a workspace, hiding the org-default picker from admins/owners.
+  const headerWorkspaceId = (req.headers['x-workspace-id'] as string | undefined) || null;
+  let workspaceId: string | null = req.workspaceId || null;
+  if (!workspaceId && headerWorkspaceId) {
+    const member = await prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: headerWorkspaceId, userId } },
+      select: { workspaceId: true },
+    });
+    if (member) workspaceId = member.workspaceId;
+  }
+  if (!workspaceId) {
+    const fallback = await prisma.workspaceMember.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+      select: { workspaceId: true },
+    });
+    workspaceId = fallback?.workspaceId || null;
+  }
+  // Global admins can read any workspace's default style (admin-viewing-as-X).
+  // For non-admins, only their own workspace memberships are surfaced — already
+  // ensured above by the membership lookups.
+  if (!workspaceId && req.user?.isAdmin && headerWorkspaceId) {
+    workspaceId = headerWorkspaceId;
+  }
   const [user, workspace] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { defaultStyle: true } }),
     workspaceId ? prisma.workspace.findUnique({ where: { id: workspaceId }, select: { defaultStyle: true, name: true } }) : Promise.resolve(null),
@@ -45,7 +72,18 @@ router.put('/workspace-style', async (req: Request, res: Response) => {
   const v = validateStyleInput(req.body?.defaultStyle);
   if (!v.ok) { res.status(400).json({ error: v.error }); return; }
   const userId = req.user!.userId;
-  const workspaceId = req.workspaceId;
+  // Resolve workspaceId the same way the GET does (settings router doesn't
+  // run requireWorkspace). Header → user's first membership.
+  const headerWorkspaceId = (req.headers['x-workspace-id'] as string | undefined) || null;
+  let workspaceId: string | null = req.workspaceId || headerWorkspaceId;
+  if (!workspaceId) {
+    const fallback = await prisma.workspaceMember.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+      select: { workspaceId: true },
+    });
+    workspaceId = fallback?.workspaceId || null;
+  }
   if (!workspaceId) { res.status(400).json({ error: 'No workspace in scope' }); return; }
   const isAdmin = !!req.user?.isAdmin;
   if (!isAdmin) {
