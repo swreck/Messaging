@@ -50,14 +50,39 @@ function describeWhen(iso?: string): string {
 // Intro steps: 0=name, 1=phase1, 2=phase2, 3=phase3, 4=done
 const INTRO_DONE = 4;
 
-// Synthetic-marker pattern. Internal triggers like [STATE_RECAP],
-// [OPEN_ON_PAGE], [REVIEW_TIER2_COLUMN:Focus], [TIME_THRESHOLD_REACHED:...]
-// are dispatched as user-role messages so Maria's prompt rules can react,
-// but the user must never see them as message bubbles. Match a single
-// all-caps bracketed token, optionally with a colon-prefixed payload.
+// Synthetic-marker patterns. Internal routing tokens like [STATE_RECAP],
+// [OPEN_ON_PAGE], [REVIEW_TIER2_COLUMN:Focus], [PPTX_PREVIEW:storyId],
+// [CONFIRM_PPTX:...], [PRE_CHAPTER_4:...], [SAVE_PEER_INFO:...],
+// [SET_VIEW_MODE:...], [TIME_THRESHOLD_REACHED:...], [FOUNDATION],
+// [INSTRUCTION: ...] are routing breadcrumbs the user should never see.
+//
+// Two filters work together:
+//   - WHOLE-MESSAGE filter: drop user/assistant bubbles whose entire content
+//     is a single marker (e.g. when the synthetic message is the only payload).
+//   - INLINE filter: strip embedded markers from message text before render
+//     so a marker that appears mid-message (e.g. Maria's preview "[PPTX_PREVIEW:storyId]
+//     I'll produce a 13-slide…") never shows up as visible text.
+//
+// Both patterns recognize the same token shape: ALL-CAPS name plus an optional
+// colon-prefixed payload of arbitrary characters up to the closing bracket.
+// The payload may include spaces, equals, commas, dashes, etc. (see
+// [INSTRUCTION: rewrite this in plain voice]).
 const SYNTHETIC_MARKER_RE = /^\s*\[[A-Z_]+(?:\s*:[^\]]*)?\]\s*$/;
+const SYNTHETIC_MARKER_GLOBAL_RE = /\[[A-Z][A-Z_]*(?:\s*:[^\]]*)?\]/g;
 function isSyntheticMarker(content: string): boolean {
   return SYNTHETIC_MARKER_RE.test(content);
+}
+function stripSyntheticMarkers(content: string): string {
+  if (!content) return content;
+  // Replace each inline marker with an empty string, then collapse the
+  // resulting double-spaces / leading-trailing whitespace so the remaining
+  // text reads cleanly. We do NOT touch markdown-style links like [text](url)
+  // because the regex requires ALL-CAPS inside the brackets.
+  return content
+    .replace(SYNTHETIC_MARKER_GLOBAL_RE, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^[ \t\n]+|[ \t\n]+$/g, '');
 }
 
 // Round B6 — time-aware session pacing. Per-tab session state lives in
@@ -900,7 +925,12 @@ export function MariaPartner() {
   function formatContent(text: string) {
     // Strip [PAGE CONTENT] blocks from legacy messages
     let stripped = text.replace(/\[PAGE CONTENT\][\s\S]*?\[USER QUESTION\]\n?/g, '');
-    const cleaned = stripped.replace(/\n\n\[.+\]$/, '');
+    let cleaned = stripped.replace(/\n\n\[.+\]$/, '');
+    // Inline synthetic-marker filter: remove any embedded routing tokens
+    // (e.g. [PPTX_PREVIEW:storyId], [FOUNDATION], [INSTRUCTION: ...]) so a
+    // marker that lives mid-message — escaping the whole-message filter — never
+    // shows up in the user-visible chat. Applied to every rendered message.
+    cleaned = stripSyntheticMarkers(cleaned);
     // Apply markdown at full-text level first, then handle line breaks via dangerouslySetInnerHTML
     let html = cleaned
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1207,7 +1237,11 @@ export function MariaPartner() {
                     <div key={i} className={`partner-msg partner-msg-${msg.role}`}>
                       {formatContent(msg.content)}
                       {msg.actionResult && (() => {
-                        const cleaned = msg.actionResult.replace(/\[NAVIGATE:[^\]]+\]\s*/g, '').replace(/\[BUILD_STARTED:[^\]]+\]\s*/g, '').trim();
+                        // Strip NAVIGATE/BUILD_STARTED first (they have known shapes), then run the
+                        // generic synthetic-marker stripper to catch any other inline routing token.
+                        const cleaned = stripSyntheticMarkers(
+                          msg.actionResult.replace(/\[NAVIGATE:[^\]]+\]\s*/g, '').replace(/\[BUILD_STARTED:[^\]]+\]\s*/g, '')
+                        ).trim();
                         if (!cleaned) return null;
                         // Simplify internal action results for naive users
                         const simple = cleaned
