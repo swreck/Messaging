@@ -60,9 +60,17 @@ export function StylePicker({ value, onChange, allowDefault = false, label = 'St
               checked={value === ''}
               onChange={() => onChange('')}
               disabled={disabled}
-              style={{ marginTop: 2 }}
+              style={{
+                // The global `.form-group input` rule makes every input
+                // 100% width, padded, bordered, and white-bg — which
+                // turns this radio into a full-width text-input shell
+                // and squeezes the label+description column off-screen.
+                // Reset to native radio dimensions inside the picker.
+                width: 'auto', padding: 0, border: 0, background: 'transparent', borderRadius: 0,
+                flexShrink: 0, marginTop: 2,
+              }}
             />
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 500 }}>Use my default</div>
               <div style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>Use whatever I've set in Settings (or my organization's default).</div>
             </div>
@@ -85,9 +93,17 @@ export function StylePicker({ value, onChange, allowDefault = false, label = 'St
               checked={value === opt.value}
               onChange={() => onChange(opt.value)}
               disabled={disabled}
-              style={{ marginTop: 2 }}
+              style={{
+                // The global `.form-group input` rule makes every input
+                // 100% width, padded, bordered, and white-bg — which
+                // turns this radio into a full-width text-input shell
+                // and squeezes the label+description column off-screen.
+                // Reset to native radio dimensions inside the picker.
+                width: 'auto', padding: 0, border: 0, background: 'transparent', borderRadius: 0,
+                flexShrink: 0, marginTop: 2,
+              }}
             />
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 500 }}>{opt.label}</div>
               <div style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>{opt.description}</div>
             </div>
