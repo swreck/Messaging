@@ -1408,18 +1408,18 @@ export function MariaPartner() {
                     </div>
                   )}
 
-                  {/* Round B6 — time-aware session pacing chips. Render once at session
-                      start (when chat is opened with no messages and no budget yet).
-                      User picks 15/30/45/Skip; budget saves to localStorage and the
-                      backend reads it on each subsequent message.
-                      Bug #2 fix: removed the !introduced gate. The intro panel
-                      renders OUTSIDE the messages container, so this card was
-                      already invisible during intro; the !introduced gate only
-                      blocked it from appearing AFTER intro completes (which is
-                      precisely when a fresh user reaches a real chat input).
-                      With that gate gone, the card shows the moment the user
-                      lands on an empty chat with no budget set today. */}
-                  {showBudgetCard && messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && (
+                  {/* Round B6 — time-aware session pacing chips. Render at session
+                      start when no budget is set yet. User picks 15/30/45/Custom/Skip;
+                      budget saves to localStorage and the backend reads it on each
+                      subsequent message.
+                      Bug #2 micro-fix: ALSO dropped the messages.length === 0 gate.
+                      The intro flow auto-injects Maria's greeting as message #1, so
+                      a fresh user always reaches a real chat input with messages.length
+                      already > 0. Render gate is now: showBudgetCard (haven't asked
+                      today) AND no live budget set AND chat loaded AND no other card
+                      occupying this slot. The chip lives alongside Maria's greeting —
+                      they don't visually conflict (chip is a self-framed card). */}
+                  {showBudgetCard && !timeContext.budgetMin && loaded && !showReturnCard && !showProactiveCard && (
                     <div className="partner-return-card" style={{
                       padding: '12px 16px',
                       marginBottom: 8,
