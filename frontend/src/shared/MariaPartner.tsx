@@ -380,6 +380,15 @@ export function MariaPartner() {
   // Stashed hint message (assistant-authored) to be appended when the user opens the panel
   const pendingHintRef = useRef<string | null>(null);
 
+  // Round B Bug #1 — defense-in-depth for the SAVE_PEER_INFO marker.
+  // When the frontend dispatches [PRE_CHAPTER_4:storyId:...], we record the
+  // storyId here. The user's NEXT message is captured into peerPromptContextRef
+  // so that if Maria writes a "Writing Chapter 4 with [peer]" confirmation
+  // WITHOUT emitting the SAVE_PEER_INFO marker, the frontend can fall back to
+  // saving the peer info itself using the user's free-text answer.
+  const pendingPeerStoryIdRef = useRef<string | null>(null);
+  const peerPromptContextRef = useRef<{ storyId: string; userAnswer: string } | null>(null);
+
   useEffect(() => {
     function onToggle(e: Event) {
       const detail = (e as CustomEvent).detail;
@@ -578,6 +587,20 @@ export function MariaPartner() {
       setMessages(prev => [...prev, { role: 'user', content: (text ? text : '') + (pendingFiles.length > 0 ? ` (${pendingFiles.length} files)` : '') }]);
     }
 
+    // Round B Bug #1 — capture peer-prompt context for the SAVE_PEER_INFO fallback.
+    // When the synthetic [PRE_CHAPTER_4:storyId:...] message goes out, record the
+    // storyId. The next user message after that is the peer answer; record it so
+    // the response handler can save it directly if Maria forgets the marker.
+    const preChapterMatch = text.match(/^\s*\[PRE_CHAPTER_4:([^:\]]+):/);
+    if (preChapterMatch) {
+      pendingPeerStoryIdRef.current = preChapterMatch[1];
+      peerPromptContextRef.current = null;
+    } else if (pendingPeerStoryIdRef.current && text.trim()) {
+      // This message is the user's free-text answer to the peer prompt.
+      peerPromptContextRef.current = { storyId: pendingPeerStoryIdRef.current, userAnswer: text };
+      pendingPeerStoryIdRef.current = null;
+    }
+
     setSending(true);
 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -695,10 +718,16 @@ export function MariaPartner() {
           // Round B5 — pitch-deck export: scan for [CONFIRM_PPTX:storyId] which
           // Maria emits when the user agrees to the trust-gate preview. Trigger
           // the download via FiveChapterShell. Strip the marker from visible text.
+          // Round B Bug #2 — reject the literal placeholder "storyId" so we don't
+          // dispatch a download for a non-existent story.
           const pptxConfirmMatch = cleanedResponse.match(/\[CONFIRM_PPTX:([^\]]+)\]/);
           if (pptxConfirmMatch) {
-            const storyId = pptxConfirmMatch[1];
-            document.dispatchEvent(new CustomEvent('pptx-export-confirmed', { detail: { storyId } }));
+            const storyId = pptxConfirmMatch[1].trim();
+            if (storyId && storyId !== 'storyId' && storyId.length >= 5) {
+              document.dispatchEvent(new CustomEvent('pptx-export-confirmed', { detail: { storyId } }));
+            } else {
+              console.warn('[CONFIRM_PPTX] ignored placeholder storyId:', storyId);
+            }
             cleanedResponse = cleanedResponse.replace(/\s*\[CONFIRM_PPTX:[^\]]+\]\s*/g, '').trim();
           }
 
@@ -710,12 +739,35 @@ export function MariaPartner() {
           if (peerMatch) {
             const storyId = peerMatch[1];
             const peerSummary = peerMatch[2] || '';
-            api.post(`/ai/stories/${storyId}/peer-info`, { peerInfo: peerSummary })
-              .catch((e) => console.error('[peer-info] save failed', e))
-              .finally(() => {
-                document.dispatchEvent(new CustomEvent('chapter4-peer-info-saved', { detail: { storyId, peerInfo: peerSummary } }));
-              });
+            // Reject placeholder storyIds the same way we do for CONFIRM_PPTX.
+            if (storyId !== 'storyId' && storyId.length >= 5) {
+              api.post(`/ai/stories/${storyId}/peer-info`, { peerInfo: peerSummary })
+                .catch((e) => console.error('[peer-info] save failed', e))
+                .finally(() => {
+                  document.dispatchEvent(new CustomEvent('chapter4-peer-info-saved', { detail: { storyId, peerInfo: peerSummary } }));
+                });
+              peerPromptContextRef.current = null;
+            }
             cleanedResponse = cleanedResponse.replace(/\s*\[SAVE_PEER_INFO:[^\]]+\]\s*/g, '').trim();
+          } else if (peerPromptContextRef.current) {
+            // Round B Bug #1 fallback — Maria wrote a "writing Chapter 4 (now|with) ..."
+            // confirmation but forgot the marker. Use the captured user answer to save
+            // peer info directly so the chapter pipeline isn't stuck. Pattern is
+            // intentionally broad: any reply that signals Chapter 4 is going forward
+            // counts, even without the literal "writing chapter 4" phrase.
+            const writingCh4 = /\b(writing|drafting|generat\w+|building|start\w*|moving on to|on to)\s+(chapter\s+4|ch\.?\s*4|the\s+(?:fourth|social\s+proof|peer)\s+chapter)\b/i;
+            const generalGoForward = /\b(got it|with that|let me|i'?ll|great|perfect|thanks)\b/i;
+            const looksLikeCh4Confirm = writingCh4.test(cleanedResponse)
+              || (generalGoForward.test(cleanedResponse) && cleanedResponse.length < 400);
+            if (looksLikeCh4Confirm) {
+              const ctx = peerPromptContextRef.current;
+              peerPromptContextRef.current = null;
+              api.post(`/ai/stories/${ctx.storyId}/peer-info`, { peerInfo: ctx.userAnswer })
+                .catch((e) => console.error('[peer-info fallback] save failed', e))
+                .finally(() => {
+                  document.dispatchEvent(new CustomEvent('chapter4-peer-info-saved', { detail: { storyId: ctx.storyId, peerInfo: ctx.userAnswer } }));
+                });
+            }
           }
         }
         setMessages(prev => [...prev, { role: 'assistant', content: cleanedResponse || result.response, actionResult: result.actionResult }]);

@@ -504,14 +504,42 @@ export function FiveChapterShell() {
   function waitForPeerInfo(storyId: string, audienceName: string): Promise<void> {
     return new Promise((resolve) => {
       const entityType = classifyAudienceEntity(audienceName);
+      let resolved = false;
+      let pollInterval: ReturnType<typeof setInterval> | null = null;
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+      const cleanup = () => {
+        document.removeEventListener('chapter4-peer-info-saved', handler as EventListener);
+        if (pollInterval) clearInterval(pollInterval);
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+      };
+      const finish = (reason: string) => {
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+        if (reason !== 'event') console.warn(`[waitForPeerInfo] resolved via ${reason} for story ${storyId}`);
+        resolve();
+      };
       function handler(e: Event) {
         const detail = (e as CustomEvent).detail as { storyId?: string } | undefined;
-        if (detail?.storyId === storyId) {
-          document.removeEventListener('chapter4-peer-info-saved', handler as EventListener);
-          resolve();
-        }
+        if (detail?.storyId === storyId) finish('event');
       }
       document.addEventListener('chapter4-peer-info-saved', handler as EventListener);
+
+      // Round B Bug #1 / S2 — polling fallback. If the SAVE_PEER_INFO marker
+      // never fires AND the frontend fallback in MariaPartner missed too, a
+      // periodic check on peerAsked still releases the wait. Poll every 4s.
+      pollInterval = setInterval(async () => {
+        try {
+          const refreshed = await api.get<{ story: FiveChapterStory }>(`/stories/${storyId}`);
+          if (refreshed?.story?.peerAsked) finish('poll');
+        } catch {/* keep polling */}
+      }, 4000);
+
+      // Hard timeout — release after 5 minutes so the generate-all loop never
+      // hangs forever even if the user closes the chat without answering.
+      // peerAsked stays false; Chapter 4 falls back to the generic version.
+      timeoutHandle = setTimeout(() => finish('timeout'), 300000);
+
       // Open Maria's chat with the synthetic marker. partner.ts handles the
       // PRE_CHAPTER_4 marker to ask the entity-type-aware peer question.
       // Marker is suppressed from user view by A5's marker filter.
