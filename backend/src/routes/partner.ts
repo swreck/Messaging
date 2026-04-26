@@ -110,7 +110,7 @@ async function buildWorkSummary(workspaceId: string): Promise<string> {
   return lines.join('\n');
 }
 
-async function buildCurrentContext(context: Record<string, any>): Promise<string> {
+async function buildCurrentContext(context: Record<string, any>, userId?: string): Promise<string> {
   if (!context?.page) return 'Unknown page';
   const parts = [`Page: ${context.page}`];
   if (context.draftId) {
@@ -146,7 +146,44 @@ async function buildCurrentContext(context: Record<string, any>): Promise<string
     // line so storyId-payload markers (SET_STORY_STYLE, SAVE_PEER_INFO,
     // CONFIRM_PPTX, PPTX_PREVIEW_REQUEST, future Round D markers) read from
     // a fresh real ID instead of copying the prompt's example sentinel.
-    parts.push(`Viewing a Five Chapter Story. [STORY_CONTEXT:${context.storyId}]`);
+    //
+    // Wave 2 cleanup — also surface the deliverable's current effective style,
+    // medium, and CTA so the "chat memory vs DB state" rule has concrete
+    // values to defer to. When the user contradicts Maria about state, the
+    // context block now contains the canonical answer.
+    let storyDetails = '';
+    try {
+      const story = await prisma.fiveChapterStory.findUnique({
+        where: { id: context.storyId },
+        select: {
+          id: true,
+          medium: true,
+          customName: true,
+          cta: true,
+          style: true,
+          peerAsked: true,
+          peerInfo: true,
+          draft: { select: { audience: { select: { name: true } } } },
+        },
+      });
+      if (story) {
+        const effectiveStyle = userId
+          ? await (await import('../lib/styleResolver.js')).resolveStyleForStory(story.id, userId).catch(() => null)
+          : null;
+        const styleLabel = (story.style && story.style.length > 0)
+          ? story.style
+          : (effectiveStyle || 'TABLE_FOR_2');
+        const detailParts = [
+          `current style: ${styleLabel}`,
+          `format: ${story.medium}`,
+          story.draft?.audience?.name ? `for: ${story.draft.audience.name}` : null,
+          story.cta ? `cta: ${story.cta}` : null,
+          story.peerAsked ? `peer info captured: ${story.peerInfo ? 'yes' : 'no (skipped)'}` : 'peer info not yet captured',
+        ].filter(Boolean) as string[];
+        storyDetails = ` (${detailParts.join('; ')})`;
+      }
+    } catch {/* non-fatal */}
+    parts.push(`Viewing a Five Chapter Story${storyDetails}. [STORY_CONTEXT:${context.storyId}]`);
   }
   if (context.audienceId) parts.push('An audience is selected');
   if (context.offeringId) parts.push('An offering is selected');
@@ -550,7 +587,7 @@ router.post('/message', async (req: Request, res: Response) => {
     }),
   ]);
 
-  const currentContext = await buildCurrentContext(ctx);
+  const currentContext = await buildCurrentContext(ctx, userId);
   const isNewUser = offeringCount === 0 && audienceCount === 0;
   const userRole = req.user?.isAdmin ? 'owner' : (membership?.role || 'collaborator');
 

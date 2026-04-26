@@ -143,8 +143,10 @@ export function FiveChapterShell() {
   }
   // Tooltip state — which claim is open + its anchor rect for positioning.
   const [openTooltipClaim, setOpenTooltipClaim] = useState<{ claim: ProvenanceClaim; anchor: DOMRect } | null>(null);
-  // Pulse-on-scroll for the auto-flow target claim.
-  const [pulseClaimId, setPulseClaimId] = useState<string | null>(null);
+  // Pulse-on-scroll state — kept as a ref-style flag for any future
+  // status badge or screen-reader announcement; the visual pulse is now
+  // applied directly to the DOM via the .is-pulse class in scrollToClaim.
+  const [, setPulseClaimId] = useState<string | null>(null);
 
   async function loadClaims(storyId: string) {
     try {
@@ -182,8 +184,19 @@ export function FiveChapterShell() {
     const node = document.querySelector<HTMLElement>(`[data-claim-id="${claim.id}"]`);
     if (!node) return;
     node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Apply the pulse class directly on the DOM. Re-triggering: remove the
+    // class, force reflow, then add it back — required for the keyframe to
+    // restart when the same claim is targeted twice.
+    node.classList.remove('is-pulse');
+    void node.offsetWidth; // force reflow so the next class add restarts the animation
+    node.classList.add('is-pulse');
+    const handle = window.setTimeout(() => {
+      node.classList.remove('is-pulse');
+    }, 2100);
     setPulseClaimId(claim.id);
-    setTimeout(() => setPulseClaimId((cur) => (cur === claim.id ? null : cur)), 1600);
+    setTimeout(() => setPulseClaimId((cur) => (cur === claim.id ? null : cur)), 2100);
+    // Clear the timer if the user navigates away mid-animation.
+    return () => window.clearTimeout(handle);
   }
   function jumpToFirstUnsourced() {
     if (sortedUnsourced.length === 0) return;
@@ -2086,11 +2099,10 @@ export function FiveChapterShell() {
           }}
         />
       )}
-      {/* Pulse animation hook — toggle a class on the active marker so it
-          briefly highlights when auto-flow scrolls to it. */}
-      {pulseClaimId && (
-        <style dangerouslySetInnerHTML={{ __html: `[data-claim-id="${pulseClaimId}"] { animation: provenance-pulse 1.4s ease-out 1; }` }} />
-      )}
+      {/* Round D4 pulse: scrollToClaim applies the .is-pulse class directly
+          on the destination marker (with forced reflow for re-triggers).
+          The keyframe runs ~2s with high-contrast amber + halo + outline so
+          the user can't miss the target. No inline <style> needed. */}
     </div>
   );
 }

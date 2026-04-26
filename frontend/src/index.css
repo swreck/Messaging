@@ -1103,15 +1103,17 @@ p { line-height: 1.5; color: var(--text-secondary); }
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
   border: 1px solid #d1d1d6;
-  /* Break out of max-width container so 6-column layouts use full viewport */
-  width: calc(100vw - 48px);
+  /* Round F2 — fit within the parent container instead of breaking out to
+   * 100vw. The break-out caused Tier 1 to clip off the left edge whenever
+   * the chat panel narrowed the visible viewport. The Three Tier now
+   * respects its container width; Tier 2 horizontal-scrolls within the
+   * row when below the comparison-comfortable width. Tier 1 stays pinned
+   * full-width above and wraps onto multiple lines if needed. */
+  width: 100%;
+  max-width: 100%;
   position: relative;
-  left: 50%;
-  transform: translateX(-50%);
+  overflow: hidden;            /* contains the inner tier2 scroll */
 }
 
 .tier1-row {
@@ -1119,6 +1121,10 @@ p { line-height: 1.5; color: var(--text-secondary); }
   text-align: center;
   border-bottom: 2px solid #d1d1d6;
   background: var(--bg-card);
+  /* Tier 1 stays pinned full-width — never clip, wrap as needed. */
+  width: 100%;
+  box-sizing: border-box;
+  word-break: break-word;
 }
 .tier-header-row {
   display: flex;
@@ -1177,23 +1183,33 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .tier1-text:hover { background: var(--bg-hover); border-radius: var(--radius-sm); cursor: text; }
 
 .tier2-row {
+  /* Round F2 — horizontal-scroll when columns can't all fit at their
+   * comparison-comfortable width. Each column has a fixed minimum width so
+   * neighbors never overlap; the row scrolls horizontally inside the table
+   * container when narrow viewports (chat-open laptop) make the at-a-glance
+   * view impossible. */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 1fr);
   grid-template-rows: auto 1fr auto auto;
   border-bottom: 1px solid #d1d1d6;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .tier2-col {
   display: grid;
-  grid-row: 1 / -1;
   grid-template-rows: subgrid;
-  min-width: 200px;
+  grid-row: 1 / -1;
+  min-width: 220px;
   border-right: 1px solid #d1d1d6;
   position: relative;
   transition: box-shadow 0.2s;
   overflow: visible;
 }
 .three-tier-table.has-suggestions .tier2-col {
-  min-width: 240px;
+  min-width: 260px;
 }
 /* Mobile: stack tier2 columns vertically so content is always readable and scrolling is simple */
 @media (max-width: 600px) {
@@ -2184,12 +2200,20 @@ p { line-height: 1.5; color: var(--text-secondary); }
   font-size: 0.85em;
   vertical-align: baseline;
 }
+/* Round D4 pulse — used by both .is-pulse class application and the
+ * inline <style> block in FiveChapterShell. Two pulses (~2s total),
+ * with strong contrast against the calm unsourced amber baseline,
+ * a glowing box-shadow halo, and a brief outline so the destination
+ * marker is unmistakable when auto-flow scrolls to it. */
+.claim-marker.is-pulse,
 .claim-marker-unsourced.is-pulse {
-  animation: provenance-pulse 1.4s ease-out 1;
+  animation: provenance-pulse 1.9s ease-out 1;
 }
 @keyframes provenance-pulse {
-  0%   { background: rgba(245, 158, 11, 0.45); }
-  100% { background: rgba(245, 158, 11, 0.12); }
+  0%   { background: rgba(245, 158, 11, 0.95); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.55); outline: 2px solid rgba(217, 119, 6, 0.85); }
+  18%  { background: rgba(245, 158, 11, 0.20); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.0);  outline-color: transparent; }
+  36%  { background: rgba(245, 158, 11, 0.85); box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.40); outline: 2px solid rgba(217, 119, 6, 0.65); }
+  100% { background: rgba(245, 158, 11, 0.12); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); outline-color: transparent; }
 }
 .claim-marker-user_words::after,
 .claim-marker-user_doc::after,
