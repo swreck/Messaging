@@ -73,7 +73,12 @@ What shape of change did the user make? Be terse and pattern-shaped, not topic-s
 }
 
 // Aggregator — group recent edit shapes by similarity. Two shapes are
-// "similar" if their normalized token sets share at least 60% (Jaccard).
+// "similar" if their normalized token sets share at least 40% (Jaccard).
+// B-6 tuning: 0.6 was too strict and missed true paraphrases of the same
+// shape (e.g. "shorter sentences" vs "broke long sentences into shorter
+// ones"). The confidence guard in detectPattern() compensates for the
+// looser similarity by requiring at least 2 observations at high|medium
+// confidence within any group that fires.
 function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -85,7 +90,7 @@ function similar(a: string, b: string): boolean {
   if (tokA.size === 0 || tokB.size === 0) return false;
   let inter = 0;
   for (const t of tokA) if (tokB.has(t)) inter++;
-  return inter / new Set([...tokA, ...tokB]).size >= 0.6;
+  return inter / new Set([...tokA, ...tokB]).size >= 0.4;
 }
 
 export interface EditObservation {
@@ -93,6 +98,7 @@ export interface EditObservation {
   audienceType?: string;
   format?: string;
   observedAt: Date;
+  confidence?: 'high' | 'medium' | 'low' | string;
 }
 export interface DetectedPattern {
   shape: string;            // canonical shape (the most recent or most representative)
@@ -110,30 +116,38 @@ export interface DetectedPattern {
  */
 export function detectPattern(observations: EditObservation[]): DetectedPattern | null {
   if (observations.length < 3) return null;
-  // Group by similar shape.
-  type Group = { shapes: string[]; audienceTypes: Set<string>; formats: Set<string>; count: number };
+  // Group by similar shape. Track confidence per-observation so the
+  // aggregator can require at least 2 high|medium signals before firing —
+  // this guards against the looser 0.4 Jaccard threshold pulling in
+  // low-confidence noise that happens to share tokens.
+  type Group = { shapes: string[]; audienceTypes: Set<string>; formats: Set<string>; count: number; strongCount: number };
   const groups: Group[] = [];
   for (const o of observations) {
     if (!o.shape) continue;
+    const isStrong = o.confidence === 'high' || o.confidence === 'medium';
     const existing = groups.find(g => g.shapes.some(s => similar(s, o.shape)));
     if (existing) {
       existing.shapes.push(o.shape);
       if (o.audienceType) existing.audienceTypes.add(o.audienceType);
       if (o.format) existing.formats.add(o.format);
       existing.count++;
+      if (isStrong) existing.strongCount++;
     } else {
       groups.push({
         shapes: [o.shape],
         audienceTypes: new Set(o.audienceType ? [o.audienceType] : []),
         formats: new Set(o.format ? [o.format] : []),
         count: 1,
+        strongCount: isStrong ? 1 : 0,
       });
     }
   }
-  // Pick the largest group that's reached threshold.
-  groups.sort((a, b) => b.count - a.count);
-  const top = groups[0];
-  if (!top || top.count < 3) return null;
+  // Pick the largest group that's reached threshold AND has 2+ strong
+  // (high|medium) confidence signals. Secondary sort on strongCount so
+  // ties prefer the better-evidenced group.
+  groups.sort((a, b) => (b.count - a.count) || (b.strongCount - a.strongCount));
+  const top = groups.find(g => g.count >= 3 && g.strongCount >= 2);
+  if (!top) return null;
   return {
     shape: top.shapes[top.shapes.length - 1],
     scopeAudienceType: top.audienceTypes.size === 1 ? [...top.audienceTypes][0] : '',

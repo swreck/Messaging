@@ -215,6 +215,21 @@ export function MariaPartner() {
   const [showDot, setShowDot] = useState(false);
   const [showGlow, setShowGlow] = useState(false);
 
+  // B-4 — first-encounter voice-button orientation. Renders an inline
+  // hint above the input row when the user opens Maria for the first
+  // time after voice was added. Persisted per-user so it never re-fires.
+  const voiceTooltipKey = user ? `voice-tooltip-dismissed-${user.userId}` : '';
+  const [showVoiceTooltip, setShowVoiceTooltip] = useState<boolean>(() => {
+    if (!voiceTooltipKey) return false;
+    try { return !localStorage.getItem(voiceTooltipKey); } catch { return false; }
+  });
+  function dismissVoiceTooltip() {
+    if (voiceTooltipKey) {
+      try { localStorage.setItem(voiceTooltipKey, '1'); } catch {}
+    }
+    setShowVoiceTooltip(false);
+  }
+
   // Toggle-can't-lie: when a user's in-chat directive conflicts with the visible
   // "Let Maria lead" toggle, Maria does the requested thing immediately AND offers
   // to promote the change to the toggle. The card below the latest exchange
@@ -649,6 +664,16 @@ export function MariaPartner() {
           } catch {}
           return {};
         })()),
+        // B-2 — once-per-session flag so Maria's proactive website-research
+        // offer only fires once. Date-stamped key resets each new day.
+        ...(((): Record<string, unknown> => {
+          try {
+            const d = new Date();
+            const key = `website-research-offered-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+            return { websiteResearchOffered: !!localStorage.getItem(key) };
+          } catch {}
+          return {};
+        })()),
       });
       // Round B6 — backend tells us when the threshold marker fired this turn so
       // we can persist thresholdTriggered=true and avoid re-firing on later messages.
@@ -972,6 +997,20 @@ export function MariaPartner() {
                 });
             }
           }
+
+          // B-2 — proactive website-research offer marker. When Maria
+          // includes [WEBSITE_RESEARCH_OFFERED] anywhere in her reply,
+          // set the date-stamped session flag so the next message tells
+          // her she's already offered this session and not to re-offer.
+          // Marker is stripped from visible text before render.
+          if (/\[WEBSITE_RESEARCH_OFFERED\]/.test(cleanedResponse)) {
+            try {
+              const d = new Date();
+              const key = `website-research-offered-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+              localStorage.setItem(key, '1');
+            } catch {}
+            cleanedResponse = cleanedResponse.replace(/\s*\[WEBSITE_RESEARCH_OFFERED\]\s*/g, '').trim();
+          }
         }
         setMessages(prev => [...prev, { role: 'assistant', content: cleanedResponse || result.response, actionResult: result.actionResult }]);
       }
@@ -1129,16 +1168,34 @@ export function MariaPartner() {
       );
     }
 
-    // Steps 1-2 combined: brief pitch + go
+    // Steps 1-2 combined: brief pitch + budget chips. B-1 — the budget
+    // question lives inside the intro on Maria-led first-touch (one
+    // continuous conversation), instead of popping up as a separate chip
+    // card after the intro completes. Chip card stays as the day-to-day
+    // re-ask for returning users (introStep already === INTRO_DONE).
     if (introStep === 1 || introStep === 2) {
       const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
+      const pickBudget = (mins: number | null) => {
+        if (mins != null) {
+          const tc: TimeContext = { sessionStartMs: Date.now(), budgetMin: mins, thresholdTriggered: false };
+          setTimeContext(tc);
+          saveTimeContext(tc);
+        }
+        markTimeBudgetAsked();
+        setShowBudgetCard(false);
+        advanceIntro(INTRO_DONE);
+      };
       return (
         <div className="partner-intro">
           <div className="partner-intro-message">
             <p>{firstName ? `Nice to meet you, ${firstName}. ` : ''}I help people build more persuasive messages and then apply them to almost any medium. Tell me about your work and I'll take it from there.</p>
+            <p style={{ marginTop: 10 }}>How much time do you have? I'll pace accordingly.</p>
           </div>
-          <div className="partner-intro-actions">
-            <button className="btn btn-primary" onClick={() => advanceIntro(INTRO_DONE)}>Let's go</button>
+          <div className="partner-intro-actions" style={{ flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={() => pickBudget(15)}>15 min</button>
+            <button className="btn btn-primary" onClick={() => pickBudget(30)}>30 min</button>
+            <button className="btn btn-primary" onClick={() => pickBudget(45)}>45 min</button>
+            <button className="btn btn-ghost" onClick={() => pickBudget(null)}>No budget today</button>
             <button className="btn btn-ghost" onClick={dismissIntro}>Not now</button>
           </div>
         </div>
@@ -1588,6 +1645,16 @@ export function MariaPartner() {
                         <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 14, lineHeight: 1, padding: '0 4px', flexShrink: 0 }} aria-label="Remove">×</button>
                       </div>
                     ))}
+                  </div>
+                )}
+                {/* B-4 — first-encounter voice-button orientation. Renders
+                    once per user (localStorage). Same visual treatment as
+                    Three Tier "view mode" orientation: subtle card with a
+                    short hint and a "Got it" dismiss. */}
+                {showVoiceTooltip && (
+                  <div className="partner-voice-tooltip" role="status">
+                    <span><strong>New:</strong> tap and hold the mic to talk. Faster than typing for long thoughts.</span>
+                    <button className="btn btn-ghost btn-sm" onClick={dismissVoiceTooltip}>Got it</button>
                   </div>
                 )}
                 <div className="partner-input-area">

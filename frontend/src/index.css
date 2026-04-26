@@ -2141,6 +2141,33 @@ p { line-height: 1.5; color: var(--text-secondary); }
   font-size: 12px;
 }
 
+/* B-4 — first-encounter voice-button orientation, mirrors the view-mode
+ * orientation pattern. Lives just above the partner-input-area so it
+ * visually points at the mic button without absolute positioning. */
+.partner-voice-tooltip {
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-light, #e5e5ea);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  animation: voiceTooltipFadeIn 240ms ease-out;
+}
+.partner-voice-tooltip button {
+  padding: 2px 8px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+@keyframes voiceTooltipFadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ─── Round D — Provenance system styling ───────────────────── */
 /* Lead-with-action banner at top of deliverable. Single line; calmer color when
  * everything is sourced, amber when something needs attention. */

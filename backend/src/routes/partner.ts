@@ -534,7 +534,7 @@ router.get('/history', async (req: Request, res: Response) => {
 // Optionally accepts an attachment: { data: base64string, mimeType: string, filename: string }
 // Images are sent to Claude via vision. PDFs and text files are extracted and prepended.
 router.post('/message', async (req: Request, res: Response) => {
-  const { message, context, attachment, attachments: rawAttachments, timeContext, voicePersistentIntent } = req.body as {
+  const { message, context, attachment, attachments: rawAttachments, timeContext, voicePersistentIntent, websiteResearchOffered } = req.body as {
     message?: string;
     context?: ActionContext;
     attachment?: { data: string; mimeType: string; filename: string };
@@ -553,6 +553,11 @@ router.post('/message', async (req: Request, res: Response) => {
     // The system prompt surfaces it so Maria explicitly summary-backs the
     // persistent intent before saving the rule.
     voicePersistentIntent?: string;
+    // B-2 — frontend tracks once-per-session whether Maria has already
+    // offered to read a company's website (date-stamped localStorage key
+    // 'website-research-offered-{date}'). Surfaces here so the prompt
+    // rule can suppress re-offering.
+    websiteResearchOffered?: boolean;
   };
   // Normalize: single attachment or array of attachments
   const allAttachments: { data: string; mimeType: string; filename: string }[] =
@@ -617,6 +622,14 @@ router.post('/message', async (req: Request, res: Response) => {
   if (voicePersistentIntent && typeof voicePersistentIntent === 'string') {
     systemPrompt += `\n\nVOICE PERSISTENT-INTENT FLAG — the user's last voice input contained phrasing that suggests a persistent rule ("from now on", "going forward", "remember to", etc.). Surface the rule explicitly in your summary-back: "...and I'll remember to apply this to future [audience-type/format] — got it right?" — then on user yes, emit [SAVE_STYLE_RULE:scopeAudienceType:scopeFormat:rule text]. Original phrasing: "${voicePersistentIntent.slice(0, 500).replace(/"/g, '\\"')}"`;
   }
+
+  // B-2 — surface website-research-offer status so Maria's proactive
+  // offer fires at most once per session. The flag flips to true on the
+  // frontend the moment Maria emits [WEBSITE_RESEARCH_OFFERED] in a
+  // reply, so by the next turn she sees the suppressed state.
+  systemPrompt += websiteResearchOffered
+    ? `\n\nWEBSITE RESEARCH OFFER STATUS: ALREADY OFFERED THIS SESSION — do not re-offer to read a company's website this session, even if the user names another company. If the user pastes a URL or explicitly asks you to read a site, still call research_website normally; the once-per-session rule only suppresses the proactive offer.`
+    : `\n\nWEBSITE RESEARCH OFFER STATUS: NOT YET OFFERED THIS SESSION — if the user names a company in this turn, follow rule (f) under RESEARCH and offer once with the [WEBSITE_RESEARCH_OFFERED] marker.`;
 
   // Round E4 / Bug #5 — surface the foundationalShift detection result from
   // the most recent chapter edit. The chapter PUT handler stashes the

@@ -97,7 +97,11 @@ export async function recordEditObservation(opts: {
   format?: string;
 }): Promise<DetectedPattern | null> {
   const characterized = await characterizeEdit({ before: opts.before, after: opts.after });
-  if (!characterized.shape || characterized.confidence === 'low') return null;
+  // B-6: store low-confidence observations too. The aggregator filters by
+  // confidence at detect time (requires 2+ high|medium in a group), so
+  // low-confidence rows can still contribute to occurrence counts when the
+  // strong-signal floor is met. Only drop when no shape was extractable.
+  if (!characterized.shape) return null;
   const user = await prisma.user.findUnique({ where: { id: opts.userId }, select: { settings: true } });
   const settings = (user?.settings as Record<string, any>) || {};
   const prior: EditObservation[] = Array.isArray(settings.editObservations)
@@ -106,6 +110,7 @@ export async function recordEditObservation(opts: {
         audienceType: typeof o?.audienceType === 'string' ? o.audienceType : undefined,
         format: typeof o?.format === 'string' ? o.format : undefined,
         observedAt: o?.observedAt ? new Date(o.observedAt) : new Date(),
+        confidence: typeof o?.confidence === 'string' ? o.confidence : undefined,
       }))
     : [];
   const next: EditObservation[] = [
@@ -115,6 +120,7 @@ export async function recordEditObservation(opts: {
       audienceType: opts.audienceType,
       format: opts.format,
       observedAt: new Date(),
+      confidence: characterized.confidence,
     },
   ].slice(-OBSERVATION_WINDOW);
   await prisma.user.update({
