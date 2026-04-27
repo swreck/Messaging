@@ -23,6 +23,10 @@ import expressFlowRoutes from './routes/express.js';
 import researchRoutes from './routes/research.js';
 import { defaultApiLimiter } from './middleware/rateLimit.js';
 
+// Debug routes are only loaded when TEST_MODE is on. The dynamic import
+// keeps the file out of the production code path entirely.
+const TEST_MODE = process.env.TEST_MODE === 'true';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -55,6 +59,12 @@ app.use('/api/share', shareRoutes);
 app.use('/api/personalize', personalizeRoutes);
 app.use('/api/express', expressFlowRoutes);
 app.use('/api/research', researchRoutes);
+
+if (TEST_MODE) {
+  const { default: testDebugRoutes } = await import('./routes/test-debug.js');
+  app.use('/api/_test', testDebugRoutes);
+  console.log('[TEST_MODE] Debug routes mounted at /api/_test');
+}
 
 // Health check
 app.get('/api/health', (_req, res) => {

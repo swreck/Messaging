@@ -1,5 +1,33 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+// Test-mode injection hook — when TEST_MODE=true, the next N calls into
+// withRetry will throw a synthetic 503 before reaching the SDK, letting
+// the failure-path test suite exercise the try/catch + circuit breaker
+// + fallback persistence end-to-end. Inert in production (TEST_MODE
+// unset). Mutated by routes/test-debug.ts.
+const TEST_MODE = process.env.TEST_MODE === 'true';
+let _testFailuresRemaining = 0;
+export function _testInjectFailures(n: number): void {
+  if (!TEST_MODE) throw new Error('Test injection requires TEST_MODE=true');
+  _testFailuresRemaining = n;
+}
+export function _testFailuresPending(): number {
+  return _testFailuresRemaining;
+}
+export function _testCircuitState(): { open: boolean; openUntil: number; consecutiveFailures: number } {
+  return {
+    open: Date.now() < circuitOpenUntil,
+    openUntil: circuitOpenUntil,
+    consecutiveFailures,
+  };
+}
+export function _testResetCircuit(): void {
+  if (!TEST_MODE) throw new Error('Test reset requires TEST_MODE=true');
+  consecutiveFailures = 0;
+  circuitOpenUntil = 0;
+  _testFailuresRemaining = 0;
+}
+
 export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
   timeout: 5 * 60 * 1000, // 5 minutes — Opus calls with voice check can take 2-3 minutes
@@ -27,6 +55,17 @@ export class AnthropicUnavailableError extends Error {
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   if (Date.now() < circuitOpenUntil) {
     throw new AnthropicUnavailableError();
+  }
+  if (TEST_MODE && _testFailuresRemaining > 0) {
+    _testFailuresRemaining -= 1;
+    consecutiveFailures += 1;
+    if (consecutiveFailures >= CIRCUIT_THRESHOLD) {
+      circuitOpenUntil = Date.now() + CIRCUIT_OPEN_MS;
+      console.error(`[ai] Circuit opened — ${CIRCUIT_THRESHOLD} consecutive failures. Failing fast for ${CIRCUIT_OPEN_MS / 1000}s.`);
+    }
+    const err: any = new Error('Test-injected synthetic 503');
+    err.status = 503;
+    throw err;
   }
   const delays = [500, 2000];
   let lastErr: unknown;

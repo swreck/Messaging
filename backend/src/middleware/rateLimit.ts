@@ -5,11 +5,16 @@
 // net is intentionally generous (60/min/user) and exists only to bound
 // runaway-loop scenarios.
 
-import rateLimit from 'express-rate-limit';
-import type { Request } from 'express';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import type { Request, Response } from 'express';
 
-function keyByUser(req: Request): string {
-  return (req as any).user?.userId || req.ip || 'unknown';
+// Use express-rate-limit's ipKeyGenerator helper for the IP fallback so
+// IPv6 addresses are normalized to a /64 prefix and we don't get flagged
+// for letting one IPv6 user bypass limits via the lower bits.
+function keyByUser(req: Request, res: Response): string {
+  const userId = (req as any).user?.userId;
+  if (userId) return userId;
+  return ipKeyGenerator(req.ip || '');
 }
 
 export const partnerLimiter = rateLimit({
