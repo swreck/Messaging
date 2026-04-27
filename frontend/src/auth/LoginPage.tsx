@@ -43,7 +43,7 @@ export function LoginPage() {
         <div className="login-brand">
           <h1 className="login-title">Maria</h1>
           <p className="login-tagline">Your messaging partner</p>
-          <p className="login-value-prop">Draft the pitch. I can lead, follow, or just answer questions.</p>
+          <p className="login-value-prop">I'm here to help build your story. I can lead, follow, or just answer questions.</p>
         </div>
 
         {user && (
