@@ -1,3 +1,4 @@
+import './test-mode-guardrail.js';
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -21,6 +22,7 @@ import shareRoutes from './routes/share.js';
 import personalizeRoutes from './routes/personalize.js';
 import expressFlowRoutes from './routes/express.js';
 import researchRoutes from './routes/research.js';
+import adminRoutes from './routes/admin.js';
 import { defaultApiLimiter } from './middleware/rateLimit.js';
 
 // Debug routes are only loaded when TEST_MODE is on. The dynamic import
@@ -59,6 +61,7 @@ app.use('/api/share', shareRoutes);
 app.use('/api/personalize', personalizeRoutes);
 app.use('/api/express', expressFlowRoutes);
 app.use('/api/research', researchRoutes);
+app.use('/api/admin', adminRoutes);
 
 if (TEST_MODE) {
   const { default: testDebugRoutes } = await import('./routes/test-debug.js');

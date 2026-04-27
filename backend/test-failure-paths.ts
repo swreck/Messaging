@@ -4,10 +4,18 @@
  * Exercises the production-hardening safety nets by injecting controlled
  * failures into a LOCAL backend running with TEST_MODE=true.
  *
- * Run:
- *   cd backend
- *   TEST_MODE=true NODE_ENV=production npx tsx src/index.ts &   # in one shell
- *   API_URL=http://localhost:3001/api npx tsx test-failure-paths.ts
+ * Run (LOCAL ONLY — production DB cannot be reached):
+ *   1. Set TEST_DATABASE_URL in backend/.env to a Neon test branch (different
+ *      host than DATABASE_URL). Recommended: use Neon's branching feature to
+ *      create a 'test' branch of the maria-messaging project.
+ *   2. Apply migrations to the test DB:
+ *        DATABASE_URL=$TEST_DATABASE_URL npx prisma migrate deploy
+ *   3. Boot the local server:
+ *        TEST_MODE=true NODE_ENV=production npx tsx src/index.ts
+ *      The server will refuse to start unless TEST_DATABASE_URL is set and
+ *      points to a different host than DATABASE_URL.
+ *   4. Run the suite:
+ *        API_URL=http://localhost:3001/api npx tsx test-failure-paths.ts
  *
  * Tests:
  *   1. Partner failure path — Anthropic throws → friendly fallback + assistant row persisted
