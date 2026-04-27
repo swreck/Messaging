@@ -953,8 +953,30 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
     }
   } catch (err) {
     console.error('[Partner] Opus call failed:', err);
+
+    // Phase 1 cleanup — persist the friendly fallback as an assistant row
+    // so we don't leave orphan user rows on the failure path. One
+    // fallbackText variable so the persisted content and the response
+    // payload can't drift. Defensive nested try/catch: if the DB write
+    // itself fails (pool exhausted, etc.) we still return the user-facing
+    // reply.
+    const fallbackText = "I lost my train of thought for a second — try again?";
+
+    try {
+      await prisma.assistantMessage.create({
+        data: {
+          userId,
+          role: 'assistant',
+          content: fallbackText,
+          context: partnerChannel(workspaceId, ctx),
+        },
+      });
+    } catch (persistErr) {
+      console.error('[Partner] Failed to persist Opus-failure fallback row:', persistErr);
+    }
+
     res.json({
-      response: "I lost my train of thought for a second — try again?",
+      response: fallbackText,
       actionResult: null,
       refreshNeeded: false,
       needsPageContent: false,
