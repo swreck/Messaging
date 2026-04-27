@@ -6,6 +6,7 @@ import { callAIWithJSON } from '../services/ai.js';
 import { buildPartnerPrompt } from '../prompts/partner.js';
 import { ACTION_ALIASES, dispatchActions, readPageContent, type ActionContext } from '../lib/actions.js';
 import { getPersonalize, updatePersonalize, buildPersonalizeChatBlock } from '../lib/personalize.js';
+import { partnerLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -572,7 +573,7 @@ router.get('/history', async (req: Request, res: Response) => {
 // POST /api/partner/message — send a message and get Maria's response
 // Optionally accepts an attachment: { data: base64string, mimeType: string, filename: string }
 // Images are sent to Claude via vision. PDFs and text files are extracted and prepended.
-router.post('/message', async (req: Request, res: Response) => {
+router.post('/message', partnerLimiter, async (req: Request, res: Response) => {
   const { message, context, attachment, attachments: rawAttachments, timeContext, voicePersistentIntent, websiteResearchOffered } = req.body as {
     message?: string;
     context?: ActionContext;
@@ -877,37 +878,50 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
     }
   }
 
+  // Phase 1 hardening (Fix #3) — compute the canonical user-message text
+  // (including extracted document text per the existing "store full doc
+  // content" design) BEFORE the Opus call so the user message can be
+  // persisted unconditionally. If the Opus call later fails, the user's
+  // message is still recorded; without this the only user-message write
+  // ran AFTER a successful Opus turn, which dropped the message on any
+  // upstream failure.
+  const rawMsg = message || '';
+  let storedUserMsg: string;
+  if (typeof userContent === 'string') {
+    storedUserMsg = userContent || '(documents attached)';
+  } else {
+    const textBlock = (userContent as any[]).find((b: any) => b.type === 'text');
+    storedUserMsg = textBlock?.text || rawMsg || '(documents attached)';
+  }
+  const userQuestion = rawMsg.includes('[USER QUESTION]\n')
+    ? rawMsg.split('[USER QUESTION]\n').pop()!
+    : storedUserMsg;
+  await prisma.assistantMessage.create({
+    data: { userId, role: 'user', content: userQuestion, context: partnerChannel(workspaceId, ctx) },
+  });
+
   // Call Opus with JSON response format. If Opus returns an empty
   // response AND no actions, retry once — this occasionally happens
   // when the model outputs malformed JSON that gets parsed to empty.
-  let result = await callAIWithJSON<{
+  // Wrapped in try/catch so an Anthropic 5xx, timeout, or open-circuit
+  // breaker surfaces as a friendly partner reply rather than a 500. The
+  // user's message is already persisted above; on retry the channel
+  // resumes naturally with the stored history.
+  let result: {
     response: string;
     action?: { type: string; params: Record<string, any> } | null;
     actions?: { type: string; params: Record<string, any> }[];
-  }>(systemPrompt, userContent, 'elite', conversationHistory);
-
-  // Normalize actions — Opus sometimes uses "action", "name", or "tool"
-  // instead of "type" for the action field. Handle all variants.
+  };
   let rawActions: { type: string; params: Record<string, any> }[] = [];
-  if (result.actions && Array.isArray(result.actions) && result.actions.length > 0) {
-    rawActions = result.actions.map((a: any) => ({
-      type: a.type || a.action || a.name || a.tool || '',
-      params: a.params || a.parameters || a.args || {},
-    }));
-  } else if (result.action) {
-    const a = result.action as any;
-    rawActions = [{ type: a.type || a.action || a.name || '', params: a.params || a.parameters || {} }];
-  }
-
-  // Retry once if Opus returned nothing usable
-  if ((!result.response || !result.response.trim()) && rawActions.length === 0) {
-    console.warn('[Partner] Empty response + no actions from Opus. Retrying once.');
+  try {
     result = await callAIWithJSON<{
       response: string;
       action?: { type: string; params: Record<string, any> } | null;
       actions?: { type: string; params: Record<string, any> }[];
     }>(systemPrompt, userContent, 'elite', conversationHistory);
-    rawActions = [];
+
+    // Normalize actions — Opus sometimes uses "action", "name", or "tool"
+    // instead of "type" for the action field. Handle all variants.
     if (result.actions && Array.isArray(result.actions) && result.actions.length > 0) {
       rawActions = result.actions.map((a: any) => ({
         type: a.type || a.action || a.name || a.tool || '',
@@ -917,6 +931,35 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
       const a = result.action as any;
       rawActions = [{ type: a.type || a.action || a.name || '', params: a.params || a.parameters || {} }];
     }
+
+    // Retry once if Opus returned nothing usable
+    if ((!result.response || !result.response.trim()) && rawActions.length === 0) {
+      console.warn('[Partner] Empty response + no actions from Opus. Retrying once.');
+      result = await callAIWithJSON<{
+        response: string;
+        action?: { type: string; params: Record<string, any> } | null;
+        actions?: { type: string; params: Record<string, any> }[];
+      }>(systemPrompt, userContent, 'elite', conversationHistory);
+      rawActions = [];
+      if (result.actions && Array.isArray(result.actions) && result.actions.length > 0) {
+        rawActions = result.actions.map((a: any) => ({
+          type: a.type || a.action || a.name || a.tool || '',
+          params: a.params || a.parameters || a.args || {},
+        }));
+      } else if (result.action) {
+        const a = result.action as any;
+        rawActions = [{ type: a.type || a.action || a.name || '', params: a.params || a.parameters || {} }];
+      }
+    }
+  } catch (err) {
+    console.error('[Partner] Opus call failed:', err);
+    res.json({
+      response: "I lost my train of thought for a second — try again?",
+      actionResult: null,
+      refreshNeeded: false,
+      needsPageContent: false,
+    });
+    return;
   }
 
   // Log raw actions for debugging
@@ -931,11 +974,9 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
   }));
 
   if (normalizedActions.length === 1 && normalizedActions[0].type === 'read_page') {
-    // Store the user message but not the response yet (will retry with page content)
-    await prisma.assistantMessage.create({
-      data: { userId, role: 'user', content: message || '', context: partnerChannel(workspaceId, ctx) },
-    });
-
+    // Phase 1 hardening (Fix #3) — user message is persisted up-front, so
+    // this branch no longer needs to store it. The page-content retry will
+    // generate a fresh assistant reply on the second pass.
     res.json({
       response: result.response,
       actionResult: null,
@@ -1148,35 +1189,16 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
     }
   }
 
-  // Store both messages — serialize response with action result for history
+  // Store the assistant reply — serialize response with action result for history.
+  // Phase 1 hardening (Fix #3) — user message was persisted before the Opus
+  // call so any upstream failure doesn't lose what the user said. Only the
+  // assistant row remains to be written here.
   const storedResponse = actionResult
     ? `${result.response}\n\n[${actionResult}]`
     : result.response;
 
-  // Store the user's message INCLUDING all extracted document text so Maria
-  // has it in EVERY subsequent turn. Each document is tagged with its filename
-  // so Maria can reference any document by name ("re-read the Revenue Strategy doc").
-  const rawMsg = message || '';
-  let storedUserMsg: string;
-  if (typeof userContent === 'string') {
-    storedUserMsg = userContent || '(documents attached)';
-  } else {
-    // Content blocks — extract the text portion (includes all [ATTACHED FILE: name] markers)
-    const textBlock = (userContent as any[]).find((b: any) => b.type === 'text');
-    storedUserMsg = textBlock?.text || rawMsg || '(documents attached)';
-  }
-  // No truncation — documents must persist in full so the user can say
-  // "re-read document X" and Maria can find it. The conversation history
-  // loader already limits to the most recent 20 messages.
-  const userQuestion = rawMsg.includes('[USER QUESTION]\n')
-    ? rawMsg.split('[USER QUESTION]\n').pop()!
-    : storedUserMsg;
-
-  await prisma.assistantMessage.createMany({
-    data: [
-      { userId, role: 'user', content: userQuestion, context: partnerChannel(workspaceId, ctx) },
-      { userId, role: 'assistant', content: storedResponse, context: partnerChannel(workspaceId, ctx) },
-    ],
+  await prisma.assistantMessage.create({
+    data: { userId, role: 'assistant', content: storedResponse, context: partnerChannel(workspaceId, ctx) },
   });
 
   console.log(`[Partner] RESPONSE: text=${(result.response || '').length}chars, actionResult=${(actionResult || '').length}chars, hasBuildStarted=${(actionResult || '').includes('BUILD_STARTED')}`);

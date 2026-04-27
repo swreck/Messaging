@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import { requireAuth } from '../middleware/auth.js';
+import { anthropic } from '../services/ai.js';
 import {
   researchWebsite,
   researchAudience,
@@ -10,8 +10,6 @@ import {
 
 const router = Router();
 router.use(requireAuth);
-
-const anthropic = new Anthropic();
 
 // Helper — fetch a URL and extract its text content for downstream Opus calls.
 async function fetchPageText(url: string): Promise<string> {

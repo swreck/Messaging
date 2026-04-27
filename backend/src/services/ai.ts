@@ -1,9 +1,60 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-const anthropic = new Anthropic({
+export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
   timeout: 5 * 60 * 1000, // 5 minutes — Opus calls with voice check can take 2-3 minutes
 });
+
+// Circuit breaker — fail fast during Anthropic outages so we don't hold
+// request threads open for 5 minutes per call. On 5 consecutive failures,
+// open the circuit for 60 seconds, during which all calls fail fast with
+// a friendly error.
+let consecutiveFailures = 0;
+let circuitOpenUntil = 0;
+const CIRCUIT_THRESHOLD = 5;
+const CIRCUIT_OPEN_MS = 60 * 1000;
+
+export class AnthropicUnavailableError extends Error {
+  constructor() {
+    super('Anthropic is having issues right now — try again in a minute.');
+    this.name = 'AnthropicUnavailableError';
+  }
+}
+
+// Retry wrapper — the SDK retries on network errors, but we add an explicit
+// app-level retry on 5xx and rate-limit (429) so transient blips don't
+// surface to users. Max 2 retries with exponential backoff (500ms, 2s).
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  if (Date.now() < circuitOpenUntil) {
+    throw new AnthropicUnavailableError();
+  }
+  const delays = [500, 2000];
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      const result = await fn();
+      consecutiveFailures = 0;
+      return result;
+    } catch (err: any) {
+      lastErr = err;
+      const status = err?.status ?? err?.response?.status;
+      const retryable =
+        status === 429 ||
+        (typeof status === 'number' && status >= 500 && status < 600) ||
+        err?.name === 'APIConnectionError' ||
+        err?.code === 'ECONNRESET' ||
+        err?.code === 'ETIMEDOUT';
+      if (!retryable || attempt === delays.length) break;
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
+  }
+  consecutiveFailures += 1;
+  if (consecutiveFailures >= CIRCUIT_THRESHOLD) {
+    circuitOpenUntil = Date.now() + CIRCUIT_OPEN_MS;
+    console.error(`[ai] Circuit opened — ${CIRCUIT_THRESHOLD} consecutive failures. Failing fast for ${CIRCUIT_OPEN_MS / 1000}s.`);
+  }
+  throw lastErr;
+}
 
 export type ModelTier = 'fast' | 'deep' | 'elite';
 
@@ -33,12 +84,12 @@ export async function callAI(
 
   messages.push({ role: 'user', content: userMessage });
 
-  const response = await anthropic.messages.create({
+  const response = await withRetry(() => anthropic.messages.create({
     model: getModel(tier),
     max_tokens: 4096,
     system: systemPrompt,
     messages,
-  });
+  }));
 
   const textBlock = response.content.find((b) => b.type === 'text');
   return textBlock?.text || '';

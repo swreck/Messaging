@@ -44,13 +44,13 @@ model User {
 // lastApplied: bumped each time a generation actually used the rule. The
 //   Settings 30-day-stale prompt reads this.
 model UserStyleRule {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   userId            String
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   rule              String
-  scopeAudienceType String   @default("")
-  scopeFormat       String   @default("")
-  createdAt         DateTime @default(now())
+  scopeAudienceType String    @default("")
+  scopeFormat       String    @default("")
+  createdAt         DateTime  @default(now())
   lastApplied       DateTime?
 
   @@index([userId])
@@ -104,18 +104,18 @@ model InviteCode {
 // ─── Offerings ──────────────────────────────────────────
 
 model Offering {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspaceId String?
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  name        String
-  smeRole     String   @default("")
-  description String   @default("")
+  id                 String     @id @default(cuid())
+  userId             String
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId        String?
+  workspace          Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name               String
+  smeRole            String     @default("")
+  description        String     @default("")
   contrarianScenario String? // Captured from the contrarian-question turn in the offering interview — kept as honest-framing material the deliverable can use ("we're not the right choice if you're doing X")
-  contrarianAsked    Boolean @default(false) // Whether the contrarian question has been asked for this offering — gates re-asking
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  contrarianAsked    Boolean    @default(false) // Whether the contrarian question has been asked for this offering — gates re-asking
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
   elements OfferingElement[]
   drafts   ThreeTierDraft[]
@@ -136,16 +136,16 @@ model OfferingElement {
 // ─── Audiences ──────────────────────────────────────────
 
 model Audience {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspaceId String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
-  description String   @default("")
-  situation   String?  // Audience-specific situation captured durably so Maria doesn't re-ask in future sessions
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  description String     @default("")
+  situation   String? // Audience-specific situation captured durably so Maria doesn't re-ask in future sessions
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   priorities Priority[]
   drafts     ThreeTierDraft[]
@@ -169,26 +169,26 @@ model Priority {
 // ─── Three Tier Draft ───────────────────────────────────
 
 model ThreeTierDraft {
-  id          String   @id @default(cuid())
-  offeringId  String
-  offering    Offering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
-  audienceId  String
-  audience    Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
-  currentStep Int      @default(1) // 1-5
-  status      String   @default("in_progress") // in_progress | completed
-  version     Int      @default(1)
-  archived    Boolean  @default(false)
+  id               String   @id @default(cuid())
+  offeringId       String
+  offering         Offering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+  audienceId       String
+  audience         Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  currentStep      Int      @default(1) // 1-5
+  status           String   @default("in_progress") // in_progress | completed
+  version          Int      @default(1)
+  archived         Boolean  @default(false)
   noStrongPairings Boolean? // True if the most recent mapping evaluation found no STRONG pairings — drives Maria's audience-fit conversation
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  mappings       Mapping[]
-  tier1Statement Tier1Statement?
+  mappings        Mapping[]
+  tier1Statement  Tier1Statement?
   tier2Statements Tier2Statement[]
-  tableVersions  TableVersion[]
-  stories        FiveChapterStory[]
-  conversations  ConversationMessage[]
-  observations   Observation[]
+  tableVersions   TableVersion[]
+  stories         FiveChapterStory[]
+  conversations   ConversationMessage[]
+  observations    Observation[]
 }
 
 model Mapping {
@@ -210,10 +210,10 @@ model Mapping {
 // ─── Tier Statements ────────────────────────────────────
 
 model Tier1Statement {
-  id       String         @id @default(cuid())
-  draftId  String         @unique
-  draft    ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  text     String
+  id      String         @id @default(cuid())
+  draftId String         @unique
+  draft   ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  text    String
 
   cellVersions CellVersion[]
 }
@@ -245,31 +245,31 @@ model Tier3Bullet {
 // ─── Five Chapter Story ─────────────────────────────────
 
 model FiveChapterStory {
-  id          String         @id @default(cuid())
-  draftId     String
-  draft       ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  medium      String         // "email" | "blog" | "social" | "landing_page" | "in_person" | "press_release" | "newsletter" | "report"
+  id            String         @id @default(cuid())
+  draftId       String
+  draft         ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  medium        String // "email" | "blog" | "social" | "landing_page" | "in_person" | "press_release" | "newsletter" | "report"
   customName    String         @default("")
   sourceStoryId String?
-  cta         String
-  emphasis    String         @default("")
-  stage       String         @default("chapters") // "chapters" | "joined" | "blended"
-  joinedText  String         @default("")
-  blendedText String         @default("")
-  version     Int            @default(1)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  cta           String
+  emphasis      String         @default("")
+  stage         String         @default("chapters") // "chapters" | "joined" | "blended"
+  joinedText    String         @default("")
+  blendedText   String         @default("")
+  version       Int            @default(1)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   // Round B4 — pre-Chapter-4 peer prompt. Optional named-peer context the user
   // contributed via Maria's pause before Ch4 generation. Empty string = user
   // declined or skipped; non-empty = use as named-peer evidence in Ch4.
-  peerInfo    String         @default("")
-  peerAsked   Boolean        @default(false)
+  peerInfo  String  @default("")
+  peerAsked Boolean @default(false)
 
   // Round C3 — per-deliverable style override. Empty string = use the user's
   // effective style (user → org → SYSTEM_DEFAULT). Set = override for this
   // deliverable only. Values: "" | "TABLE_FOR_2" | "ENGINEERING_TABLE" | "PERSONALIZED"
-  style       String         @default("")
+  style String @default("")
 
   chapters      ChapterContent[]
   storyVersions StoryVersion[]
@@ -279,7 +279,7 @@ model ChapterContent {
   id         String           @id @default(cuid())
   storyId    String
   story      FiveChapterStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  chapterNum Int              // 1-5
+  chapterNum Int // 1-5
   title      String
   content    String
 
@@ -311,23 +311,23 @@ model ChapterContent {
 //   RESOLVED_SOURCED  — Add source succeeded; origin flipped to RESEARCH.
 //   RESOLVED_OWNED    — user owned it; origin flipped to AUTHORED.
 model Claim {
-  id          String         @id @default(cuid())
+  id               String         @id @default(cuid())
   chapterContentId String
-  chapter     ChapterContent @relation(fields: [chapterContentId], references: [id], onDelete: Cascade)
+  chapter          ChapterContent @relation(fields: [chapterContentId], references: [id], onDelete: Cascade)
   // The exact sentence text in the chapter content this claim covers.
   // Stored as the literal string so the frontend can locate it for marker
   // placement and the auto-flow scroll-to-next behavior.
-  sentence    String
+  sentence         String
   // Position in the chapter content for stable ordering. Approximate
   // character offset; recomputed on chapter regeneration.
-  charOffset  Int            @default(0)
-  origin      String         @default("INFERENCE")
+  charOffset       Int            @default(0)
+  origin           String         @default("INFERENCE")
   // sourceRef varies by origin: doc id+page for USER_DOC, URL for RESEARCH,
   // empty for USER_WORDS / INFERENCE / AUTHORED.
-  sourceRef   String         @default("")
-  state       String         @default("OPEN")
-  resolvedAt  DateTime?
-  createdAt   DateTime       @default(now())
+  sourceRef        String         @default("")
+  state            String         @default("OPEN")
+  resolvedAt       DateTime?
+  createdAt        DateTime       @default(now())
 
   @@index([chapterContentId, state])
 }
@@ -375,7 +375,7 @@ model ConversationMessage {
   draftId   String
   draft     ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
   step      Int
-  role      String         // "user" | "assistant"
+  role      String // "user" | "assistant"
   content   String
   createdAt DateTime       @default(now())
 }
@@ -386,11 +386,13 @@ model AssistantMessage {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      String   // "user" | "assistant"
+  role      String // "user" | "assistant"
   content   String
   context   Json     @default("{}")
   action    String?
   createdAt DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 // ─── Share Links ───────────────────────────────────────
@@ -423,16 +425,16 @@ model ChapterVersion {
 // either change-the-cell or explicit acknowledge-as-is — the dismiss-without-
 // resolution path is gone. Persists across sessions until resolved.
 model Observation {
-  id          String         @id @default(cuid())
-  draftId     String
-  draft       ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  cellType    String         // tier1 | tier2 | tier3
-  cellId      String         // Tier1Statement.id or Tier2Statement.id or Tier3Bullet.id
-  suggestion  String         // Maria's suggestion text — what she'd flag if user clicks
-  state       String         @default("OPEN") // OPEN | RESOLVED_BY_CHANGE | RESOLVED_BY_ACKNOWLEDGE
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  resolvedAt  DateTime?
+  id         String         @id @default(cuid())
+  draftId    String
+  draft      ThreeTierDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  cellType   String // tier1 | tier2 | tier3
+  cellId     String // Tier1Statement.id or Tier2Statement.id or Tier3Bullet.id
+  suggestion String // Maria's suggestion text — what she'd flag if user clicks
+  state      String         @default("OPEN") // OPEN | RESOLVED_BY_CHANGE | RESOLVED_BY_ACKNOWLEDGE
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  resolvedAt DateTime?
 
   @@index([draftId, state])
   @@index([cellType, cellId])
@@ -472,27 +474,27 @@ model ExpressJob {
 // One active session per user per workspace at a time.
 
 model GuidedSession {
-  id              String   @id @default(cuid())
-  userId          String
-  workspaceId     String
+  id          String @id @default(cuid())
+  userId      String
+  workspaceId String
 
-  phase           String   @default("greeting")
-  completedStages Json     @default("[]")
-  messages        Json     @default("[]")
+  phase           String @default("greeting")
+  completedStages Json   @default("[]")
+  messages        Json   @default("[]")
 
-  intakeAnswers   Json?
-  interpretation  Json?
-  situation       String?
+  intakeAnswers  Json?
+  interpretation Json?
+  situation      String?
 
-  draftId         String?
-  storyId         String?
-  foundation      Json?
-  backlog         Json     @default("[]")
-  lastDraftText   String?
+  draftId       String?
+  storyId       String?
+  foundation    Json?
+  backlog       Json    @default("[]")
+  lastDraftText String?
 
-  completedAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([userId, workspaceId])
 }

@@ -21,6 +21,7 @@ import shareRoutes from './routes/share.js';
 import personalizeRoutes from './routes/personalize.js';
 import expressFlowRoutes from './routes/express.js';
 import researchRoutes from './routes/research.js';
+import { defaultApiLimiter } from './middleware/rateLimit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -30,6 +31,11 @@ app.use(cors({
   exposedHeaders: ['x-refreshed-token'],
 }));
 app.use(express.json({ limit: '50mb' }));
+
+// Phase 1 hardening (Fix #8) — generous safety-net rate limit on all
+// /api routes. Specific routes have stricter limits attached at the
+// router. Runs before auth so unauthenticated traffic gets keyed by IP.
+app.use('/api', defaultApiLimiter);
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -98,14 +104,36 @@ function transformToMaria3(html: string): string {
     .replace(/<title>Maria<\/title>/g, '<title>Maria 3</title>');
 }
 
-// SPA fallback — Express 5 doesn't support app.get('*', ...)
+// SPA fallback — Express 5 doesn't support app.get('*', ...).
+// Phase 1 hardening (Fix #7) — in production we read index.html once at
+// startup and serve from memory; the file never changes between deploys
+// so per-request disk I/O is wasted work. In development we re-read per
+// request so Vite hot-reload still propagates.
+const isProd = process.env.NODE_ENV === 'production';
+let cachedIndexMaria25: string | null = null;
+let cachedIndexMaria3: string | null = null;
+
+async function readIndexHtml(maria3: boolean): Promise<string> {
+  const fs = await import('fs/promises');
+  const raw = await fs.readFile(path.join(publicDir, 'index.html'), 'utf-8');
+  return maria3 ? transformToMaria3(raw) : raw;
+}
+
+if (isProd) {
+  cachedIndexMaria25 = await readIndexHtml(false);
+  cachedIndexMaria3 = await readIndexHtml(true);
+  console.log('[index.html] Cached at startup (prod mode).');
+}
+
 app.use(async (req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api')) {
     try {
-      const fs = await import('fs/promises');
-      let html = await fs.readFile(path.join(publicDir, 'index.html'), 'utf-8');
-      if (isMariaThreeHost(req.hostname)) {
-        html = transformToMaria3(html);
+      const wantMaria3 = isMariaThreeHost(req.hostname);
+      let html: string;
+      if (isProd) {
+        html = (wantMaria3 ? cachedIndexMaria3 : cachedIndexMaria25) as string;
+      } else {
+        html = await readIndexHtml(wantMaria3);
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.send(html);

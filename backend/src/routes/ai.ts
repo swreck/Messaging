@@ -25,6 +25,7 @@ import { checkFiveChapter, buildFiveChapterFeedback, type FiveChapterInput } fro
 import { checkStatementVoice, checkProofBullet, buildGuardCorrection } from '../lib/voiceGuard.js';
 
 import { requireWorkspace, requireEditor, requireStoryteller } from '../middleware/workspace.js';
+import { generateChapterLimiter, polishStoryLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -1426,7 +1427,7 @@ ${draft.offering.elements.map(e => `"${e.text}"`).join('\n')}`;
 });
 
 // ─── Polish Story (voice check for Five Chapter Stories) ──────
-router.post('/polish-story', requireEditor, async (req: Request, res: Response) => {
+router.post('/polish-story', polishStoryLimiter, requireEditor, async (req: Request, res: Response) => {
   const { storyId } = req.body;
   if (!storyId) { res.status(400).json({ error: 'storyId required' }); return; }
 
@@ -1681,7 +1682,7 @@ router.post('/draft-mfs', requireEditor, async (req: Request, res: Response) => 
 
 // ─── Five Chapter Story ─────────────────────────────────
 
-router.post('/generate-chapter', requireStoryteller, async (req: Request, res: Response) => {
+router.post('/generate-chapter', generateChapterLimiter, requireStoryteller, async (req: Request, res: Response) => {
   const { storyId, chapterNum } = req.body;
   if (!storyId || !chapterNum) {
     res.status(400).json({ error: 'storyId and chapterNum are required' });
