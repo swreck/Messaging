@@ -3206,7 +3206,27 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .tt-card-progress { display: flex; align-items: center; gap: 8px; }
 .tt-card-status { font-size: 13px; color: var(--text-secondary); }
 .tt-card-updated { font-size: 12px; color: var(--text-tertiary); }
-.tt-card-action { margin-top: auto; }
+/* Bug F — action row needs to be a flex container so the four buttons
+ * (Open / Duplicate / Archive / + New) read as distinct, spaced
+ * actions rather than run-on text. The default block layout was
+ * collapsing them into a stack with no visual separation. Each
+ * .btn-ghost in here also gets a subtle border so the user reads
+ * them as buttons rather than inline links. */
+.tt-card-action {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.tt-card-action .btn-ghost {
+  border: 1px solid var(--border-light, #e5e5ea);
+  background: var(--bg-card, #fff);
+}
+.tt-card-action .btn-ghost:hover:not(:disabled) {
+  border-color: var(--accent, #007aff);
+  background: var(--accent-light, #eaf4ff);
+}
 
 .tt-card-new {
   border-style: dashed;

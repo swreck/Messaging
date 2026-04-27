@@ -1476,11 +1476,16 @@ export function MariaPartner() {
                       )}
                     </div>
                   )}
-                  {/* Guided entry card — shows one of two states:
-                      - Active session in background (user chose assistant view temporarily):
-                        "Return to your guided message" — clears preferAssistant and flips back
-                      - No active session: "Start a guided message" — creates new session */}
-                  {loaded && (hasActiveGuidedSession ? (
+                  {/* Bug D — single-prompt prioritization. Pre-resolve which
+                      proactive prompt to show this turn, render at most one.
+                      Order: resume-guided (active guided session waiting) →
+                      resume-draft (express draft) → return-context (prior
+                      Three Tier work) → proactive offer → budget chips →
+                      start-guided (CTA fallback). Resume offers are merged
+                      into a single prompt; the user dismisses one and the
+                      next one in the queue surfaces on the next render
+                      (e.g. budget chips fire after resume is dismissed). */}
+                  {loaded && hasActiveGuidedSession && (
                     <div className="partner-guided-card partner-guided-card-return">
                       <div className="partner-guided-card-text">
                         Your guided message is still in progress.
@@ -1494,7 +1499,9 @@ export function MariaPartner() {
                         </button>
                       </div>
                     </div>
-                  ) : (
+                  )}
+
+                  {loaded && !hasActiveGuidedSession && !resumeDraft && !(showReturnCard && returnContext) && !(showProactiveCard && proactiveOffer) && !(showBudgetCard && !timeContext.budgetMin) && (
                     <div className="partner-guided-card partner-guided-card-start">
                       <div className="partner-guided-card-text">
                         Want me to walk you through building a message? I'll ask a few questions and draft the first version for you.
@@ -1512,10 +1519,10 @@ export function MariaPartner() {
                         </button>
                       </div>
                     </div>
-                  ))}
+                  )}
 
-                  {/* Resume draft card — highest priority: user walked away from an in-progress guided session */}
-                  {resumeDraft && (
+                  {/* Resume draft card — second priority after active guided session. */}
+                  {loaded && !hasActiveGuidedSession && resumeDraft && (
                     <div className="partner-return-card" style={{
                       padding: '12px 16px',
                       marginBottom: 8,
@@ -1536,8 +1543,8 @@ export function MariaPartner() {
                     </div>
                   )}
 
-                  {/* Return context card */}
-                  {showReturnCard && returnContext && !resumeDraft && (
+                  {/* Return context card — only when no in-progress guided/draft. */}
+                  {loaded && !hasActiveGuidedSession && !resumeDraft && showReturnCard && returnContext && (
                     <div className="partner-return-card" style={{
                       padding: '12px 16px',
                       marginBottom: 8,
@@ -1558,8 +1565,8 @@ export function MariaPartner() {
                     </div>
                   )}
 
-                  {/* Proactive offer card */}
-                  {showProactiveCard && proactiveOffer && !showReturnCard && !resumeDraft && (
+                  {/* Proactive offer card — fires only when no resume class is active. */}
+                  {loaded && !hasActiveGuidedSession && !resumeDraft && !(showReturnCard && returnContext) && showProactiveCard && proactiveOffer && (
                     <div className="partner-return-card" style={{
                       padding: '12px 16px',
                       marginBottom: 8,
@@ -1581,17 +1588,10 @@ export function MariaPartner() {
                   )}
 
                   {/* Round B6 — time-aware session pacing chips. Render at session
-                      start when no budget is set yet. User picks 15/30/45/Custom/Skip;
-                      budget saves to localStorage and the backend reads it on each
-                      subsequent message.
-                      Bug #2 micro-fix: ALSO dropped the messages.length === 0 gate.
-                      The intro flow auto-injects Maria's greeting as message #1, so
-                      a fresh user always reaches a real chat input with messages.length
-                      already > 0. Render gate is now: showBudgetCard (haven't asked
-                      today) AND no live budget set AND chat loaded AND no other card
-                      occupying this slot. The chip lives alongside Maria's greeting —
-                      they don't visually conflict (chip is a self-framed card). */}
-                  {showBudgetCard && !timeContext.budgetMin && loaded && !showReturnCard && !showProactiveCard && (
+                      start when no budget is set yet. User picks 15/30/45/Custom/Skip.
+                      Bug D — defers behind any active resume/proactive prompt so the
+                      user isn't asked about time WHILE being asked about resuming. */}
+                  {loaded && !hasActiveGuidedSession && !resumeDraft && !(showReturnCard && returnContext) && !(showProactiveCard && proactiveOffer) && showBudgetCard && !timeContext.budgetMin && (
                     <div className="partner-return-card" style={{
                       padding: '12px 16px',
                       marginBottom: 8,
@@ -1644,23 +1644,31 @@ export function MariaPartner() {
                     </div>
                   )}
 
-                  {messages.length === 0 && loaded && !showReturnCard && !showProactiveCard && !showBudgetCard && (
+                  {/* Bug E — when scope is scoped and the filtered message list
+                      is empty, ALWAYS show the empty-state copy so the user
+                      understands why the chat looks blank. Even when proactive
+                      cards are present, the empty-state renders below them so
+                      "I'm scoped to this email and there's nothing here yet"
+                      is visible. The unscoped empty-state keeps its prior
+                      gating (only shows when no proactive card occupies the
+                      slot) since its copy is more conversational than
+                      orienting. */}
+                  {messages.length === 0 && loaded && scopeMode === 'scoped' && currentScope.kind && (
                     <div className="partner-empty">
-                      {scopeMode === 'scoped' && currentScope.kind ? (
-                        <>
-                          No messages on this {currentScope.typeLabel} yet — start a conversation, or{' '}
-                          <button
-                            className="partner-empty-link"
-                            onClick={() => {
-                              setScopeMode('everything');
-                              saveScopePref(user?.userId, currentScope, 'everything');
-                              setLoaded(false);
-                            }}
-                          >show everything</button>.
-                        </>
-                      ) : (
-                        "Tell me about your work — or if you have notes, a discovery doc, or an old draft, drop them here and I'll work from those."
-                      )}
+                      No messages on this {currentScope.typeLabel} yet — start a conversation, or{' '}
+                      <button
+                        className="partner-empty-link"
+                        onClick={() => {
+                          setScopeMode('everything');
+                          saveScopePref(user?.userId, currentScope, 'everything');
+                          setLoaded(false);
+                        }}
+                      >show everything</button>.
+                    </div>
+                  )}
+                  {messages.length === 0 && loaded && !(scopeMode === 'scoped' && currentScope.kind) && !showReturnCard && !showProactiveCard && !showBudgetCard && (
+                    <div className="partner-empty">
+                      Tell me about your work — or if you have notes, a discovery doc, or an old draft, drop them here and I'll work from those.
                     </div>
                   )}
                   {messages.map((msg, i) => {

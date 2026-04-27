@@ -364,8 +364,19 @@ export function SettingsPage() {
             borderRadius: 'var(--radius)',
             color: 'var(--text-secondary)',
           }}>
-            No style profile yet. Open the Maria chat and say "Let's set up my writing style" to get started,
-            or tap the Personalize button on any Five Chapter Story page.
+            <p style={{ margin: '0 0 12px' }}>
+              No style profile yet. Maria can learn your voice from a short interview
+              or by reading samples of your past writing.
+            </p>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true, message: "Let's set up my writing style" } }))}
+            >
+              Start the interview
+            </button>
+            <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--text-tertiary)' }}>
+              You can also tap Personalize on any Five Chapter Story page.
+            </p>
           </div>
         )}
       </div>
