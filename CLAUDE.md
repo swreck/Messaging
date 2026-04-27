@@ -23,6 +23,63 @@ The following files encode Ken Rosen's proprietary messaging methodologies. They
 
 If you believe a change is needed, explain what and why to Ken first. These files represent decades of consulting expertise encoded into software. Drift here means the product fails.
 
+## 🆘 DISASTER RECOVERY — READ THIS IF MARIA IS BROKEN OR GONE
+
+**If Ken says something like "Maria is broken, restore from latest backup" or "the code is gone, what do we have?", this is the procedure. Use it as written. Do NOT improvise.**
+
+Three independent backup layers were established 2026-04-27. Lose any two, the third still recovers you. List in order of preference (try Layer 1 first; fall through if it's unavailable).
+
+### Layer 1 — Git tag pinned on GitHub (use this first)
+
+- **Tag:** `pre-phase-2-2026-04-27` on remote `swreck/Messaging` — points at commit `70a27aa` (Phase 1 verification, live bundle was `index-DrOf6cOV.js`).
+- **Verify it still exists:** `git ls-remote --tags origin pre-phase-2-2026-04-27`
+- **Restore main to this point** (DESTRUCTIVE — confirm with Ken before running):
+  ```
+  git fetch origin --tags
+  git checkout pre-phase-2-2026-04-27
+  git checkout -b restore-from-pre-phase-2
+  git push origin restore-from-pre-phase-2
+  ```
+  Then open a PR `restore-from-pre-phase-2 → main` so the rollback is reviewable. Do NOT force-push to main directly without Ken's explicit "yes, force-push to main" — it's the destructive-action rule from the global CLAUDE.md.
+- **Other anchor tags** (older known-good points, in case `pre-phase-2-2026-04-27` is somehow corrupt): `v3.1-decision-question`, `v3.0-guided-flow`, `v2.5-final`. List with `git tag`.
+
+### Layer 2 — Offline self-contained git bundle (if GitHub is unavailable)
+
+- **File:** `/Users/kenrosen/Documents/MariaBackups/maria-2026-04-27-full-history.bundle` (~23MB at creation).
+- **Verify integrity:** `git bundle verify /Users/kenrosen/Documents/MariaBackups/maria-2026-04-27-full-history.bundle`
+- **Restore:**
+  ```
+  git clone /Users/kenrosen/Documents/MariaBackups/maria-2026-04-27-full-history.bundle restored-repo
+  cd restored-repo
+  git remote set-url origin https://github.com/swreck/Messaging.git
+  git push --all origin
+  git push --tags origin
+  ```
+
+### Layer 3 — Production database JSON snapshot (if Neon data is corrupt)
+
+- **File:** `/Users/kenrosen/Documents/MariaBackups/maria-db-snapshot-2026-04-27T17-55-51-121Z.json` (~5.4MB at creation).
+- **What's in it:** every row of every Prisma-managed table at 2026-04-27 17:55 UTC. Schema is NOT in the JSON — schema lives in `backend/prisma/migrations/` in the repo, applied via `npx prisma migrate deploy`.
+- **To take a fresh snapshot any time** (always do this BEFORE any risky DB operation):
+  ```
+  npx --prefix /Users/kenrosen/Documents/Projects/Messaging/backend tsx \
+    --env-file=/Users/kenrosen/Documents/Projects/Messaging/backend/.env \
+    /Users/kenrosen/Documents/Projects/Messaging/backend/snapshot-db.ts
+  ```
+  Writes a new timestamped JSON to `/Users/kenrosen/Documents/MariaBackups/`.
+- **To restore from JSON:** there is no pre-built import script — write a one-off that walks the JSON in dependency order (User → Workspace → Offering → Audience → ThreeTierDraft → ...) and `prisma.<model>.create` row by row, ignoring duplicate-key errors. Apply schema first via `prisma migrate deploy`. Cuid IDs and timestamps round-trip from the JSON.
+- **Neon's own point-in-time snapshots are still the fastest recovery path for a Neon-side incident** — check the Neon dashboard before falling back to the JSON. The JSON is for the case where Neon and GitHub both fail in the same window.
+
+### Detailed README
+
+Full procedures + recommended next steps (install `pg_dump` for canonical SQL dumps; what's NOT backed up like secrets) live at `/Users/kenrosen/Documents/MariaBackups/README.md`. Read it if Layer 1 + Layer 2 + Layer 3 above leave any question unanswered.
+
+### Before any new risky operation
+
+- **Always tag the current main with `pre-<operation-name>-YYYY-MM-DD` and push the tag** before starting. This adds another rollback anchor on the GitHub side at zero cost.
+- **Run the snapshot-db.ts command above** if the operation could touch DB schema or data. Five seconds of work; saves hours of recovery.
+- **Update this section's "Layer 1" tag pointer** when a new safety anchor is created so the freshest tag is always the documented one.
+
 ## What this is
 
 Maria, Your Messaging Partner — a web app implementing Ken Rosen's two messaging methodologies:
