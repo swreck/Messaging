@@ -235,7 +235,7 @@ export function MariaAssistant() {
             }
           }}
           onFocus={() => { if (messages.length > 0) setExpanded(true); }}
-          placeholder="Ask Maria anything..."
+          placeholder="Type a reply, or ask Maria anything…"
           disabled={sending}
           rows={1}
           onInput={e => {

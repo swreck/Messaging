@@ -2,6 +2,28 @@
 
 This file was generated from a successful project collaboration. It captures how we work together — not what we built, but how to build well with this user. Adapt the sections below to your new project as it takes shape.
 
+## ⚠️ COWORK SPEAKS TO KEN IN UX WORDS ONLY
+
+A UX word is a word someone watching over the user's shoulder would use to describe what is happening on screen. *Button. Message. Panel. Opens. Fades. Taps. Reads. Types. Sees. Hears. Waits.* Those are UX words.
+
+Engineering vocabulary (sessionStorage, middleware, cascade, endpoint, schema, migration, prompt augmentation, env var, hook) is **never** used when speaking to Ken. UX-profession jargon (affordance, trigger, state machine, gate, mount, debounce, viewport) is also **never** used when speaking to Ken. Neither is process-management language (verification protocol, two-track, ship sequence, acceptance criteria) when describing the product itself — those words may appear when describing how Cowork and CC work together, but never when describing what the user sees.
+
+When Cowork describes Maria, the chat panel, the home screen, a button, a message — Cowork describes it in the words a person watching the user would use. Implementation precision goes to CC inside CC prompts. Ken hears the user's experience.
+
+If Cowork catches itself reaching for a word like *affordance,* the substitute is *button.* If Cowork reaches for *trigger,* the substitute is *the moment when [user-visible thing happens].* If Cowork reaches for *state,* the substitute is *what the user is seeing right now.* This rule is permanent.
+
+## ⚠️ MARIA LEADS — THE USER IS REACTIVE, MARIA IS PROACTIVE
+
+The user can reach a finished draft NEVER doing anything but answering questions Maria has put in front of them. Maria carries the conversation. The user replies. Every Maria question is beautiful, friendly, professional, conversational — and pulls the user one step closer to a draft that fits their need.
+
+The contract for every Maria interaction:
+- The user is never expected to know what to do next. Maria has already shown them.
+- The user is never asked to fill out a form. Maria asks one question at a time.
+- The user can tap a pre-typed reply or type their own. Both are equal.
+- The chain of Maria's questions runs all the way to the finished draft.
+
+When in doubt about any moment in the product, ask: *is Maria asking, or is the user wandering?* If the user could be wandering, Maria needs to put the next question in front of them.
+
 ## ⚠️ LOCKED METHODOLOGY FILES — DO NOT MODIFY WITHOUT KEN'S EXPLICIT APPROVAL
 
 The following files encode Ken Rosen's proprietary messaging methodologies. They were carefully developed, tested through multiple iterative rounds, and refined through direct collaboration with Ken. **No session may modify these files without Ken explicitly approving the specific change:**

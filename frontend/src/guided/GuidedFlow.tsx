@@ -1470,7 +1470,7 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Reply to Maria..."
+              placeholder="Type a reply, or ask Maria anything…"
               rows={typeof window !== 'undefined' && window.innerWidth <= 600 ? 2 : 4}
               autoFocus
             />

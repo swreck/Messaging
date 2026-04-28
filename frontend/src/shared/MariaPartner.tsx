@@ -8,6 +8,7 @@ import { GuidedFlow } from '../guided/GuidedFlow';
 import {
   detectLeadDirective,
   directiveConflictsWithToggle,
+  getToggleState,
   setToggleState,
   bumpOverrideCount,
   resetOverrideCount,
@@ -20,6 +21,11 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   actionResult?: string | null;
+  // Chat-open opener — when Maria speaks first on panel-mount with the
+  // "Let Maria lead" toggle on, she emits 2-4 reply chips. Tapping a chip
+  // posts the chip text as a normal user message.
+  chips?: string[];
+  isChatOpen?: boolean;
 }
 
 interface ReturnContext {
@@ -376,7 +382,12 @@ export function MariaPartner() {
           // conversation, or Show everything") instead. The greeting
           // injection only runs in the unscoped path so first-touch users
           // on the dashboard still get welcomed.
-          if (history.length === 0 && !isScoped) {
+          //
+          // Chat-open opener: when "Let Maria lead" is on, the opener
+          // useEffect below handles greeting + reply chips in Maria's
+          // voice via the partner pipeline. Skip the legacy injection in
+          // that case so Maria doesn't speak twice.
+          if (history.length === 0 && !isScoped && getToggleState() !== 'on') {
             const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
             const onEntityDetailPage =
               pageContext &&
@@ -450,6 +461,57 @@ export function MariaPartner() {
         .catch(() => setLoaded(true));
     }
   }, [open, loaded, introduced, introStep, scopeMode, currentScope.kind, currentScope.id]);
+
+  // Chat-open proactive opener. The rule: when the panel opens with
+  // "Let Maria lead" on, Maria's first message arrives within ~3s and
+  // ends with reply chips. The user is never left wondering what to do.
+  // Gated by sessionStorage so it never re-fires on the same panel within
+  // the same browser session. When the toggle is off, this effect is a
+  // no-op — the panel opens silently.
+  useEffect(() => {
+    if (!open || !loaded || !introduced || !user) return;
+    if (getToggleState() !== 'on') return;
+    const gateKey = `maria-opened-${user.userId}`;
+    try {
+      if (sessionStorage.getItem(gateKey)) return;
+      sessionStorage.setItem(gateKey, '1');
+    } catch {}
+
+    let cancelled = false;
+    setSending(true);
+    api.post<{
+      response: string;
+      chips?: string[];
+      isChatOpen?: boolean;
+    }>('/partner/message', {
+      trigger: 'chat-open',
+      context: pageContext,
+    })
+      .then(result => {
+        if (cancelled) return;
+        if (result.response) {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: result.response,
+            chips: result.chips || [],
+            isChatOpen: true,
+          }]);
+        }
+      })
+      .catch(err => {
+        // Silent failure — the user's experience is "panel opened, no
+        // opener fired." Logged for debugging; the next user message
+        // proceeds normally. We do NOT clear the sessionStorage gate
+        // here — a transient backend failure shouldn't trigger an
+        // immediate retry that would feel chaotic to the user.
+        console.warn('[Partner] chat-open opener failed:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setSending(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [open, loaded, introduced, user, pageContext]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -1705,6 +1767,52 @@ export function MariaPartner() {
                     </div>
                     );
                   })}
+                  {/* Chat-open reply chips. Render below the latest assistant
+                      message when it carries chips and is the bottom of the
+                      thread. Tap echoes the chip text as a normal user reply
+                      via the existing send() flow. */}
+                  {(() => {
+                    const last = messages[messages.length - 1];
+                    if (!last || last.role !== 'assistant') return null;
+                    const chips = last.chips || [];
+                    if (chips.length === 0) return null;
+                    if (sending) return null;
+                    return (
+                      <div className="partner-opener-chips" style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        padding: '8px 14px 4px 14px',
+                      }}>
+                        {chips.map((chip, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{
+                              borderRadius: 18,
+                              padding: '8px 14px',
+                              fontSize: 14,
+                              border: '1px solid var(--accent, #007aff)',
+                              color: 'var(--accent, #007aff)',
+                              background: 'transparent',
+                            }}
+                            onClick={() => {
+                              // Tap → echo as user bubble + send() with override
+                              // so the existing partner-message flow handles it.
+                              setMessages(prev => prev.map((m, j) => (
+                                j === prev.length - 1 ? { ...m, chips: [] } : m
+                              )).concat({ role: 'user', content: chip }));
+                              send(chip);
+                            }}
+                          >
+                            {chip}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
                   {sending && (
                     <div className="partner-msg partner-msg-assistant partner-typing">
                       <span /><span /><span />
@@ -1817,7 +1925,7 @@ export function MariaPartner() {
                         });
                       }
                     }}
-                    placeholder="Work with Maria..."
+                    placeholder="Type a reply, or ask Maria anything…"
                     disabled={sending}
                     rows={1}
                     style={{ minHeight: 44, flexShrink: 0 }}

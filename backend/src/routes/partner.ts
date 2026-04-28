@@ -574,11 +574,16 @@ router.get('/history', async (req: Request, res: Response) => {
 // Optionally accepts an attachment: { data: base64string, mimeType: string, filename: string }
 // Images are sent to Claude via vision. PDFs and text files are extracted and prepended.
 router.post('/message', partnerLimiter, async (req: Request, res: Response) => {
-  const { message, context, attachment, attachments: rawAttachments, timeContext, voicePersistentIntent, websiteResearchOffered } = req.body as {
+  const { message, context, attachment, attachments: rawAttachments, timeContext, voicePersistentIntent, websiteResearchOffered, trigger } = req.body as {
     message?: string;
     context?: ActionContext;
     attachment?: { data: string; mimeType: string; filename: string };
     attachments?: { data: string; mimeType: string; filename: string }[];
+    // Chat-open proactive opener — frontend posts this trigger when the chat
+    // panel mounts with the "Let Maria lead" toggle on. Skips user-message
+    // validation + persistence; augments the system prompt with a CHAT_OPEN
+    // block; instructs Opus to greet + ask one question + offer 2-3 chips.
+    trigger?: 'chat-open';
     // Round B6 — time-aware session pacing. Frontend tracks the session-start
     // timestamp + the user's time budget in localStorage and includes them on
     // every partner message. Backend computes elapsed and decides whether to
@@ -602,7 +607,8 @@ router.post('/message', partnerLimiter, async (req: Request, res: Response) => {
   // Normalize: single attachment or array of attachments
   const allAttachments: { data: string; mimeType: string; filename: string }[] =
     rawAttachments || (attachment ? [attachment] : []);
-  if (!message && allAttachments.length === 0) {
+  const isChatOpen = trigger === 'chat-open';
+  if (!isChatOpen && !message && allAttachments.length === 0) {
     res.status(400).json({ error: 'message or attachment is required' });
     return;
   }
@@ -754,6 +760,99 @@ If the user declines, drop it cleanly. The proposal will time out in 90 seconds.
     }
   } catch (err) { console.error('[E2] surface pending pattern failed:', err); }
 
+  // Chat-open proactive opener — augment the system prompt so Opus speaks
+  // first when the panel mounts with "Let Maria lead" on. The rule below is
+  // the SINGLE rule the implementation obeys: Maria asks; the user answers.
+  // No methodology / prompt / evaluator file is touched — this block is a
+  // runtime addition only, same pattern as voicePersistentIntent above.
+  if (isChatOpen) {
+    const introducedAlready = !!(await getPartnerSettings(userId)).introduced;
+
+    // Recent deliverables — top 3 across drafts and stories by updatedAt.
+    const [recentDrafts, recentStories] = await Promise.all([
+      prisma.threeTierDraft.findMany({
+        where: { offering: { workspaceId } },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+        select: { id: true, updatedAt: true, offering: { select: { name: true } }, audience: { select: { name: true } } },
+      }),
+      prisma.fiveChapterStory.findMany({
+        where: { draft: { offering: { workspaceId } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          updatedAt: true,
+          customName: true,
+          medium: true,
+          draft: { select: { offering: { select: { name: true } }, audience: { select: { name: true } } } },
+        },
+      }),
+    ]);
+    type RecentItem = { kind: '3T' | '5CS'; title: string; updatedAt: Date; ageDays: number };
+    const now = Date.now();
+    const recentItems: RecentItem[] = [
+      ...recentDrafts.map(d => ({
+        kind: '3T' as const,
+        title: `${d.offering?.name || 'Offering'} → ${d.audience?.name || 'Audience'}`,
+        updatedAt: d.updatedAt,
+        ageDays: Math.floor((now - d.updatedAt.getTime()) / 86400000),
+      })),
+      ...recentStories.map(s => {
+        const offeringName = s.draft?.offering?.name || 'offering';
+        const audienceName = s.draft?.audience?.name || 'audience';
+        const fallbackTitle = `${s.medium || 'story'} — ${offeringName} → ${audienceName}`;
+        return {
+          kind: '5CS' as const,
+          title: s.customName?.trim() || fallbackTitle,
+          updatedAt: s.updatedAt,
+          ageDays: Math.floor((now - s.updatedAt.getTime()) / 86400000),
+        };
+      }),
+    ].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, 3);
+
+    const mostRecentAgeDays = recentItems.length > 0 ? recentItems[0].ageDays : null;
+    const onDeliverablePage = !!(ctx.draftId || ctx.storyId);
+
+    // Resolve user state for the prompt block. Four canonical states.
+    let stateLabel: 'first-time' | 'in-deliverable' | 'returning-active' | 'returning-stale';
+    if (!introducedAlready && recentItems.length === 0) {
+      stateLabel = 'first-time';
+    } else if (onDeliverablePage) {
+      stateLabel = 'in-deliverable';
+    } else if (mostRecentAgeDays !== null && mostRecentAgeDays <= 7) {
+      stateLabel = 'returning-active';
+    } else {
+      stateLabel = 'returning-stale';
+    }
+
+    const stateBlock =
+      stateLabel === 'first-time'
+        ? 'STATE: first-time user. They have never seen Maria before and have no deliverables yet. Open with a one-sentence warm hello of who you are and what you do, then ASK one specific opening question that gets them naming what they want to work on. Offer 2-3 reply chips that are the answers a real first-time user would give in their voice (e.g. "Help me sell something", "I have a pitch coming up", "I want to message my team").'
+        : stateLabel === 'in-deliverable'
+        ? `STATE: user is INSIDE a specific deliverable right now (${ctx.draftId ? 'a Three Tier' : 'a Five Chapter Story'}${ctx.storyId ? ` — story id ${ctx.storyId}` : ctx.draftId ? ` — draft id ${ctx.draftId}` : ''}). Open by naming the SINGLE BIGGEST CURRENT GAP on this deliverable in plain language, then ASK whether they want to start there. Offer exactly 2 chips: "Yes, start there" and "Show me something else here".`
+        : stateLabel === 'returning-active'
+        ? `STATE: returning user with active recent work. Their most recently touched deliverable was ${mostRecentAgeDays} day${mostRecentAgeDays === 1 ? '' : 's'} ago. Open by naming THAT deliverable by its actual title and where it stood (first draft / claims needing a look / ready to refine), then ASK whether they want to pick it back up. Offer exactly 2 chips: "Pick up [title]" and "Something else". Recent items, in order, with titles you can use verbatim:\n${recentItems.map((r, i) => `  ${i + 1}. ${r.title} (${r.kind}, ${r.ageDays}d ago)`).join('\n')}`
+        : `STATE: returning user, gone for a while. Their most recent work was ${mostRecentAgeDays === null ? 'never' : `${mostRecentAgeDays} days ago`}. Open by acknowledging the return briefly (one short sentence) and ASK whether they want to pick something up or build something new. Offer 3-4 chips: the ${Math.min(3, recentItems.length)} most-recently touched titles plus "Build something new". Recent items:\n${recentItems.length === 0 ? '  (none)' : recentItems.map((r, i) => `  ${i + 1}. ${r.title} (${r.kind}, ${r.ageDays}d ago)`).join('\n')}`;
+
+    systemPrompt += `\n\nCHAT-OPEN PROACTIVE OPENER — FIRST AND ONLY ACTION THIS TURN.
+
+THE RULE you must obey: Maria asks; the user answers. The chat panel just opened; the user has NOT typed anything. Your reply IS the user's first three seconds in this session, so it must:
+  1. Be in your voice — warm, peer, never sales.
+  2. Be ONE message: at most one short context sentence, then ONE specific question grounded in the user's actual situation below.
+  3. Never tell the user to type something or "let me know" — you are asking; they answer.
+  4. End with reply chips. Format chips as standalone lines AT THE END of your response, each on its own line, exactly like this:
+     [CHIP: chip text 1]
+     [CHIP: chip text 2]
+  5. Chips are the user's likely answers in the USER'S voice, never yours. Tap-sized, specific to the question above. 2-4 chips total.
+
+DO NOT take any actions, build any deliverables, or call any tools this turn. The user has not asked for anything. Your only job is to greet and ask.
+
+${stateBlock}
+
+Output JSON shape: { "response": "<your reply, ending with [CHIP: ...] lines>", "action": null, "actions": [] }`;
+  }
+
   // Personalization context — interview questions PREPEND to override conversational tone
   const personalizeProfile = await getPersonalize(userId);
   if (personalizeProfile.interviewStep > 0 && personalizeProfile.interviewStep < 7) {
@@ -811,7 +910,10 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
 
   // Build user message — plain text or content blocks with attachments.
   // Images go through Claude vision. Text/PDF/DOCX content is prepended as text.
-  let userContent: string | any[] = message || '';
+  // Chat-open: synthesize a one-token user turn so Opus has something to
+  // respond to. The turn is NEVER persisted (see persistence guard below),
+  // so it doesn't pollute history; it only exists to give Opus a turn-shape.
+  let userContent: string | any[] = isChatOpen ? '[CHAT_OPENED]' : (message || '');
   if (allAttachments.length > 0) {
     const contentBlocks: any[] = [];
     let textPrefix = '';
@@ -896,9 +998,13 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
   const userQuestion = rawMsg.includes('[USER QUESTION]\n')
     ? rawMsg.split('[USER QUESTION]\n').pop()!
     : storedUserMsg;
-  await prisma.assistantMessage.create({
-    data: { userId, role: 'user', content: userQuestion, context: partnerChannel(workspaceId, ctx) },
-  });
+  // Chat-open: do NOT persist a user row. The opener is unprompted; the
+  // user has not typed anything. Only the assistant reply persists below.
+  if (!isChatOpen) {
+    await prisma.assistantMessage.create({
+      data: { userId, role: 'user', content: userQuestion, context: partnerChannel(workspaceId, ctx) },
+    });
+  }
 
   // Call Opus with JSON response format. If Opus returns an empty
   // response AND no actions, retry once — this occasionally happens
@@ -987,6 +1093,40 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
   // Log raw actions for debugging
   if (rawActions.length > 0) {
     console.log(`[Partner] Actions: ${rawActions.map(a => `${a.type}(${Object.keys(a.params || {}).join(',')})`).join(', ')}`);
+  }
+
+  // Chat-open short-circuit. The opener never takes actions; if Opus
+  // returned any (against instructions), drop them. Parse [CHIP: ...]
+  // markers from the response, strip them from the visible text, persist
+  // the assistant row, and return.
+  if (isChatOpen) {
+    const chipPattern = /\[CHIP:\s*([^\]\n]+?)\s*\]/g;
+    const chips: string[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = chipPattern.exec(result.response || '')) !== null) {
+      const text = match[1].trim();
+      if (text && chips.length < 4) chips.push(text);
+    }
+    const visible = (result.response || '').replace(chipPattern, '').replace(/\n{3,}/g, '\n\n').trim();
+    const finalText = visible || "Hi — I'm Maria. What are you working on right now?";
+
+    try {
+      await prisma.assistantMessage.create({
+        data: { userId, role: 'assistant', content: finalText, context: partnerChannel(workspaceId, ctx) },
+      });
+    } catch (persistErr) {
+      console.error('[Partner] chat-open persist failed:', persistErr);
+    }
+
+    res.json({
+      response: finalText,
+      chips,
+      isChatOpen: true,
+      actionResult: null,
+      refreshNeeded: false,
+      needsPageContent: false,
+    });
+    return;
   }
 
   // Check if Maria wants to read the page
