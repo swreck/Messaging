@@ -563,9 +563,20 @@ router.get('/history', async (req: Request, res: Response) => {
       return false;
     });
   }
+  // Cowork follow-up #2 — surface persisted chips on assistant rows so
+  // chips survive a panel close/reopen and show up after history reload.
+  // Cowork follow-up #6 — surface kind so the frontend can identify
+  // chat-open openers if it ever needs to (today the backend already
+  // sweeps stale openers; this is forward-compatible).
   const messages = filtered
     .slice(0, 200)
-    .map(({ role, content, createdAt }) => ({ role, content, createdAt }));
+    .map(({ role, content, createdAt, context }) => {
+      const ctx = (context as any) || {};
+      const out: { role: string; content: string; createdAt: Date; chips?: string[]; kind?: string } = { role, content, createdAt };
+      if (Array.isArray(ctx.chips) && ctx.chips.length > 0) out.chips = ctx.chips;
+      if (typeof ctx.kind === 'string') out.kind = ctx.kind;
+      return out;
+    });
   messages.reverse();
   res.json({ messages });
 });
@@ -574,7 +585,7 @@ router.get('/history', async (req: Request, res: Response) => {
 // Optionally accepts an attachment: { data: base64string, mimeType: string, filename: string }
 // Images are sent to Claude via vision. PDFs and text files are extracted and prepended.
 router.post('/message', partnerLimiter, async (req: Request, res: Response) => {
-  const { message, context, attachment, attachments: rawAttachments, timeContext, voicePersistentIntent, websiteResearchOffered, trigger } = req.body as {
+  const { message, context, attachment, attachments: rawAttachments, timeContext, voicePersistentIntent, websiteResearchOffered, overBudgetAcknowledged, trigger } = req.body as {
     message?: string;
     context?: ActionContext;
     attachment?: { data: string; mimeType: string; filename: string };
@@ -603,6 +614,11 @@ router.post('/message', partnerLimiter, async (req: Request, res: Response) => {
     // 'website-research-offered-{date}'). Surfaces here so the prompt
     // rule can suppress re-offering.
     websiteResearchOffered?: boolean;
+    // Cowork follow-up #3 — once-per-session over-budget acknowledgement.
+    // Frontend writes 'over-budget-ack-{date}' to localStorage after the
+    // first over-budget message lands; sends true here on every subsequent
+    // turn so the backend suppresses the alert from re-firing.
+    overBudgetAcknowledged?: boolean;
   };
   // Normalize: single attachment or array of attachments
   const allAttachments: { data: string; mimeType: string; filename: string }[] =
@@ -828,7 +844,13 @@ If the user declines, drop it cleanly. The proposal will time out in 90 seconds.
 
     const stateBlock =
       stateLabel === 'first-time'
-        ? 'STATE: first-time user. They have never seen Maria before and have no deliverables yet. Open with a one-sentence warm hello of who you are and what you do, then ASK one specific opening question that gets them naming what they want to work on. Offer 2-3 reply chips that are the answers a real first-time user would give in their voice (e.g. "Help me sell something", "I have a pitch coming up", "I want to message my team").'
+        ? `STATE: first-time user. They have never seen Maria before and have no deliverables yet. The user is a senior professional who needs to PERSUADE someone — that may be selling a product, making a case to a board, advocating for a policy change, recruiting a hire, asking a partner to commit, rallying a team, briefing an executive, or any other moment where one human is trying to move another. DO NOT assume commerce. DO NOT use the words "product," "service," "pitch," or "sell" in your opener — those words narrow the range and read as patronizing to anyone with a non-commercial persuasive moment in mind.
+
+Open with a one-sentence warm hello, then ASK a broad opening question along the lines of: "What are you trying to get someone to see, decide, or do? Tell me as much or as little as you want — I'll take it from there." (Use that exact spirit; you may rewrite it slightly in your voice.) Offer 3-4 reply chips that name persuasive moments in the user's voice. Use these as canonical chips, in this order:
+  [CHIP: Make a case for something I'm advocating]
+  [CHIP: Get a decision or sign-off from a stakeholder]
+  [CHIP: Recruit, rally, or align a team or partner]
+  [CHIP: I have something I've drafted — read it first]`
         : stateLabel === 'in-deliverable'
         ? `STATE: user is INSIDE a specific deliverable right now (${ctx.draftId ? 'a Three Tier' : 'a Five Chapter Story'}${ctx.storyId ? ` — story id ${ctx.storyId}` : ctx.draftId ? ` — draft id ${ctx.draftId}` : ''}). Open by naming the SINGLE BIGGEST CURRENT GAP on this deliverable in plain language, then ASK whether they want to start there. Offer exactly 2 chips: "Yes, start there" and "Show me something else here".`
         : stateLabel === 'returning-active'
@@ -851,6 +873,40 @@ DO NOT take any actions, build any deliverables, or call any tools this turn. Th
 ${stateBlock}
 
 Output JSON shape: { "response": "<your reply, ending with [CHIP: ...] lines>", "action": null, "actions": [] }`;
+  }
+
+  // Cowork follow-up #2 — UNIVERSAL CHIP-EMISSION RULE.
+  // Every Maria turn that ends with a question must emit reply chips so the
+  // user can tap rather than invent an opening sentence. Applied as a
+  // runtime augmentation; the locked methodology file is untouched.
+  systemPrompt += `\n\nREPLY CHIPS — UNIVERSAL RULE.
+
+Every response of yours that ends with a question (open or closed) MUST end with at least 2 chip markers, formatted EXACTLY like this, each on its own line at the very end of your response:
+  [CHIP: chip text 1]
+  [CHIP: chip text 2]
+
+Chips are pre-typed reply buttons. Their text is what the USER would say back to you, in the user's voice — NOT yours. They are short (under 10 words ideally), specific to your question, and natural for a senior professional to tap.
+
+  - If your question has natural binary options (yes/no, do/don't, this/that), emit those two as chips in the user's voice.
+  - If your question is open-ended, emit 2-4 sentence-length chips covering the most likely user replies. The user can always type their own — chips are there so they don't have to.
+  - If your turn does NOT end with a question (you are stating a fact, confirming an action, narrating progress), do NOT emit chips.
+  - Chip text never says "Yes Maria" or "Maria, please" — write it as the user's words, no addressee.
+  - Chips are ALWAYS the very last thing in your response, after the question.`;
+
+  // Cowork follow-up #1 — broaden the first-message opener away from
+  // commerce-narrow framing. This overrides the locked partner-prompt's
+  // "Tell me about the product or service" line for the very first user
+  // message in a fresh conversation. The methodology file is untouched.
+  if (history.length === 0 && !isChatOpen && !message?.startsWith('[')) {
+    systemPrompt += `\n\nFIRST-MESSAGE BROAD FRAMING — applies on this turn ONLY.
+
+This is the user's first message. They are a senior professional. Their persuasive moment may be selling a product, but it may equally be making a case to a board, advocating for a policy change, recruiting a hire, briefing an executive, rallying a team, or any other moment where one person is moving another to see, decide, or do something. DO NOT assume commerce. DO NOT say "product" or "service" or "pitch" or "sell" in your reply unless the user themselves used those words.
+
+Frame your reply around what they're trying to get someone to see, decide, or do. End with a question that helps them describe the moment — broad enough that any persuasive context fits. Then per the UNIVERSAL CHIP RULE above, end with 3-4 chips. Use these as your canonical chips for first-message turns, adapting to what the user actually said:
+  [CHIP: Make a case for something I'm advocating]
+  [CHIP: Get a decision or sign-off from a stakeholder]
+  [CHIP: Recruit, rally, or align a team or partner]
+  [CHIP: I have something I've drafted — read it first]`;
   }
 
   // Personalization context — interview questions PREPEND to override conversational tone
@@ -879,7 +935,12 @@ Output JSON shape: { "response": "<your reply, ending with [CHIP: ...] lines>", 
     const remainingMin = Math.max(0, budgetMin - elapsedMin);
     const pctElapsed = elapsedMin / budgetMin;
     const tightBudget = pctElapsed >= 0.7 && pctElapsed < 0.8;
-    const crossedThreshold = pctElapsed >= 0.8 && !timeContext.thresholdTriggered;
+    // Cowork follow-up #3 — `overBudgetAcknowledged` is a belt-and-suspenders
+    // gate keyed by date in localStorage on the frontend. Even if
+    // thresholdTriggered somehow gets unset (cleared cache, fresh tab), this
+    // flag persists for the day and prevents the alert from re-hijacking the
+    // conversation on every turn.
+    const crossedThreshold = pctElapsed >= 0.8 && !timeContext.thresholdTriggered && !overBudgetAcknowledged;
     if (crossedThreshold) {
       timeThresholdFiredThisTurn = true;
       systemPrompt = `TIME THRESHOLD ALERT — surface this NOW, in this turn, before any other content:
@@ -887,7 +948,12 @@ Output JSON shape: { "response": "<your reply, ending with [CHIP: ...] lines>", 
 
 The user set a ${budgetMin}-minute budget at session start. They've used ${elapsedMin} minutes; ${remainingMin} remaining. Surface the threshold-intervention with elapsed/done/remaining/two-paths framing using these EXACT numbers. Voice: partnership, not surveillance. Example shape: "${remainingMin} minutes left in your budget. Where we are: [what's done]. Two paths — [ship now with the lighter version] or [push past your budget by ~${Math.round(remainingMin * 1.5)} minutes to do them properly]. What's the call?"
 
-After this turn, the frontend marks thresholdTriggered=true so this alert won't re-fire. If the user blows past budget without intervening, you'll see another alert at the over-budget threshold.
+End your response with these exact 3 chips on their own lines (per the UNIVERSAL CHIP RULE), in the user's voice:
+[CHIP: Keep going as planned]
+[CHIP: Wrap up faster]
+[CHIP: Stop here, save what we have]
+
+After this turn, the frontend marks thresholdTriggered=true AND writes a localStorage acknowledgement so this alert never re-fires this session — even if the user blows past budget further.
 
 ` + systemPrompt;
     } else if (tightBudget) {
@@ -1000,7 +1066,15 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
     : storedUserMsg;
   // Chat-open: do NOT persist a user row. The opener is unprompted; the
   // user has not typed anything. Only the assistant reply persists below.
-  if (!isChatOpen) {
+  //
+  // Cowork follow-up #7 — defense-in-depth. Skip user-row persist for any
+  // synthetic-marker payload ([OPEN_ON_PAGE], [STATE_RECAP], [CHAT_OPENED],
+  // [PRE_CHAPTER_4:...], etc). These are routing tokens emitted by the
+  // frontend on its own behalf, not the user's words. Persisting them
+  // pollutes the user's chat history with messages they didn't type.
+  const SYNTHETIC_USER_MARKER = /^\s*\[[A-Z_]+(?:\s*:[^\]]*)?\]\s*$/;
+  const isSyntheticUserPayload = SYNTHETIC_USER_MARKER.test(userQuestion);
+  if (!isChatOpen && !isSyntheticUserPayload) {
     await prisma.assistantMessage.create({
       data: { userId, role: 'user', content: userQuestion, context: partnerChannel(workspaceId, ctx) },
     });
@@ -1098,7 +1172,12 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
   // Chat-open short-circuit. The opener never takes actions; if Opus
   // returned any (against instructions), drop them. Parse [CHIP: ...]
   // markers from the response, strip them from the visible text, persist
-  // the assistant row, and return.
+  // the assistant row tagged kind:'chat-open-opener', and return.
+  //
+  // Cowork follow-up #6 — before persisting the new opener, delete any
+  // prior chat-open-opener rows for this user/workspace. This keeps stale
+  // page-context openers from stacking up in the panel as the user
+  // navigates between pages within the same session.
   if (isChatOpen) {
     const chipPattern = /\[CHIP:\s*([^\]\n]+?)\s*\]/g;
     const chips: string[] = [];
@@ -1111,8 +1190,24 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
     const finalText = visible || "Hi — I'm Maria. What are you working on right now?";
 
     try {
+      // Sweep prior openers tagged for this channel, scoped to user. We
+      // load and filter rather than path-query because Prisma JSON path
+      // filters on Postgres can be flaky for multi-key matches; the user
+      // is unlikely to have many opener rows so the read is cheap.
+      const priorOpeners = await prisma.assistantMessage.findMany({
+        where: { userId, context: { path: ['channel'], equals: 'partner' } },
+        select: { id: true, context: true },
+      });
+      const staleOpenerIds = priorOpeners
+        .filter(m => (m.context as any)?.kind === 'chat-open-opener')
+        .map(m => m.id);
+      if (staleOpenerIds.length > 0) {
+        await prisma.assistantMessage.deleteMany({ where: { id: { in: staleOpenerIds } } });
+      }
+
+      const openerCtx = { ...partnerChannel(workspaceId, ctx), kind: 'chat-open-opener', chips };
       await prisma.assistantMessage.create({
-        data: { userId, role: 'assistant', content: finalText, context: partnerChannel(workspaceId, ctx) },
+        data: { userId, role: 'assistant', content: finalText, context: openerCtx },
       });
     } catch (persistErr) {
       console.error('[Partner] chat-open persist failed:', persistErr);
@@ -1351,6 +1446,21 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
     }
   }
 
+  // Cowork follow-up #2 — parse universal [CHIP: ...] markers from every
+  // Maria turn (not just chat-open). Strip from visible text; persist
+  // chips in the assistant row's context JSON so they survive history
+  // reload; return them on the response so the frontend can render them.
+  const universalChipPattern = /\[CHIP:\s*([^\]\n]+?)\s*\]/g;
+  const universalChips: string[] = [];
+  {
+    let m: RegExpExecArray | null;
+    while ((m = universalChipPattern.exec(result.response || '')) !== null) {
+      const text = m[1].trim();
+      if (text && universalChips.length < 4) universalChips.push(text);
+    }
+  }
+  result.response = (result.response || '').replace(universalChipPattern, '').replace(/\n{3,}/g, '\n\n').trim();
+
   // Store the assistant reply — serialize response with action result for history.
   // Phase 1 hardening (Fix #3) — user message was persisted before the Opus
   // call so any upstream failure doesn't lose what the user said. Only the
@@ -1359,14 +1469,18 @@ After this turn, the frontend marks thresholdTriggered=true so this alert won't 
     ? `${result.response}\n\n[${actionResult}]`
     : result.response;
 
+  const assistantCtx = universalChips.length > 0
+    ? { ...partnerChannel(workspaceId, ctx), chips: universalChips }
+    : partnerChannel(workspaceId, ctx);
   await prisma.assistantMessage.create({
-    data: { userId, role: 'assistant', content: storedResponse, context: partnerChannel(workspaceId, ctx) },
+    data: { userId, role: 'assistant', content: storedResponse, context: assistantCtx },
   });
 
-  console.log(`[Partner] RESPONSE: text=${(result.response || '').length}chars, actionResult=${(actionResult || '').length}chars, hasBuildStarted=${(actionResult || '').includes('BUILD_STARTED')}`);
+  console.log(`[Partner] RESPONSE: text=${(result.response || '').length}chars, actionResult=${(actionResult || '').length}chars, chips=${universalChips.length}, hasBuildStarted=${(actionResult || '').includes('BUILD_STARTED')}`);
 
   res.json({
     response: result.response,
+    chips: universalChips.length > 0 ? universalChips : undefined,
     actionResult,
     refreshNeeded,
     needsPageContent: false,

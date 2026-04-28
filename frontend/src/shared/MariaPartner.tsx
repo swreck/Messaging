@@ -374,8 +374,18 @@ export function MariaPartner() {
       const qs = new URLSearchParams(scopeParams).toString();
       const url = qs ? `/partner/history?${qs}` : '/partner/history';
       const isScoped = scopeMode === 'scoped' && !!currentScope.kind;
-      api.get<{ messages: Message[] }>(url)
-        .then(async ({ messages: history }) => {
+      api.get<{ messages: (Message & { kind?: string })[] }>(url)
+        .then(async ({ messages: rawHistory }) => {
+          // Cowork follow-up #2 + #6 — backend now returns chips and kind on
+          // assistant rows. Map kind:'chat-open-opener' to isChatOpen:true so
+          // the cleanup sweep in the chat-open useEffect can identify them.
+          const history: Message[] = rawHistory.map(m => ({
+            role: m.role,
+            content: m.content,
+            actionResult: m.actionResult,
+            chips: Array.isArray(m.chips) ? m.chips : undefined,
+            isChatOpen: m.kind === 'chat-open-opener' || m.isChatOpen,
+          }));
           // B-7 — when in scoped mode and the scoped history is empty,
           // skip the auto-greeting injection. The render layer shows the
           // empty-state UI ("No messages on this [type] yet — start a
@@ -465,13 +475,24 @@ export function MariaPartner() {
   // Chat-open proactive opener. The rule: when the panel opens with
   // "Let Maria lead" on, Maria's first message arrives within ~3s and
   // ends with reply chips. The user is never left wondering what to do.
-  // Gated by sessionStorage so it never re-fires on the same panel within
-  // the same browser session. When the toggle is off, this effect is a
-  // no-op — the panel opens silently.
+  //
+  // Cowork follow-up #5 — gate key is per-page-context, not per-user.
+  // Each distinct surface (Dashboard vs deliverable vs different
+  // deliverable) fires its own opener exactly once per session.
+  // Navigation between pages within the same session refires correctly
+  // because the key changes.
+  //
+  // Cowork follow-up #6 — when a new opener fires, the backend sweeps
+  // prior chat-open-opener rows for this user. We also remove stale
+  // chat-open-opener messages from the visible thread on the client
+  // before appending the new one, so the panel never shows two competing
+  // openers from different page-contexts.
   useEffect(() => {
     if (!open || !loaded || !introduced || !user) return;
     if (getToggleState() !== 'on') return;
-    const gateKey = `maria-opened-${user.userId}`;
+    const pageKind = pageContext?.page || 'dashboard';
+    const deliverableId = pageContext?.draftId || pageContext?.storyId || 'none';
+    const gateKey = `maria-opened-${user.userId}-${pageKind}-${deliverableId}`;
     try {
       if (sessionStorage.getItem(gateKey)) return;
       sessionStorage.setItem(gateKey, '1');
@@ -490,12 +511,18 @@ export function MariaPartner() {
       .then(result => {
         if (cancelled) return;
         if (result.response) {
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: result.response,
-            chips: result.chips || [],
-            isChatOpen: true,
-          }]);
+          setMessages(prev => {
+            // Remove any prior chat-open openers from the visible thread
+            // before appending the new one. Real conversational replies
+            // are untouched.
+            const cleaned = prev.filter(m => !m.isChatOpen);
+            return [...cleaned, {
+              role: 'assistant',
+              content: result.response,
+              chips: result.chips || [],
+              isChatOpen: true,
+            }];
+          });
         }
       })
       .catch(err => {
@@ -511,7 +538,7 @@ export function MariaPartner() {
       });
 
     return () => { cancelled = true; };
-  }, [open, loaded, introduced, user, pageContext]);
+  }, [open, loaded, introduced, user, pageContext?.page, pageContext?.draftId, pageContext?.storyId, pageContext?.offeringId, pageContext?.audienceId]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -774,6 +801,7 @@ export function MariaPartner() {
     try {
       const result = await api.post<{
         response: string;
+        chips?: string[];
         actionResult: string | null;
         refreshNeeded: boolean;
         needsPageContent?: boolean;
@@ -807,13 +835,32 @@ export function MariaPartner() {
           } catch {}
           return {};
         })()),
+        // Cowork follow-up #3 — once-per-session over-budget acknowledgement.
+        // Suppresses repeat firing of the time-threshold alert after the user
+        // has seen it once today.
+        ...(((): Record<string, unknown> => {
+          try {
+            const d = new Date();
+            const key = `over-budget-ack-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+            return { overBudgetAcknowledged: !!localStorage.getItem(key) };
+          } catch {}
+          return {};
+        })()),
       });
       // Round B6 — backend tells us when the threshold marker fired this turn so
       // we can persist thresholdTriggered=true and avoid re-firing on later messages.
+      // Cowork follow-up #3 — also write a date-stamped over-budget acknowledgement
+      // so the alert is suppressed for the rest of the day even across cleared
+      // session storage or fresh tabs.
       if (result.timeThresholdFired && !timeContext.thresholdTriggered) {
         const updated: TimeContext = { ...timeContext, thresholdTriggered: true };
         setTimeContext(updated);
         saveTimeContext(updated);
+        try {
+          const d = new Date();
+          const key = `over-budget-ack-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+          localStorage.setItem(key, '1');
+        } catch {}
       }
       setPendingFiles([]);
 
@@ -1145,7 +1192,12 @@ export function MariaPartner() {
             cleanedResponse = cleanedResponse.replace(/\s*\[WEBSITE_RESEARCH_OFFERED\]\s*/g, '').trim();
           }
         }
-        setMessages(prev => [...prev, { role: 'assistant', content: cleanedResponse || result.response, actionResult: result.actionResult }]);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: cleanedResponse || result.response,
+          actionResult: result.actionResult,
+          chips: result.chips,
+        }]);
       }
 
       if (result.actionResult) {

@@ -57,10 +57,29 @@ export function DashboardPage() {
   const [recentAudience, setRecentAudience] = useState<string>('');
   const [recentSort, setRecentSort] = useState<'recent' | 'oldest' | 'offeringAZ' | 'audienceAZ'>('recent');
   const [recentDateRange, setRecentDateRange] = useState<'any' | '7' | '30' | '90'>('any');
+  // Cowork follow-up #4 — once Maria has greeted the user even once, the
+  // home-screen welcome card with the "Let's start" button should never
+  // show again. We check both the introduced flag (set after the first
+  // chat-open opener fires) and the partner history (any assistant
+  // message means Maria has spoken to this user). Either signal suffices.
+  const [welcomeSuppressed, setWelcomeSuppressed] = useState<boolean | null>(null);
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'dashboard' }); registerRefresh(loadAll); }, []);
   useEffect(() => { loadAll(); }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    api.get<{ introduced?: boolean }>('/partner/status')
+      .then(s => {
+        if (s.introduced) { setWelcomeSuppressed(true); return; }
+        return api.get<{ messages: { role: string }[] }>('/partner/history')
+          .then(h => {
+            setWelcomeSuppressed((h.messages || []).some(m => m.role === 'assistant'));
+          });
+      })
+      .catch(() => setWelcomeSuppressed(false));
+  }, [user]);
 
   // Listen for toggle promotions from chat. When Maria flips the "Let Maria lead"
   // default in response to a user's in-chat request, the switch here should
@@ -255,8 +274,11 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* New user — Maria's voice, one forward button */}
-      {isNew && (
+      {/* New user — Maria's voice, one forward button.
+          Cowork follow-up #4: hidden once Maria has spoken to this user even
+          once. introShown OR any prior assistant message in partner history
+          flips welcomeSuppressed and this card never renders again. */}
+      {isNew && welcomeSuppressed === false && (
         <div className="dashboard-welcome empty-state-enhanced">
           <div className="empty-icon">💬</div>
           <h3>{firstName ? `Hi ${firstName} — I'm Maria.` : `Hi, I'm Maria.`}</h3>
