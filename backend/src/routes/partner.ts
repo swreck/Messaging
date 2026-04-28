@@ -875,6 +875,30 @@ ${stateBlock}
 Output JSON shape: { "response": "<your reply, ending with [CHIP: ...] lines>", "action": null, "actions": [] }`;
   }
 
+  // CONVERSATION INTEGRITY RULE — applies on every turn after the first.
+  // The conversation history that follows this system prompt is real and
+  // authoritative. Three behaviors required of Maria:
+  //   1. Read the history before replying. Do not repeat questions whose
+  //      answers are already in the history.
+  //   2. Treat brief user replies as CONTINUATIONS of the established
+  //      context, never as "user is uncertain — revert to opener."
+  //   3. Never claim the conversation is empty. The phrase "I don't see
+  //      anything above in our conversation" or "this looks like our first
+  //      exchange" is forbidden — it gaslights the user.
+  // Companion to the locked methodology's NEW USER GUIDANCE block, which
+  // now also tells Maria to build on prior turns rather than re-ask.
+  if (history.length > 0) {
+    systemPrompt += `\n\nCONVERSATION INTEGRITY — applies this turn and every turn.
+
+The conversation history above is REAL. It contains everything the user has told you in this session. Before replying, read it.
+
+  - If the user has already described an offering, an audience, a value story, a format, an occasion, a stakeholder, or any other piece of the persuasive moment in a prior turn of THIS conversation, that piece is ESTABLISHED. Do not re-ask. Build on it.
+  - Brief user replies (a few words, a single phrase, a fragmentary answer) are CONTINUATIONS of the established context. Treat a 5-word reply the same way you'd treat a 50-word reply: as more information layered on top of what's already known. Never interpret brevity as "user is uncertain — fall back to the opener question."
+  - The user can refer back to anything they've said. If the user says "I already explained that" or "didn't I tell you above", they are right; the answer is in the history above. Re-read the history and surface what they referenced. NEVER reply with "I don't see anything above" or "this looks like our first exchange" or any equivalent denial — that is gaslighting and it ends the user's trust in this product.
+
+If you genuinely do not know something the user is asking about, say so plainly: "I'm not sure I caught that — could you say more?" That is honest. Denying the conversation exists is not.`;
+  }
+
   // Cowork follow-up #2 — UNIVERSAL CHIP-EMISSION RULE.
   // Every Maria turn that ends with a question must emit reply chips so the
   // user can tap rather than invent an opening sentence. Applied as a
@@ -893,21 +917,11 @@ Chips are pre-typed reply buttons. Their text is what the USER would say back to
   - Chip text never says "Yes Maria" or "Maria, please" — write it as the user's words, no addressee.
   - Chips are ALWAYS the very last thing in your response, after the question.`;
 
-  // Cowork follow-up #1 — broaden the first-message opener away from
-  // commerce-narrow framing. This overrides the locked partner-prompt's
-  // "Tell me about the product or service" line for the very first user
-  // message in a fresh conversation. The methodology file is untouched.
-  if (history.length === 0 && !isChatOpen && !message?.startsWith('[')) {
-    systemPrompt += `\n\nFIRST-MESSAGE BROAD FRAMING — applies on this turn ONLY.
-
-This is the user's first message. They are a senior professional. Their persuasive moment may be selling a product, but it may equally be making a case to a board, advocating for a policy change, recruiting a hire, briefing an executive, rallying a team, or any other moment where one person is moving another to see, decide, or do something. DO NOT assume commerce. DO NOT say "product" or "service" or "pitch" or "sell" in your reply unless the user themselves used those words.
-
-Frame your reply around what they're trying to get someone to see, decide, or do. End with a question that helps them describe the moment — broad enough that any persuasive context fits. Then per the UNIVERSAL CHIP RULE above, end with 3-4 chips. Use these as your canonical chips for first-message turns, adapting to what the user actually said:
-  [CHIP: Make a case for something I'm advocating]
-  [CHIP: Get a decision or sign-off from a stakeholder]
-  [CHIP: Recruit, rally, or align a team or partner]
-  [CHIP: I have something I've drafted — read it first]`;
-  }
+  // (The "first message broad framing" runtime override that previously
+  // lived here was dropped once the locked NEW USER GUIDANCE block in
+  // prompts/partner.ts was rewritten to broaden the opener directly.
+  // Two voices for the same situation produced redundant guidance; the
+  // single source of truth is the methodology file.)
 
   // Personalization context — interview questions PREPEND to override conversational tone
   const personalizeProfile = await getPersonalize(userId);
