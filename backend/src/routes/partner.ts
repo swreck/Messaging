@@ -665,7 +665,18 @@ router.post('/message', partnerLimiter, async (req: Request, res: Response) => {
   ]);
 
   const currentContext = await buildCurrentContext(ctx, userId);
-  const isNewUser = offeringCount === 0 && audienceCount === 0;
+  // isNewUser fires the NEW USER GUIDANCE block in the locked methodology
+  // file. That block is intended for the very first message of a fresh
+  // conversation. Without the history.length === 0 gate, the block was
+  // re-injecting on every turn (since the DB stayed empty until Maria
+  // fired create_offering / create_audience), and its repeated assertion
+  // that "this user has no offerings or audiences yet" was pulling Opus
+  // toward "treat every brief reply as if the user is just starting" —
+  // which manifested as the demo38 / demo40 conversation-memory failure
+  // (Maria denying the conversation, reverting to the opener question).
+  // Gating on history.length === 0 keeps the block firing only when it
+  // should: the very first message in a conversation.
+  const isNewUser = history.length === 0 && offeringCount === 0 && audienceCount === 0;
   const userRole = req.user?.isAdmin ? 'owner' : (membership?.role || 'collaborator');
 
   let systemPrompt = buildPartnerPrompt({
@@ -875,28 +886,31 @@ ${stateBlock}
 Output JSON shape: { "response": "<your reply, ending with [CHIP: ...] lines>", "action": null, "actions": [] }`;
   }
 
-  // CONVERSATION INTEGRITY RULE — applies on every turn after the first.
-  // The conversation history that follows this system prompt is real and
-  // authoritative. Three behaviors required of Maria:
-  //   1. Read the history before replying. Do not repeat questions whose
-  //      answers are already in the history.
-  //   2. Treat brief user replies as CONTINUATIONS of the established
-  //      context, never as "user is uncertain — revert to opener."
-  //   3. Never claim the conversation is empty. The phrase "I don't see
-  //      anything above in our conversation" or "this looks like our first
-  //      exchange" is forbidden — it gaslights the user.
-  // Companion to the locked methodology's NEW USER GUIDANCE block, which
-  // now also tells Maria to build on prior turns rather than re-ask.
+  // CONVERSATION INTEGRITY RULE — placed at the TOP of the system prompt
+  // (prepended) so it dominates Opus's attention. Without this dominance,
+  // the locked methodology's onboarding-mode language ("this user has no
+  // offerings or audiences yet") was winning over the conversation
+  // history that Opus could see in the messages array — Opus was siding
+  // with the system prompt's "no context" assertion against the
+  // messages-array reality, producing replies like "this appears to be
+  // our first exchange" mid-conversation. Putting integrity first
+  // re-anchors Opus on the conversation as the source of truth.
   if (history.length > 0) {
-    systemPrompt += `\n\nCONVERSATION INTEGRITY — applies this turn and every turn.
+    const integrityBlock = `CONVERSATION INTEGRITY — THIS RULE OVERRIDES EVERYTHING BELOW.
 
-The conversation history above is REAL. It contains everything the user has told you in this session. Before replying, read it.
+The conversation history attached to this turn (the messages array sent with this request) is REAL, AUTHORITATIVE, and complete. It contains every word the user has typed and every reply you have given in this session. You CAN see it. You MUST use it.
 
-  - If the user has already described an offering, an audience, a value story, a format, an occasion, a stakeholder, or any other piece of the persuasive moment in a prior turn of THIS conversation, that piece is ESTABLISHED. Do not re-ask. Build on it.
-  - Brief user replies (a few words, a single phrase, a fragmentary answer) are CONTINUATIONS of the established context. Treat a 5-word reply the same way you'd treat a 50-word reply: as more information layered on top of what's already known. Never interpret brevity as "user is uncertain — fall back to the opener question."
-  - The user can refer back to anything they've said. If the user says "I already explained that" or "didn't I tell you above", they are right; the answer is in the history above. Re-read the history and surface what they referenced. NEVER reply with "I don't see anything above" or "this looks like our first exchange" or any equivalent denial — that is gaslighting and it ends the user's trust in this product.
+Hard rules:
+  1. Before composing your reply, read the conversation history. Anything the user has already told you — offering, audience, value story, format, occasion, stakeholder, brief or detailed — is ESTABLISHED. Do not re-ask it. Build on it.
+  2. Brief user replies (a few words, a single phrase, a fragmentary answer) are CONTINUATIONS of the established context, not signs of uncertainty. Treat a 5-word reply the same way as a 50-word reply: more information on top of what's already known. Never interpret brevity as a reason to revert to the opener question.
+  3. NEVER say "this appears to be our first exchange," "I don't see any prior messages," "this looks like the start of our conversation," "I don't have any prior messages from you," or any equivalent. These statements are LIES if there is conversation history attached, and there always is on every turn after the first. Saying them gaslights the user and ends their trust in this product permanently. If you ever feel the urge to say one of these phrases, STOP — re-read the messages array — answer based on what's actually there.
+  4. If the user references something they said earlier ("didn't I already explain", "I told you above", "as I said"), they are correct. Find what they referenced in the conversation history and acknowledge it directly. The user is never wrong about whether they sent a message — your job is to find it and use it.
+  5. If the system prompt below says "this user has no offerings or audiences yet" (or any similar database-state claim), that refers ONLY to the database. It does NOT mean the conversation is empty. The user may have richly described an offering and audience IN THIS CONVERSATION without those rows being committed to the database yet. Treat the conversation as the source of truth for what's been described; the database is downstream.
 
-If you genuinely do not know something the user is asking about, say so plainly: "I'm not sure I caught that — could you say more?" That is honest. Denying the conversation exists is not.`;
+This rule supersedes all guidance below it. Always.
+
+`;
+    systemPrompt = integrityBlock + systemPrompt;
   }
 
   // Cowork follow-up #2 — UNIVERSAL CHIP-EMISSION RULE.
