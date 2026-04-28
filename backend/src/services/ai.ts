@@ -165,11 +165,20 @@ export async function callAIWithJSON<T>(
       }
     }
 
-    // Retry once with a stronger nudge
+    // Retry once with a stronger nudge.
+    //
+    // CRITICAL: pass conversationHistory through to the retry. Without it,
+    // Opus on retry would see only the meta nudge and the original user
+    // message — no prior turns. That made multi-turn callers (the partner
+    // pipeline most visibly) lose all conversation memory whenever Opus's
+    // first response wasn't strict JSON, producing replies like "this
+    // appears to be the start of our conversation" mid-conversation.
+    // Discovered via the demo38 / demo39 conversation-memory regression.
     const retryResponse = await callAI(
       systemPrompt + jsonSuffix,
       `Your previous response was not valid JSON. Respond with ONLY a JSON object, nothing else.\n\nOriginal request: ${userMessage}`,
-      tier
+      tier,
+      conversationHistory,
     );
     const retryCleaned = retryResponse.replace(/^```json?\n?/m, '').replace(/\n?```$/m, '').trim();
     try {
