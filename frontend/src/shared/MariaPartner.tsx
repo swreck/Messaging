@@ -416,7 +416,6 @@ export function MariaPartner() {
       }
       const qs = new URLSearchParams(scopeParams).toString();
       const url = qs ? `/partner/history?${qs}` : '/partner/history';
-      const isScoped = scopeMode === 'scoped' && !!currentScope.kind;
       api.get<{ messages: (Message & { kind?: string })[] }>(url)
         .then(async ({ messages: rawHistory }) => {
           // Cowork follow-up #2 + #6 — backend now returns chips and kind on
