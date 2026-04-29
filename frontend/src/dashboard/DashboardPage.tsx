@@ -209,6 +209,14 @@ export function DashboardPage() {
     const next = !consultation;
     setConsultation(next);
     try { localStorage.setItem('maria-consultation', next ? 'on' : 'off'); } catch {}
+    // Path-architecture refactor — Phase 1. Dual-write the toggle to
+    // User.settings.partner.consultation so the toggle follows the user
+    // across devices and the backend can read it for proactive milestone
+    // narration in Phase 3. Fire-and-forget; localStorage above is the
+    // synchronous fast read for the local UI. If the PUT fails (network,
+    // server), we accept the temporary divergence — the next /partner/status
+    // load reconciles.
+    api.put('/partner/consultation', { value: next ? 'on' : 'off' }).catch(() => {});
     try {
       document.dispatchEvent(new CustomEvent(LEAD_TOGGLE_EVENT, { detail: { value: next ? 'on' : 'off' } }));
     } catch {}

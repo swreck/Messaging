@@ -34,12 +34,21 @@ async function getPartnerSettings(userId: string) {
     select: { username: true, settings: true },
   });
   const settings = (user?.settings as Record<string, any>) || {};
+  // Path-architecture refactor — Phase 1. The "Let Maria lead" toggle is the
+  // switch between Path B (proactive milestone narration) and Path A (Maria
+  // stays quiet unless asked). Persisted on User.settings.partner.consultation
+  // so the toggle follows the user across devices and the route layer can
+  // gate proactive narration on it. Default 'on' matches the dashboard's
+  // initial state and the existing localStorage default.
+  const rawConsultation = settings.partner?.consultation;
+  const consultation: 'on' | 'off' = rawConsultation === 'off' ? 'off' : 'on';
   return {
     username: user?.username || '',
     displayName: settings.partner?.displayName as string | undefined,
     introduced: !!settings.partner?.introduced,
     introStep: (settings.partner?.introStep as number) ?? 0,
     lastVisitAt: settings.partner?.lastVisitAt as string | undefined,
+    consultation,
   };
 }
 
@@ -445,7 +454,7 @@ router.get('/status', async (req: Request, res: Response) => {
     // Non-critical
   }
 
-  res.json({ username, displayName, introduced, introStep, returnContext, proactiveOffer, resumeDraft });
+  res.json({ username, displayName, introduced, introStep, returnContext, proactiveOffer, resumeDraft, consultation: settings.consultation });
 });
 
 // PUT /api/partner/name — store display name (does NOT complete intro)
@@ -518,6 +527,42 @@ router.put('/intro-step', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// PUT /api/partner/consultation — persist the "Let Maria lead" toggle state.
+// Path-architecture refactor — Phase 1.
+//
+// Toggle semantics: 'on' = Path B / leadership mode (Maria fires milestone
+// narration proactively), 'off' = Path A / support mode (Maria stays quiet
+// unless asked). Source of truth is User.settings.partner.consultation so the
+// toggle follows the user across devices. The frontend writes localStorage
+// AND calls this endpoint on every toggle change (dual-write) so the
+// device-local fast read stays in sync with the persisted state.
+router.put('/consultation', async (req: Request, res: Response) => {
+  const { value } = req.body as { value?: 'on' | 'off' };
+  if (value !== 'on' && value !== 'off') {
+    res.status(400).json({ error: 'value must be "on" or "off"' });
+    return;
+  }
+  const userId = req.user!.userId;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { settings: true },
+  });
+  const current = (user?.settings as Record<string, any>) || {};
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      settings: {
+        ...current,
+        partner: {
+          ...current.partner,
+          consultation: value,
+        },
+      },
+    },
+  });
+  res.json({ success: true, consultation: value });
+});
+
 // GET /api/partner/history — load persistent conversation.
 // B-7 — accepts optional scope query params (scopeStoryId, scopeDraftId,
 // scopeAudienceId, scopeOfferingId). When provided, returns only messages
@@ -585,7 +630,7 @@ router.get('/history', async (req: Request, res: Response) => {
 // Optionally accepts an attachment: { data: base64string, mimeType: string, filename: string }
 // Images are sent to Claude via vision. PDFs and text files are extracted and prepended.
 router.post('/message', partnerLimiter, async (req: Request, res: Response) => {
-  const { message, context, attachment, attachments: rawAttachments, timeContext, voicePersistentIntent, websiteResearchOffered, overBudgetAcknowledged, trigger } = req.body as {
+  const { message, context, attachment, attachments: rawAttachments, timeContext, voicePersistentIntent, websiteResearchOffered, overBudgetAcknowledged, consultation: bodyConsultation, trigger } = req.body as {
     message?: string;
     context?: ActionContext;
     attachment?: { data: string; mimeType: string; filename: string };
@@ -619,6 +664,13 @@ router.post('/message', partnerLimiter, async (req: Request, res: Response) => {
     // first over-budget message lands; sends true here on every subsequent
     // turn so the backend suppresses the alert from re-firing.
     overBudgetAcknowledged?: boolean;
+    // Path-architecture refactor — Phase 1. Frontend includes the user's
+    // current "Let Maria lead" toggle state on every turn so the route can
+    // read it for that turn's logic (gating proactive milestone narration
+    // when Phase 3 lands). Body value is informational; persistence is
+    // handled by PUT /partner/consultation. If absent, the route falls back
+    // to the persisted User.settings.partner.consultation value.
+    consultation?: 'on' | 'off';
   };
   // Normalize: single attachment or array of attachments
   const allAttachments: { data: string; mimeType: string; filename: string }[] =
@@ -649,8 +701,19 @@ router.post('/message', partnerLimiter, async (req: Request, res: Response) => {
   }).slice(0, 20);
   history.reverse();
 
-  // Get user's display name
-  const { displayName } = await getPartnerSettings(userId);
+  // Get user's display name and persisted consultation state.
+  // Phase 1 of the path-architecture refactor — `effectiveConsultation` is
+  // the toggle state the route layer should use for THIS turn's logic.
+  // Body wins when present (frontend just flipped the toggle and is sending
+  // through), persisted User.settings wins when absent. Phase 3 will read
+  // this constant to gate proactive milestone narration; in Phase 1 it is
+  // resolved but not yet consumed by downstream logic.
+  const { displayName, consultation: persistedConsultation } = await getPartnerSettings(userId);
+  const effectiveConsultation: 'on' | 'off' =
+    (bodyConsultation === 'on' || bodyConsultation === 'off')
+      ? bodyConsultation
+      : persistedConsultation;
+  void effectiveConsultation; // Phase 1: resolved, awaiting Phase 3 consumer.
 
   // Build work summary and context
   const [workSummary, surfacingHint, offeringCount, audienceCount, membership] = await Promise.all([

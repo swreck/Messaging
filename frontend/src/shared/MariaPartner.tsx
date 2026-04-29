@@ -304,7 +304,7 @@ export function MariaPartner() {
   // Load status on mount — only if logged in
   useEffect(() => {
     if (!user) return;
-    api.get<{ username: string; displayName?: string; introduced: boolean; introStep?: number; returnContext?: ReturnContext | null; proactiveOffer?: string | null; resumeDraft?: { sessionId: string; summary: string; phase: string } | null }>('/partner/status')
+    api.get<{ username: string; displayName?: string; introduced: boolean; introStep?: number; returnContext?: ReturnContext | null; proactiveOffer?: string | null; resumeDraft?: { sessionId: string; summary: string; phase: string } | null; consultation?: 'on' | 'off' }>('/partner/status')
       .then(status => {
         setIntroduced(status.introduced);
         setIntroStep(status.introStep ?? 0);
@@ -321,6 +321,23 @@ export function MariaPartner() {
         }
         if (status.resumeDraft) {
           setResumeDraft(status.resumeDraft);
+        }
+
+        // Path-architecture refactor — Phase 1. Reconcile the device-local
+        // toggle (localStorage) with the persisted source of truth on
+        // User.settings. Server wins. This handles the case where the user
+        // toggled on another device and is now opening this one — the
+        // localStorage value is stale; the server is current. We do NOT
+        // dispatch the LEAD_TOGGLE_EVENT here because no user action just
+        // happened; we just quietly bring localStorage into agreement.
+        if (status.consultation === 'on' || status.consultation === 'off') {
+          try {
+            const localValue = localStorage.getItem('maria-consultation');
+            const serverValue = status.consultation;
+            if (localValue !== serverValue) {
+              localStorage.setItem('maria-consultation', serverValue);
+            }
+          } catch {}
         }
 
         if (!status.introduced) {
@@ -854,6 +871,11 @@ export function MariaPartner() {
           } catch {}
           return {};
         })()),
+        // Path-architecture refactor — Phase 1. Send the device-local toggle
+        // state on every turn so the route layer can read it for that turn's
+        // logic (Phase 3 will gate proactive milestone narration on this).
+        // Body wins over persisted value; absent body falls back to persisted.
+        consultation: getToggleState(),
       });
       // Round B6 — backend tells us when the threshold marker fired this turn so
       // we can persist thresholdTriggered=true and avoid re-firing on later messages.
