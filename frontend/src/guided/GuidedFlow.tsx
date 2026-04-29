@@ -4,6 +4,8 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 import { useToast } from '../shared/ToastContext';
+import { getToggleState } from '../shared/leadershipDetection';
+import { PAGE_AFTER_NARRATION_DELAY_MS } from '../shared/milestoneCopy';
 import { useGuidedSessionContext } from './GuidedSessionContext';
 import { ProcessBar } from './ProcessBar';
 import { InputConfirmationCard } from './InputConfirmationCard';
@@ -663,6 +665,12 @@ export function GuidedFlow({ mode = 'full', onSwitchToAssistant }: GuidedFlowPro
       if (status.status === 'complete') {
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
+        // Phase 2 — page-after-narration delay (Redline #15). In Path B
+        // (toggle ON), hold the deliverable reveal by
+        // PAGE_AFTER_NARRATION_DELAY_MS so Maria's blended-ready milestone
+        // narration lands in chat first. Path A: no delay.
+        const proceedDelay = getToggleState() === 'on' ? PAGE_AFTER_NARRATION_DELAY_MS : 0;
+        await new Promise(r => setTimeout(r, proceedDelay));
         removeMessage(progressId);
 
         const blendedText = status.story?.blendedText || '';

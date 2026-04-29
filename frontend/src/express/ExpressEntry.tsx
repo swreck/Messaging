@@ -19,6 +19,8 @@ import { api } from '../api/client';
 import { InterpretationPreview } from './InterpretationPreview';
 import type { ExpressInterpretation } from './types';
 import { useToast } from '../shared/ToastContext';
+import { getToggleState } from '../shared/leadershipDetection';
+import { PAGE_AFTER_NARRATION_DELAY_MS } from '../shared/milestoneCopy';
 import { useAuth } from '../auth/AuthContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 
@@ -232,13 +234,22 @@ export function ExpressEntry() {
           (status.story
             ? INTERNAL_MEDIUM_FALLBACK[status.story.medium] || status.story.customName
             : 'first draft');
-        setPhase({
+        // Phase 2 — page-after-narration delay (Redline #15). When the
+        // toggle is ON (Path B), hold the visible page swap by
+        // PAGE_AFTER_NARRATION_DELAY_MS so Maria's blended-ready milestone
+        // narration lands in chat first. Path A: no delay.
+        const pageSwap = () => setPhase({
           name: 'complete',
           blendedText,
           mediumLabel,
           variants,
           activeVariant: 0,
         });
+        if (getToggleState() === 'on') {
+          setTimeout(pageSwap, PAGE_AFTER_NARRATION_DELAY_MS);
+        } else {
+          pageSwap();
+        }
       } else if (status.status === 'error') {
         stopPolling();
         setPhase({

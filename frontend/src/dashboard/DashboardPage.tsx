@@ -5,6 +5,8 @@ import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 import { LEAD_TOGGLE_EVENT } from '../shared/leadershipDetection';
+import { TOGGLE_CONFIRMATION_ON, TOGGLE_CONFIRMATION_OFF } from '../shared/milestoneCopy';
+import { MobileHomeAffordances } from '../shared/MobileHomeAffordances';
 import { useAuth } from '../auth/AuthContext';
 import type { Offering, Audience } from '../types';
 
@@ -217,6 +219,15 @@ export function DashboardPage() {
     // server), we accept the temporary divergence — the next /partner/status
     // load reconciles.
     api.put('/partner/consultation', { value: next ? 'on' : 'off' }).catch(() => {});
+    // Phase 2 — Redline #9. Persist the toggle confirmation chat row so
+    // it survives reload + cross-device. The MariaPartner LEAD_TOGGLE_EVENT
+    // listener handles the visible-thread append; this POST handles the
+    // persistent record. Both fire on every flip in or out of pipeline.
+    api.post('/partner/log-message', {
+      role: 'assistant',
+      content: next ? TOGGLE_CONFIRMATION_ON : TOGGLE_CONFIRMATION_OFF,
+      kind: 'toggle-confirmation',
+    }).catch(() => {/* non-critical */});
     try {
       document.dispatchEvent(new CustomEvent(LEAD_TOGGLE_EVENT, { detail: { value: next ? 'on' : 'off' } }));
     } catch {}
@@ -264,6 +275,13 @@ export function DashboardPage() {
           </button>
         </label>
       </div>
+
+      {/* Phase 2 — Redlines #10, #13, #14: iPhone-only home-screen affordances.
+          The component renders nothing above MOBILE_HOME_BREAKPOINT_PX, so the
+          desktop dashboard is untouched. On small layouts these two buttons sit
+          right below the toggle bar; the rest of the dashboard tiles still
+          render below for users who scroll. */}
+      <MobileHomeAffordances mostRecentDraftId={mostRecent?.draftId} />
 
       {/* Change 14 — Toggle OFF banner: visible signal that Maria is waiting. */}
       {!consultation && (

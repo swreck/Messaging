@@ -13,9 +13,21 @@ import {
   bumpOverrideCount,
   resetOverrideCount,
   getOverrideCount,
+  LEAD_TOGGLE_EVENT,
   type LeadDirection,
 } from './leadershipDetection';
 import { VoiceInputButton } from './VoiceInputButton';
+import {
+  bumpWhatsNextAndShouldOffer,
+  resetWhatsNextCount,
+} from './whatsNextDetector';
+import {
+  MODE_SWITCH_OFFER_PATH_A_TO_B,
+  MODE_SWITCH_OFFER_CHIP_YES,
+  MODE_SWITCH_OFFER_CHIP_NO,
+  TOGGLE_CONFIRMATION_ON,
+  TOGGLE_CONFIRMATION_OFF,
+} from './milestoneCopy';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -296,6 +308,12 @@ export function MariaPartner() {
     softened: boolean;
   } | null>(null);
 
+  // Phase 2 — mode-switch offer state. Non-null when the user has just typed
+  // the third consecutive "what's next?" in Path A and Maria has rendered the
+  // locked offer text + chips locally. The chips' handlers persist the user's
+  // accept/decline back to the partner conversation history asynchronously.
+  const [modeSwitchOfferActive, setModeSwitchOfferActive] = useState<boolean>(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -422,7 +440,10 @@ export function MariaPartner() {
           // useEffect below handles greeting + reply chips in Maria's
           // voice via the partner pipeline. Skip the legacy injection in
           // that case so Maria doesn't speak twice.
-          if (history.length === 0 && !isScoped && getToggleState() !== 'on') {
+          // Phase 2 — Redline #11: legacy greeting block removed. Chat-open
+          // useEffect below now fires unconditionally and is the sole opener.
+          // eslint-disable-next-line no-constant-condition
+          if (false) {
             const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
             const onEntityDetailPage =
               pageContext &&
@@ -514,7 +535,16 @@ export function MariaPartner() {
   // openers from different page-contexts.
   useEffect(() => {
     if (!open || !loaded || !introduced || !user) return;
-    if (getToggleState() !== 'on') return;
+    // Phase 2 — Redline #11: the chat-open opener now fires regardless of
+    // toggle state. Empty workspaces hit the locked OPENER_FRESH_USER path
+    // server-side; populated workspaces hit the existing state-aware
+    // opener. Both paths are unconditional once the panel is open.
+    //
+    // Exception: when a synthetic message is already queued (e.g. the
+    // dashboard toggle-ON flow queues [STATE_RECAP]), let that message
+    // serve as the opener for this open event. The chat-open trigger
+    // would double-greet otherwise.
+    if (pendingMessageRef.current) return;
     const pageKind = pageContext?.page || 'dashboard';
     const deliverableId = pageContext?.draftId || pageContext?.storyId || 'none';
     const gateKey = `maria-opened-${user.userId}-${pageKind}-${deliverableId}`;
@@ -597,6 +627,25 @@ export function MariaPartner() {
 
   // Stashed hint message (assistant-authored) to be appended when the user opens the panel
   const pendingHintRef = useRef<string | null>(null);
+
+  // Phase 2 — visible toggle-confirmation listener (Redline #9). Every time
+  // the "Let Maria lead" toggle flips (from the dashboard, from the
+  // mode-switch offer, from anywhere) the LEAD_TOGGLE_EVENT fires. Append
+  // the locked confirmation text to the visible thread for instant feel.
+  // Persistence is handled by the flip-trigger site (DashboardPage's
+  // toggleConsultation handler, or the mode-switch offer chip handler) —
+  // this listener is presentation only.
+  useEffect(() => {
+    function onLeadToggleChanged(e: Event) {
+      const detail = (e as CustomEvent).detail as { value?: 'on' | 'off' } | undefined;
+      const next = detail?.value;
+      if (next !== 'on' && next !== 'off') return;
+      const content = next === 'on' ? TOGGLE_CONFIRMATION_ON : TOGGLE_CONFIRMATION_OFF;
+      setMessages(prev => [...prev, { role: 'assistant', content }]);
+    }
+    document.addEventListener(LEAD_TOGGLE_EVENT, onLeadToggleChanged);
+    return () => document.removeEventListener(LEAD_TOGGLE_EVENT, onLeadToggleChanged);
+  }, []);
 
   // Round B Bug #1 — defense-in-depth for the SAVE_PEER_INFO marker.
   // When the frontend dispatches [PRE_CHAPTER_4:storyId:...], we record the
@@ -803,6 +852,39 @@ export function MariaPartner() {
     if (!overrideText) {
       setInput('');
       setMessages(prev => [...prev, { role: 'user', content: (text ? text : '') + (pendingFiles.length > 0 ? ` (${pendingFiles.length} files)` : '') }]);
+    }
+
+    // Phase 2 — Path A what's-next counter. Bump per user message. When the
+    // toggle is OFF and the third consecutive "what's next?"-style intent
+    // arrives, render the locked mode-switch offer locally for snappy feel
+    // and persist it asynchronously. The offer's accept/decline chips fire
+    // toggle promotion + persistence below in the render block.
+    if (getToggleState() === 'off' && !overrideText) {
+      const shouldOffer = bumpWhatsNextAndShouldOffer(user?.userId, text);
+      if (shouldOffer) {
+        // Render locally for instant feel — Redline #6. The offer text is a
+        // normal assistant bubble; the two chips (Yes / No) are rendered by
+        // the dedicated mode-switch-offer card below the thread, similar to
+        // the existing toggle-can't-lie promotion card.
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: MODE_SWITCH_OFFER_PATH_A_TO_B },
+        ]);
+        setModeSwitchOfferActive(true);
+        // Reset so the offer doesn't immediately re-fire if the user keeps asking.
+        resetWhatsNextCount(user?.userId);
+        // Persist asynchronously — survives reload + cross-device.
+        api.post('/partner/log-message', {
+          role: 'assistant',
+          content: MODE_SWITCH_OFFER_PATH_A_TO_B,
+          kind: 'mode-switch-offer',
+          ctx: pageContext,
+        }).catch(() => {/* non-critical */});
+        return;
+      }
+    } else if (getToggleState() === 'on' && !overrideText) {
+      // Toggle ON — counter is meaningless in Path B; keep it cleared.
+      resetWhatsNextCount(user?.userId);
     }
 
     // Round B Bug #1 — capture peer-prompt context for the SAVE_PEER_INFO fallback.
@@ -1945,6 +2027,72 @@ export function MariaPartner() {
                           }}
                         >
                           Just this time
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Phase 2 — mode-switch offer card (Path A only). Appears
+                      below the offer text when the user has hit the third
+                      consecutive what's-next intent. Yes flips the toggle to
+                      ON (Path B) and writes TOGGLE_CONFIRMATION_ON. No just
+                      dismisses. Both outcomes persist asynchronously so chat
+                      history stays complete across reloads / devices. */}
+                  {modeSwitchOfferActive && !sending && (
+                    <div className="partner-lead-promotion">
+                      <div className="partner-lead-promotion-actions">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => {
+                            // Persist the user's accept as a chip-text user message.
+                            api.post('/partner/log-message', {
+                              role: 'user',
+                              content: MODE_SWITCH_OFFER_CHIP_YES,
+                              kind: 'mode-switch-accept',
+                              ctx: pageContext,
+                            }).catch(() => {/* non-critical */});
+                            // Append the user's chip text locally for instant feel.
+                            setMessages(prev => [
+                              ...prev,
+                              { role: 'user', content: MODE_SWITCH_OFFER_CHIP_YES },
+                            ]);
+                            // Persist the toggle state on User.settings so it
+                            // follows the user across devices (Phase 1 promise).
+                            api.put('/partner/consultation', { value: 'on' }).catch(() => {/* non-critical */});
+                            // Persist the toggle confirmation chat row.
+                            api.post('/partner/log-message', {
+                              role: 'assistant',
+                              content: TOGGLE_CONFIRMATION_ON,
+                              kind: 'toggle-confirmation',
+                              ctx: pageContext,
+                            }).catch(() => {/* non-critical */});
+                            // Flip the toggle. setToggleState dispatches the
+                            // LEAD_TOGGLE_EVENT — the dashboard toggle UI moves
+                            // visibly AND the LEAD_TOGGLE_EVENT listener
+                            // appends TOGGLE_CONFIRMATION_ON to the thread.
+                            setToggleState('on');
+                            setModeSwitchOfferActive(false);
+                          }}
+                        >
+                          {MODE_SWITCH_OFFER_CHIP_YES}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => {
+                            api.post('/partner/log-message', {
+                              role: 'user',
+                              content: MODE_SWITCH_OFFER_CHIP_NO,
+                              kind: 'mode-switch-decline',
+                              ctx: pageContext,
+                            }).catch(() => {/* non-critical */});
+                            setMessages(prev => [
+                              ...prev,
+                              { role: 'user', content: MODE_SWITCH_OFFER_CHIP_NO },
+                            ]);
+                            setModeSwitchOfferActive(false);
+                          }}
+                        >
+                          {MODE_SWITCH_OFFER_CHIP_NO}
                         </button>
                       </div>
                     </div>

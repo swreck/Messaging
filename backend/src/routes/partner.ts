@@ -6,6 +6,8 @@ import { callAIWithJSON } from '../services/ai.js';
 import { buildPartnerPrompt } from '../prompts/partner.js';
 import { ACTION_ALIASES, dispatchActions, readPageContent, type ActionContext } from '../lib/actions.js';
 import { getPersonalize, updatePersonalize, buildPersonalizeChatBlock } from '../lib/personalize.js';
+import { getPartnerSettings } from '../lib/partnerSettings.js';
+import { OPENER_FRESH_USER } from '../prompts/milestoneCopy.js';
 import { partnerLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
@@ -27,30 +29,9 @@ function partnerChannel(workspaceId: string, ctx?: { storyId?: string; draftId?:
 }
 
 // ─── Helpers ─────────────────────────────────────────────
-
-async function getPartnerSettings(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { username: true, settings: true },
-  });
-  const settings = (user?.settings as Record<string, any>) || {};
-  // Path-architecture refactor — Phase 1. The "Let Maria lead" toggle is the
-  // switch between Path B (proactive milestone narration) and Path A (Maria
-  // stays quiet unless asked). Persisted on User.settings.partner.consultation
-  // so the toggle follows the user across devices and the route layer can
-  // gate proactive narration on it. Default 'on' matches the dashboard's
-  // initial state and the existing localStorage default.
-  const rawConsultation = settings.partner?.consultation;
-  const consultation: 'on' | 'off' = rawConsultation === 'off' ? 'off' : 'on';
-  return {
-    username: user?.username || '',
-    displayName: settings.partner?.displayName as string | undefined,
-    introduced: !!settings.partner?.introduced,
-    introStep: (settings.partner?.introStep as number) ?? 0,
-    lastVisitAt: settings.partner?.lastVisitAt as string | undefined,
-    consultation,
-  };
-}
+// Phase 2 — getPartnerSettings was extracted to backend/src/lib/partnerSettings.ts
+// so the background express pipeline can read the same persisted state. The
+// import is at the top of this file. Behavior is unchanged.
 
 async function buildWorkSummary(workspaceId: string): Promise<string> {
   const [offerings, audiences, drafts] = await Promise.all([
@@ -563,6 +544,59 @@ router.put('/consultation', async (req: Request, res: Response) => {
   res.json({ success: true, consultation: value });
 });
 
+// POST /api/partner/log-message — async persistence of locally-rendered chat.
+// Phase 2 — used by the frontend for messages it renders instantly for
+// snappy feel (mode-switch offer + chip outcome, toggle confirmations) and
+// then writes back so the chat history is complete across reloads/devices.
+// Constrained to a small allowlist of `kind` values; arbitrary content
+// goes through the regular /message path.
+router.post('/log-message', async (req: Request, res: Response) => {
+  const { role, content, kind, ctx: ctxBody } = req.body as {
+    role?: 'user' | 'assistant';
+    content?: string;
+    kind?: string;
+    ctx?: ActionContext;
+  };
+  if ((role !== 'user' && role !== 'assistant')
+      || typeof content !== 'string'
+      || content.trim().length === 0) {
+    res.status(400).json({ error: 'role and content are required' });
+    return;
+  }
+  const ALLOWED_KINDS = new Set([
+    'mode-switch-offer',
+    'mode-switch-accept',
+    'mode-switch-decline',
+    'toggle-confirmation',
+  ]);
+  if (!kind || !ALLOWED_KINDS.has(kind)) {
+    res.status(400).json({ error: 'unknown or missing kind' });
+    return;
+  }
+  const userId = req.user!.userId;
+  const wsId = req.workspaceId!;
+  const safeCtx: ActionContext = ctxBody || {};
+  const channelCtx: Record<string, any> = { channel: 'partner', workspaceId: wsId, kind };
+  if (safeCtx.storyId) channelCtx.storyId = safeCtx.storyId;
+  if (safeCtx.draftId) channelCtx.draftId = safeCtx.draftId;
+  if (safeCtx.audienceId) channelCtx.audienceId = safeCtx.audienceId;
+  if (safeCtx.offeringId) channelCtx.offeringId = safeCtx.offeringId;
+  try {
+    await prisma.assistantMessage.create({
+      data: {
+        userId,
+        role,
+        content: content.slice(0, 5000),
+        context: channelCtx,
+      },
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Partner] log-message failed:', err);
+    res.status(500).json({ error: 'persist failed' });
+  }
+});
+
 // GET /api/partner/history — load persistent conversation.
 // B-7 — accepts optional scope query params (scopeStoryId, scopeDraftId,
 // scopeAudienceId, scopeOfferingId). When provided, returns only messages
@@ -918,13 +952,17 @@ If the user declines, drop it cleanly. The proposal will time out in 90 seconds.
 
     const stateBlock =
       stateLabel === 'first-time'
-        ? `STATE: first-time user. They have never seen Maria before and have no deliverables yet. The user is a senior professional who needs to PERSUADE someone — that may be selling a product, making a case to a board, advocating for a policy change, recruiting a hire, asking a partner to commit, rallying a team, briefing an executive, or any other moment where one human is trying to move another. DO NOT assume commerce. DO NOT use the words "product," "service," "pitch," or "sell" in your opener — those words narrow the range and read as patronizing to anyone with a non-commercial persuasive moment in mind.
+        ? `STATE: first-time user, empty workspace. Phase 2 — your reply this turn is EXACTLY the locked fresh-user opener, character-for-character, no edits, no rewording, no warmup before, no extension after:
 
-Open with a one-sentence warm hello, then ASK a broad opening question along the lines of: "What are you trying to get someone to see, decide, or do? Tell me as much or as little as you want — I'll take it from there." (Use that exact spirit; you may rewrite it slightly in your voice.) Offer 3-4 reply chips that name persuasive moments in the user's voice. Use these as canonical chips, in this order:
+"${OPENER_FRESH_USER}"
+
+Then 3-4 chips on their own lines AT THE END, in the user's voice. Use these canonical chips:
   [CHIP: Make a case for something I'm advocating]
   [CHIP: Get a decision or sign-off from a stakeholder]
   [CHIP: Recruit, rally, or align a team or partner]
-  [CHIP: I have something I've drafted — read it first]`
+  [CHIP: I have something I've drafted — read it first]
+
+Do not paraphrase the opener. Do not add any other content. The text quoted above is Cowork-authored and locked.`
         : stateLabel === 'in-deliverable'
         ? `STATE: user is INSIDE a specific deliverable right now (${ctx.draftId ? 'a Three Tier' : 'a Five Chapter Story'}${ctx.storyId ? ` — story id ${ctx.storyId}` : ctx.draftId ? ` — draft id ${ctx.draftId}` : ''}). Open by naming the SINGLE BIGGEST CURRENT GAP on this deliverable in plain language, then ASK whether they want to start there. Offer exactly 2 chips: "Yes, start there" and "Show me something else here".`
         : stateLabel === 'returning-active'
@@ -1270,6 +1308,23 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
   // page-context openers from stacking up in the panel as the user
   // navigates between pages within the same session.
   if (isChatOpen) {
+    // Phase 2 — server-side guarantee for the fresh-user opener. If the
+    // workspace is empty (first-time path), force the visible text to the
+    // locked OPENER_FRESH_USER regardless of what Opus emitted. Chips from
+    // Opus are kept (Universal Chip Rule); on the rare empty-chip case we
+    // fall back to the canonical four chips from milestoneCopy.
+    const isFirstTime = offeringCount === 0 && audienceCount === 0;
+    if (isFirstTime) {
+      const fallbackChips = [
+        'Make a case for something I\'m advocating',
+        'Get a decision or sign-off from a stakeholder',
+        'Recruit, rally, or align a team or partner',
+        'I have something I\'ve drafted — read it first',
+      ];
+      const fallbackChipMarkers = fallbackChips.map(c => `[CHIP: ${c}]`).join('\n');
+      result.response = `${OPENER_FRESH_USER}\n${fallbackChipMarkers}`;
+    }
+
     const chipPattern = /\[CHIP:\s*([^\]\n]+?)\s*\]/g;
     const chips: string[] = [];
     let match: RegExpExecArray | null;

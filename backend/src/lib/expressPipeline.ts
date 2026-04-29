@@ -11,15 +11,28 @@
 // 2.5 continues working identically.
 
 import { prisma } from './prisma.js';
+import { getConsultationLive } from './partnerSettings.js';
 import { callAI, callAIWithJSON } from '../services/ai.js';
 import { MAPPING_SYSTEM } from '../prompts/mapping.js';
 import { CONVERT_LINES_SYSTEM } from '../prompts/generation.js';
 import {
   buildChapterPrompt,
   BLEND_SYSTEM,
+  JOIN_CHAPTERS_SYSTEM,
   CHAPTER_CRITERIA,
   CHAPTER_NAMES,
 } from '../prompts/fiveChapter.js';
+import {
+  MILESTONE_FOUNDATION_CONFIRMED,
+  MILESTONE_CHAPTERS_SEPARATED_READY,
+  MILESTONE_CHAPTERS_COMBINED_READY,
+  MILESTONE_BLENDED_READY,
+  SOFT_NOTE_CHAPTER_3_MISSING,
+  SOFT_NOTE_CHAPTER_4_MISSING,
+  SOFT_NOTE_CHAPTER_5_MISSING,
+  buildCompositeMissingNote,
+  PAUSE_ON_FOUNDATIONAL_SHIFT,
+} from '../prompts/milestoneCopy.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import {
   checkStatements,
@@ -64,6 +77,233 @@ const MEDIUM_ID_MAP: Record<string, string> = {
 
 function pickInternalMedium(extractedMedium: string): string {
   return MEDIUM_ID_MAP[extractedMedium] || 'email';
+}
+
+// ─── Phase 2 helpers — milestone narration, soft notes, shift pause ──
+//
+// These helpers are used by both the autonomous pipeline (runPipeline) and
+// the guided pipeline (runDraftPipeline) so the user-facing chat behavior
+// is identical regardless of which path produced the deliverable. All
+// user-facing strings come from prompts/milestoneCopy.ts — the wording is
+// Cowork-authored and never composed in this file.
+
+interface PartnerCtx {
+  storyId?: string;
+  draftId?: string;
+  audienceId?: string;
+  offeringId?: string;
+}
+
+function buildPartnerContext(workspaceId: string, ctx: PartnerCtx, kind?: string): Record<string, string> {
+  const out: Record<string, string> = { channel: 'partner', workspaceId };
+  if (ctx.storyId) out.storyId = ctx.storyId;
+  if (ctx.draftId) out.draftId = ctx.draftId;
+  if (ctx.audienceId) out.audienceId = ctx.audienceId;
+  if (ctx.offeringId) out.offeringId = ctx.offeringId;
+  if (kind) out.kind = kind;
+  return out;
+}
+
+// Write an assistant message into the persistent partner conversation.
+// Used for milestone narrations, soft notes, the foundational-shift pause
+// message, and toggle confirmations written by the pipeline. Fail-open so
+// pipeline progress is never blocked by a chat-write hiccup.
+async function writeMariaMessage(opts: {
+  userId: string;
+  workspaceId: string;
+  ctx: PartnerCtx;
+  content: string;
+  kind?: string;
+}): Promise<void> {
+  try {
+    await prisma.assistantMessage.create({
+      data: {
+        userId: opts.userId,
+        role: 'assistant',
+        content: opts.content,
+        context: buildPartnerContext(opts.workspaceId, opts.ctx, opts.kind),
+      },
+    });
+  } catch (err) {
+    console.error('[ExpressPipeline] writeMariaMessage failed (fail-open):', err);
+  }
+}
+
+// Path-architecture refactor — Phase 2, Redline #3. Live read of the
+// "Let Maria lead" toggle BEFORE each milestone narration. Flipping the
+// toggle mid-pipeline takes effect on the next milestone — the toggle is
+// a live promise, not a snapshot at job start.
+async function narrateMilestoneIfPathB(opts: {
+  userId: string;
+  workspaceId: string;
+  ctx: PartnerCtx;
+  milestone:
+    | typeof MILESTONE_FOUNDATION_CONFIRMED
+    | typeof MILESTONE_CHAPTERS_SEPARATED_READY
+    | typeof MILESTONE_CHAPTERS_COMBINED_READY
+    | typeof MILESTONE_BLENDED_READY;
+}): Promise<void> {
+  try {
+    const consultation = await getConsultationLive(opts.userId);
+    if (consultation !== 'on') return;
+  } catch (err) {
+    console.error('[ExpressPipeline] consultation read failed (fail-closed, no narration):', err);
+    return;
+  }
+  await writeMariaMessage({
+    userId: opts.userId,
+    workspaceId: opts.workspaceId,
+    ctx: opts.ctx,
+    content: opts.milestone,
+    kind: 'milestone-narration',
+  });
+}
+
+// Soft-note routing (Redline #7). After MILESTONE_BLENDED_READY fires,
+// detect missing chapters and emit either the single matching soft note
+// or, when 2-3 are missing, the composite. Soft notes go to chat ONLY —
+// they are never appended to blendedText, so the deliverable stays clean.
+// Fires regardless of toggle state: the user needs to know what's missing
+// whether Maria is leading or quiet.
+async function emitMissingChapterNotes(opts: {
+  userId: string;
+  workspaceId: string;
+  ctx: PartnerCtx;
+  missing: Array<3 | 4 | 5>;
+}): Promise<void> {
+  if (opts.missing.length === 0) return;
+  if (opts.missing.length === 1) {
+    const n = opts.missing[0];
+    const text =
+      n === 3 ? SOFT_NOTE_CHAPTER_3_MISSING :
+      n === 4 ? SOFT_NOTE_CHAPTER_4_MISSING :
+      SOFT_NOTE_CHAPTER_5_MISSING;
+    await writeMariaMessage({
+      userId: opts.userId,
+      workspaceId: opts.workspaceId,
+      ctx: opts.ctx,
+      content: text,
+      kind: 'soft-note',
+    });
+    return;
+  }
+  await writeMariaMessage({
+    userId: opts.userId,
+    workspaceId: opts.workspaceId,
+    ctx: opts.ctx,
+    content: buildCompositeMissingNote(opts.missing),
+    kind: 'soft-note',
+  });
+}
+
+// Foundational-shift pause (Redline #4). Polls User.settings.pendingFoundationalShift
+// for a fresh entry that landed during this pipeline run. If detected:
+// (a) writes PAUSE_ON_FOUNDATIONAL_SHIFT to chat once per pipeline,
+// (b) waits for the pending shift to clear (user resolved via existing
+//     APPLY_FOUNDATIONAL_SHIFT chat marker — that handler clears the flag
+//     and applies the tier update),
+// (c) returns 'regenerate-chapters' if the resolution actually changed the
+//     Tier 1 text since the pipeline started (caller restarts chapter loop),
+//     'continue' if the user declined or the tier didn't change,
+//     'timeout' if no resolution arrived inside the wait window.
+//
+// Cosmetic edits (no pending shift) return 'continue' immediately; the
+// pipeline proceeds normally.
+type ShiftPauseResult = 'continue' | 'regenerate-chapters' | 'timeout';
+
+async function checkFoundationalShiftPause(opts: {
+  jobId: string;
+  userId: string;
+  workspaceId: string;
+  ctx: PartnerCtx;
+  draftId: string;
+  pipelineStartMs: number;
+  pauseFlag: { value: boolean };
+  initialTier1Text: string;
+  updateStage: (stage: string) => Promise<void>;
+}): Promise<ShiftPauseResult> {
+  // Fast read — most boundaries have no pending shift.
+  const userRow = await prisma.user.findUnique({
+    where: { id: opts.userId },
+    select: { settings: true },
+  });
+  const settings = (userRow?.settings as Record<string, any>) || {};
+  const pending = settings.pendingFoundationalShift as
+    | { draftId?: string; setAt?: string }
+    | undefined;
+  if (!pending || !pending.setAt || !pending.draftId) return 'continue';
+  if (pending.draftId !== opts.draftId) return 'continue';
+  const setAtMs = new Date(pending.setAt).getTime();
+  if (isNaN(setAtMs) || setAtMs < opts.pipelineStartMs) return 'continue';
+
+  // Pending shift detected on THIS draft, fresh since pipeline start.
+  // Send the locked pause copy to chat exactly once, regardless of toggle —
+  // the user has just edited; they need to know we're holding off.
+  if (!opts.pauseFlag.value) {
+    opts.pauseFlag.value = true;
+    await writeMariaMessage({
+      userId: opts.userId,
+      workspaceId: opts.workspaceId,
+      ctx: opts.ctx,
+      content: PAUSE_ON_FOUNDATIONAL_SHIFT,
+      kind: 'pause-narration',
+    });
+    await opts.updateStage('Holding for the foundation update');
+  }
+
+  // Poll for resolution — every 3s, max 5 minutes. Resolution = pending flag
+  // cleared by the route handler (either APPLY_FOUNDATIONAL_SHIFT applied,
+  // or 90s freshness window expired and the route swept it).
+  const POLL_INTERVAL_MS = 3000;
+  const MAX_WAIT_MS = 5 * 60 * 1000;
+  const waitStart = Date.now();
+  while (Date.now() - waitStart < MAX_WAIT_MS) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+    const fresh = await prisma.user.findUnique({
+      where: { id: opts.userId },
+      select: { settings: true },
+    });
+    const freshSettings = (fresh?.settings as Record<string, any>) || {};
+    const stillPending = freshSettings.pendingFoundationalShift as
+      | { draftId?: string; setAt?: string }
+      | undefined;
+    if (!stillPending || stillPending.draftId !== opts.draftId) {
+      // Resolved. Determine whether the tier text actually changed.
+      const tier1Now = await prisma.tier1Statement.findFirst({
+        where: { draftId: opts.draftId },
+        select: { text: true },
+      });
+      if (tier1Now && tier1Now.text !== opts.initialTier1Text) {
+        return 'regenerate-chapters';
+      }
+      return 'continue';
+    }
+  }
+  return 'timeout';
+}
+
+// Missing-chapter detection. Returns the list of chapters with no source
+// content backing them. Mirrors the per-chapter guardrail logic already in
+// the pipeline so the user-facing soft notes line up with the silent
+// guardrails underneath.
+function detectMissingChaptersFromTier(opts: {
+  hasSupportColumn: boolean;
+  hasSocialProofColumn: boolean;
+  namedCustomerCount: number;
+  otherNamedSpecificCount: number;
+  hasMeaningfulCta: boolean;
+}): Array<3 | 4 | 5> {
+  const missing: Array<3 | 4 | 5> = [];
+  if (!opts.hasSupportColumn) missing.push(3);
+  if (
+    !opts.hasSocialProofColumn &&
+    opts.namedCustomerCount === 0 &&
+    opts.otherNamedSpecificCount === 0
+  ) {
+    missing.push(4);
+  }
+  if (!opts.hasMeaningfulCta) missing.push(5);
+  return missing;
 }
 
 // ─── Commit: interpretation → DB rows ─────────────────
@@ -408,6 +648,16 @@ export async function runPipeline(jobId: string): Promise<void> {
     const variantCount = variantDraftIds.length;
     const storyIds: string[] = [];
 
+    // Phase 2 — userId + workspaceId for milestone narration writes. Both
+    // are guaranteed by the ExpressJob row.
+    const pipelineUserId = job.userId;
+    const pipelineWorkspaceId = job.workspaceId;
+    const pipelineStartMs = Date.now();
+    // One-shot pause-narration flag per pipeline run. The PAUSE_ON_FOUNDATIONAL_SHIFT
+    // message fires at most once even if the user makes multiple foundation-changing
+    // edits during the run.
+    const shiftPauseFlag = { value: false };
+
     for (let variantIndex = 0; variantIndex < variantCount; variantIndex++) {
       const currentDraftId = variantDraftIds[variantIndex];
 
@@ -672,6 +922,29 @@ AUDIENCE: ${draftWithElements.audience.name}`;
 
     await update({ progress: scaledProgress(45) });
 
+    // Phase 2 — Milestone 1: Foundation confirmed. Path B narration only;
+    // Path A stays silent. Live consultation read inside the helper.
+    await narrateMilestoneIfPathB({
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      milestone: MILESTONE_FOUNDATION_CONFIRMED,
+    });
+
+    // Capture initial Tier 1 text BEFORE chapter generation so the
+    // shift-pause helper can detect whether a mid-pipeline edit actually
+    // changed the foundation.
+    const initialTier1Text = (
+      await prisma.tier1Statement.findFirst({
+        where: { draftId: draftWithElements.id },
+        select: { text: true },
+      })
+    )?.text || '';
+
     // ─── Stage 3: Five Chapter Story ─────────────────
     const mediumKey = pickInternalMedium(interpretation.primaryMedium.value);
     const mediumSpec = getMediumSpec(mediumKey);
@@ -718,7 +991,9 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       },
     });
 
-    const draftForStory = await prisma.threeTierDraft.findFirst({
+    // Phase 2 — `let` (was `const`) so the foundational-shift pause path
+    // can re-fetch this row after a foundation regeneration.
+    let draftForStory = await prisma.threeTierDraft.findFirst({
       where: { id: draftWithElements.id },
       include: {
         tier1Statement: true,
@@ -737,6 +1012,7 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       await fail('Draft vanished before chapter generation.');
       return;
     }
+    let initialTier1TextForShift = initialTier1Text || draftForStory.tier1Statement?.text || '';
 
     // Detect which content is actually available in the Three Tier so we can
     // write chapter-specific anti-fabrication guardrails below. Each chapter
@@ -930,6 +1206,12 @@ Return ONLY the one sentence.`;
       console.error('[Ch1 thesis] Generation failed, proceeding without:', err);
     }
 
+    // Phase 2 — chapter generation may run twice if the user makes a
+    // foundation-changing edit during the run. The do-while wrapper lets
+    // the foundational-shift pause helper restart chapter generation once
+    // with a refreshed Three Tier. One regeneration cycle max.
+    let chapterRegenerated = false;
+    do {
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
         status: `chapter_${chapterNum}`,
@@ -1290,6 +1572,128 @@ ${draftForStory.tier2Statements
       }
     }
 
+    // Phase 2 — Foundational-shift pause check after chapter loop. If the
+    // user edited the foundation mid-pipeline, this returns
+    // 'regenerate-chapters' so we delete chapters and re-run the loop ONCE.
+    {
+      const pauseResult = await checkFoundationalShiftPause({
+        jobId,
+        userId: pipelineUserId,
+        workspaceId: pipelineWorkspaceId,
+        ctx: {
+          storyId: story.id,
+          draftId: draftWithElements.id,
+          offeringId: draftWithElements.offering.id,
+          audienceId: draftWithElements.audience.id,
+        },
+        draftId: draftWithElements.id,
+        pipelineStartMs,
+        pauseFlag: shiftPauseFlag,
+        initialTier1Text: initialTier1TextForShift,
+        updateStage: async (s: string) => { await update({ stage: s }); },
+      });
+      if (pauseResult === 'timeout') {
+        await fail('Foundation update timed out. Start a new build when you are ready.');
+        return;
+      }
+      if (pauseResult === 'regenerate-chapters' && !chapterRegenerated) {
+        chapterRegenerated = true;
+        await prisma.chapterContent.deleteMany({ where: { storyId: story.id } });
+        const refreshed = await prisma.threeTierDraft.findFirst({
+          where: { id: draftWithElements.id },
+          include: {
+            tier1Statement: true,
+            tier2Statements: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                tier3Bullets: { orderBy: { sortOrder: 'asc' } },
+                priority: true,
+              },
+            },
+            offering: { include: { elements: true } },
+            audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+          },
+        });
+        if (!refreshed) {
+          await fail('Draft vanished during foundation regeneration.');
+          return;
+        }
+        draftForStory = refreshed;
+        initialTier1TextForShift = draftForStory.tier1Statement?.text || '';
+        continue;  // re-enter chapter loop with refreshed foundation
+      }
+      break;  // no shift, exit do-while
+    }
+    } while (true);
+
+    // Phase 2 — Milestone 2: Chapters separated. Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      milestone: MILESTONE_CHAPTERS_SEPARATED_READY,
+    });
+
+    // ─── Stage 3.5: Join (NEW in Phase 2) ────────────
+    // Combine the five separately-generated chapters into one read with
+    // minimal transitions. Persists `joinedText` and stage='joined' on
+    // the FCS row, then narrates Milestone 3 before the blend pass runs.
+    await update({
+      status: 'joining',
+      stage: `Joining the chapters${variantStageSuffix}`,
+      progress: scaledProgress(88),
+    });
+
+    const storyWithChaptersForJoin = await prisma.fiveChapterStory.findFirst({
+      where: { id: story.id },
+      include: { chapters: { orderBy: { chapterNum: 'asc' } } },
+    });
+    if (!storyWithChaptersForJoin || storyWithChaptersForJoin.chapters.length < 5) {
+      await fail('Not all chapters generated cleanly.');
+      return;
+    }
+    const joinSourceText = storyWithChaptersForJoin.chapters
+      .map(ch => ch.content)
+      .join('\n\n');
+    const joinMessage = `CONTENT FORMAT: ${mediumSpec.label}\n\n${joinSourceText}`;
+    let joinedText = '';
+    try {
+      joinedText = await callAI(JOIN_CHAPTERS_SYSTEM, joinMessage, 'elite');
+      try {
+        const joinCheck = await checkProse(joinedText, `Joined ${mediumSpec.label}`);
+        if (!joinCheck.passed && joinCheck.violations.length > 0) {
+          const feedback = buildProseViolationFeedback(joinCheck.violations);
+          joinedText = await callAI(JOIN_CHAPTERS_SYSTEM, joinMessage + feedback, 'elite');
+        }
+      } catch (err) {
+        console.error(`[ExpressPipeline] ${jobId} join voice check error (fail-open):`, err);
+      }
+      await prisma.fiveChapterStory.update({
+        where: { id: story.id },
+        data: { joinedText, stage: 'joined' },
+      });
+    } catch (err) {
+      console.error(`[ExpressPipeline] ${jobId} join failed (fail-open, blend still runs):`, err);
+    }
+
+    // Phase 2 — Milestone 3: Chapters combined. Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      milestone: MILESTONE_CHAPTERS_COMBINED_READY,
+    });
+
     // ─── Stage 4: Blend into final draft ─────────────
     await update({
       status: 'blending',
@@ -1601,6 +2005,50 @@ Convert each into an [INSERT: ...] marker.`;
         version: { increment: 1 },
       },
     });
+
+    // Phase 2 — Milestone 4: Blended ready. Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      milestone: MILESTONE_BLENDED_READY,
+    });
+
+    // Phase 2 — Soft notes for missing chapters. Sent as separate chat
+    // messages AFTER the blended-ready narration; never appended to the
+    // deliverable body. The deliverable surface stays clean.
+    // Detection mirrors the silent guardrail logic above: Ch3 missing if
+    // no support column, Ch4 missing if no named specifics anywhere, Ch5
+    // missing if the user supplied no situation (CTA defaults to a
+    // generic phrase but the situation drives whether Ch5 has real content).
+    {
+      const ctaProvided =
+        typeof interpretation.situation === 'string' &&
+        interpretation.situation.trim().length > 0;
+      const missing = detectMissingChaptersFromTier({
+        hasSupportColumn,
+        hasSocialProofColumn,
+        namedCustomerCount: namedCustomers.size,
+        otherNamedSpecificCount: otherNamedSpecifics.length,
+        hasMeaningfulCta: ctaProvided,
+      });
+      await emitMissingChapterNotes({
+        userId: pipelineUserId,
+        workspaceId: pipelineWorkspaceId,
+        ctx: {
+          storyId: story.id,
+          draftId: draftWithElements.id,
+          offeringId: draftWithElements.offering.id,
+          audienceId: draftWithElements.audience.id,
+        },
+        missing,
+      });
+    }
 
     storyIds.push(story.id);
     } // ─── end variant loop ─────────────────────────────
@@ -1939,6 +2387,16 @@ AUDIENCE: ${audience.name}`;
       tier3: t3Rows,
     });
   }
+
+  // Phase 2 — Milestone 1 narration. Path B only (live toggle read).
+  // Fires once when the foundation row is fully written and we're about to
+  // hand back to the caller for the user's review.
+  await narrateMilestoneIfPathB({
+    userId,
+    workspaceId,
+    ctx: { draftId: draft.id, offeringId: offering.id, audienceId: audience.id },
+    milestone: MILESTONE_FOUNDATION_CONFIRMED,
+  });
 
   return {
     draftId: draft.id,
@@ -2311,6 +2769,21 @@ async function runDraftPipeline(
   }
 
   try {
+    // Phase 2 — read userId / workspaceId / draftId from the job row so the
+    // helpers can write milestone narrations + soft notes into the partner
+    // conversation. Capture start ms + initial Tier 1 text so the
+    // foundational-shift pause helper can detect mid-pipeline edits.
+    const jobRow = await prisma.expressJob.findUnique({
+      where: { id: jobId },
+      select: { userId: true, workspaceId: true, draftId: true },
+    });
+    const guidedUserId = jobRow?.userId || '';
+    const guidedWorkspaceId = jobRow?.workspaceId || '';
+    const guidedDraftId = jobRow?.draftId || draftForStory?.id || '';
+    const guidedPipelineStartMs = Date.now();
+    const guidedShiftPauseFlag = { value: false };
+    let guidedInitialTier1Text = draftForStory?.tier1Statement?.text || '';
+
     // Detect support/social proof content for guardrails
     const tier2Labels = draftForStory.tier2Statements
       .map((t: any) => (t.categoryLabel || '').toLowerCase())
@@ -2382,6 +2855,11 @@ Return ONLY the one sentence.`;
       console.error('[GuidedDraft] Ch1 thesis failed:', err);
     }
 
+    // Phase 2 — chapter regeneration loop. Identical pattern to runPipeline:
+    // up to one regeneration cycle if the user makes a foundation-changing
+    // edit during the run.
+    let guidedChapterRegenerated = false;
+    do {
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
         status: `chapter_${chapterNum}`,
@@ -2558,6 +3036,116 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
       });
     }
 
+    // Phase 2 — Foundational-shift pause check (guided pipeline). Same
+    // pattern as runPipeline: if the user edited the foundation mid-run,
+    // wait for resolution and regenerate chapters once.
+    {
+      const pauseResult = await checkFoundationalShiftPause({
+        jobId,
+        userId: guidedUserId,
+        workspaceId: guidedWorkspaceId,
+        ctx: {
+          storyId,
+          draftId: guidedDraftId,
+          offeringId: draftForStory.offering?.id,
+          audienceId: draftForStory.audience?.id,
+        },
+        draftId: guidedDraftId,
+        pipelineStartMs: guidedPipelineStartMs,
+        pauseFlag: guidedShiftPauseFlag,
+        initialTier1Text: guidedInitialTier1Text,
+        updateStage: async (s: string) => { await update({ stage: s }); },
+      });
+      if (pauseResult === 'timeout') {
+        throw new Error('Foundation update timed out. Start a new build when you are ready.');
+      }
+      if (pauseResult === 'regenerate-chapters' && !guidedChapterRegenerated) {
+        guidedChapterRegenerated = true;
+        await prisma.chapterContent.deleteMany({ where: { storyId } });
+        const refreshed = await prisma.threeTierDraft.findFirst({
+          where: { id: guidedDraftId },
+          include: {
+            tier1Statement: true,
+            tier2Statements: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                tier3Bullets: { orderBy: { sortOrder: 'asc' } },
+                priority: true,
+              },
+            },
+            offering: { include: { elements: true } },
+            audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+          },
+        });
+        if (!refreshed) {
+          throw new Error('Draft vanished during foundation regeneration.');
+        }
+        draftForStory = refreshed;
+        guidedInitialTier1Text = draftForStory.tier1Statement?.text || '';
+        continue;
+      }
+      break;
+    }
+    } while (true);
+
+    // Phase 2 — Milestone 2: Chapters separated. Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: guidedUserId,
+      workspaceId: guidedWorkspaceId,
+      ctx: {
+        storyId,
+        draftId: guidedDraftId,
+        offeringId: draftForStory.offering?.id,
+        audienceId: draftForStory.audience?.id,
+      },
+      milestone: MILESTONE_CHAPTERS_SEPARATED_READY,
+    });
+
+    // ── Join (NEW in Phase 2) ──────────────────────
+    await update({ status: 'joining', stage: 'Joining the chapters', progress: 84 });
+    const guidedStoryWithChaptersForJoin = await prisma.fiveChapterStory.findFirst({
+      where: { id: storyId },
+      include: { chapters: { orderBy: { chapterNum: 'asc' } } },
+    });
+    if (!guidedStoryWithChaptersForJoin || guidedStoryWithChaptersForJoin.chapters.length < 5) {
+      throw new Error('Not all chapters generated.');
+    }
+    const guidedJoinSourceText = guidedStoryWithChaptersForJoin.chapters
+      .map(ch => ch.content)
+      .join('\n\n');
+    const guidedJoinMessage = `CONTENT FORMAT: ${mediumSpec.label}\n\n${guidedJoinSourceText}`;
+    try {
+      let guidedJoinedText = await callAI(JOIN_CHAPTERS_SYSTEM, guidedJoinMessage, 'elite');
+      try {
+        const joinCheck = await checkProse(guidedJoinedText, `Joined ${mediumSpec.label}`);
+        if (!joinCheck.passed && joinCheck.violations.length > 0) {
+          const feedback = buildProseViolationFeedback(joinCheck.violations);
+          guidedJoinedText = await callAI(JOIN_CHAPTERS_SYSTEM, guidedJoinMessage + feedback, 'elite');
+        }
+      } catch (err) {
+        console.error(`[GuidedDraft] join voice check error (fail-open):`, err);
+      }
+      await prisma.fiveChapterStory.update({
+        where: { id: storyId },
+        data: { joinedText: guidedJoinedText, stage: 'joined' },
+      });
+    } catch (err) {
+      console.error(`[GuidedDraft] join failed (fail-open, blend still runs):`, err);
+    }
+
+    // Phase 2 — Milestone 3: Chapters combined. Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: guidedUserId,
+      workspaceId: guidedWorkspaceId,
+      ctx: {
+        storyId,
+        draftId: guidedDraftId,
+        offeringId: draftForStory.offering?.id,
+        audienceId: draftForStory.audience?.id,
+      },
+      milestone: MILESTONE_CHAPTERS_COMBINED_READY,
+    });
+
     // ── Blend ──────────────────────────────────────
     await update({ status: 'blending', stage: 'Polishing the draft', progress: 88 });
 
@@ -2608,6 +3196,44 @@ CRITICAL — NO FABRICATION. Only use claims from the source chapters above.`;
       where: { id: storyId },
       data: { blendedText, stage: 'blended', version: { increment: 1 } },
     });
+
+    // Phase 2 — Milestone 4: Blended ready (guided). Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: guidedUserId,
+      workspaceId: guidedWorkspaceId,
+      ctx: {
+        storyId,
+        draftId: guidedDraftId,
+        offeringId: draftForStory.offering?.id,
+        audienceId: draftForStory.audience?.id,
+      },
+      milestone: MILESTONE_BLENDED_READY,
+    });
+
+    // Phase 2 — Soft notes for missing chapters (guided). Sent as separate
+    // chat messages after the blended-ready narration; never appended to
+    // blendedText.
+    {
+      const ctaProvided = typeof cta === 'string' && cta.trim().length > 0;
+      const missing = detectMissingChaptersFromTier({
+        hasSupportColumn,
+        hasSocialProofColumn,
+        namedCustomerCount: namedCustomers.size,
+        otherNamedSpecificCount: otherNamedSpecificsGuided.length,
+        hasMeaningfulCta: ctaProvided,
+      });
+      await emitMissingChapterNotes({
+        userId: guidedUserId,
+        workspaceId: guidedWorkspaceId,
+        ctx: {
+          storyId,
+          draftId: guidedDraftId,
+          offeringId: draftForStory.offering?.id,
+          audienceId: draftForStory.audience?.id,
+        },
+        missing,
+      });
+    }
 
     await update({ status: 'complete', stage: 'First draft ready', progress: 100 });
     console.log(`[GuidedDraft] ${jobId} complete, story ${storyId}`);
