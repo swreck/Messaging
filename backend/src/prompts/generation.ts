@@ -322,6 +322,18 @@ For EACH Tier 3 bullet:
 □ Does it contain a number, name, or verifiable fact?
 □ Does it prove the Tier 2 claim (not state the current problem)?
 □ Is it a fact, not a value claim?
+□ TRACES TO USER INPUT? Did the user supply this exact number, name, or verifiable fact in the conversation, the situation block, or attached documents? If you cannot point to the user's words behind this proof bullet, IT IS FABRICATION. Do not write it. Emit [INSERT: <one-sentence description in the user's voice of what proof is needed for this Tier 2>] instead. Examples: [INSERT: a benchmark number comparing your I/O speed to mainline NVMe — what you measured], [INSERT: the latency or throughput improvement you've actually observed in testing], [INSERT: a certification, audit, or compliance result you can cite]. The marker is the proof bullet — not invented filler.
+
+ANTI-INVENTION FOR TIER 3 (THIS IS THE SOURCE OF TRUTH FOR DOWNSTREAM CHAPTERS):
+Every Tier 3 bullet feeds into Five Chapter Story chapters as approved proof. If a Tier 3 bullet is invented, every chapter that consumes it propagates the fabrication. You are the gate. Three rules:
+
+1. NUMBERS MUST TRACE. If the user did not give you a specific number — latency, throughput, percentage, IOPS, dollar amount, time saved — DO NOT WRITE ONE. Emit [INSERT: ...].
+
+2. NAMES MUST TRACE. Customer names, partner names, certifications, regulatory approvals, peer institutions — only if the user named them. Otherwise [INSERT: ...].
+
+3. CAPABILITIES MUST TRACE. If the user said "drop-in on standard interfaces," you can write "Standard NVMe-oF and SAS interfaces" if the user named those interfaces. If the user only said "drop-in," do not invent the interface names. The Tier 3 bullet is then [INSERT: which standard interfaces does it drop into?].
+
+A Tier 2 column with one or two real proof bullets and one [INSERT: ...] marker is BETTER than a column with three bullets where one is fabricated. The methodology's claim is that messages without specific verifiable proof do not persuade — and a fabricated proof bullet is worse than a missing one because it destroys trust when discovered.
 
 For column labels:
 □ Are they exactly "Focus", "Product", "ROI", "Support", "Social proof" (plus optional overflow)?

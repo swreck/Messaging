@@ -43,6 +43,8 @@ import {
   groupByType,
   type SocialProofItem,
 } from '../services/socialProofExtract.js';
+import { classifyClaims } from '../services/provenanceClassify.js';
+import { checkFiveChapter, type FiveChapterInput } from '../services/fiveChapterCheck.js';
 import type { ExpressInterpretation } from './expressExtraction.js';
 
 // ─── Medium translation ────────────────────────────────
@@ -1458,6 +1460,138 @@ ${draftForStory.tier2Statements
       .replace(chapterNameLineRegex, '')    // stray chapter-title lines
       .replace(/\n{3,}/g, '\n\n')           // collapse excessive blank lines
       .trim();
+
+    // ─── Post-blend credibility pass — wired Cowork April 2026 ─────
+    // Runs provenanceClassify (Round D) and fiveChapterCheck (locked
+    // structural evaluator) against the final blended text. On flag,
+    // replaces the flagged sentence with an [INSERT: ...] marker (option
+    // (b) per Cowork's Steps 4 + 5b). Failures fall through silently —
+    // the user gets the un-marker-substituted draft and any chapter-level
+    // [INSERT: ...] markers Maria already emitted are still preserved.
+    const postBlendTierText = `Tier 1: "${draftForStory.tier1Statement?.text || ''}"
+${draftForStory.tier2Statements
+  .map(
+    (t2, i) => `Tier 2 #${i + 1} [${t2.categoryLabel || 'unlabeled'}]: "${t2.text}"
+  Proof: ${t2.tier3Bullets.map(b => b.text).join(', ') || '(no proof)'}`,
+  )
+  .join('\n')}`;
+    try {
+      const sourceMaterials = {
+        userInput: interpretation.situation || '',
+        threeTier: postBlendTierText,
+        userDocs: [],
+        peerInfo: '',
+      };
+      const claims = await classifyClaims({
+        chapterContent: blendedText,
+        sourceMaterials,
+      });
+      const inferenceClaims = claims.filter(c => c.origin === 'INFERENCE');
+      if (inferenceClaims.length > 0) {
+        console.log(
+          `[ExpressPipeline] ${jobId} provenanceClassify flagged ${inferenceClaims.length} INFERENCE-origin claim(s) post-blend; substituting with [INSERT: ...] markers`,
+        );
+        // Batched single-call rewrite — Opus converts each flagged sentence
+        // into a one-line [INSERT: ...] marker in the user's voice.
+        const rewriteSystem = `You are converting flagged sentences into placeholder markers. Each flagged sentence makes a concrete claim that does not trace to user input — a fabricated number, name, spec, or commercial term. Your job: for each flagged sentence, output a single [INSERT: <description>] marker that tells the user, in their own voice, exactly what specific input they need to supply to replace this sentence. The description should be one short clause, smart-friend voice, no jargon, no system-warning tone.
+
+OUTPUT shape (JSON, no markdown):
+{
+  "substitutions": [
+    { "sentence": "the flagged sentence verbatim", "marker": "[INSERT: ...]" }
+  ]
+}
+
+One entry per flagged sentence, in input order. The marker must start with [INSERT: and end with ].`;
+        const rewriteUser = `FLAGGED SENTENCES (each one was inferred without supporting input):
+${inferenceClaims.map((c, i) => `${i + 1}. "${c.sentence}"`).join('\n')}
+
+Convert each into an [INSERT: ...] marker.`;
+        try {
+          const rewriteResult = await callAIWithJSON<{
+            substitutions: { sentence: string; marker: string }[];
+          }>(rewriteSystem, rewriteUser, 'elite');
+          const subs = Array.isArray(rewriteResult.substitutions) ? rewriteResult.substitutions : [];
+          let substituted = 0;
+          for (const sub of subs) {
+            if (!sub?.sentence || !sub?.marker) continue;
+            // Conservative substitution: only replace if the exact sentence
+            // text is still present in blendedText (handles the case where
+            // the regex sanitizer above has already trimmed it).
+            if (blendedText.includes(sub.sentence)) {
+              blendedText = blendedText.replace(sub.sentence, sub.marker.trim());
+              substituted++;
+            }
+          }
+          console.log(
+            `[ExpressPipeline] ${jobId} substituted ${substituted}/${inferenceClaims.length} flagged sentences with markers`,
+          );
+        } catch (rewriteErr) {
+          console.error(
+            `[ExpressPipeline] ${jobId} marker-rewrite failed (fall-through, no substitution):`,
+            rewriteErr,
+          );
+        }
+      } else {
+        console.log(`[ExpressPipeline] ${jobId} provenanceClassify clean (no INFERENCE claims)`);
+      }
+    } catch (err) {
+      console.error(`[ExpressPipeline] ${jobId} provenanceClassify error (fall-open):`, err);
+    }
+
+    // Five Chapter structural check — boundary violations, missing-chapter
+    // detection, persuasion-arc compliance. Logged for telemetry; does not
+    // block. Full evaluator tuning is a separate cycle if its outputs are
+    // wrong-shape against the build pipeline's chapter set.
+    try {
+      const fcInput: FiveChapterInput = {
+        offeringName: draftForStory.offering?.name || '',
+        audienceName: draftForStory.audience?.name || '',
+        medium: mediumSpec.label,
+        cta: '',
+        tier1Text: draftForStory.tier1Statement?.text || '',
+        chapters: storyWithChapters.chapters.map((ch) => ({
+          num: ch.chapterNum,
+          title: CHAPTER_NAMES[ch.chapterNum - 1] || `Chapter ${ch.chapterNum}`,
+          content: ch.content || '',
+        })),
+      };
+      const fcResult = await checkFiveChapter(fcInput);
+      if (!fcResult.passed) {
+        const violations = fcResult.chapters
+          .filter(c => !c.pass)
+          .flatMap(c => c.violations.map(v => `Ch${c.num}: ${v}`))
+          .concat(fcResult.crossChecks.filter(x => !x.pass).map(x => `${x.id}: ${x.detail}`));
+        console.log(
+          `[ExpressPipeline] ${jobId} fiveChapterCheck flagged ${violations.length} structural issue(s): ${violations.slice(0, 5).join(' | ')}`,
+        );
+      } else {
+        console.log(`[ExpressPipeline] ${jobId} fiveChapterCheck clean`);
+      }
+    } catch (err) {
+      console.error(`[ExpressPipeline] ${jobId} fiveChapterCheck error (fall-open):`, err);
+    }
+
+    // Banner assembly — deterministic. Extract every [INSERT: ...] marker
+    // present in the final blendedText (whether emitted by chapters during
+    // generation, preserved through blend, or substituted in by the
+    // post-blend rewrite above) and prepend a single banner in Maria's
+    // smart-friend voice listing each gap. If no markers exist, no banner.
+    const markerPattern = /\[INSERT:\s*([^\]\n]+?)\s*\]/g;
+    const markerDescriptions: string[] = [];
+    let mm: RegExpExecArray | null;
+    while ((mm = markerPattern.exec(blendedText)) !== null) {
+      const desc = mm[1].trim();
+      if (desc) markerDescriptions.push(desc);
+    }
+    if (markerDescriptions.length > 0) {
+      const bullets = markerDescriptions.map(d => `• ${d}`).join('\n');
+      const banner = `Before you send this, fill these for me — I won't fake them:\n${bullets}\n\n`;
+      blendedText = banner + blendedText;
+      console.log(
+        `[ExpressPipeline] ${jobId} prepended banner naming ${markerDescriptions.length} [INSERT] gap(s)`,
+      );
+    }
 
     await prisma.fiveChapterStory.update({
       where: { id: story.id },

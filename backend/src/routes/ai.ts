@@ -1448,7 +1448,7 @@ router.post('/polish-story', polishStoryLimiter, requireEditor, async (req: Requ
     if (!check.passed && check.violations.length > 0) {
       const feedback = buildProseViolationFeedback(check.violations);
       let improved = await callAI(
-        `You are a careful editor. Rewrite this text to fix the specific voice violations listed below. Keep the same content, structure, and approximate length. Only change what needs fixing.${feedback}`,
+        `You are a careful editor. Rewrite this text to fix the specific voice violations listed below. Keep the same content, structure, and approximate length. Only change what needs fixing. PRESERVE [INSERT: …] markers verbatim — they are deliberate placeholders the user must fill before sending; do not remove, rephrase, or smooth around them.${feedback}`,
         `TEXT TO POLISH:\n${story.blendedText}\n\nReturn ONLY the polished text.`,
         'elite'
       );
@@ -1457,7 +1457,7 @@ router.post('/polish-story', polishStoryLimiter, requireEditor, async (req: Requ
       if (!recheck.passed && recheck.violations.length > 0) {
         const recheckFeedback = buildProseViolationFeedback(recheck.violations);
         improved = await callAI(
-          `You are a careful editor. Your previous rewrite introduced new voice violations. Fix them while keeping the content intact.${recheckFeedback}`,
+          `You are a careful editor. Your previous rewrite introduced new voice violations. Fix them while keeping the content intact. PRESERVE [INSERT: …] markers verbatim.${recheckFeedback}`,
           `TEXT TO FIX:\n${improved}\n\nReturn ONLY the fixed text.`,
           'elite'
         );

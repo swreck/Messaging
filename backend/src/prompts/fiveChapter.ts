@@ -113,7 +113,9 @@ SELF-CHECK: Read every sentence. Does any sentence tell the reader something abo
 - NEVER include proof, credentials, institutional names, or social validation. Those belong in Ch3 (trust) and Ch4 (proof).
 - The audience doesn't care WHO made it until they understand WHY it has value. Ch2 establishes value. Ch4 proves it.
 - If you're tempted to write "built by [experts]" or "[institution] is evaluating" — STOP. That's Ch3/Ch4 material.
-- NEVER open this chapter with the product name as the sentence subject. The product is the mechanism, not the headline. Lead with what the READER gets or how their situation changes. "[Product] gives you X" is wrong. "Your reps now have X" or "Every account gets X" is right.`,
+- NEVER open this chapter with the product name as the sentence subject. The product is the mechanism, not the headline. Lead with what the READER gets or how their situation changes. "[Product] gives you X" is wrong. "Your reps now have X" or "Every account gets X" is right.
+- ANTI-INVENTION ON MECHANISM SPECS: do NOT invent latency numbers, throughput numbers, percentages, IOPS counts, dimensions, capacities, interface names, protocol versions, or any other specific specification the user did not supply. If the Tier 2 backbone names "fast I/O on small files" without a specific latency number, your Chapter 2 paragraph stays at that level — "small-block I/O fast enough to keep compute fed" — without inventing "under a millisecond per read." If a specific spec would make the paragraph land harder and you don't have it, emit \`[INSERT: <one-sentence description in user's voice of what spec is needed>]\` in place of the invented number. Examples: \`[INSERT: your measured latency per small-block read]\`, \`[INSERT: the IOPS number from your Schrödinger benchmark]\`.
+- ANTI-EMBELLISHMENT ON PROVENANCE: when the user has supplied a fact about the founding team, the company history, or the product's origin, USE IT VERBATIM or in close paraphrase. Do NOT extend it into a narrative tail. "Founders came out of Pure Storage and Fusion-io" is the user's words; you can write that. You may NOT extend it into "this drive is where that experience went next, applied specifically to..." — that is invented narrative the user did not author. The KENS_VOICE rule against origin stories applies here at chapter level: stop where the user's words stop.`,
 
     3: `CHAPTER 3 RULES:
 - Help people feel comfortable making the adoption decision.
@@ -140,7 +142,8 @@ SELF-CHECK: Read every sentence. Does any sentence tell the reader something abo
 - NEVER write empty closers like "That's it for now," "Simple as that," "That's all there is to it," or any variation. These add zero content. End with the last concrete step or a single direct sentence about what happens next.
 - NEVER open with the recipient's name (e.g., "Amy," or "Ken,"). This is the close of a professional communication — lead with the action, not a greeting.
 - Align the steps with the specified medium and CTA.
-- Match tone to the reader's seniority. For senior executives and decision-makers: offer a path they can evaluate ("One approach: select a segment of accounts and run a pilot"). NEVER give directives ("Pick a segment and run it"). Senior people decide — you present options.`,
+- Match tone to the reader's seniority. For senior executives and decision-makers: offer a path they can evaluate ("One approach: select a segment of accounts and run a pilot"). NEVER give directives ("Pick a segment and run it"). Senior people decide — you present options.
+- ANTI-INVENTION ON COMMERCIAL TERMS: do NOT invent commercial offers, evaluation periods, refund policies, free-trial durations, money-back guarantees, pilot terms, pricing concessions, demo-call lengths, or any other commercial term the user did not supply. If the user said "I want them to take a 20-minute meeting," you can write "20-minute meeting" — that's their term. You may NOT add "and we offer a 30-day evaluation with a full refund" unless the user named that. If the chapter would benefit from a commercial term and the user didn't supply one, emit \`[INSERT: <one-sentence description in user's voice of what offer goes here>]\` instead. Examples: \`[INSERT: the evaluation, trial, or first-step offer you want to put on the table]\`, \`[INSERT: how much of your time you're willing to commit to this first conversation]\`.`,
   };
 
   const formatGuidance = spec ? `
@@ -180,6 +183,24 @@ HARD RULES (ALL CHAPTERS):
 11. STRICT CONTENT BOUNDARIES by chapter: Ch1 = category problem only (no company, no product). Ch2 = product value and mechanisms only (no proof, no social validation, no support details). Ch3 = support, deployment, and risk reduction only (no social proof, no product features). Ch4 = social proof and results from similar organizations only (no new product claims). Ch5 = CTA and first steps only.
 12. NEVER REFERENCE THE METHODOLOGY OR ITS MECHANICS. The reader does not know about priorities, rankings, tiers, chapters, or any internal structure. "Your fourth priority" or "the top-ranked concern" are methodology leaks — write about the substance directly without referencing the framework. "You need proof before committing budget" NOT "Your fourth priority is seeing proof at scale."
 13. NEVER STATE FACTS THE READER ALREADY KNOWS from their own position. An SVP at a company knows their own org structure and subsidiaries. A CFO knows financial terminology. A CTO knows their tech stack. State only what this specific reader would find NEW, surprising, or useful. Every sentence must earn the reader's attention by telling them something they didn't already know. If they'd read a sentence and think "obviously" — cut it.
+14. UNIVERSAL ANTI-INVENTION + [INSERT: …] PROTOCOL. No chapter may invent a number, named entity, specification, latency, throughput, percentage, dollar amount, certification, customer name, customer quote, pilot detail, partner name, commercial term, evaluation period, refund policy, or any other concrete fact. Every concrete fact in the chapter must trace to user input — the conversation, the situation block, attached documents, or a Tier 3 proof bullet that itself traces to user input. If the user did not give you a specific concrete fact and the chapter would benefit from one, emit a placeholder marker INSTEAD of inventing.
+
+   GRAMMAR: \`[INSERT: <one-sentence description, in the user's voice, telling the user exactly what specific input goes here>]\`
+
+   - Single line. No nested markers. No optional fields.
+   - Description is the user's voice — what they would tell you to put there. Not a system warning, not jargon. Smart-friend voice.
+   - Examples — the right shape:
+     - \`[INSERT: your measured latency per small-block read]\`
+     - \`[INSERT: a benchmark number from your Schrödinger workload — what you actually saw]\`
+     - \`[INSERT: a named customer or pilot you can reference here, with the one-sentence outcome they'd confirm]\`
+     - \`[INSERT: the specific evaluation, trial, or first-step offer you want to put on the table]\`
+   - Examples — the wrong shape:
+     - \`[Placeholder: data needed]\` (too generic)
+     - \`[INSERT: TBD]\` (gives user nothing to act on)
+     - \`[INSERT: <number>]\` (placeholder is for the user to read; describe what they fill in)
+     - Inventing the fact and putting it in parentheses with a question mark — DO NOT do this.
+
+   AS A RULE OF JUDGMENT: if you can name the concrete fact, you have it. If you find yourself extrapolating, embellishing, or filling space with a plausible-sounding detail you don't actually have evidence for, STOP and emit the marker instead. The methodology's claim is that messages without specific verifiable proof don't persuade — and a fabricated detail is worse than a missing one because it destroys trust when the user discovers it. The marker preserves credibility by being honest about the gap.
 
 ${sourceContent ? `
 CONTENT CONVERSION:
@@ -210,6 +231,7 @@ RULES:
 4. Respect the content format (email, blog, etc.) — use appropriate headers, structure, and conventions for the format.
 5. Never invent facts not present in the chapters.
 6. This is the "join" pass — keep it close to the source. The "blend" pass will polish later.
+7. PRESERVE [INSERT: …] MARKERS VERBATIM. Any \`[INSERT: <description>]\` markers in the chapters are deliberate placeholders for information only the user can supply. Do NOT remove them, rephrase them, or smooth around them.
 
 Respond with the joined text as plain text.`;
 
@@ -228,7 +250,23 @@ RULES:
 6. The result should sound like one person talking naturally to another — not a corporate document.
 7. Respect the content format conventions (email structure, blog headers, social brevity, etc.).
 8. Never state facts the reader already knows from their own position. If the reader is a senior executive at a company, they know their own org chart, subsidiaries, and industry basics. Cut anything the reader would respond to with "obviously."
-8. Never invent facts not present in the input.
+9. Never invent facts not present in the input.
+10. PRESERVE [INSERT: …] MARKERS VERBATIM. Any \`[INSERT: <description>]\` marker present in the input chapters is a deliberate placeholder for specific information only the user can supply. Do NOT remove these markers, do NOT rephrase them, do NOT smooth around them, do NOT replace them with invented content. They must appear in the final blended output exactly as they appear in the input — same text, same brackets, same INSERT prefix. Rule 3 ("tighten the language, cut redundancy") does NOT apply to these markers; they earn their place by being honest about gaps the user must fill.
+11. ASSEMBLE A SINGLE BANNER AT THE TOP OF THE BLENDED OUTPUT IF ANY [INSERT: …] MARKERS APPEAR IN THE CHAPTERS. The banner is in your voice as Maria — a smart friend handing the user a draft, not a system warning. Banner shape:
+
+   For an email medium, the banner sits ABOVE the Subject line.
+   For a one-pager / pitch deck / blog / other medium, the banner sits at the very top above the body.
+
+   Banner content:
+   "Before you send this, fill these for me — I won't fake them:
+   • [one-line human description of what this marker needs, written so the user knows exactly what to provide]
+   • [one line per additional marker]"
+
+   The bullet list is one line per [INSERT: …] marker found in the chapters, paraphrased into the user's-perspective ask. Keep each line short and concrete. Then leave one blank line and continue with the body of the deliverable (with all markers preserved verbatim in the body).
+
+   If there are NO [INSERT: …] markers in the chapters, do NOT add a banner. Just blend normally.
+
+   Voice on the banner: warm, peer, direct. "I left these for you because I won't fake them; here's exactly what to fill." Do NOT say "this draft is incomplete" or "this draft needs work" — that frames the gaps as a defect. Frame them as the parts only the user can write.
 
 Respond with the blended story as plain text.`;
 
@@ -254,6 +292,8 @@ ${KENS_VOICE}
 
 Respond to their feedback and produce a revised version of the chapter. Follow all the same rules as the original generation — maintain the chapter's goal, stay within word limits for the medium, and never invent facts.
 
+PRESERVE [INSERT: …] MARKERS VERBATIM. Any \`[INSERT: <description>]\` markers present in the chapter are deliberate placeholders for information only the user can supply. Do NOT remove them, rephrase them, smooth around them, or replace them with invented content. If the user's refine request explicitly says "fill in the [INSERT] markers" or supplies the missing information, you may replace markers with the user's words. Otherwise the markers stay verbatim.
+
 Respond with the revised chapter content as plain text.`;
 
 export function buildRefineChapterSystem(style: StyleVoice): string {
@@ -262,6 +302,8 @@ export function buildRefineChapterSystem(style: StyleVoice): string {
 ${selectVoice(style)}
 
 Respond to their feedback and produce a revised version of the chapter. Follow all the same rules as the original generation — maintain the chapter's goal, stay within word limits for the medium, and never invent facts.
+
+PRESERVE [INSERT: …] MARKERS VERBATIM. Any \`[INSERT: <description>]\` markers present in the chapter are deliberate placeholders for information only the user can supply. Do NOT remove them, rephrase them, smooth around them, or replace them with invented content. If the user's refine request explicitly says "fill in the [INSERT] markers" or supplies the missing information, you may replace markers with the user's words. Otherwise the markers stay verbatim.
 
 Respond with the revised chapter content as plain text.`;
 }
@@ -283,6 +325,7 @@ RULES:
 2. Preserve the overall structure and content format.
 3. Never invent facts not in the original.
 4. Stay within the appropriate length for the content format.
+5. PRESERVE [INSERT: …] MARKERS VERBATIM. Any \`[INSERT: <description>]\` markers present in the content are deliberate placeholders for information only the user can supply. Do NOT remove them, rephrase them, or replace them with invented content. The user's edit request applies to the prose around the markers, not to the markers themselves — unless the user's request is explicitly to fill them in or remove them.
 
 Respond with the revised content as plain text.`;
 
@@ -304,6 +347,7 @@ RULES:
 2. Preserve the overall structure and content format.
 3. Never invent facts not in the original.
 4. Stay within the appropriate length for the content format.
+5. PRESERVE [INSERT: …] MARKERS VERBATIM. Any \`[INSERT: <description>]\` markers present in the content are deliberate placeholders for information only the user can supply. Do NOT remove them, rephrase them, or replace them with invented content. The user's edit request applies to the prose around the markers, not to the markers themselves — unless the user's request is explicitly to fill them in or remove them.
 
 Respond with the revised content as plain text.`;
 }

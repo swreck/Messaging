@@ -91,8 +91,14 @@ function isValidStoryId(id: string | undefined | null): boolean {
 // colon-prefixed payload of arbitrary characters up to the closing bracket.
 // The payload may include spaces, equals, commas, dashes, etc. (see
 // [INSTRUCTION: rewrite this in plain voice]).
-const SYNTHETIC_MARKER_RE = /^\s*\[[A-Z_]+(?:\s*:[^\]]*)?\]\s*$/;
-const SYNTHETIC_MARKER_GLOBAL_RE = /\[[A-Z][A-Z_]*(?:\s*:[^\]]*)?\]/g;
+//
+// EXCEPTION: [INSERT: …] markers are USER-FACING placeholders Maria emits
+// when a piece of input is missing from a deliverable. They must survive
+// every render and strip pass — Cowork April 2026 credibility-regression
+// fix. Both the whole-message filter and the global stripper exclude
+// INSERT-prefixed markers via lookahead.
+const SYNTHETIC_MARKER_RE = /^\s*\[(?!INSERT:)[A-Z_]+(?:\s*:[^\]]*)?\]\s*$/;
+const SYNTHETIC_MARKER_GLOBAL_RE = /\[(?!INSERT:)[A-Z][A-Z_]*(?:\s*:[^\]]*)?\]/g;
 function isSyntheticMarker(content: string): boolean {
   return SYNTHETIC_MARKER_RE.test(content);
 }
@@ -101,7 +107,9 @@ function stripSyntheticMarkers(content: string): string {
   // Replace each inline marker with an empty string, then collapse the
   // resulting double-spaces / leading-trailing whitespace so the remaining
   // text reads cleanly. We do NOT touch markdown-style links like [text](url)
-  // because the regex requires ALL-CAPS inside the brackets.
+  // because the regex requires ALL-CAPS inside the brackets. We do NOT
+  // touch [INSERT: …] markers — those are user-facing placeholders that
+  // must render as-is so the user can see what to fill before sending.
   return content
     .replace(SYNTHETIC_MARKER_GLOBAL_RE, '')
     .replace(/[ \t]{2,}/g, ' ')
