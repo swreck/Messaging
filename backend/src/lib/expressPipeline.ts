@@ -27,10 +27,7 @@ import {
   MILESTONE_CHAPTERS_SEPARATED_READY,
   MILESTONE_CHAPTERS_COMBINED_READY,
   MILESTONE_BLENDED_READY,
-  SOFT_NOTE_CHAPTER_3_MISSING,
-  SOFT_NOTE_CHAPTER_4_MISSING,
-  SOFT_NOTE_CHAPTER_5_MISSING,
-  buildCompositeMissingNote,
+  buildSoftNote,
   PAUSE_ON_FOUNDATIONAL_SHIFT,
   buildFoundationalShiftTimeout,
   TIMEOUT_AREA_TIER1,
@@ -163,41 +160,74 @@ async function narrateMilestoneIfPathB(opts: {
   });
 }
 
-// Soft-note routing (Redline #7). After MILESTONE_BLENDED_READY fires,
-// detect missing chapters and emit either the single matching soft note
-// or, when 2-3 are missing, the composite. Soft notes go to chat ONLY —
-// they are never appended to blendedText, so the deliverable stays clean.
-// Fires regardless of toggle state: the user needs to know what's missing
+// Round 2 fix — extract [INSERT: <description>] markers from chapter
+// content, return the descriptions (user-facing missing-piece labels) plus
+// the chapter content with marker-bearing sentences stripped. The chapter
+// generators emit markers as a classifier signal; the descriptions feed
+// the soft-note system, and the stripped prose is what goes into join +
+// blend. Net effect: blendedText has zero brackets, and missing-fact
+// metadata reaches the chat as soft notes.
+function extractAndStripMarkers(content: string): {
+  cleanContent: string;
+  missingPieces: string[];
+} {
+  const missingPieces: string[] = [];
+  const markerRe = /\[INSERT:\s*([^\]\n]+?)\s*\]/g;
+  let mm: RegExpExecArray | null;
+  while ((mm = markerRe.exec(content)) !== null) {
+    const desc = mm[1].trim();
+    if (desc) missingPieces.push(desc);
+  }
+  if (missingPieces.length === 0) {
+    return { cleanContent: content, missingPieces };
+  }
+  // Remove every sentence containing a marker, then collapse the residual
+  // whitespace. Sentence boundary = `.`, `!`, or `?` followed by space or
+  // line break, plus paragraph boundaries. The conservative approach is to
+  // walk paragraphs and rebuild without marker-bearing sentences.
+  const paragraphs = content.split(/\n{2,}/);
+  const cleanedParagraphs = paragraphs
+    .map(par => {
+      // Split paragraph into sentences. Keep terminator with sentence so we
+      // can reassemble cleanly.
+      const sentenceRe = /[^.!?]+[.!?]+["')\]]?\s*|\S[^.!?\n]*$/g;
+      const sentences = par.match(sentenceRe) || [par];
+      const kept = sentences.filter(s => !/\[INSERT:/.test(s));
+      return kept.join('').trim();
+    })
+    .filter(par => par.length > 0);
+  const cleanContent = cleanedParagraphs.join('\n\n').trim();
+  return { cleanContent, missingPieces };
+}
+
+// Soft-note routing — Round 2 (unified template). After
+// MILESTONE_BLENDED_READY fires, emit one buildSoftNote per chapter that
+// has any gap. Empty case (whole chapter missing per tier-level rules):
+// pass missingPieces=[] so the template uses EMPTY_CASE_FILL. Partial case
+// (chapter exists but content gaps): pass extracted marker descriptions.
+// Soft notes go to chat ONLY — never appended to blendedText. Fires
+// regardless of toggle state: the user needs to know what's missing
 // whether Maria is leading or quiet.
-async function emitMissingChapterNotes(opts: {
+async function emitChapterSoftNotes(opts: {
   userId: string;
   workspaceId: string;
   ctx: PartnerCtx;
-  missing: Array<3 | 4 | 5>;
+  wholeChapterEmpty: Set<3 | 4 | 5>;
+  chapterMissingPieces: Record<3 | 4 | 5, string[]>;
 }): Promise<void> {
-  if (opts.missing.length === 0) return;
-  if (opts.missing.length === 1) {
-    const n = opts.missing[0];
-    const text =
-      n === 3 ? SOFT_NOTE_CHAPTER_3_MISSING :
-      n === 4 ? SOFT_NOTE_CHAPTER_4_MISSING :
-      SOFT_NOTE_CHAPTER_5_MISSING;
+  for (const chapter of [3, 4, 5] as const) {
+    const isEmpty = opts.wholeChapterEmpty.has(chapter);
+    const pieces = opts.chapterMissingPieces[chapter] || [];
+    if (!isEmpty && pieces.length === 0) continue;
+    const note = buildSoftNote(chapter, isEmpty ? [] : pieces);
     await writeMariaMessage({
       userId: opts.userId,
       workspaceId: opts.workspaceId,
       ctx: opts.ctx,
-      content: text,
+      content: note,
       kind: 'soft-note',
     });
-    return;
   }
-  await writeMariaMessage({
-    userId: opts.userId,
-    workspaceId: opts.workspaceId,
-    ctx: opts.ctx,
-    content: buildCompositeMissingNote(opts.missing),
-    kind: 'soft-note',
-  });
 }
 
 // Foundational-shift pause (Redline #4). Polls User.settings.pendingFoundationalShift
@@ -1242,7 +1272,13 @@ Return ONLY the one sentence.`;
     // adjustments before settling on a foundation.
     const MAX_REGEN_CYCLES = 3;
     let chapterRegenCount = 0;
+    // Round 2 fix — per-chapter missing-piece descriptors extracted from
+    // the chapter generators' [INSERT: <description>] markers. Survives the
+    // chapter loop; resets at the top of each regen cycle. Feeds the
+    // unified soft-note system after blend completes.
+    let chapterMissingPieces: Record<3 | 4 | 5, string[]> = { 3: [], 4: [], 5: [] };
     do {
+    chapterMissingPieces = { 3: [], 4: [], 5: [] };
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
         status: `chapter_${chapterNum}`,
@@ -1571,6 +1607,21 @@ ${draftForStory.tier2Statements
           .filter(line => line.trim())
           .join('\n')
           .trim();
+      }
+
+      // Round 2 fix — extract [INSERT: ...] marker descriptions and strip
+      // marker-bearing sentences from the chapter prose. The descriptions
+      // are the user-facing missing-piece labels; the stripped prose is
+      // what flows into join + blend so blendedText has zero brackets.
+      // Only chapters 3-5 carry methodology-required gaps that should
+      // surface as soft notes; markers in 1-2 still get stripped from
+      // the prose but don't drive a chat note.
+      {
+        const { cleanContent, missingPieces } = extractAndStripMarkers(content);
+        content = cleanContent;
+        if (chapterNum === 3 || chapterNum === 4 || chapterNum === 5) {
+          chapterMissingPieces[chapterNum] = missingPieces;
+        }
       }
 
       await prisma.chapterContent.upsert({
@@ -1908,13 +1959,13 @@ ${draftForStory.tier2Statements
       .replace(/\n{3,}/g, '\n\n')           // collapse excessive blank lines
       .trim();
 
-    // ─── Post-blend credibility pass — wired Cowork April 2026 ─────
-    // Runs provenanceClassify (Round D) and fiveChapterCheck (locked
-    // structural evaluator) against the final blended text. On flag,
-    // replaces the flagged sentence with an [INSERT: ...] marker (option
-    // (b) per Cowork's Steps 4 + 5b). Failures fall through silently —
-    // the user gets the un-marker-substituted draft and any chapter-level
-    // [INSERT: ...] markers Maria already emitted are still preserved.
+    // ─── Post-blend credibility telemetry ─────────────
+    // Runs provenanceClassify (Round D) and fiveChapterCheck against the
+    // final blended text. Round 2 fix — the marker-substitution rewriter
+    // is removed: per Cowork's redesign, fact gaps surface as per-chapter
+    // soft notes in chat, not as [INSERT: ...] markers in the prose.
+    // INFERENCE flags here are logged for telemetry only; chapter-level
+    // marker extraction is the path that drives user-visible gap notices.
     const postBlendTierText = `Tier 1: "${draftForStory.tier1Statement?.text || ''}"
 ${draftForStory.tier2Statements
   .map(
@@ -1936,49 +1987,8 @@ ${draftForStory.tier2Statements
       const inferenceClaims = claims.filter(c => c.origin === 'INFERENCE');
       if (inferenceClaims.length > 0) {
         console.log(
-          `[ExpressPipeline] ${jobId} provenanceClassify flagged ${inferenceClaims.length} INFERENCE-origin claim(s) post-blend; substituting with [INSERT: ...] markers`,
+          `[ExpressPipeline] ${jobId} provenanceClassify flagged ${inferenceClaims.length} INFERENCE-origin claim(s) post-blend (telemetry only — no rewrite)`,
         );
-        // Batched single-call rewrite — Opus converts each flagged sentence
-        // into a one-line [INSERT: ...] marker in the user's voice.
-        const rewriteSystem = `You are converting flagged sentences into placeholder markers. Each flagged sentence makes a concrete claim that does not trace to user input — a fabricated number, name, spec, or commercial term. Your job: for each flagged sentence, output a single [INSERT: <description>] marker that tells the user, in their own voice, exactly what specific input they need to supply to replace this sentence. The description should be one short clause, smart-friend voice, no jargon, no system-warning tone.
-
-OUTPUT shape (JSON, no markdown):
-{
-  "substitutions": [
-    { "sentence": "the flagged sentence verbatim", "marker": "[INSERT: ...]" }
-  ]
-}
-
-One entry per flagged sentence, in input order. The marker must start with [INSERT: and end with ].`;
-        const rewriteUser = `FLAGGED SENTENCES (each one was inferred without supporting input):
-${inferenceClaims.map((c, i) => `${i + 1}. "${c.sentence}"`).join('\n')}
-
-Convert each into an [INSERT: ...] marker.`;
-        try {
-          const rewriteResult = await callAIWithJSON<{
-            substitutions: { sentence: string; marker: string }[];
-          }>(rewriteSystem, rewriteUser, 'elite');
-          const subs = Array.isArray(rewriteResult.substitutions) ? rewriteResult.substitutions : [];
-          let substituted = 0;
-          for (const sub of subs) {
-            if (!sub?.sentence || !sub?.marker) continue;
-            // Conservative substitution: only replace if the exact sentence
-            // text is still present in blendedText (handles the case where
-            // the regex sanitizer above has already trimmed it).
-            if (blendedText.includes(sub.sentence)) {
-              blendedText = blendedText.replace(sub.sentence, sub.marker.trim());
-              substituted++;
-            }
-          }
-          console.log(
-            `[ExpressPipeline] ${jobId} substituted ${substituted}/${inferenceClaims.length} flagged sentences with markers`,
-          );
-        } catch (rewriteErr) {
-          console.error(
-            `[ExpressPipeline] ${jobId} marker-rewrite failed (fall-through, no substitution):`,
-            rewriteErr,
-          );
-        }
       } else {
         console.log(`[ExpressPipeline] ${jobId} provenanceClassify clean (no INFERENCE claims)`);
       }
@@ -2019,25 +2029,24 @@ Convert each into an [INSERT: ...] marker.`;
       console.error(`[ExpressPipeline] ${jobId} fiveChapterCheck error (fall-open):`, err);
     }
 
-    // Banner assembly — deterministic. Extract every [INSERT: ...] marker
-    // present in the final blendedText (whether emitted by chapters during
-    // generation, preserved through blend, or substituted in by the
-    // post-blend rewrite above) and prepend a single banner in Maria's
-    // smart-friend voice listing each gap. If no markers exist, no banner.
-    const markerPattern = /\[INSERT:\s*([^\]\n]+?)\s*\]/g;
-    const markerDescriptions: string[] = [];
-    let mm: RegExpExecArray | null;
-    while ((mm = markerPattern.exec(blendedText)) !== null) {
-      const desc = mm[1].trim();
-      if (desc) markerDescriptions.push(desc);
-    }
-    if (markerDescriptions.length > 0) {
-      const bullets = markerDescriptions.map(d => `• ${d}`).join('\n');
-      const banner = `Before you send this, fill these for me — I won't fake them:\n${bullets}\n\n`;
-      blendedText = banner + blendedText;
-      console.log(
-        `[ExpressPipeline] ${jobId} prepended banner naming ${markerDescriptions.length} [INSERT] gap(s)`,
-      );
+    // Round 2 fix — defensive sweep. If any [INSERT: ...] markers somehow
+    // survive into blendedText (the chapter-level strip should catch them
+    // all, but blend Opus could in principle invent or echo one), strip
+    // every sentence containing a marker so the deliverable surface stays
+    // clean. The user gets the partial-prose; the soft-note system below
+    // tells them what's missing.
+    {
+      const before = blendedText;
+      const stripped = extractAndStripMarkers(blendedText);
+      if (stripped.missingPieces.length > 0) {
+        console.log(
+          `[ExpressPipeline] ${jobId} defensive blend-level strip removed ${stripped.missingPieces.length} marker(s)`,
+        );
+        blendedText = stripped.cleanContent;
+      } else {
+        // No markers — leave blendedText untouched.
+        blendedText = before;
+      }
     }
 
     await prisma.fiveChapterStory.update({
@@ -2062,25 +2071,33 @@ Convert each into an [INSERT: ...] marker.`;
       milestone: MILESTONE_BLENDED_READY,
     });
 
-    // Phase 2 — Soft notes for missing chapters. Sent as separate chat
-    // messages AFTER the blended-ready narration; never appended to the
-    // deliverable body. The deliverable surface stays clean.
-    // Detection mirrors the silent guardrail logic above: Ch3 missing if
-    // no support column, Ch4 missing if no named specifics anywhere, Ch5
-    // missing if the user supplied no situation (CTA defaults to a
-    // generic phrase but the situation drives whether Ch5 has real content).
+    // Round 2 fix — Soft notes for chapter content gaps. Sent as separate
+    // chat messages AFTER the blended-ready narration; never appended to
+    // the deliverable body. One soft note per gappy chapter (3, 4, or 5).
+    // Two signals feed the soft-note system:
+    //   1. Tier-level whole-chapter empty (mirrors the silent guardrail
+    //      logic): Ch3 if no support column, Ch4 if no named specifics,
+    //      Ch5 if no situation. These pass missingPieces=[] so the
+    //      template uses EMPTY_CASE_FILL.
+    //   2. Chapter-level marker descriptions extracted in the chapter loop
+    //      (chapterMissingPieces). These pass natural-language descriptors
+    //      so the template lists them.
+    // Whole-empty wins over partial: if a chapter is whole-empty per tier
+    // rules, we use the empty-case template even if the chapter generator
+    // also emitted markers.
     {
       const ctaProvided =
         typeof interpretation.situation === 'string' &&
         interpretation.situation.trim().length > 0;
-      const missing = detectMissingChaptersFromTier({
+      const wholeEmptyArr = detectMissingChaptersFromTier({
         hasSupportColumn,
         hasSocialProofColumn,
         namedCustomerCount: namedCustomers.size,
         otherNamedSpecificCount: otherNamedSpecifics.length,
         hasMeaningfulCta: ctaProvided,
       });
-      await emitMissingChapterNotes({
+      const wholeChapterEmpty = new Set<3 | 4 | 5>(wholeEmptyArr);
+      await emitChapterSoftNotes({
         userId: pipelineUserId,
         workspaceId: pipelineWorkspaceId,
         ctx: {
@@ -2089,7 +2106,8 @@ Convert each into an [INSERT: ...] marker.`;
           offeringId: draftWithElements.offering.id,
           audienceId: draftWithElements.audience.id,
         },
-        missing,
+        wholeChapterEmpty,
+        chapterMissingPieces,
       });
     }
 
@@ -2903,7 +2921,11 @@ Return ONLY the one sentence.`;
     // bound runaway loops; normal use rarely exceeds two follow-up edits.
     const GUIDED_MAX_REGEN_CYCLES = 3;
     let guidedChapterRegenCount = 0;
+    // Round 2 fix — same per-chapter missing-piece accumulator as
+    // runPipeline. Resets at the top of each regen cycle.
+    let guidedChapterMissingPieces: Record<3 | 4 | 5, string[]> = { 3: [], 4: [], 5: [] };
     do {
+    guidedChapterMissingPieces = { 3: [], 4: [], 5: [] };
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
         status: `chapter_${chapterNum}`,
@@ -3071,6 +3093,16 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
           .filter(line => line.trim())
           .join('\n')
           .trim();
+      }
+
+      // Round 2 fix — extract chapter-level marker descriptions and strip
+      // marker-bearing sentences before persist. Same logic as runPipeline.
+      {
+        const { cleanContent, missingPieces } = extractAndStripMarkers(content);
+        content = cleanContent;
+        if (chapterNum === 3 || chapterNum === 4 || chapterNum === 5) {
+          guidedChapterMissingPieces[chapterNum] = missingPieces;
+        }
       }
 
       await prisma.chapterContent.upsert({
@@ -3266,19 +3298,21 @@ CRITICAL — NO FABRICATION. Only use claims from the source chapters above.`;
       milestone: MILESTONE_BLENDED_READY,
     });
 
-    // Phase 2 — Soft notes for missing chapters (guided). Sent as separate
-    // chat messages after the blended-ready narration; never appended to
-    // blendedText.
+    // Round 2 fix — Soft notes for chapter content gaps (guided). One soft
+    // note per gappy chapter. Whole-empty (per tier rules) → empty case
+    // template; partial (chapter has content but markers extracted) →
+    // descriptors listed in the template. Same logic as runPipeline.
     {
       const ctaProvided = typeof cta === 'string' && cta.trim().length > 0;
-      const missing = detectMissingChaptersFromTier({
+      const wholeEmptyArr = detectMissingChaptersFromTier({
         hasSupportColumn,
         hasSocialProofColumn,
         namedCustomerCount: namedCustomers.size,
         otherNamedSpecificCount: otherNamedSpecificsGuided.length,
         hasMeaningfulCta: ctaProvided,
       });
-      await emitMissingChapterNotes({
+      const wholeChapterEmpty = new Set<3 | 4 | 5>(wholeEmptyArr);
+      await emitChapterSoftNotes({
         userId: guidedUserId,
         workspaceId: guidedWorkspaceId,
         ctx: {
@@ -3287,7 +3321,8 @@ CRITICAL — NO FABRICATION. Only use claims from the source chapters above.`;
           offeringId: draftForStory.offering?.id,
           audienceId: draftForStory.audience?.id,
         },
-        missing,
+        wholeChapterEmpty,
+        chapterMissingPieces: guidedChapterMissingPieces,
       });
     }
 

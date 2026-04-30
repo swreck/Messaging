@@ -16,35 +16,59 @@ export const MILESTONE_CHAPTERS_COMBINED_READY =
 export const MILESTONE_BLENDED_READY =
   "Last pass: I've polished the seams so the five chapters feel like one piece of writing instead of five. This is the version you'd send. Take a look. If anything doesn't sound like you, point at it and we'll fix it.";
 
-// ─── Soft notes for missing chapters (sent as a separate chat message
-// after MILESTONE_BLENDED_READY, not appended to the deliverable body) ─
+// ─── Soft notes for chapter content gaps (empty or partial) ──────────────
+// Sent as separate chat messages after MILESTONE_BLENDED_READY, never
+// appended to the deliverable body. One soft note per gappy chapter.
 
-export const SOFT_NOTE_CHAPTER_3_MISSING =
-  "Note: we haven't discussed numbers or outcomes yet, so there's nothing yet in the measurable value chapter (Chapter 3). When you're ready, tell me what the measurable difference looks like and I'll fold it in.";
+const CHAPTER_PURPOSE: Record<3 | 4 | 5, string> = {
+  3: "ROI and measurable value",
+  4: "others who already trust you",
+  5: "what you want your audience to do next",
+};
 
-export const SOFT_NOTE_CHAPTER_4_MISSING =
-  "Note: we haven't discussed customers or awards yet, so there's nothing yet in the social proof chapter (Chapter 4). When we have a customer story or two, I can fold them in.";
+const EMPTY_CASE_FILL: Record<3 | 4 | 5, string> = {
+  3: "any numerical metric",
+  4: "an actual name or award",
+  5: "a specific action they can take — a call link, an email, or a scheduling page",
+};
 
-export const SOFT_NOTE_CHAPTER_5_MISSING =
-  "Note: we haven't discussed what you want your audience to do next, so there's nothing yet in the ask chapter (Chapter 5). Tell me the action and I'll add it.";
+const VALUE_CLAIM_POOL: ReadonlyArray<string> = [
+  "more compelling",
+  "more persuasive",
+  "sharper",
+  "more direct",
+  "stronger",
+];
 
-// Composite note when 2 or 3 chapters are missing — sent as one chat
-// message after MILESTONE_BLENDED_READY in place of the individual
-// soft notes.
-export function buildCompositeMissingNote(missing: Array<3 | 4 | 5>): string {
-  const labels: Record<3 | 4 | 5, string> = {
-    3: "the measurable value (Chapter 3)",
-    4: "the references and social proof (Chapter 4)",
-    5: "the ask (Chapter 5)",
-  };
-  const parts = missing.sort().map((n) => labels[n]);
-  let list: string;
-  if (parts.length === 2) {
-    list = `${parts[0]} and ${parts[1]}`;
+// Internal counter for index-rotating selection. Module-level state.
+let _valueClaimIdx = 0;
+function pickValueClaim(): string {
+  const claim = VALUE_CLAIM_POOL[_valueClaimIdx % VALUE_CLAIM_POOL.length];
+  _valueClaimIdx += 1;
+  return claim;
+}
+
+export function buildSoftNote(
+  chapter: 3 | 4 | 5,
+  missingPieces: string[]  // empty = whole chapter empty; non-empty = partial
+): string {
+  const purpose = CHAPTER_PURPOSE[chapter];
+  const valueClaim = pickValueClaim();
+
+  let missingDescription: string;
+  if (missingPieces.length === 0) {
+    missingDescription = EMPTY_CASE_FILL[chapter];
+  } else if (missingPieces.length === 1) {
+    missingDescription = missingPieces[0];
+  } else if (missingPieces.length === 2) {
+    missingDescription = `${missingPieces[0]} and ${missingPieces[1]}`;
   } else {
-    list = `${parts[0]}, ${parts[1]}, and ${parts[2]}`;
+    const last = missingPieces[missingPieces.length - 1];
+    const rest = missingPieces.slice(0, -1).join(", ");
+    missingDescription = `${rest}, and ${last}`;
   }
-  return `Note: a few chapters aren't filled in yet — ${list}. When we have any of them, I'll fold them in.`;
+
+  return `The chapter on ${purpose}, chapter ${chapter}, would be ${valueClaim} with ${missingDescription}. Anything I can use?`;
 }
 
 // ─── Mode-switch offer (Path A → Path B, after 3 consecutive what's-next) ─

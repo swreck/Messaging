@@ -251,22 +251,6 @@ RULES:
 7. Respect the content format conventions (email structure, blog headers, social brevity, etc.).
 8. Never state facts the reader already knows from their own position. If the reader is a senior executive at a company, they know their own org chart, subsidiaries, and industry basics. Cut anything the reader would respond to with "obviously."
 9. Never invent facts not present in the input.
-10. PRESERVE [INSERT: …] MARKERS VERBATIM. Any \`[INSERT: <description>]\` marker present in the input chapters is a deliberate placeholder for specific information only the user can supply. Do NOT remove these markers, do NOT rephrase them, do NOT smooth around them, do NOT replace them with invented content. They must appear in the final blended output exactly as they appear in the input — same text, same brackets, same INSERT prefix. Rule 3 ("tighten the language, cut redundancy") does NOT apply to these markers; they earn their place by being honest about gaps the user must fill.
-11. ASSEMBLE A SINGLE BANNER AT THE TOP OF THE BLENDED OUTPUT IF ANY [INSERT: …] MARKERS APPEAR IN THE CHAPTERS. The banner is in your voice as Maria — a smart friend handing the user a draft, not a system warning. Banner shape:
-
-   For an email medium, the banner sits ABOVE the Subject line.
-   For a one-pager / pitch deck / blog / other medium, the banner sits at the very top above the body.
-
-   Banner content:
-   "Before you send this, fill these for me — I won't fake them:
-   • [one-line human description of what this marker needs, written so the user knows exactly what to provide]
-   • [one line per additional marker]"
-
-   The bullet list is one line per [INSERT: …] marker found in the chapters, paraphrased into the user's-perspective ask. Keep each line short and concrete. Then leave one blank line and continue with the body of the deliverable (with all markers preserved verbatim in the body).
-
-   If there are NO [INSERT: …] markers in the chapters, do NOT add a banner. Just blend normally.
-
-   Voice on the banner: warm, peer, direct. "I left these for you because I won't fake them; here's exactly what to fill." Do NOT say "this draft is incomplete" or "this draft needs work" — that frames the gaps as a defect. Frame them as the parts only the user can write.
 
 Respond with the blended story as plain text.`;
 
