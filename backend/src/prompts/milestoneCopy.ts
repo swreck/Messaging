@@ -144,3 +144,45 @@ export const WHATS_NEXT_INTENT_PHRASES: ReadonlyArray<string> = [
   "go on",
   "continue",
 ];
+
+// ─── Skip-demand response (user explicitly asks to bypass coaching) ─────
+
+export const SKIP_DEMAND_RESPONSE =
+  "I've tried this — it doesn't work well. The result is more persuasive and more accurate if you confirm a couple of interim steps with me. I can make those really easy. But if you really want to skip them, I'll take what you've given me and run with it. It'll take a few minutes.";
+
+export const SKIP_DEMAND_CHIP_CONTINUE = "Lead me through interim steps. Quickly.";
+export const SKIP_DEMAND_CHIP_AUTONOMOUS = "I understand. Do your best.";
+
+export const SKIP_INTENT_PHRASES: ReadonlyArray<string> = [
+  "just build it",
+  "just build the whole thing",
+  "skip the process",
+  "skip the questions",
+  "skip the steps",
+  "skip ahead",
+  "skip it",
+  "i don't want to do this",
+  "i don't want to walk through",
+  "give me the result",
+  "give me the deliverable",
+  "do it for me",
+  "do the whole thing",
+  "go ahead and do it",
+  "build the whole thing",
+];
+
+// ─── Stage-aware presence check-ins (fire if a stage runs > 30s) ─────
+
+export const STAGE_CHECKIN_TIER_GENERATION =
+  "Working on the foundation — won't be long.";
+
+export const STAGE_CHECKIN_CHAPTERS =
+  "Working through the chapters — should be a couple minutes.";
+
+export const STAGE_CHECKIN_BLEND =
+  "Polishing the seams — almost there.";
+
+// ─── Foundational-shift hold midpoint presence (fires at 90s of 3-min hold) ──
+
+export const FOUNDATIONAL_SHIFT_HOLD_MIDPOINT =
+  "Still here — take your time.";

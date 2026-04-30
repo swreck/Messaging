@@ -7,7 +7,14 @@ import { buildPartnerPrompt } from '../prompts/partner.js';
 import { ACTION_ALIASES, dispatchActions, readPageContent, type ActionContext } from '../lib/actions.js';
 import { getPersonalize, updatePersonalize, buildPersonalizeChatBlock } from '../lib/personalize.js';
 import { getPartnerSettings } from '../lib/partnerSettings.js';
-import { OPENER_FRESH_USER, OPENER_FRESH_USER_CHIPS } from '../prompts/milestoneCopy.js';
+import {
+  OPENER_FRESH_USER,
+  OPENER_FRESH_USER_CHIPS,
+  SKIP_DEMAND_RESPONSE,
+  SKIP_DEMAND_CHIP_CONTINUE,
+  SKIP_DEMAND_CHIP_AUTONOMOUS,
+  SKIP_INTENT_PHRASES,
+} from '../prompts/milestoneCopy.js';
 import { partnerLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
@@ -1206,6 +1213,35 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
     });
   }
 
+  // Round 3 fix — skip-demand short-circuit. If the user typed a phrase
+  // explicitly demanding to bypass coaching, return the locked response
+  // (Cowork-authored) with the two locked chips. Routing of those chips
+  // is deferred to Opus on the next user turn — the CONTINUE chip reads
+  // as "keep coaching" and the AUTONOMOUS chip reads as a build directive
+  // that already maps to existing PRE-BUILD READINESS rules in partner.ts.
+  // Chip text is intentionally distinct from the phrase list so taps
+  // don't re-trigger the short-circuit.
+  if (!isChatOpen && !isSyntheticUserPayload && message) {
+    const normalized = message.trim().toLowerCase().replace(/[.!?,;:]/g, '');
+    const isSkipDemand = SKIP_INTENT_PHRASES.some(phrase => normalized.includes(phrase));
+    if (isSkipDemand) {
+      const skipChips = [SKIP_DEMAND_CHIP_CONTINUE, SKIP_DEMAND_CHIP_AUTONOMOUS];
+      const skipCtx = { ...partnerChannel(workspaceId, ctx), chips: skipChips, kind: 'skip-demand-response' };
+      await prisma.assistantMessage.create({
+        data: { userId, role: 'assistant', content: SKIP_DEMAND_RESPONSE, context: skipCtx },
+      });
+      res.json({
+        response: SKIP_DEMAND_RESPONSE,
+        chips: skipChips,
+        actionResult: undefined,
+        refreshNeeded: false,
+        needsPageContent: false,
+        timeThresholdFired: false,
+      });
+      return;
+    }
+  }
+
   // Call Opus with JSON response format. If Opus returns an empty
   // response AND no actions, retry once — this occasionally happens
   // when the model outputs malformed JSON that gets parsed to empty.
@@ -1589,11 +1625,35 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
   // reload; return them on the response so the frontend can render them.
   const universalChipPattern = /\[CHIP:\s*([^\]\n]+?)\s*\]/g;
   const universalChips: string[] = [];
+  // Round 3 fix — skip-affordance chip filter. Path C does not exist as
+  // an entry point; coaching chips that end the flow early ("Just build
+  // it…", "Skip ahead", etc.) get dropped here regardless of how Opus
+  // composed the chip text. Free-text skip-demands route through the
+  // SKIP_DEMAND short-circuit above with the locked Cowork response.
+  const SKIP_CHIP_PATTERNS: RegExp[] = [
+    /^just build/i,
+    /^build (it|now|this|the whole)/i,
+    /^skip /i,
+    /skip the (process|questions|steps|interim)/i,
+    /go ahead and (build|do)/i,
+    /do (it|the whole|your best now|it for me)/i,
+    /^(give|show) me (the|a) (result|deliverable|draft|email)/i,
+    /with what (you|i|we) (have|gave)/i,
+  ];
+  function isSkipShapedChip(text: string): boolean {
+    const t = text.trim().replace(/[.!?]+$/, '');
+    return SKIP_CHIP_PATTERNS.some(re => re.test(t));
+  }
   {
     let m: RegExpExecArray | null;
     while ((m = universalChipPattern.exec(result.response || '')) !== null) {
       const text = m[1].trim();
-      if (text && universalChips.length < 4) universalChips.push(text);
+      if (!text) continue;
+      if (isSkipShapedChip(text)) {
+        console.log(`[Partner] dropped skip-shaped chip: ${JSON.stringify(text)}`);
+        continue;
+      }
+      if (universalChips.length < 4) universalChips.push(text);
     }
   }
   result.response = (result.response || '').replace(universalChipPattern, '').replace(/\n{3,}/g, '\n\n').trim();

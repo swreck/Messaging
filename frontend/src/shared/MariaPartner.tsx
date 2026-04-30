@@ -1369,30 +1369,37 @@ export function MariaPartner() {
         const buildMatch = result.actionResult.match(/\[BUILD_STARTED:([^:]+):([^\]]+)\]/);
         if (buildMatch) {
           const jobId = buildMatch[1];
-          // Show a progress message that updates with fun status lines
-          const progressPhrases = [
-            "Reading between the lines...",
-            "Mapping what matters to your audience...",
-            "Writing chapter 1 — setting the scene...",
-            "Building the case...",
-            "Finding the right words...",
-            "Almost there — polishing the draft...",
-          ];
-          let phraseIdx = 0;
-          const progressMsgId = `build-${jobId}`;
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: progressPhrases[0],
-            id: progressMsgId,
-          } as any]);
-          const phraseInterval = setInterval(() => {
-            phraseIdx = Math.min(phraseIdx + 1, progressPhrases.length - 1);
-            setMessages(prev => prev.map(m =>
-              (m as any).id === progressMsgId
-                ? { ...m, content: progressPhrases[phraseIdx] }
-                : m
-            ));
-          }, 12000);
+          // Round 3 fix — drop the rotating cute-phrase placeholder. The
+          // backend writes Maria-voice milestone narrations (Path B) and
+          // stage-aware presence check-ins (>30s stages) into chat history
+          // as they happen. The chat panel just needs to fast-poll
+          // /partner/history during the build so those messages surface
+          // within ~5s of being written, not in a burst at the end.
+          const buildStartedAt = Date.now();
+          const historyPoll = setInterval(async () => {
+            try {
+              const scopeParams: Record<string, string> = {};
+              if (scopeMode === 'scoped' && currentScope.kind && currentScope.id) {
+                if (currentScope.kind === 'storyId') scopeParams.scopeStoryId = currentScope.id;
+                else if (currentScope.kind === 'draftId') scopeParams.scopeDraftId = currentScope.id;
+                else if (currentScope.kind === 'audienceId') scopeParams.scopeAudienceId = currentScope.id;
+                else if (currentScope.kind === 'offeringId') scopeParams.scopeOfferingId = currentScope.id;
+              }
+              const qs = new URLSearchParams(scopeParams).toString();
+              const url = qs ? `/partner/history?${qs}` : '/partner/history';
+              const fresh = await api.get<{ messages: (Message & { kind?: string })[] }>(url);
+              const remapped: Message[] = fresh.messages.map(m => ({
+                role: m.role,
+                content: m.content,
+                actionResult: m.actionResult,
+                chips: Array.isArray(m.chips) ? m.chips : undefined,
+                isChatOpen: m.kind === 'chat-open-opener' || m.isChatOpen,
+              }));
+              setMessages(remapped);
+            } catch {
+              // Transient error — keep polling
+            }
+          }, 5000);
           const pollInterval = setInterval(async () => {
             try {
               const status = await api.get<{
@@ -1402,12 +1409,11 @@ export function MariaPartner() {
               }>(`/express/status/${jobId}`);
               if (status.status === 'complete' && status.resultStoryId && status.draftId) {
                 clearInterval(pollInterval);
-                clearInterval(phraseInterval);
-                setMessages(prev => prev.filter(m => (m as any).id !== progressMsgId));
+                clearInterval(historyPoll);
                 navigate(`/five-chapter/${status.draftId}?story=${status.resultStoryId}`);
               } else if (status.status === 'error') {
                 clearInterval(pollInterval);
-                clearInterval(phraseInterval);
+                clearInterval(historyPoll);
                 setMessages(prev => [...prev, {
                   role: 'assistant',
                   content: "Something went wrong building the draft. Tell me to try again if you'd like.",
@@ -1418,7 +1424,11 @@ export function MariaPartner() {
             }
           }, 5000);
           // Safety: stop polling after 10 minutes
-          setTimeout(() => { clearInterval(pollInterval); clearInterval(phraseInterval); }, 600000);
+          setTimeout(() => {
+            clearInterval(pollInterval);
+            clearInterval(historyPoll);
+          }, 600000);
+          void buildStartedAt;
         }
       }
 
@@ -1820,7 +1830,13 @@ export function MariaPartner() {
                       into a single prompt; the user dismisses one and the
                       next one in the queue surfaces on the next render
                       (e.g. budget chips fire after resume is dismissed). */}
-                  {loaded && hasActiveGuidedSession && (
+                  {/* Round 3 fix — only render the cross-draft "Pick it back up"
+                      banner when the chat panel is in dashboard-level (unscoped)
+                      view. Inside a story / draft / audience / offering scope,
+                      the banner pointed at a DIFFERENT draft would violate the
+                      scope promise the panel just made. The banner remains useful
+                      on the dashboard, where the user IS at the cross-draft level. */}
+                  {loaded && hasActiveGuidedSession && !currentScope.kind && (
                     <div className="partner-guided-card partner-guided-card-return">
                       <div className="partner-guided-card-text">
                         Your guided message is still in progress.
