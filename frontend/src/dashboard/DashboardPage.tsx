@@ -7,6 +7,7 @@ import { useWorkspace } from '../shared/WorkspaceContext';
 import { LEAD_TOGGLE_EVENT } from '../shared/leadershipDetection';
 import { TOGGLE_CONFIRMATION_ON, TOGGLE_CONFIRMATION_OFF } from '../shared/milestoneCopy';
 import { MobileHomeAffordances } from '../shared/MobileHomeAffordances';
+import { MOBILE_HOME_BREAKPOINT_PX } from '../shared/breakpoints';
 import { useAuth } from '../auth/AuthContext';
 import type { Offering, Audience } from '../types';
 
@@ -65,6 +66,21 @@ export function DashboardPage() {
   // chat-open opener fires) and the partner history (any assistant
   // message means Maria has spoken to this user). Either signal suffices.
   const [welcomeSuppressed, setWelcomeSuppressed] = useState<boolean | null>(null);
+
+  // Phase 2 — Fix 4: hide the dashboard's consultation toggle bar on small
+  // screens. The toggle moves into the chat-panel header (MariaPartner) so
+  // the iPhone home renders only the two affordance buttons + tiles.
+  const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_HOME_BREAKPOINT_PX;
+  });
+  useEffect(() => {
+    function update() {
+      setIsSmallScreen(window.innerWidth <= MOBILE_HOME_BREAKPOINT_PX);
+    }
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'dashboard' }); registerRefresh(loadAll); }, []);
@@ -254,27 +270,32 @@ export function DashboardPage() {
 
   return (
     <div className="dashboard">
-      {/* Consultation toggle — default ON */}
-      <div className="consultation-toggle-bar">
-        <div className="consultation-toggle-left">
-          {activeWorkspace && (
-            <h2 className="dashboard-workspace-name" style={{ margin: 0 }}>{activeWorkspace.name}</h2>
-          )}
+      {/* Consultation toggle — default ON.
+          Phase 2 — Fix 4: hidden on small screens. The toggle moves to the
+          chat-panel header (MariaPartner) on iPhone so the home screen
+          shows only the two affordance buttons + tiles below them. */}
+      {!isSmallScreen && (
+        <div className="consultation-toggle-bar">
+          <div className="consultation-toggle-left">
+            {activeWorkspace && (
+              <h2 className="dashboard-workspace-name" style={{ margin: 0 }}>{activeWorkspace.name}</h2>
+            )}
+          </div>
+          <label className="consultation-toggle" title={consultation ? 'Maria guides each step. Take over whenever you want.' : 'You drive. Maria waits on the side.'}>
+            <span className={`consultation-toggle-label ${consultation ? 'consultation-toggle-label-active' : ''}`}>
+              Let Maria lead
+            </span>
+            <button
+              type="button"
+              className={`consultation-switch ${consultation ? 'consultation-switch-on' : ''}`}
+              onClick={toggleConsultation}
+              aria-label="Toggle Maria collaboration"
+            >
+              <span className="consultation-switch-thumb" />
+            </button>
+          </label>
         </div>
-        <label className="consultation-toggle" title={consultation ? 'Maria guides each step. Take over whenever you want.' : 'You drive. Maria waits on the side.'}>
-          <span className={`consultation-toggle-label ${consultation ? 'consultation-toggle-label-active' : ''}`}>
-            Let Maria lead
-          </span>
-          <button
-            type="button"
-            className={`consultation-switch ${consultation ? 'consultation-switch-on' : ''}`}
-            onClick={toggleConsultation}
-            aria-label="Toggle Maria collaboration"
-          >
-            <span className="consultation-switch-thumb" />
-          </button>
-        </label>
-      </div>
+      )}
 
       {/* Phase 2 — Redlines #10, #13, #14: iPhone-only home-screen affordances.
           The component renders nothing above MOBILE_HOME_BREAKPOINT_PX, so the

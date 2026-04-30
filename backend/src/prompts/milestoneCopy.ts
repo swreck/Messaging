@@ -68,10 +68,31 @@ export const TOGGLE_CONFIRMATION_OFF =
 export const PAUSE_ON_FOUNDATIONAL_SHIFT =
   "Hold on — let me redo the foundation with that change before I keep going.";
 
+// ─── Foundational-shift timeout (Path B, 5-min hold expired) ──────────
+
+export const TIMEOUT_AREA_TIER1     = "your top tier";
+export const TIMEOUT_AREA_TIER2     = "your priorities";
+export const TIMEOUT_AREA_AUDIENCE  = "your audience";
+export const TIMEOUT_AREA_OFFERING  = "your offering";
+export const TIMEOUT_AREA_FALLBACK  = "the foundation";
+
+export function buildFoundationalShiftTimeout(area: string): string {
+  return `I had to let the story go — I can only hold things for a few minutes. When you're ready to come back to ${area}, tell me and we'll start it back up.`;
+}
+
 // ─── Fresh-user opener (empty workspace, on direct invocation of chat) ────
 
 export const OPENER_FRESH_USER =
   "Hi — I'm Maria. What are we working on?";
+
+// ─── Fresh-user opener chips (paired with OPENER_FRESH_USER) ────────────
+
+export const OPENER_FRESH_USER_CHIPS: ReadonlyArray<string> = [
+  "Win over a customer or outside audience",
+  "Get sign-off from a decision-maker inside",
+  "Align a team on a move",
+  "Sharpen a draft I've already started",
+];
 
 // ─── iPhone affordance labels ─────────────────────────────────────────
 

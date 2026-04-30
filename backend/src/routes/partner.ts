@@ -7,7 +7,7 @@ import { buildPartnerPrompt } from '../prompts/partner.js';
 import { ACTION_ALIASES, dispatchActions, readPageContent, type ActionContext } from '../lib/actions.js';
 import { getPersonalize, updatePersonalize, buildPersonalizeChatBlock } from '../lib/personalize.js';
 import { getPartnerSettings } from '../lib/partnerSettings.js';
-import { OPENER_FRESH_USER } from '../prompts/milestoneCopy.js';
+import { OPENER_FRESH_USER, OPENER_FRESH_USER_CHIPS } from '../prompts/milestoneCopy.js';
 import { partnerLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
@@ -956,11 +956,8 @@ If the user declines, drop it cleanly. The proposal will time out in 90 seconds.
 
 "${OPENER_FRESH_USER}"
 
-Then 3-4 chips on their own lines AT THE END, in the user's voice. Use these canonical chips:
-  [CHIP: Make a case for something I'm advocating]
-  [CHIP: Get a decision or sign-off from a stakeholder]
-  [CHIP: Recruit, rally, or align a team or partner]
-  [CHIP: I have something I've drafted — read it first]
+Then 4 chips on their own lines AT THE END, in the user's voice. Use these canonical chips, in this exact order, character-for-character:
+${OPENER_FRESH_USER_CHIPS.map(c => `  [CHIP: ${c}]`).join('\n')}
 
 Do not paraphrase the opener. Do not add any other content. The text quoted above is Cowork-authored and locked.`
         : stateLabel === 'in-deliverable'
@@ -1315,13 +1312,7 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
     // fall back to the canonical four chips from milestoneCopy.
     const isFirstTime = offeringCount === 0 && audienceCount === 0;
     if (isFirstTime) {
-      const fallbackChips = [
-        'Make a case for something I\'m advocating',
-        'Get a decision or sign-off from a stakeholder',
-        'Recruit, rally, or align a team or partner',
-        'I have something I\'ve drafted — read it first',
-      ];
-      const fallbackChipMarkers = fallbackChips.map(c => `[CHIP: ${c}]`).join('\n');
+      const fallbackChipMarkers = OPENER_FRESH_USER_CHIPS.map(c => `[CHIP: ${c}]`).join('\n');
       result.response = `${OPENER_FRESH_USER}\n${fallbackChipMarkers}`;
     }
 

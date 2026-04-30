@@ -28,6 +28,7 @@ import {
   TOGGLE_CONFIRMATION_ON,
   TOGGLE_CONFIRMATION_OFF,
 } from './milestoneCopy';
+import { MOBILE_HOME_BREAKPOINT_PX } from './breakpoints';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -313,6 +314,53 @@ export function MariaPartner() {
   // locked offer text + chips locally. The chips' handlers persist the user's
   // accept/decline back to the partner conversation history asynchronously.
   const [modeSwitchOfferActive, setModeSwitchOfferActive] = useState<boolean>(false);
+
+  // Phase 2 — Fix 4: small-screen detection for the iPhone toggle home.
+  // When isSmallScreen, the consultation toggle moves OUT of the dashboard
+  // and INTO the chat-panel header so the user reaches it without scrolling
+  // past the iPhone home affordances.
+  const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_HOME_BREAKPOINT_PX;
+  });
+  useEffect(() => {
+    function update() {
+      setIsSmallScreen(window.innerWidth <= MOBILE_HOME_BREAKPOINT_PX);
+    }
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  // Phase 2 — Fix 4: in-panel toggle state, mirrored from localStorage so
+  // the visible switch reflects the current consultation. Listens for
+  // LEAD_TOGGLE_EVENT to stay in sync when toggle moves from any source.
+  const [panelConsultation, setPanelConsultation] = useState<'on' | 'off'>(() => getToggleState());
+  useEffect(() => {
+    function syncFromEvent(e: Event) {
+      const detail = (e as CustomEvent).detail as { value?: 'on' | 'off' } | undefined;
+      if (detail?.value === 'on' || detail?.value === 'off') {
+        setPanelConsultation(detail.value);
+      }
+    }
+    document.addEventListener(LEAD_TOGGLE_EVENT, syncFromEvent);
+    return () => document.removeEventListener(LEAD_TOGGLE_EVENT, syncFromEvent);
+  }, []);
+
+  // Phase 2 — Fix 4: in-panel toggle click handler. Same dual-write pattern
+  // as DashboardPage.toggleConsultation: localStorage + PUT /partner/consultation
+  // + POST /partner/log-message + dispatch LEAD_TOGGLE_EVENT.
+  function toggleConsultationFromPanel() {
+    const next: 'on' | 'off' = panelConsultation === 'on' ? 'off' : 'on';
+    setPanelConsultation(next);
+    setToggleState(next);  // writes localStorage + dispatches LEAD_TOGGLE_EVENT
+    api.put('/partner/consultation', { value: next }).catch(() => {/* non-critical */});
+    api.post('/partner/log-message', {
+      role: 'assistant',
+      content: next === 'on' ? TOGGLE_CONFIRMATION_ON : TOGGLE_CONFIRMATION_OFF,
+      kind: 'toggle-confirmation',
+      ctx: pageContext,
+    }).catch(() => {/* non-critical */});
+  }
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1645,6 +1693,68 @@ export function MariaPartner() {
               </button>
             </div>
           </div>
+
+          {/* Phase 2 — Fix 4: iPhone toggle home. On small screens (<= 600px)
+              the "Let Maria lead" toggle lives here, pinned under the panel
+              header above the message thread. On larger screens, the toggle
+              stays on the dashboard. */}
+          {isSmallScreen && (
+            <div
+              className="partner-mobile-toggle"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 16px',
+                borderBottom: '1px solid var(--border-light, #e5e5ea)',
+                background: 'var(--bg-secondary, #f8f8fa)',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: panelConsultation === 'on' ? 'var(--text-primary, #1c1c1e)' : 'var(--text-secondary, #6e6e73)',
+                }}
+              >
+                Let Maria lead
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={panelConsultation === 'on'}
+                aria-label="Toggle Maria collaboration"
+                title={panelConsultation === 'on' ? 'Maria guides each step. Take over whenever you want.' : 'You drive. Maria waits on the side.'}
+                onClick={toggleConsultationFromPanel}
+                style={{
+                  width: 50,
+                  height: 30,
+                  borderRadius: 15,
+                  border: 'none',
+                  background: panelConsultation === 'on' ? 'var(--accent, #007aff)' : 'var(--border-light, #c7c7cc)',
+                  position: 'relative',
+                  cursor: 'pointer',
+                  padding: 0,
+                  flexShrink: 0,
+                  transition: 'background 0.15s',
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 3,
+                    left: panelConsultation === 'on' ? 23 : 3,
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: 'white',
+                    transition: 'left 0.15s',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                  }}
+                />
+              </button>
+            </div>
+          )}
 
           <div className="partner-body">
             {!statusLoaded && (

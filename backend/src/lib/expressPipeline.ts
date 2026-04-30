@@ -32,6 +32,10 @@ import {
   SOFT_NOTE_CHAPTER_5_MISSING,
   buildCompositeMissingNote,
   PAUSE_ON_FOUNDATIONAL_SHIFT,
+  buildFoundationalShiftTimeout,
+  TIMEOUT_AREA_TIER1,
+  TIMEOUT_AREA_TIER2,
+  TIMEOUT_AREA_FALLBACK,
 } from '../prompts/milestoneCopy.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import {
@@ -209,7 +213,26 @@ async function emitMissingChapterNotes(opts: {
 //
 // Cosmetic edits (no pending shift) return 'continue' immediately; the
 // pipeline proceeds normally.
-type ShiftPauseResult = 'continue' | 'regenerate-chapters' | 'timeout';
+type ShiftPauseAction = 'continue' | 'regenerate-chapters' | 'timeout';
+interface ShiftPauseResult {
+  action: ShiftPauseAction;
+  // Populated whenever a pending shift was detected (regenerate-chapters or
+  // timeout outcomes). Mirrors the foundationalShift classifier's targetCell:
+  // "tier1" | "tier2-N" | "none" — caller maps to TIMEOUT_AREA_*.
+  targetCell?: string;
+}
+
+// Map a foundational-shift targetCell to the locked timeout-area constant
+// used by buildFoundationalShiftTimeout. The classifier's outputs today are
+// "tier1" | "tier2-N" | "none". TIMEOUT_AREA_AUDIENCE / TIMEOUT_AREA_OFFERING
+// constants exist in milestoneCopy.ts for forward-compat — this mapping
+// falls those cases through to TIMEOUT_AREA_FALLBACK because the current
+// pause path only fires from chapter edits.
+function timeoutAreaForTargetCell(targetCell?: string): string {
+  if (targetCell === 'tier1') return TIMEOUT_AREA_TIER1;
+  if (targetCell && targetCell.startsWith('tier2')) return TIMEOUT_AREA_TIER2;
+  return TIMEOUT_AREA_FALLBACK;
+}
 
 async function checkFoundationalShiftPause(opts: {
   jobId: string;
@@ -229,12 +252,14 @@ async function checkFoundationalShiftPause(opts: {
   });
   const settings = (userRow?.settings as Record<string, any>) || {};
   const pending = settings.pendingFoundationalShift as
-    | { draftId?: string; setAt?: string }
+    | { draftId?: string; setAt?: string; targetCell?: string }
     | undefined;
-  if (!pending || !pending.setAt || !pending.draftId) return 'continue';
-  if (pending.draftId !== opts.draftId) return 'continue';
+  if (!pending || !pending.setAt || !pending.draftId) return { action: 'continue' };
+  if (pending.draftId !== opts.draftId) return { action: 'continue' };
   const setAtMs = new Date(pending.setAt).getTime();
-  if (isNaN(setAtMs) || setAtMs < opts.pipelineStartMs) return 'continue';
+  if (isNaN(setAtMs) || setAtMs < opts.pipelineStartMs) return { action: 'continue' };
+
+  const detectedTargetCell = pending.targetCell;
 
   // Pending shift detected on THIS draft, fresh since pipeline start.
   // Send the locked pause copy to chat exactly once, regardless of toggle —
@@ -265,7 +290,7 @@ async function checkFoundationalShiftPause(opts: {
     });
     const freshSettings = (fresh?.settings as Record<string, any>) || {};
     const stillPending = freshSettings.pendingFoundationalShift as
-      | { draftId?: string; setAt?: string }
+      | { draftId?: string; setAt?: string; targetCell?: string }
       | undefined;
     if (!stillPending || stillPending.draftId !== opts.draftId) {
       // Resolved. Determine whether the tier text actually changed.
@@ -274,12 +299,12 @@ async function checkFoundationalShiftPause(opts: {
         select: { text: true },
       });
       if (tier1Now && tier1Now.text !== opts.initialTier1Text) {
-        return 'regenerate-chapters';
+        return { action: 'regenerate-chapters', targetCell: detectedTargetCell };
       }
-      return 'continue';
+      return { action: 'continue' };
     }
   }
-  return 'timeout';
+  return { action: 'timeout', targetCell: detectedTargetCell };
 }
 
 // Missing-chapter detection. Returns the list of chapters with no source
@@ -1206,11 +1231,13 @@ Return ONLY the one sentence.`;
       console.error('[Ch1 thesis] Generation failed, proceeding without:', err);
     }
 
-    // Phase 2 — chapter generation may run twice if the user makes a
-    // foundation-changing edit during the run. The do-while wrapper lets
-    // the foundational-shift pause helper restart chapter generation once
-    // with a refreshed Three Tier. One regeneration cycle max.
-    let chapterRegenerated = false;
+    // Phase 2 — Fix 3: chapter generation may regenerate up to MAX_REGEN_CYCLES
+    // times if the user makes foundation-changing edits during the run. Each
+    // edit fires its own pause + regen. The cap exists only as a runaway-loop
+    // safety net; in normal use the user makes at most a couple of follow-up
+    // adjustments before settling on a foundation.
+    const MAX_REGEN_CYCLES = 3;
+    let chapterRegenCount = 0;
     do {
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
@@ -1592,12 +1619,24 @@ ${draftForStory.tier2Statements
         initialTier1Text: initialTier1TextForShift,
         updateStage: async (s: string) => { await update({ stage: s }); },
       });
-      if (pauseResult === 'timeout') {
-        await fail('Foundation update timed out. Start a new build when you are ready.');
+      if (pauseResult.action === 'timeout') {
+        await writeMariaMessage({
+          userId: pipelineUserId,
+          workspaceId: pipelineWorkspaceId,
+          ctx: {
+            storyId: story.id,
+            draftId: draftWithElements.id,
+            offeringId: draftWithElements.offering.id,
+            audienceId: draftWithElements.audience.id,
+          },
+          content: buildFoundationalShiftTimeout(timeoutAreaForTargetCell(pauseResult.targetCell)),
+          kind: 'pause-timeout',
+        });
+        await fail('Foundation update timed out.');
         return;
       }
-      if (pauseResult === 'regenerate-chapters' && !chapterRegenerated) {
-        chapterRegenerated = true;
+      if (pauseResult.action === 'regenerate-chapters' && chapterRegenCount < MAX_REGEN_CYCLES) {
+        chapterRegenCount++;
         await prisma.chapterContent.deleteMany({ where: { storyId: story.id } });
         const refreshed = await prisma.threeTierDraft.findFirst({
           where: { id: draftWithElements.id },
@@ -2855,10 +2894,11 @@ Return ONLY the one sentence.`;
       console.error('[GuidedDraft] Ch1 thesis failed:', err);
     }
 
-    // Phase 2 — chapter regeneration loop. Identical pattern to runPipeline:
-    // up to one regeneration cycle if the user makes a foundation-changing
-    // edit during the run.
-    let guidedChapterRegenerated = false;
+    // Phase 2 — Fix 3: chapter regeneration loop. Identical pattern to runPipeline:
+    // up to GUIDED_MAX_REGEN_CYCLES regeneration cycles. Cap exists only to
+    // bound runaway loops; normal use rarely exceeds two follow-up edits.
+    const GUIDED_MAX_REGEN_CYCLES = 3;
+    let guidedChapterRegenCount = 0;
     do {
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
@@ -3056,11 +3096,23 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
         initialTier1Text: guidedInitialTier1Text,
         updateStage: async (s: string) => { await update({ stage: s }); },
       });
-      if (pauseResult === 'timeout') {
-        throw new Error('Foundation update timed out. Start a new build when you are ready.');
+      if (pauseResult.action === 'timeout') {
+        await writeMariaMessage({
+          userId: guidedUserId,
+          workspaceId: guidedWorkspaceId,
+          ctx: {
+            storyId,
+            draftId: guidedDraftId,
+            offeringId: draftForStory.offering?.id,
+            audienceId: draftForStory.audience?.id,
+          },
+          content: buildFoundationalShiftTimeout(timeoutAreaForTargetCell(pauseResult.targetCell)),
+          kind: 'pause-timeout',
+        });
+        throw new Error('Foundation update timed out.');
       }
-      if (pauseResult === 'regenerate-chapters' && !guidedChapterRegenerated) {
-        guidedChapterRegenerated = true;
+      if (pauseResult.action === 'regenerate-chapters' && guidedChapterRegenCount < GUIDED_MAX_REGEN_CYCLES) {
+        guidedChapterRegenCount++;
         await prisma.chapterContent.deleteMany({ where: { storyId } });
         const refreshed = await prisma.threeTierDraft.findFirst({
           where: { id: guidedDraftId },
