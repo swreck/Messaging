@@ -10,6 +10,7 @@ import { getPartnerSettings } from '../lib/partnerSettings.js';
 import {
   OPENER_FRESH_USER,
   OPENER_FRESH_USER_CHIPS,
+  OPENER_FALLBACK_GENERIC,
   SKIP_DEMAND_RESPONSE,
   SKIP_DEMAND_CHIP_CONTINUE,
   SKIP_DEMAND_CHIP_AUTONOMOUS,
@@ -957,6 +958,15 @@ If the user declines, drop it cleanly. The proposal will time out in 90 seconds.
       stateLabel = 'returning-stale';
     }
 
+    // Round 4 Fix 11 — graduated chat-open opener length by user activity.
+    // Returning-active splits into "very recent" (≤1 day, short audience-
+    // anchored question) and "moderately recent" (2-7 days, brief time
+    // acknowledgment + audience-anchored question). Returning-stale keeps
+    // the dense recap.
+    const returningSubLabel: 'very-recent' | 'moderately-recent' =
+      stateLabel === 'returning-active' && mostRecentAgeDays !== null && mostRecentAgeDays <= 1
+        ? 'very-recent'
+        : 'moderately-recent';
     const stateBlock =
       stateLabel === 'first-time'
         ? `STATE: first-time user, empty workspace. Phase 2 — your reply this turn is EXACTLY the locked fresh-user opener, character-for-character, no edits, no rewording, no warmup before, no extension after:
@@ -968,12 +978,42 @@ ${OPENER_FRESH_USER_CHIPS.map(c => `  [CHIP: ${c}]`).join('\n')}
 
 Do not paraphrase the opener. Do not add any other content. The text quoted above is Cowork-authored and locked.`
         : stateLabel === 'in-deliverable'
-        ? `STATE: user is INSIDE a specific deliverable right now (${ctx.draftId ? 'a Three Tier' : 'a Five Chapter Story'}${ctx.storyId ? ` — story id ${ctx.storyId}` : ctx.draftId ? ` — draft id ${ctx.draftId}` : ''}). Open by naming the SINGLE BIGGEST CURRENT GAP on this deliverable in plain language, then ASK whether they want to start there. Offer exactly 2 chips: "Yes, start there" and "Show me something else here".`
+        ? `STATE: user is INSIDE a specific deliverable right now (${ctx.draftId ? 'a Three Tier' : 'a Five Chapter Story'}${ctx.storyId ? ` — story id ${ctx.storyId}` : ctx.draftId ? ` — draft id ${ctx.draftId}` : ''}). Open by naming the SINGLE BIGGEST CURRENT GAP on this deliverable in plain language, then ASK whether they want to start there. Then exactly 2 chips on their own lines AT THE END:
+  [CHIP: Yes, start there]
+  [CHIP: Show me something else here]
+
+Do not number these as "1." / "2." in the prose — they must appear as [CHIP: ...] markers, one per line.`
+        : stateLabel === 'returning-active' && returningSubLabel === 'very-recent'
+        ? `STATE: returning user, very recent activity (≤1 day).
+Open with a short audience-anchored question and 2 chips.
+Format: "Back to the [audience name]?"
+Use the most recent draft's audience name verbatim from this list:
+${recentItems.map((r, i) => `  ${i + 1}. ${r.title} (${r.kind}, ${r.ageDays}d ago)`).join('\n')}
+
+Then exactly 2 chips on their own lines:
+  [CHIP: Yes, pick it up]
+  [CHIP: Something else]
+
+Do not add any other prose. The reply is one short question and two chips. That's it.`
         : stateLabel === 'returning-active'
-        ? `STATE: returning user with active recent work. Their most recently touched deliverable was ${mostRecentAgeDays} day${mostRecentAgeDays === 1 ? '' : 's'} ago. Open by naming THAT deliverable by its actual title and where it stood (first draft / claims needing a look / ready to refine), then ASK whether they want to pick it back up. Offer exactly 2 chips: "Pick up [title]" and "Something else". Recent items, in order, with titles you can use verbatim:\n${recentItems.map((r, i) => `  ${i + 1}. ${r.title} (${r.kind}, ${r.ageDays}d ago)`).join('\n')}`
-        : `STATE: returning user, gone for a while. Their most recent work was ${mostRecentAgeDays === null ? 'never' : `${mostRecentAgeDays} days ago`}. Open by acknowledging the return briefly (one short sentence) and ASK whether they want to pick something up or build something new. Offer 3-4 chips: the ${Math.min(3, recentItems.length)} most-recently touched titles plus "Build something new". Recent items:\n${recentItems.length === 0 ? '  (none)' : recentItems.map((r, i) => `  ${i + 1}. ${r.title} (${r.kind}, ${r.ageDays}d ago)`).join('\n')}`;
+        ? `STATE: returning user, moderately recent activity (2-7 days).
+Open with a brief time acknowledgment + audience-anchored question + 3 chips.
+Format: "It's been a few days — back to the [audience name]?"
+Use the most recent draft's audience name verbatim from this list:
+${recentItems.map((r, i) => `  ${i + 1}. ${r.title} (${r.kind}, ${r.ageDays}d ago)`).join('\n')}
+
+Then exactly 3 chips on their own lines:
+  [CHIP: Yes, pick it up]
+  [CHIP: Start something new]
+  [CHIP: Something else]
+
+Do not add any other prose.`
+        : `STATE: returning user, gone for a while. Their most recent work was ${mostRecentAgeDays === null ? 'never' : `${mostRecentAgeDays} days ago`}. Open by acknowledging the return briefly (one short sentence) and ASK whether they want to pick something up or build something new. Then 3-4 chips on their own lines AT THE END — use the ${Math.min(3, recentItems.length)} most-recently touched titles verbatim plus "Build something new". Format each chip as [CHIP: chip text] on its own line — never as a numbered list. Recent items:
+${recentItems.length === 0 ? '  (none)' : recentItems.map((r, i) => `  ${i + 1}. ${r.title} (${r.kind}, ${r.ageDays}d ago)`).join('\n')}`;
 
     systemPrompt += `\n\nCHAT-OPEN PROACTIVE OPENER — FIRST AND ONLY ACTION THIS TURN.
+
+HARD CONSTRAINT: never name any offering, audience, draft, or other proper-noun reference that is not explicitly in the data list provided to you below. If you don't have a specific name for what the user was working on, say "your most recent work" or "what you started yesterday" — never invent a name to make the greeting feel state-aware.
 
 THE RULE you must obey: Maria asks; the user answers. The chat panel just opened; the user has NOT typed anything. Your reply IS the user's first three seconds in this session, so it must:
   1. Be in your voice — warm, peer, never sales.
@@ -983,6 +1023,7 @@ THE RULE you must obey: Maria asks; the user answers. The chat panel just opened
      [CHIP: chip text 1]
      [CHIP: chip text 2]
   5. Chips are the user's likely answers in the USER'S voice, never yours. Tap-sized, specific to the question above. 2-4 chips total.
+  6. Do NOT format options as a numbered list inside the prose ("1. ...\n2. ..."). Options are chips on their own lines using the [CHIP: ...] marker — every time.
 
 DO NOT take any actions, build any deliverables, or call any tools this turn. The user has not asked for anything. Your only job is to greet and ask.
 
@@ -1350,6 +1391,87 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
     if (isFirstTime) {
       const fallbackChipMarkers = OPENER_FRESH_USER_CHIPS.map(c => `[CHIP: ${c}]`).join('\n');
       result.response = `${OPENER_FRESH_USER}\n${fallbackChipMarkers}`;
+    }
+
+    // Round 4 Fix 1 Part B — fabrication validator. Pull every proper-
+    // noun phrase from Opus's chat-open prose and check it against the
+    // workspace's actual offerings, audiences, and deliverable titles.
+    // If anything fails the allowlist (e.g. an invented "RouteLens"
+    // product name), fall back to the locked generic opener so trust
+    // doesn't rupture in Maria's most trust-sensitive moment.
+    if (!isFirstTime) {
+      try {
+        const proseOnly = (result.response || '').replace(/\[CHIP:[^\]]*\]/g, ' ');
+        // Multi-word capitalized sequences ("Grocery Fleet Operations Director")
+        // and CamelCase single tokens ("RouteLens", "FleetOps") are the
+        // high-risk fabrication shapes. Single capitalized words at sentence
+        // boundaries are usually English (Welcome, OK) and are skipped.
+        const multiWordRe = /\b[A-Z][a-zA-Z0-9]+(?:\s+[A-Z][a-zA-Z0-9]+)+\b/g;
+        const camelCaseRe = /\b[A-Z][a-z]+[A-Z][a-zA-Z0-9]*\b/g;
+        const candidates = new Set<string>();
+        let m: RegExpExecArray | null;
+        while ((m = multiWordRe.exec(proseOnly)) !== null) candidates.add(m[0]);
+        while ((m = camelCaseRe.exec(proseOnly)) !== null) candidates.add(m[0]);
+
+        if (candidates.size > 0) {
+          // Build the allowlist from real workspace data: offering names,
+          // audience names, all story custom names, plus the user's own
+          // first name. recentItems from the prompt-build block is out of
+          // scope here; pulling fresh data is a few cheap queries that
+          // only run when the validator finds candidate proper-noun
+          // phrases (i.e. rarely).
+          const [allOfferings, allAudiences, allStories] = await Promise.all([
+            prisma.offering.findMany({
+              where: { workspaceId },
+              select: { name: true },
+            }),
+            prisma.audience.findMany({
+              where: { workspaceId },
+              select: { name: true },
+            }),
+            prisma.fiveChapterStory.findMany({
+              where: { draft: { offering: { workspaceId } } },
+              select: { customName: true },
+              take: 50,
+            }),
+          ]);
+          const allowlist: string[] = [
+            ...allOfferings.map(o => o.name || ''),
+            ...allAudiences.map(a => a.name || ''),
+            ...allStories.map(s => s.customName || ''),
+            displayName || '',
+            (displayName || '').split(/\s+/)[0] || '',
+            'Maria',
+            'Three Tier',
+            '5 Chapter Story',
+            'Five Chapter Story',
+          ].map(s => s.toLowerCase()).filter(s => s.length > 0);
+
+          let fabricated: string | null = null;
+          for (const phrase of candidates) {
+            const lower = phrase.toLowerCase();
+            // A candidate is acceptable if it appears as a substring of any
+            // allowlist entry, OR if it contains an allowlist entry — both
+            // directions catch partial matches like "Grocery Fleet" inside
+            // "Grocery Fleet Operations Director".
+            const matched = allowlist.some(a =>
+              a.includes(lower) || lower.includes(a),
+            );
+            if (!matched) {
+              fabricated = phrase;
+              break;
+            }
+          }
+
+          if (fabricated) {
+            console.log(`[Partner] chat-open validator caught fabricated name: ${JSON.stringify(fabricated)} — falling back to generic opener`);
+            const fallbackChipMarkers = OPENER_FRESH_USER_CHIPS.map(c => `[CHIP: ${c}]`).join('\n');
+            result.response = `${OPENER_FALLBACK_GENERIC}\n${fallbackChipMarkers}`;
+          }
+        }
+      } catch (validatorErr) {
+        console.error('[Partner] chat-open validator error (fail-open, original opener stands):', validatorErr);
+      }
     }
 
     const chipPattern = /\[CHIP:\s*([^\]\n]+?)\s*\]/g;

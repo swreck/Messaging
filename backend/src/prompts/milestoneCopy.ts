@@ -32,12 +32,19 @@ const EMPTY_CASE_FILL: Record<3 | 4 | 5, string> = {
   5: "a specific action they can take — a call link, an email, or a scheduling page",
 };
 
-const VALUE_CLAIM_POOL: ReadonlyArray<string> = [
+// Round 4 Fix 9 — expanded from 5 to 10 entries so users don't see the
+// same opening word for soft note 1 across multiple builds in a session.
+export const VALUE_CLAIM_POOL: ReadonlyArray<string> = [
   "more compelling",
   "more persuasive",
   "sharper",
   "more direct",
   "stronger",
+  "tighter",
+  "clearer",
+  "more memorable",
+  "more concrete",
+  "more credible",
 ];
 
 // Internal counter for index-rotating selection. Module-level state.
@@ -146,9 +153,11 @@ export const WHATS_NEXT_INTENT_PHRASES: ReadonlyArray<string> = [
 ];
 
 // ─── Skip-demand response (user explicitly asks to bypass coaching) ─────
+// Round 4 Fix 4 — Ken's tightened four-sentence version. Replaces the
+// prior five-sentence text which read as a wall on phones.
 
 export const SKIP_DEMAND_RESPONSE =
-  "I've tried this — it doesn't work well. The result is more persuasive and more accurate if you confirm a couple of interim steps with me. I can make those really easy. But if you really want to skip them, I'll take what you've given me and run with it. It'll take a few minutes.";
+  "I've tried this — it doesn't work well. The result is more persuasive if you confirm interim steps. I'll help. But if you really want to skip, I'll do my best with what you've given me. It'll take a few minutes.";
 
 export const SKIP_DEMAND_CHIP_CONTINUE = "Lead me through interim steps. Quickly.";
 export const SKIP_DEMAND_CHIP_AUTONOMOUS = "I understand. Do your best.";
@@ -186,3 +195,25 @@ export const STAGE_CHECKIN_BLEND =
 
 export const FOUNDATIONAL_SHIFT_HOLD_MIDPOINT =
   "Still here — take your time.";
+
+// ─── Fallback chat-open opener when the validator catches a fabricated name ─
+// Round 4 Fix 1.
+
+export const OPENER_FALLBACK_GENERIC =
+  "Welcome back. What are we working on today?";
+
+// ─── Soft-note pacing — Round 4 Fixes 7 + 8 ────────────────────────────
+// After MILESTONE_BLENDED_READY lands, wait this long before writing the
+// first soft note so Maria's "Take a look" invitation has breathing room.
+export const PAUSE_BEFORE_SOFT_NOTES_MS = 4000;
+// Between soft notes, when more than one chapter has gaps. Prevents the
+// chat panel from queue-dumping bubbles all at once.
+export const SOFT_NOTE_STAGGER_MS = 3500;
+
+// ─── Path A dashboard banner — Round 4 Fix 10 ──────────────────────────
+// Replaces the prior "You're driving. I'll wait until you ask." banner.
+// Stylized capital-L "Let Maria Lead" is intentional — the live toggle
+// label uses lowercase but the banner reference reads as a setting name.
+
+export const PATH_A_BANNER =
+  "Maria is listening. Toggle 'Let Maria Lead' for guidance.";

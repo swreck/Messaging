@@ -23,3 +23,8 @@ export const IPHONE_AFFORDANCE_TAKE_A_LOOK = "Take a look";
 export const IPHONE_AFFORDANCE_WORK_WITH_MARIA = "Work with Maria";
 
 export const PAGE_AFTER_NARRATION_DELAY_MS = 1000;
+
+// Round 4 Fix 10 Part B — replaces the prior "You're driving" banner.
+// Mirror of PATH_A_BANNER in backend/src/prompts/milestoneCopy.ts.
+export const PATH_A_BANNER =
+  "Maria is listening. Toggle 'Let Maria Lead' for guidance.";

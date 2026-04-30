@@ -72,8 +72,35 @@ export function resetWhatsNextCount(userId: string | undefined): void {
   } catch { /* non-critical */ }
 }
 
+// Round 4 Fix 5 — once the user declines the mode-switch offer, the
+// flag below suppresses re-firing for the rest of the session even if
+// the counter crosses threshold again. Cleared on logout (sessionStorage
+// scope) and on offer accept (the toggle flip itself ends the question).
+function declinedFlagKey(userId: string): string {
+  return `mode-switch-declined-${userId}`;
+}
+
+export function hasDeclinedModeSwitchOffer(userId: string | undefined): boolean {
+  if (!userId) return false;
+  try {
+    return sessionStorage.getItem(declinedFlagKey(userId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markModeSwitchOfferDeclined(userId: string | undefined): void {
+  if (!userId) return;
+  try {
+    sessionStorage.setItem(declinedFlagKey(userId), '1');
+  } catch { /* non-critical */ }
+}
+
 // Bump the counter and return whether the threshold was just crossed.
-// Caller fires the mode-switch offer when this returns true.
+// Caller fires the mode-switch offer when this returns true. Returns
+// false if the user has already declined the offer this session — the
+// detector still tracks the counter so behavioral telemetry stays
+// accurate, but the offer doesn't pester.
 export function bumpWhatsNextAndShouldOffer(
   userId: string | undefined,
   userText: string,
@@ -85,6 +112,7 @@ export function bumpWhatsNextAndShouldOffer(
   }
   const next = getWhatsNextCount(userId) + 1;
   setWhatsNextCount(userId, next);
+  if (hasDeclinedModeSwitchOffer(userId)) return false;
   return next >= WHATS_NEXT_TRIGGER_THRESHOLD;
 }
 

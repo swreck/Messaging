@@ -84,7 +84,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <nav className="nav-bar">
         <Link to="/" className="nav-brand">
           <span className="nav-brand-name">Maria</span>
-          <span className="nav-brand-tagline">Your Messaging Partner</span>
+          {/* Round 4 Fix 6 — hide the tagline below 600px so the brand
+              mark doesn't truncate to "M…" at iPhone width. The "Maria"
+              wordmark alone fits inside the iPhone nav. */}
+          {!isSmallScreen && (
+            <span className="nav-brand-tagline">Your Messaging Partner</span>
+          )}
         </Link>
         <div className="nav-links">
           {NAV_ITEMS.map(item => (

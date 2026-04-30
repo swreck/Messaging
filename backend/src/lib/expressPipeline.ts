@@ -37,6 +37,8 @@ import {
   STAGE_CHECKIN_CHAPTERS,
   STAGE_CHECKIN_BLEND,
   FOUNDATIONAL_SHIFT_HOLD_MIDPOINT,
+  PAUSE_BEFORE_SOFT_NOTES_MS,
+  SOFT_NOTE_STAGGER_MS,
 } from '../prompts/milestoneCopy.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import {
@@ -286,16 +288,37 @@ async function emitChapterSoftNotes(opts: {
   wholeChapterEmpty: Set<3 | 4 | 5>;
   chapterMissingPieces: Record<3 | 4 | 5, string[]>;
 }): Promise<void> {
+  // Round 4 Fix 7 — assemble the soft notes that need to fire BEFORE
+  // sleeping, so we can short-circuit the whole pause when there are
+  // none. No work, no delay.
+  const notesToSend: { chapter: 3 | 4 | 5; text: string }[] = [];
   for (const chapter of [3, 4, 5] as const) {
     const isEmpty = opts.wholeChapterEmpty.has(chapter);
     const pieces = opts.chapterMissingPieces[chapter] || [];
     if (!isEmpty && pieces.length === 0) continue;
-    const note = buildSoftNote(chapter, isEmpty ? [] : pieces);
+    notesToSend.push({ chapter, text: buildSoftNote(chapter, isEmpty ? [] : pieces) });
+  }
+  if (notesToSend.length === 0) return;
+
+  // Round 4 Fix 7 — give MILESTONE_BLENDED_READY breathing room before
+  // the first soft note fires. Without the pause, "Take a look" and the
+  // gap notices arrive in the same bubble cluster and undercut each
+  // other.
+  await new Promise(r => setTimeout(r, PAUSE_BEFORE_SOFT_NOTES_MS));
+
+  // Round 4 Fix 8 — stagger soft notes by SOFT_NOTE_STAGGER_MS so the
+  // chat panel doesn't queue-dump bubbles when more than one chapter
+  // has gaps. First note fires immediately after the Fix 7 pause; each
+  // subsequent note waits the stagger interval before writing.
+  for (let i = 0; i < notesToSend.length; i++) {
+    if (i > 0) {
+      await new Promise(r => setTimeout(r, SOFT_NOTE_STAGGER_MS));
+    }
     await writeMariaMessage({
       userId: opts.userId,
       workspaceId: opts.workspaceId,
       ctx: opts.ctx,
-      content: note,
+      content: notesToSend[i].text,
       kind: 'soft-note',
     });
   }

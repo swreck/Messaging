@@ -20,6 +20,7 @@ import { VoiceInputButton } from './VoiceInputButton';
 import {
   bumpWhatsNextAndShouldOffer,
   resetWhatsNextCount,
+  markModeSwitchOfferDeclined,
 } from './whatsNextDetector';
 import {
   MODE_SWITCH_OFFER_PATH_A_TO_B,
@@ -28,7 +29,8 @@ import {
   TOGGLE_CONFIRMATION_ON,
   TOGGLE_CONFIRMATION_OFF,
 } from './milestoneCopy';
-import { MOBILE_HOME_BREAKPOINT_PX } from './breakpoints';
+// MOBILE_HOME_BREAKPOINT_PX import dropped in Round 4 Fix 10 (toggle
+// renders at all widths). Re-add if future visual treatments need it.
 
 interface Message {
   role: 'user' | 'assistant';
@@ -161,11 +163,7 @@ function hasAskedTimeBudget(): boolean {
     return true; // err on the side of not re-asking
   }
 }
-function markTimeBudgetAsked() {
-  try {
-    localStorage.setItem(`time-budget-asked-${getSessionDateKey()}`, '1');
-  } catch {}
-}
+// Round 4 Fix 12 — markTimeBudgetAsked removed alongside the budget step.
 
 type PanelSize = 'compact' | 'medium' | 'full';
 
@@ -315,21 +313,11 @@ export function MariaPartner() {
   // accept/decline back to the partner conversation history asynchronously.
   const [modeSwitchOfferActive, setModeSwitchOfferActive] = useState<boolean>(false);
 
-  // Phase 2 — Fix 4: small-screen detection for the iPhone toggle home.
-  // When isSmallScreen, the consultation toggle moves OUT of the dashboard
-  // and INTO the chat-panel header so the user reaches it without scrolling
-  // past the iPhone home affordances.
-  const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_HOME_BREAKPOINT_PX;
-  });
-  useEffect(() => {
-    function update() {
-      setIsSmallScreen(window.innerWidth <= MOBILE_HOME_BREAKPOINT_PX);
-    }
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, []);
+  // Round 4 Fix 10 — small-screen breakpoint state was used to gate the
+  // chat-panel-header toggle. With the toggle now rendered at every
+  // breakpoint, isSmallScreen is no longer needed inside MariaPartner.
+  // The MOBILE_HOME_BREAKPOINT_PX import survives for future per-pixel
+  // adjustments if Cowork wants different visual treatments by width.
 
   // Phase 2 — Fix 4: in-panel toggle state, mirrored from localStorage so
   // the visible switch reflects the current consultation. Listens for
@@ -715,6 +703,20 @@ export function MariaPartner() {
         return;
       }
       if (detail?.open) {
+        // Round 4 Fix 2 — `+ New message` and other fresh-start entry
+        // points dispatch maria-toggle with freshStart=true so the panel
+        // resets to empty before the chat-open opener fires. Without this,
+        // the unscoped panel surfaces full prior history including stale
+        // sessions, and the user lands on a "step indicator says ✓ basics"
+        // experience for a build they don't recognize.
+        if (detail.freshStart) {
+          setMessages([]);
+          setLoaded(true);
+          setIntroduced(true);
+          setShowProactiveCard(false);
+          setShowReturnCard(false);
+          setShowBudgetCard(false);
+        }
         setOpen(true);
         setShowDot(false);
         setShowGlow(false);
@@ -784,15 +786,8 @@ export function MariaPartner() {
     } catch { /* non-critical */ }
   }
 
-  async function dismissIntro() {
-    setIntroStep(INTRO_DONE);
-    setIntroduced(true);
-    setOpen(false);
-    setLoaded(false);
-    try {
-      await api.put('/partner/intro-step', { dismiss: true });
-    } catch { /* non-critical */ }
-  }
+  // Round 4 Fix 12 — dismissIntro removed alongside the budget step. The
+  // only call site was the "Not now" button on the budget chips.
 
   // remindLater removed — intro simplified to 2 steps
 
@@ -807,7 +802,10 @@ export function MariaPartner() {
     // conversation greeting still reads "Hi <username>" after the user
     // just told Maria their real name.
     setSuggestedName(name.charAt(0).toUpperCase() + name.slice(1));
-    setIntroStep(1); // advance past name to Phase 1
+    // Round 4 Fix 12 — skip the time-budget step. Fresh users go straight
+    // from name confirmation to the chat-open opener (OPENER_FRESH_USER
+    // for empty workspaces, state-aware welcome for returning users).
+    advanceIntro(INTRO_DONE);
   }
 
   // ─── Send message ───────────────────────────────────
@@ -1522,39 +1520,13 @@ export function MariaPartner() {
       );
     }
 
-    // Steps 1-2 combined: brief pitch + budget chips. B-1 — the budget
-    // question lives inside the intro on Maria-led first-touch (one
-    // continuous conversation), instead of popping up as a separate chip
-    // card after the intro completes. Chip card stays as the day-to-day
-    // re-ask for returning users (introStep already === INTRO_DONE).
-    if (introStep === 1 || introStep === 2) {
-      const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
-      const pickBudget = (mins: number | null) => {
-        if (mins != null) {
-          const tc: TimeContext = { sessionStartMs: Date.now(), budgetMin: mins, thresholdTriggered: false };
-          setTimeContext(tc);
-          saveTimeContext(tc);
-        }
-        markTimeBudgetAsked();
-        setShowBudgetCard(false);
-        advanceIntro(INTRO_DONE);
-      };
-      return (
-        <div className="partner-intro">
-          <div className="partner-intro-message">
-            <p>{firstName ? `Nice to meet you, ${firstName}. ` : ''}I help people build more persuasive messages and then apply them to almost any medium. Tell me about your work and I'll take it from there.</p>
-            <p style={{ marginTop: 10 }}>How much time do you have? I'll pace accordingly.</p>
-          </div>
-          <div className="partner-intro-actions" style={{ flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={() => pickBudget(15)}>15 min</button>
-            <button className="btn btn-primary" onClick={() => pickBudget(30)}>30 min</button>
-            <button className="btn btn-primary" onClick={() => pickBudget(45)}>45 min</button>
-            <button className="btn btn-ghost" onClick={() => pickBudget(null)}>No budget today</button>
-            <button className="btn btn-ghost" onClick={dismissIntro}>Not now</button>
-          </div>
-        </div>
-      );
-    }
+    // Round 4 Fix 12 — the time-budget intro step (introStep === 1 || 2)
+    // is removed. Fresh users now go from name confirmation directly to
+    // the chat-open opener. The downstream TIME_THRESHOLD logic in
+    // routes/partner.ts is gated on timeContext.budgetMin being truthy,
+    // which it never is once this step is gone — sensible no-op default
+    // matches the CC prompt's "Let Maria lead replaces the lead-vs-
+    // follow signal that the budget step used to provide."
 
     // Step 3: Phase 3 — context
     if (introStep === 3) {
@@ -1704,11 +1676,12 @@ export function MariaPartner() {
             </div>
           </div>
 
-          {/* Phase 2 — Fix 4: iPhone toggle home. On small screens (<= 600px)
-              the "Let Maria lead" toggle lives here, pinned under the panel
-              header above the message thread. On larger screens, the toggle
-              stays on the dashboard. */}
-          {isSmallScreen && (
+          {/* Round 4 Fix 10 — toggle relocation. The "Let Maria lead"
+              toggle lives in the chat-panel header at every breakpoint
+              now (was small-screen-only in Round 2). It's a setting WITHIN
+              the Maria relationship, so its home is Maria's panel. The
+              dashboard's top-right toggle is removed in this round. */}
+          {(
             <div
               className="partner-mobile-toggle"
               style={{
@@ -1938,62 +1911,11 @@ export function MariaPartner() {
                     </div>
                   )}
 
-                  {/* Round B6 — time-aware session pacing chips. Render at session
-                      start when no budget is set yet. User picks 15/30/45/Custom/Skip.
-                      Bug D — defers behind any active resume/proactive prompt so the
-                      user isn't asked about time WHILE being asked about resuming. */}
-                  {loaded && !hasActiveGuidedSession && !resumeDraft && !(showReturnCard && returnContext) && !(showProactiveCard && proactiveOffer) && showBudgetCard && !timeContext.budgetMin && (
-                    <div className="partner-return-card" style={{
-                      padding: '12px 16px',
-                      marginBottom: 8,
-                      background: 'var(--bg-secondary, #f8f8fa)',
-                      borderRadius: 'var(--radius-sm, 6px)',
-                      border: '1px solid var(--border-light, #e5e5ea)',
-                    }}>
-                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
-                        What's your time budget for this session? I'll pace accordingly.
-                      </p>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {[15, 30, 45].map((mins) => (
-                          <button
-                            key={mins}
-                            className="btn btn-ghost btn-sm"
-                            style={{ minHeight: 32, padding: '4px 12px' }}
-                            onClick={() => {
-                              const tc: TimeContext = { sessionStartMs: Date.now(), budgetMin: mins, thresholdTriggered: false };
-                              setTimeContext(tc);
-                              saveTimeContext(tc);
-                              markTimeBudgetAsked();
-                              setShowBudgetCard(false);
-                            }}
-                          >{mins} min</button>
-                        ))}
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ minHeight: 32, padding: '4px 12px' }}
-                          onClick={() => {
-                            const m = window.prompt('How many minutes?');
-                            const n = m ? parseInt(m, 10) : NaN;
-                            if (!isNaN(n) && n > 0 && n <= 240) {
-                              const tc: TimeContext = { sessionStartMs: Date.now(), budgetMin: n, thresholdTriggered: false };
-                              setTimeContext(tc);
-                              saveTimeContext(tc);
-                              markTimeBudgetAsked();
-                              setShowBudgetCard(false);
-                            }
-                          }}
-                        >Other</button>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ minHeight: 32, padding: '4px 12px' }}
-                          onClick={() => {
-                            markTimeBudgetAsked();
-                            setShowBudgetCard(false);
-                          }}
-                        >Skip</button>
-                      </div>
-                    </div>
-                  )}
+                  {/* Round 4 Fix 12 — day-to-day budget re-ask card removed.
+                      The "Let Maria lead" toggle covers the lead-vs-follow
+                      pacing distinction; specific time budgets aren't needed.
+                      Downstream TIME_THRESHOLD logic in routes/partner.ts
+                      stays in place but no-ops because no budget gets set. */}
 
                   {/* Bug E — when scope is scoped and the filtered message list
                       is empty, ALWAYS show the empty-state copy so the user
@@ -2214,6 +2136,10 @@ export function MariaPartner() {
                               ...prev,
                               { role: 'user', content: MODE_SWITCH_OFFER_CHIP_NO },
                             ]);
+                            // Round 4 Fix 5 — session-level decline flag so
+                            // the offer doesn't re-fire later in the same
+                            // session if the user crosses threshold again.
+                            markModeSwitchOfferDeclined(user?.userId);
                             setModeSwitchOfferActive(false);
                           }}
                         >
