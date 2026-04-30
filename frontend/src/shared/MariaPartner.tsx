@@ -1683,7 +1683,7 @@ export function MariaPartner() {
               dashboard's top-right toggle is removed in this round. */}
           {(
             <div
-              className="partner-mobile-toggle"
+              className="partner-lead-toggle"
               style={{
                 display: 'flex',
                 alignItems: 'center',
