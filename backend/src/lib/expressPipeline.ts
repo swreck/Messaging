@@ -947,19 +947,6 @@ AUDIENCE: ${draftWithElements.audience.name}`;
 
     await update({ progress: scaledProgress(45) });
 
-    // Phase 2 — Milestone 1: Foundation confirmed. Path B narration only;
-    // Path A stays silent. Live consultation read inside the helper.
-    await narrateMilestoneIfPathB({
-      userId: pipelineUserId,
-      workspaceId: pipelineWorkspaceId,
-      ctx: {
-        draftId: draftWithElements.id,
-        offeringId: draftWithElements.offering.id,
-        audienceId: draftWithElements.audience.id,
-      },
-      milestone: MILESTONE_FOUNDATION_CONFIRMED,
-    });
-
     // Capture initial Tier 1 text BEFORE chapter generation so the
     // shift-pause helper can detect whether a mid-pipeline edit actually
     // changed the foundation.
@@ -1014,6 +1001,23 @@ AUDIENCE: ${draftWithElements.audience.name}`;
         customName: buildCustomName(),
         cta: `Get started with ${interpretation.offering.name || 'us'}`,
       },
+    });
+
+    // Phase 2 — Milestone 1: Foundation confirmed. Path B narration only;
+    // Path A stays silent. Live consultation read inside the helper.
+    // Fires after the FCS row exists so storyId is in ctx — the chat panel
+    // scopes history by storyId once it navigates to /five-chapter, and a
+    // foundation message without storyId would be filtered out of view.
+    await narrateMilestoneIfPathB({
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      milestone: MILESTONE_FOUNDATION_CONFIRMED,
     });
 
     // Phase 2 — `let` (was `const`) so the foundational-shift pause path
