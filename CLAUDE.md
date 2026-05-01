@@ -64,8 +64,9 @@ Three independent backup layers were established 2026-04-27. Lose any two, the t
 
 ### Layer 1 — Git tag pinned on GitHub (use this first)
 
-- **Tag:** `pre-phase-2-2026-04-27` on remote `swreck/Messaging` — points at commit `70a27aa` (Phase 1 verification, live bundle was `index-DrOf6cOV.js`).
-- **Verify it still exists:** `git ls-remote --tags origin pre-phase-2-2026-04-27`
+- **Tag:** `pre-round-3-3-merge-2026-05-01` on remote `swreck/Messaging` — points at commit `8ba860e` (Round 3.2 production state, bundle `index-BUv8rE46.js`). Latest pre-merge anchor.
+- **Older anchor:** `pre-phase-2-2026-04-27` → commit `70a27aa` (Phase 1 verification, bundle `index-DrOf6cOV.js`).
+- **Verify it still exists:** `git ls-remote --tags origin pre-round-3-3-merge-2026-05-01`
 - **Restore main to this point** (DESTRUCTIVE — confirm with Ken before running):
   ```
   git fetch origin --tags
@@ -91,7 +92,8 @@ Three independent backup layers were established 2026-04-27. Lose any two, the t
 
 ### Layer 3 — Production database JSON snapshot (if Neon data is corrupt)
 
-- **File:** `/Users/kenrosen/Documents/MariaBackups/maria-db-snapshot-2026-04-27T17-55-51-121Z.json` (~5.4MB at creation).
+- **Latest file:** `/Users/kenrosen/Documents/MariaBackups/maria-db-snapshot-2026-05-01T23-00-25-898Z.json` (~5.4MB, taken pre-Round-3.3-merge).
+- **Older snapshot:** `/Users/kenrosen/Documents/MariaBackups/maria-db-snapshot-2026-04-27T17-55-51-121Z.json` (~5.4MB at creation).
 - **What's in it:** every row of every Prisma-managed table at 2026-04-27 17:55 UTC. Schema is NOT in the JSON — schema lives in `backend/prisma/migrations/` in the repo, applied via `npx prisma migrate deploy`.
 - **To take a fresh snapshot any time** (always do this BEFORE any risky DB operation):
   ```
