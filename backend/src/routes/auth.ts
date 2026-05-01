@@ -90,25 +90,23 @@ router.post('/register', async (req: Request, res: Response) => {
 
   const passwordHash = await bcryptjs.hash(password, 10);
 
-  // Display name: prefer the admin-supplied invitee name, fall back to the
-  // capitalized username. This is what Maria greets with and what anchors
-  // the workspace title — NOT the raw (possibly hyphenated) username.
-  const displayName =
-    (code.inviteeName && code.inviteeName.trim()) ||
-    `${normalizedUsername.charAt(0).toUpperCase()}${normalizedUsername.slice(1)}`;
-  const firstName = displayName.split(/\s+/)[0];
-
+  // Round 3.1 Item 1 — do NOT fabricate displayName/firstName at register
+  // time. The admin-supplied invitee name is an internal label, not the
+  // user's preferred name (TEST_* invitee names produced "TEST" greetings;
+  // any multi-word invitee name produced a wrong first-name fabrication).
+  // Leave displayName empty here. Maria's intro flow asks the user what
+  // they'd like to be called and persists the answer via /partner/name.
+  // Existing accounts whose displayName was already seeded by the prior
+  // logic continue to work — only NEW signups skip the fabrication.
   const user = await prisma.user.create({
     data: {
       username: normalizedUsername,
       passwordHash,
       isAdmin: code.role === 'admin',
-      // Seed both top-level (for general UI) and partner.displayName
-      // (so Maria greets by the real first name, not the raw username).
       settings: {
-        displayName,
-        firstName,
-        partner: { displayName: firstName },
+        // Empty top-level + partner.displayName is the signal the
+        // frontend reads as "ask the user what they want to be called."
+        partner: { displayName: '' },
       },
     },
   });
@@ -120,7 +118,9 @@ router.post('/register', async (req: Request, res: Response) => {
   });
 
   // If the invite code is linked to a workspace, add the user as a member
-  // Otherwise, create a default workspace for them
+  // Otherwise, create a default workspace for them with a placeholder
+  // title. /partner/name renames the workspace once the user provides
+  // their preferred name.
   if (code.workspaceId) {
     await prisma.workspaceMember.create({
       data: {
@@ -132,7 +132,7 @@ router.post('/register', async (req: Request, res: Response) => {
   } else {
     await prisma.workspace.create({
       data: {
-        name: `${firstName}'s Workspace`,
+        name: 'Your Workspace',
         members: {
           create: { userId: user.id, role: 'owner' },
         },
@@ -143,7 +143,7 @@ router.post('/register', async (req: Request, res: Response) => {
   const payload: AuthPayload = { userId: user.id, username: user.username, isAdmin: user.isAdmin };
   const token = signToken(payload);
 
-  res.status(201).json({ token, user: { ...payload, displayName, firstName } });
+  res.status(201).json({ token, user: { ...payload, displayName: '', firstName: '' } });
 });
 
 // POST /api/auth/login

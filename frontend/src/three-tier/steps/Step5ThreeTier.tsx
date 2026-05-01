@@ -57,6 +57,9 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
   // load. Contains an entry for every observation (open AND resolved) when
   // viewMode='all-markup'; only OPEN entries otherwise.
   const [cellStates, setCellStates] = useState<Map<string, CellMarkupState>>(new Map());
+  // Round 3.1 Item A — cellKey → Observation.id for OPEN observations so
+  // the "Fill this in" submit can resolve the right row server-side.
+  const [cellObservationIds, setCellObservationIds] = useState<Map<string, string>>(new Map());
 
   // Helper — convert an observation row to a UI cell key (tier1, tier2-i, tier3-i-j).
   function observationToCellKey(obs: { cellType: string; cellId: string }): string | null {
@@ -87,10 +90,14 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       .then(({ observations }) => {
         if (!observations || observations.length === 0) {
           setCellStates(new Map());
+          setCellObservationIds(new Map());
           return;
         }
         const openMap = new Map<string, string>();
         const stateMap = new Map<string, CellMarkupState>();
+        // Round 3.1 Item A — track observation id per cell so the
+        // "Fill this in" submit can resolve the right Observation row.
+        const idMap = new Map<string, string>();
         for (const obs of observations) {
           const key = observationToCellKey(obs);
           if (!key) continue;
@@ -98,6 +105,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           if (state === 'OPEN') {
             openMap.set(key, obs.suggestion);
             stateMap.set(key, 'open');
+            idMap.set(key, obs.id);
           } else if (state === 'RESOLVED_BY_CHANGE') {
             stateMap.set(key, 'resolved-change');
           } else if (state === 'RESOLVED_BY_ACKNOWLEDGE') {
@@ -116,6 +124,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
           });
         }
         setCellStates(stateMap);
+        setCellObservationIds(idMap);
       })
       .catch(() => {/* non-fatal */});
   }, [draft?.id, viewMode]);
@@ -415,6 +424,30 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
       if (next.size === 0) previousStateRef.current = null;
       return next;
     });
+  }
+
+  // Round 3.1 Item A — Fill-this-in submit for autonomous-mode gap
+  // observations. Updates the cell text via the existing tier PUT, then
+  // resolves the Observation row server-side so the gap doesn't reappear
+  // on the next observation reload. Falls back gracefully if the resolve
+  // fails — the cell still updated successfully.
+  async function handleFillGap(cell: string, text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const observationId = cellObservationIds.get(cell);
+    await handleAcceptSuggestion(cell, trimmed);
+    if (observationId) {
+      try {
+        await api.post(`/ai/observations/${observationId}/resolve`, { kind: 'change' });
+      } catch (err) {
+        console.error('[FillGap] resolve failed (non-fatal):', err);
+      }
+      setCellObservationIds(prev => {
+        const next = new Map(prev);
+        next.delete(cell);
+        return next;
+      });
+    }
   }
 
   function clearSuggestions() {
@@ -774,6 +807,7 @@ export function Step5ThreeTier({ draft, loadDraft, refreshDraft, prevStep, goToS
         cellStates={cellStates}
         onAcceptSuggestion={handleAcceptSuggestion}
         onDismissSuggestion={handleDismissSuggestion}
+        onFillGap={handleFillGap}
         tier1Alternative={tier1Alternative}
         focusedCell={focusedCell}
         onCellFocus={setFocusedCell}

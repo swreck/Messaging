@@ -28,6 +28,12 @@ interface ThreeTierTableProps {
   cellStates?: Map<string, CellMarkupState>;
   onAcceptSuggestion?: (cell: string, text: string) => void;
   onDismissSuggestion?: (cell: string) => void;
+  // Round 3.1 Item A — fill-this-in submit for autonomous-mode gap
+  // observations. When the suggestion text starts with the GAP marker,
+  // the inline panel renders a text input + "Fill this in" submit
+  // instead of the Accept/Discuss pair. Submit calls this callback,
+  // which updates the cell and resolves the observation server-side.
+  onFillGap?: (cell: string, text: string) => void;
   tier1Alternative?: string | null;
   focusedCell?: string | null;
   onCellFocus?: (cell: string | null) => void;
@@ -41,10 +47,46 @@ interface PendingDelete {
   timeout: ReturnType<typeof setTimeout>;
 }
 
-export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, cellStates, onAcceptSuggestion, tier1Alternative, focusedCell, onCellFocus, viewMode = 'minimal' }: ThreeTierTableProps) {
+export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, cellStates, onAcceptSuggestion, onFillGap, tier1Alternative, focusedCell, onCellFocus, viewMode = 'minimal' }: ThreeTierTableProps) {
   const { showToast } = useToast();
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Round 3.1 Item A — per-cell text buffer for the gap-fill input. Only
+  // populated when a gap observation is active on that cell.
+  const [gapDraftByCell, setGapDraftByCell] = useState<Map<string, string>>(new Map());
+
+  // Round 3.1 Item A — gap-marker detector + body extractor. Suggestions
+  // prefixed with "[GAP] " are autonomous-mode gap observations and
+  // render the input variant of the inline panel.
+  function isGapSuggestion(text: string | undefined): boolean {
+    return !!(text && text.trimStart().startsWith('[GAP]'));
+  }
+  function gapBody(text: string): string {
+    // Strip the "[GAP]" prefix (with or without trailing whitespace) for
+    // display. The marker survives in the persisted suggestion so reloads
+    // still trigger the gap variant.
+    return text.replace(/^\s*\[GAP\]\s*/, '').trim();
+  }
+  function getGapDraft(cell: string): string {
+    return gapDraftByCell.get(cell) || '';
+  }
+  function setGapDraft(cell: string, value: string): void {
+    setGapDraftByCell(prev => {
+      const next = new Map(prev);
+      next.set(cell, value);
+      return next;
+    });
+  }
+  function submitGap(cell: string): void {
+    const text = (gapDraftByCell.get(cell) || '').trim();
+    if (!text) return;
+    onFillGap?.(cell, text);
+    setGapDraftByCell(prev => {
+      const next = new Map(prev);
+      next.delete(cell);
+      return next;
+    });
+  }
 
   // Three-view-mode helpers. State (suggestions Map) is preserved across mode
   // switches; viewMode only controls visibility.
@@ -320,25 +362,51 @@ ${t2s.map(t2 => `<div class="tier2-col">
           )}
           {shouldShowInline('tier1') && (
             <div className="inline-suggestion">
-              <span className="inline-suggestion-text">{suggestions!.get('tier1')}</span>
-              <div className="inline-suggestion-actions">
-                <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.('tier1', suggestions!.get('tier1')!)}>Accept</button>
-                <button className="inline-suggestion-dismiss" onClick={(e) => {
-                  e.stopPropagation();
-                  // Discuss-with-Maria replaces silent Dismiss. Opens scoped chat
-                  // where the user can change the cell or acknowledge-as-is.
-                  document.dispatchEvent(new CustomEvent('maria-toggle', {
-                    detail: { open: true, message: `[REVIEW_CELL:tier1] I want to look at the Tier 1 suggestion you have.` },
-                  }));
-                }}>Discuss</button>
-              </div>
-              {tier1Alternative && (
-                <div
-                  style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8, cursor: 'pointer', lineHeight: 1.5 }}
-                  onClick={() => onAcceptSuggestion?.('tier1', tier1Alternative)}
-                >
-                  I also have a more straightforward version: <em>"{tier1Alternative}"</em>
-                </div>
+              {isGapSuggestion(suggestions!.get('tier1')) ? (
+                // Round 3.1 Item A — gap-fill input variant.
+                <>
+                  <span className="inline-suggestion-text">{gapBody(suggestions!.get('tier1')!)}</span>
+                  <div className="inline-suggestion-actions" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6, marginTop: 8 }}>
+                    <input
+                      type="text"
+                      value={getGapDraft('tier1')}
+                      onChange={e => setGapDraft('tier1', e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') submitGap('tier1'); }}
+                      placeholder="Type the missing input"
+                      style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-light, #e5e5ea)', fontSize: 13 }}
+                    />
+                    <button
+                      className="inline-suggestion-accept"
+                      onClick={() => submitGap('tier1')}
+                      disabled={!getGapDraft('tier1').trim()}
+                    >
+                      Fill this in
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="inline-suggestion-text">{suggestions!.get('tier1')}</span>
+                  <div className="inline-suggestion-actions">
+                    <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.('tier1', suggestions!.get('tier1')!)}>Accept</button>
+                    <button className="inline-suggestion-dismiss" onClick={(e) => {
+                      e.stopPropagation();
+                      // Discuss-with-Maria replaces silent Dismiss. Opens scoped chat
+                      // where the user can change the cell or acknowledge-as-is.
+                      document.dispatchEvent(new CustomEvent('maria-toggle', {
+                        detail: { open: true, message: `[REVIEW_CELL:tier1] I want to look at the Tier 1 suggestion you have.` },
+                      }));
+                    }}>Discuss</button>
+                  </div>
+                  {tier1Alternative && (
+                    <div
+                      style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8, cursor: 'pointer', lineHeight: 1.5 }}
+                      onClick={() => onAcceptSuggestion?.('tier1', tier1Alternative)}
+                    >
+                      I also have a more straightforward version: <em>"{tier1Alternative}"</em>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -390,17 +458,43 @@ ${t2s.map(t2 => `<div class="tier2-col">
                 )}
                 {shouldShowInline(t2Key) && (
                   <div className="inline-suggestion">
-                    <span className="inline-suggestion-text">{suggestions!.get(t2Key)}</span>
-                    <div className="inline-suggestion-actions">
-                      <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(t2Key, suggestions!.get(t2Key)!)}>Accept</button>
-                      <button className="inline-suggestion-dismiss" onClick={(e) => {
-                        e.stopPropagation();
-                        const label = t2.categoryLabel || `column ${t2Index + 1}`;
-                        document.dispatchEvent(new CustomEvent('maria-toggle', {
-                          detail: { open: true, message: `[REVIEW_CELL:${t2Key}] I want to look at the suggestion you have on the ${label} column.` },
-                        }));
-                      }}>Discuss</button>
-                    </div>
+                    {isGapSuggestion(suggestions!.get(t2Key)) ? (
+                      // Round 3.1 Item A — gap-fill input variant.
+                      <>
+                        <span className="inline-suggestion-text">{gapBody(suggestions!.get(t2Key)!)}</span>
+                        <div className="inline-suggestion-actions" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6, marginTop: 8 }}>
+                          <input
+                            type="text"
+                            value={getGapDraft(t2Key)}
+                            onChange={e => setGapDraft(t2Key, e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') submitGap(t2Key); }}
+                            placeholder="Type the missing input"
+                            style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-light, #e5e5ea)', fontSize: 13 }}
+                          />
+                          <button
+                            className="inline-suggestion-accept"
+                            onClick={() => submitGap(t2Key)}
+                            disabled={!getGapDraft(t2Key).trim()}
+                          >
+                            Fill this in
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="inline-suggestion-text">{suggestions!.get(t2Key)}</span>
+                        <div className="inline-suggestion-actions">
+                          <button className="inline-suggestion-accept" onClick={() => onAcceptSuggestion?.(t2Key, suggestions!.get(t2Key)!)}>Accept</button>
+                          <button className="inline-suggestion-dismiss" onClick={(e) => {
+                            e.stopPropagation();
+                            const label = t2.categoryLabel || `column ${t2Index + 1}`;
+                            document.dispatchEvent(new CustomEvent('maria-toggle', {
+                              detail: { open: true, message: `[REVIEW_CELL:${t2Key}] I want to look at the suggestion you have on the ${label} column.` },
+                            }));
+                          }}>Discuss</button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
                 <CellVersionNav

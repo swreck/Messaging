@@ -28,6 +28,9 @@ import {
   MODE_SWITCH_OFFER_CHIP_NO,
   TOGGLE_CONFIRMATION_ON,
   TOGGLE_CONFIRMATION_OFF,
+  SKIP_DEMAND_CHIP_AUTONOMOUS,
+  AUTONOMOUS_POST_DELIVERY_CHIP_YES,
+  isAutonomousPostDeliveryChipNo,
 } from './milestoneCopy';
 // MOBILE_HOME_BREAKPOINT_PX import dropped in Round 4 Fix 10 (toggle
 // renders at all widths). Re-add if future visual treatments need it.
@@ -41,6 +44,13 @@ interface Message {
   // posts the chip text as a normal user message.
   chips?: string[];
   isChatOpen?: boolean;
+  // Round 3.1 Item 2 — surfaced from the persisted assistantMessage
+  // context for autonomous-post-delivery offer messages so the YES chip
+  // can navigate to the right Three Tier without a server round-trip.
+  kind?: string;
+  autonomousDraftId?: string;
+  autonomousStoryId?: string;
+  autonomousDeliverableType?: string;
 }
 
 interface ReturnContext {
@@ -255,7 +265,8 @@ export function MariaPartner() {
   const [introStep, setIntroStep] = useState<number>(0);
   const [introduced, setIntroduced] = useState<boolean | null>(null);
   const [customName, setCustomName] = useState('');
-  const [showCustomInput, setShowCustomInput] = useState(false);
+  // Round 3.1 Item 1 — showCustomInput state removed alongside the
+  // chip-or-input branch in renderIntro. The input is the only path now.
   const [suggestedName, setSuggestedName] = useState('');
 
   // Round B6 — time-aware session pacing
@@ -355,6 +366,25 @@ export function MariaPartner() {
   const panelRef = useRef<HTMLDivElement>(null);
   const followUpRef = useRef(false);
 
+  // Round 3.1 Item 4 — when the auth user changes (logout → signup, or a
+  // workspace switch), reset every panel-side state slice that can carry
+  // a previous user's content. Without this, a brand-new TEST_aria signup
+  // briefly inherited admin's proactive-return-card "I know what VP
+  // Marketing typically cares about…" because setProactiveOffer was only
+  // called on truthy values and the prior session's value lingered.
+  useEffect(() => {
+    if (!user) {
+      setMessages([]);
+      setReturnContext(null);
+      setProactiveOffer(null);
+      setResumeDraft(null);
+      setSuggestedName('');
+      setIntroduced(null);
+      setIntroStep(0);
+      setLoaded(false);
+    }
+  }, [user?.userId]);
+
   // Load status on mount — only if logged in
   useEffect(() => {
     if (!user) return;
@@ -362,20 +392,21 @@ export function MariaPartner() {
       .then(status => {
         setIntroduced(status.introduced);
         setIntroStep(status.introStep ?? 0);
-        const name = status.displayName || status.username || '';
+        // Round 3.1 Item 1 — suggestedName tracks the user's preferred
+        // name only. No fallback to username (fabricating "Test_aria_2026"
+        // from a TEST_* username produced the bug Cowork flagged).
+        const realDisplayName = (status.displayName || '').trim();
         setSuggestedName(
-          name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
+          realDisplayName ? realDisplayName.charAt(0).toUpperCase() + realDisplayName.slice(1) : ''
         );
 
-        if (status.returnContext) {
-          setReturnContext(status.returnContext);
-        }
-        if (status.proactiveOffer) {
-          setProactiveOffer(status.proactiveOffer);
-        }
-        if (status.resumeDraft) {
-          setResumeDraft(status.resumeDraft);
-        }
+        // Round 3.1 Item 4 — set unconditionally so a null response
+        // overwrites any stale state from a prior session. The previous
+        // truthy-only setters were the bug — they let stale proactive
+        // cards survive a logout/signup cycle.
+        setReturnContext(status.returnContext || null);
+        setProactiveOffer(status.proactiveOffer || null);
+        setResumeDraft(status.resumeDraft || null);
 
         // Path-architecture refactor — Phase 1. Reconcile the device-local
         // toggle (localStorage) with the persisted source of truth on
@@ -452,7 +483,7 @@ export function MariaPartner() {
       }
       const qs = new URLSearchParams(scopeParams).toString();
       const url = qs ? `/partner/history?${qs}` : '/partner/history';
-      api.get<{ messages: (Message & { kind?: string })[] }>(url)
+      api.get<{ messages: (Message & { kind?: string; autonomousDraftId?: string; autonomousStoryId?: string; autonomousDeliverableType?: string })[] }>(url)
         .then(async ({ messages: rawHistory }) => {
           // Cowork follow-up #2 + #6 — backend now returns chips and kind on
           // assistant rows. Map kind:'chat-open-opener' to isChatOpen:true so
@@ -463,6 +494,10 @@ export function MariaPartner() {
             actionResult: m.actionResult,
             chips: Array.isArray(m.chips) ? m.chips : undefined,
             isChatOpen: m.kind === 'chat-open-opener' || m.isChatOpen,
+            kind: m.kind,
+            autonomousDraftId: m.autonomousDraftId,
+            autonomousStoryId: m.autonomousStoryId,
+            autonomousDeliverableType: m.autonomousDeliverableType,
           }));
           // B-7 — when in scoped mode and the scoped history is empty,
           // skip the auto-greeting injection. The render layer shows the
@@ -802,10 +837,16 @@ export function MariaPartner() {
     // conversation greeting still reads "Hi <username>" after the user
     // just told Maria their real name.
     setSuggestedName(name.charAt(0).toUpperCase() + name.slice(1));
-    // Round 4 Fix 12 — skip the time-budget step. Fresh users go straight
-    // from name confirmation to the chat-open opener (OPENER_FRESH_USER
-    // for empty workspaces, state-aware welcome for returning users).
-    advanceIntro(INTRO_DONE);
+    // Round 3.1 follow-up regression fix — PUT /partner/name now
+    // advances introStep=4, introduced=true server-side directly.
+    // Mirror the advance into local state and trigger the history
+    // reload so the chat-open opener fires immediately. The previous
+    // advanceIntro(INTRO_DONE) call (and its parallel PUT
+    // /partner/intro-step) was racing the /name PUT and being
+    // clobbered, leaving fresh users stuck at introStep=1.
+    setIntroStep(INTRO_DONE);
+    setIntroduced(true);
+    setLoaded(false);
   }
 
   // ─── Send message ───────────────────────────────────
@@ -1385,13 +1426,17 @@ export function MariaPartner() {
               }
               const qs = new URLSearchParams(scopeParams).toString();
               const url = qs ? `/partner/history?${qs}` : '/partner/history';
-              const fresh = await api.get<{ messages: (Message & { kind?: string })[] }>(url);
+              const fresh = await api.get<{ messages: (Message & { kind?: string; autonomousDraftId?: string; autonomousStoryId?: string; autonomousDeliverableType?: string })[] }>(url);
               const remapped: Message[] = fresh.messages.map(m => ({
                 role: m.role,
                 content: m.content,
                 actionResult: m.actionResult,
                 chips: Array.isArray(m.chips) ? m.chips : undefined,
                 isChatOpen: m.kind === 'chat-open-opener' || m.isChatOpen,
+                kind: m.kind,
+                autonomousDraftId: m.autonomousDraftId,
+                autonomousStoryId: m.autonomousStoryId,
+                autonomousDeliverableType: m.autonomousDeliverableType,
               }));
               setMessages(remapped);
             } catch {
@@ -1484,36 +1529,43 @@ export function MariaPartner() {
   // ─── Render intro ──────────────────────────────────
 
   function renderIntro() {
-    // Step 0: Name capture
+    // Round 3.1 Item 1 — name capture, refactored. Brand-new users no
+    // longer see a "That's me" chip backed by a fabricated suggestedName
+    // (the prior path produced "TEST" for every TEST_* synthetic account
+    // and similar artifacts for any multi-word invitee name). The user
+    // types their preferred name or taps the secondary chip to use their
+    // username verbatim. Maria asks one question and waits.
     if (introStep === 0) {
+      const usernameFallback = user?.username || '';
       return (
         <div className="partner-intro">
           <div className="partner-intro-message">
-            <p>Hi — I'm Maria.{suggestedName ? ` Can I call you ${suggestedName}?` : ' What should I call you?'}</p>
+            <p>Hi — I'm Maria. What should I call you?</p>
           </div>
           <div className="partner-intro-actions">
-            {!showCustomInput && suggestedName ? (
-              <>
-                <button className="btn btn-primary" onClick={() => confirmName(suggestedName)}>That's me</button>
-                <button className="btn btn-ghost" onClick={() => setShowCustomInput(true)}>Call me something else</button>
-              </>
-            ) : (
-              <div className="partner-name-input">
-                <input
-                  type="text"
-                  value={customName}
-                  onChange={e => setCustomName(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Escape') setShowCustomInput(false);
-                    if (e.key === 'Enter' && customName.trim()) confirmName(customName.trim());
-                  }}
-                  placeholder="What should I call you?"
-                  autoFocus
-                />
-                <button className="btn btn-primary btn-sm" onClick={() => customName.trim() && confirmName(customName.trim())} disabled={!customName.trim()}>
-                  That's it
-                </button>
-              </div>
+            <div className="partner-name-input">
+              <input
+                type="text"
+                value={customName}
+                onChange={e => setCustomName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && customName.trim()) confirmName(customName.trim());
+                }}
+                placeholder="Type your preferred name"
+                autoFocus
+              />
+              <button className="btn btn-primary btn-sm" onClick={() => customName.trim() && confirmName(customName.trim())} disabled={!customName.trim()}>
+                That's it
+              </button>
+            </div>
+            {usernameFallback && (
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ marginTop: 8 }}
+                onClick={() => confirmName(usernameFallback)}
+              >
+                Call me {usernameFallback}
+              </button>
             )}
           </div>
         </div>
@@ -2008,9 +2060,98 @@ export function MariaPartner() {
                               color: 'var(--accent, #007aff)',
                               background: 'transparent',
                             }}
-                            onClick={() => {
-                              // Tap → echo as user bubble + send() with override
-                              // so the existing partner-message flow handles it.
+                            onClick={async () => {
+                              // Round 3.1 Item 2 — intercept three specific
+                              // chip texts before falling through to the
+                              // generic send-through-Opus path.
+
+                              // (1) AUTONOMOUS skip-demand chip — route
+                              // directly to /partner/autonomous-build so the
+                              // pipeline kickoff is deterministic, not
+                              // Opus-interpreted.
+                              if (chip === SKIP_DEMAND_CHIP_AUTONOMOUS) {
+                                setMessages(prev => prev.map((m, j) => (
+                                  j === prev.length - 1 ? { ...m, chips: [] } : m
+                                )).concat({ role: 'user', content: chip }));
+                                try {
+                                  const result = await api.post<{
+                                    started: boolean;
+                                    jobId?: string;
+                                    draftId?: string;
+                                    deliverableType?: string;
+                                    reason?: string;
+                                  }>('/partner/autonomous-build', {});
+                                  if (result.started && result.jobId && result.draftId) {
+                                    // Behave as if [BUILD_STARTED:jobId:draftId]
+                                    // was received. Reuse the existing build-poll
+                                    // path by synthesizing the marker into a
+                                    // local actionResult-shaped follow-up.
+                                    const synthetic = `[BUILD_STARTED:${result.jobId}:${result.draftId}] Building your ${result.deliverableType || 'deliverable'} now.`;
+                                    // Send a no-op to trigger the existing
+                                    // BUILD_STARTED handler — passing the
+                                    // synthetic marker through send()'s
+                                    // post-result branch isn't possible, so we
+                                    // call the same poll logic inline. Keep it
+                                    // simple: poll status here.
+                                    const pollInterval = setInterval(async () => {
+                                      try {
+                                        const status = await api.get<{
+                                          status: string;
+                                          draftId: string | null;
+                                          resultStoryId: string | null;
+                                        }>(`/express/status/${result.jobId}`);
+                                        if (status.status === 'complete' && status.resultStoryId && status.draftId) {
+                                          clearInterval(pollInterval);
+                                          navigate(`/five-chapter/${status.draftId}?story=${status.resultStoryId}`);
+                                        } else if (status.status === 'error') {
+                                          clearInterval(pollInterval);
+                                          setMessages(prev => [...prev, {
+                                            role: 'assistant',
+                                            content: "Something went wrong building the draft. Tell me to try again if you'd like.",
+                                          }]);
+                                        }
+                                      } catch {
+                                        // Transient error — keep polling
+                                      }
+                                    }, 5000);
+                                    setTimeout(() => clearInterval(pollInterval), 600000);
+                                    void synthetic;
+                                  } else {
+                                    // Fallback: server couldn't classify or
+                                    // couldn't find offering/audience. Send
+                                    // chip text through Opus as before — Opus
+                                    // ends up at Three-Tier-only, which is the
+                                    // intended fallback per the CC prompt.
+                                    send(chip);
+                                  }
+                                } catch (err) {
+                                  console.error('[autonomous-build]', err);
+                                  send(chip);
+                                }
+                                return;
+                              }
+
+                              // (2) YES on autonomous post-delivery offer →
+                              // navigate to /three-tier/{draftId}.
+                              if (chip === AUTONOMOUS_POST_DELIVERY_CHIP_YES && last.autonomousDraftId) {
+                                setMessages(prev => prev.map((m, j) => (
+                                  j === prev.length - 1 ? { ...m, chips: [] } : m
+                                )).concat({ role: 'user', content: chip }));
+                                navigate(`/three-tier/${last.autonomousDraftId}`);
+                                return;
+                              }
+
+                              // (3) NO on autonomous post-delivery offer →
+                              // close panel so the deliverable comes to focus.
+                              if (isAutonomousPostDeliveryChipNo(chip) && last.kind === 'autonomous-post-delivery') {
+                                setMessages(prev => prev.map((m, j) => (
+                                  j === prev.length - 1 ? { ...m, chips: [] } : m
+                                )).concat({ role: 'user', content: chip }));
+                                setOpen(false);
+                                return;
+                              }
+
+                              // Default: echo as user bubble + send through Opus.
                               setMessages(prev => prev.map((m, j) => (
                                 j === prev.length - 1 ? { ...m, chips: [] } : m
                               )).concat({ role: 'user', content: chip }));
