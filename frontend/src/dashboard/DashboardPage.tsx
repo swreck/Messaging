@@ -5,10 +5,10 @@ import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 import { LEAD_TOGGLE_EVENT } from '../shared/leadershipDetection';
-import { PATH_A_BANNER } from '../shared/milestoneCopy';
+import { PATH_A_BANNER, SPLASH_FRESH_USER } from '../shared/milestoneCopy';
 import { MobileHomeAffordances } from '../shared/MobileHomeAffordances';
 import { MOBILE_HOME_BREAKPOINT_PX } from '../shared/breakpoints';
-import { useAuth } from '../auth/AuthContext';
+// useAuth import removed in Round 3.2 — dashboard no longer reads the user.
 import type { Offering, Audience } from '../types';
 
 interface HierarchyOffering {
@@ -43,8 +43,9 @@ interface ActiveDraft {
 export function DashboardPage() {
   const navigate = useNavigate();
   const { activeWorkspace } = useWorkspace();
-  const { user } = useAuth();
-  const firstName = user?.firstName || user?.displayName;
+  // Round 3.2 Items 3 + 5A — the dashboard no longer reads user via
+  // useAuth (firstName interpolation removed; welcomeSuppressed state
+  // dropped along with the per-user effect that consumed user.id).
   const [hierarchy, setHierarchy] = useState<HierarchyOffering[]>([]);
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [audiences, setAudiences] = useState<Audience[]>([]);
@@ -60,12 +61,10 @@ export function DashboardPage() {
   const [recentAudience, setRecentAudience] = useState<string>('');
   const [recentSort, setRecentSort] = useState<'recent' | 'oldest' | 'offeringAZ' | 'audienceAZ'>('recent');
   const [recentDateRange, setRecentDateRange] = useState<'any' | '7' | '30' | '90'>('any');
-  // Cowork follow-up #4 — once Maria has greeted the user even once, the
-  // home-screen welcome card with the "Let's start" button should never
-  // show again. We check both the introduced flag (set after the first
-  // chat-open opener fires) and the partner history (any assistant
-  // message means Maria has spoken to this user). Either signal suffices.
-  const [welcomeSuppressed, setWelcomeSuppressed] = useState<boolean | null>(null);
+  // Round 3.2 Item 5A — the prior welcomeSuppressed state is removed.
+  // The friendly splash now renders on every empty-workspace visit, not
+  // only first-time signup. The empty-workspace condition (`isNew`)
+  // alone gates the splash.
 
   // Phase 2 — Fix 4: hide the dashboard's consultation toggle bar on small
   // screens. The toggle moves into the chat-panel header (MariaPartner) so
@@ -86,18 +85,8 @@ export function DashboardPage() {
   useEffect(() => { setPageContext({ page: 'dashboard' }); registerRefresh(loadAll); }, []);
   useEffect(() => { loadAll(); }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    api.get<{ introduced?: boolean }>('/partner/status')
-      .then(s => {
-        if (s.introduced) { setWelcomeSuppressed(true); return; }
-        return api.get<{ messages: { role: string }[] }>('/partner/history')
-          .then(h => {
-            setWelcomeSuppressed((h.messages || []).some(m => m.role === 'assistant'));
-          });
-      })
-      .catch(() => setWelcomeSuppressed(false));
-  }, [user]);
+  // Round 3.2 Item 5A — welcomeSuppressed effect dropped along with its
+  // state. The splash gating moved to `isNew` alone.
 
   // Listen for toggle promotions from chat. When Maria flips the "Let Maria lead"
   // default in response to a user's in-chat request, the switch here should
@@ -275,11 +264,14 @@ export function DashboardPage() {
           Cowork follow-up #4: hidden once Maria has spoken to this user even
           once. introShown OR any prior assistant message in partner history
           flips welcomeSuppressed and this card never renders again. */}
-      {isNew && welcomeSuppressed === false && (
+      {/* Round 3.2 Items 3 + 5A — locked Cowork splash. Replaces the
+          47-word promotional text with SPLASH_FRESH_USER. Renders on every
+          empty-workspace visit (not only first-time signup); the prior
+          `welcomeSuppressed === false` gate was the source of the
+          "naive returning user lands on bare nav" symptom. */}
+      {isNew && (
         <div className="dashboard-welcome empty-state-enhanced">
-          <div className="empty-icon">💬</div>
-          <h3>{firstName ? `Hi ${firstName} — I'm Maria.` : `Hi, I'm Maria.`}</h3>
-          <p>Tell me what you're working on and who needs to hear it. I'll help you land a clear message and a story you can use — whether you're selling, rallying your team, or persuading a partner.</p>
+          <h3>{SPLASH_FRESH_USER}</h3>
           <button
             className="btn btn-primary"
             onClick={() => navigate('/express')}

@@ -16,6 +16,9 @@ import {
   SKIP_DEMAND_CHIP_AUTONOMOUS,
   SKIP_INTENT_PHRASES,
   buildAutonomousPreBuildExpectation,
+  buildPathAReturnAcknowledgment,
+  IDENTITY_ACKNOWLEDGMENT,
+  IDENTITY_INTENT_PHRASES,
 } from '../prompts/milestoneCopy.js';
 import { commitExistingForPipeline, runPipeline } from '../lib/expressPipeline.js';
 import { partnerLimiter } from '../middleware/rateLimit.js';
@@ -423,6 +426,59 @@ router.get('/status', async (req: Request, res: Response) => {
         // Non-critical
       }
     }
+  }
+
+  // Round 3.2 Item 5B — Path A return-user continuity acknowledgment.
+  // Fires once per session-start (sign-in or >2-hour idle) when:
+  //   - consultation === 'off' (Path A)
+  //   - lastVisitAt is from a prior session (>2h gap, or never set)
+  //   - there's a recent draft (<24h)
+  // The acknowledgment is written DIRECTLY to chat history via
+  // writeMariaMessage so the chat panel renders it on the next history
+  // poll. Within-session navigation re-hits /partner/status but the
+  // 2-hour gap test prevents re-firing because lastVisitAt updates below
+  // on every status call.
+  try {
+    if (introduced && settings.consultation === 'off') {
+      const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+      const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const lastVisit = lastVisitAt ? new Date(lastVisitAt).getTime() : 0;
+      const sessionStart = !lastVisit || (now - lastVisit) > TWO_HOURS_MS;
+      if (sessionStart) {
+        const recentDraft = await prisma.threeTierDraft.findFirst({
+          where: { offering: { workspaceId: wsId } },
+          orderBy: { updatedAt: 'desc' },
+          select: {
+            updatedAt: true,
+            offering: { select: { name: true } },
+            audience: { select: { name: true } },
+          },
+        });
+        if (recentDraft && (now - recentDraft.updatedAt.getTime()) < TWENTY_FOUR_HOURS_MS) {
+          const offeringName = recentDraft.offering?.name || 'your work';
+          const audienceName = recentDraft.audience?.name || 'your audience';
+          const workName = `${offeringName} → ${audienceName}`;
+          const ackText = buildPathAReturnAcknowledgment({
+            name: displayName,
+            workName,
+          });
+          await prisma.assistantMessage.create({
+            data: {
+              userId,
+              role: 'assistant',
+              content: ackText,
+              context: {
+                ...partnerChannel(wsId),
+                kind: 'path-a-return-ack',
+              },
+            },
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Partner] path-a return-ack write failed (non-fatal):', err);
   }
 
   // Update lastVisitAt
@@ -1334,6 +1390,29 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
       res.json({
         response: SKIP_DEMAND_RESPONSE,
         chips: skipChips,
+        actionResult: undefined,
+        refreshNeeded: false,
+        needsPageContent: false,
+        timeThresholdFired: false,
+      });
+      return;
+    }
+
+    // Round 3.2 Item 11 — identity-question short-circuit. When the user
+    // asks "Are you AI?" / "What model?" / "Who built you?" or similar,
+    // Maria answers verbatim with IDENTITY_ACKNOWLEDGMENT instead of
+    // sidestepping. Same short-circuit pattern as skip-demand: write
+    // locked text directly, skip Opus. The user's next message picks
+    // up normal Opus flow with full conversation context, so the
+    // bridging back to work happens naturally on the next turn.
+    const isIdentityQuestion = IDENTITY_INTENT_PHRASES.some(phrase => normalized.includes(phrase));
+    if (isIdentityQuestion) {
+      const identityCtx = { ...partnerChannel(workspaceId, ctx), kind: 'identity-acknowledgment' };
+      await prisma.assistantMessage.create({
+        data: { userId, role: 'assistant', content: IDENTITY_ACKNOWLEDGMENT, context: identityCtx },
+      });
+      res.json({
+        response: IDENTITY_ACKNOWLEDGMENT,
         actionResult: undefined,
         refreshNeeded: false,
         needsPageContent: false,

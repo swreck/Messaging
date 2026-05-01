@@ -47,6 +47,124 @@ interface PendingDelete {
   timeout: ReturnType<typeof setTimeout>;
 }
 
+// Round 3.2 Item 6 — render `[INSERT: <description>]` markers in tier
+// text as a styled fill-in affordance instead of literal bracket text.
+// Click → inline input → submit replaces the marker with the user's
+// text and persists via the tier-update PUT. Honest-gap styling: muted
+// + italic + subtle background tint, no flashing or "DO THIS NOW"
+// callouts (Beck's flow showed pushy prompts pushed overwhelmed users
+// deeper into stuck).
+function InsertGap({ description, onApply }: { description: string; onApply: (userText: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [input, setInput] = useState('');
+
+  if (!editing) {
+    return (
+      <span
+        className="insert-gap-affordance"
+        style={{
+          fontStyle: 'italic',
+          color: 'var(--text-tertiary, #8e8e93)',
+          background: 'rgba(255, 200, 100, 0.08)',
+          padding: '2px 8px',
+          borderRadius: 4,
+          cursor: 'pointer',
+          fontSize: '0.92em',
+          marginRight: 2,
+          marginLeft: 2,
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
+        title="Click to fill in"
+      >
+        + Add: {description}
+      </span>
+    );
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginRight: 2, marginLeft: 2 }} onClick={(e) => e.stopPropagation()}>
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && input.trim()) {
+            onApply(input.trim());
+            setEditing(false);
+            setInput('');
+          }
+          if (e.key === 'Escape') {
+            setEditing(false);
+            setInput('');
+          }
+        }}
+        autoFocus
+        placeholder={description}
+        style={{
+          fontSize: 'inherit',
+          padding: '2px 8px',
+          border: '1px solid var(--accent, #007aff)',
+          borderRadius: 4,
+          minWidth: 220,
+        }}
+      />
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        style={{ padding: '2px 10px', fontSize: 13 }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (input.trim()) {
+            onApply(input.trim());
+            setEditing(false);
+            setInput('');
+          }
+        }}
+        disabled={!input.trim()}
+      >
+        Save
+      </button>
+    </span>
+  );
+}
+
+function renderTextWithInsertGaps(
+  text: string,
+  onApply: (newText: string) => void,
+): React.ReactNode {
+  if (!text) return text;
+  const re = /\[INSERT:\s*([^\]\n]+?)\s*\]/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > lastIndex) {
+      parts.push(<span key={key++}>{text.slice(lastIndex, m.index)}</span>);
+    }
+    const description = m[1].trim();
+    const marker = m[0];
+    parts.push(
+      <InsertGap
+        key={key++}
+        description={description}
+        onApply={(userText) => {
+          const newText = text.replace(marker, userText);
+          onApply(newText);
+        }}
+      />,
+    );
+    lastIndex = m.index + m[0].length;
+  }
+  if (parts.length === 0) return text;
+  if (lastIndex < text.length) {
+    parts.push(<span key={key++}>{text.slice(lastIndex)}</span>);
+  }
+  return <>{parts}</>;
+}
+
 export function ThreeTierTable({ draft, onUpdate, onConflict, suggestions, cellStates, onAcceptSuggestion, onFillGap, tier1Alternative, focusedCell, onCellFocus, viewMode = 'minimal' }: ThreeTierTableProps) {
   const { showToast } = useToast();
   const [editingCell, setEditingCell] = useState<string | null>(null);
@@ -357,7 +475,9 @@ ${t2s.map(t2 => `<div class="tier2-col">
             />
           ) : (
             <div className="tier1-text" onClick={() => handleCellClick('tier1')}>
-              {draft.tier1Statement?.text || 'Click to add Tier 1 statement'}
+              {draft.tier1Statement?.text
+                ? renderTextWithInsertGaps(draft.tier1Statement.text, (newText) => updateTier1(newText))
+                : 'Click to add Tier 1 statement'}
             </div>
           )}
           {shouldShowInline('tier1') && (
@@ -453,7 +573,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                   </div>
                 ) : (
                   <div className="tier2-text" onClick={() => handleCellClick(`tier2-${t2.id}`)}>
-                    {t2.text}
+                    {renderTextWithInsertGaps(t2.text, (newText) => updateTier2(t2.id, newText, t2.text))}
                   </div>
                 )}
                 {shouldShowInline(t2Key) && (
@@ -530,7 +650,7 @@ ${t2s.map(t2 => `<div class="tier2-col">
                               handleCellClick(`tier3-${t3.id}`);
                             }}
                           >
-                            <span>{t3.text}</span>
+                            <span>{renderTextWithInsertGaps(t3.text, (newText) => updateTier3(t3.id, newText, t3.text))}</span>
                             {isPendingDelete ? (
                               <span className="tier3-undo" onClick={(e) => { e.stopPropagation(); undoDeleteTier3(); }}>Undo</span>
                             ) : (

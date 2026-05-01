@@ -62,16 +62,22 @@ export function buildSoftNote(
   const purpose = CHAPTER_PURPOSE[chapter];
   const valueClaim = pickValueClaim();
 
+  // Round 3.2 Item 4 — strip trailing punctuation from each piece before
+  // joining. Some classifier outputs end with a period; the template
+  // appends its own period after `${missingDescription}`, producing the
+  // doubled-period bug Cowork observed (".. Anything I can use?").
+  const cleanedPieces = missingPieces.map(p => p.replace(/[.!?]+\s*$/, '').trim()).filter(p => p.length > 0);
+
   let missingDescription: string;
-  if (missingPieces.length === 0) {
+  if (cleanedPieces.length === 0) {
     missingDescription = EMPTY_CASE_FILL[chapter];
-  } else if (missingPieces.length === 1) {
-    missingDescription = missingPieces[0];
-  } else if (missingPieces.length === 2) {
-    missingDescription = `${missingPieces[0]} and ${missingPieces[1]}`;
+  } else if (cleanedPieces.length === 1) {
+    missingDescription = cleanedPieces[0];
+  } else if (cleanedPieces.length === 2) {
+    missingDescription = `${cleanedPieces[0]} and ${cleanedPieces[1]}`;
   } else {
-    const last = missingPieces[missingPieces.length - 1];
-    const rest = missingPieces.slice(0, -1).join(", ");
+    const last = cleanedPieces[cleanedPieces.length - 1];
+    const rest = cleanedPieces.slice(0, -1).join(", ");
     missingDescription = `${rest}, and ${last}`;
   }
 
@@ -248,3 +254,93 @@ export const BLEND_HEARTBEAT =
   "Still polishing — this last pass takes a minute.";
 
 export const BLEND_HEARTBEAT_MS = 60000;
+
+// ─── Round 3.2 Item 3 — Splash welcome (fresh-signup dashboard) ────────
+// Replaces the prior 47-word promotional splash. Same six words as
+// OPENER_FRESH_USER — the splash and the chat-panel opener intentionally
+// share this line to reduce visual noise on first impression.
+
+export const SPLASH_FRESH_USER =
+  "Hi — I'm Maria. What are we working on?";
+
+// ─── Round 3.2 Item 5B — Path A return-user continuity ────────────────
+// Fires once per session-start (sign-in or >2-hour idle) when a returning
+// Path A user (toggle off) opens the chat panel with active work in the
+// last 24 hours. NOT on within-session navigation. {name} substitutes
+// with the user's displayName, {workName} with the most recent draft's
+// "<offering> → <audience>" string. Empty-workspace return falls back to
+// SPLASH_FRESH_USER.
+
+export const PATH_A_RETURN_ACKNOWLEDGMENTS: ReadonlyArray<string> = [
+  "Welcome back. {workName} is saved if you want to keep going.",
+  "Hey, {name}. {workName} is here when you're ready.",
+  "Picking back up? {workName} is right where you left it.",
+  "Back at it — {workName} is queued up.",
+  "Welcome back. Tell me when you're ready to dig into {workName}.",
+];
+
+let _pathAReturnIdx = 0;
+export function buildPathAReturnAcknowledgment(opts: {
+  name?: string;
+  workName: string;
+}): string {
+  const template = PATH_A_RETURN_ACKNOWLEDGMENTS[_pathAReturnIdx % PATH_A_RETURN_ACKNOWLEDGMENTS.length];
+  _pathAReturnIdx += 1;
+  return template
+    .replace(/\{name\}/g, opts.name && opts.name.trim() ? opts.name.trim() : 'there')
+    .replace(/\{workName\}/g, opts.workName);
+}
+
+// ─── Round 3.2 Item 7 — Affirmation pool ──────────────────────────────
+// Replaces the templated "That was actually really clear" tic. Maria
+// chooses an entry only when an affirmation is warranted; many turns
+// have no affirmation at all. Index-rotating selection, same shape as
+// VALUE_CLAIM_POOL.
+
+export const AFFIRMATION_POOL: ReadonlyArray<string> = [
+  "Got it. That's enough to work with.",
+  "OK — I have what I need on that.",
+  "Right there — that's clean.",
+  "Crisp. That helps.",
+  "That tracks. Good enough to build on.",
+  "Clear. Moving on.",
+  "Solid. That's what I needed.",
+  "Got it.",
+];
+
+let _affirmationIdx = 0;
+export function pickAffirmation(): string {
+  const a = AFFIRMATION_POOL[_affirmationIdx % AFFIRMATION_POOL.length];
+  _affirmationIdx += 1;
+  return a;
+}
+
+// ─── Round 3.2 Item 11 — Identity acknowledgment ──────────────────────
+// Fires only when the user asks an identity question ("Are you AI?",
+// "What model are you?", "Who built you?", similar). Maria answers
+// directly, then bridges back to the work at hand on the next turn.
+
+export const IDENTITY_ACKNOWLEDGMENT =
+  "Yes, I'm an AI agent built by Anthropic and trained on techniques to help with persuasive messaging.";
+
+// Phrase list for backend identity-question detection. Lean toward false
+// negatives — if the user phrases the question off-list, Opus's normal
+// flow continues; the rule-detect short-circuit only fires on clear hits.
+export const IDENTITY_INTENT_PHRASES: ReadonlyArray<string> = [
+  "are you ai",
+  "are you a ai",
+  "are you an ai",
+  "are you human",
+  "are you a human",
+  "are you a person",
+  "are you a bot",
+  "are you a chatbot",
+  "what model are you",
+  "what model is this",
+  "which model",
+  "who built you",
+  "who made you",
+  "who created you",
+  "what are you",
+  "are you real",
+];

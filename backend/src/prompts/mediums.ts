@@ -18,8 +18,8 @@ export const MEDIUM_SPECS: Record<string, MediumSpec> = {
     description: 'Professional outreach email',
     wordRange: [150, 250],
     chapterBudgets: [30, 60, 25, 25, 20],
-    format: 'Subject line, opening hook, 2-3 body paragraphs, clear CTA. No headers beyond subject.',
-    formatRules: 'This is a single-scroll business email. Chapter 1 is 1-2 sentences max. The entire email must feel like something a person actually sent, not a marketing piece. No section headers. No bullet lists longer than 3 items.',
+    format: 'Subject line, salutation, opening hook, 2-3 body paragraphs, clear CTA, signoff. No headers beyond subject.',
+    formatRules: 'This is a single-scroll business email. Chapter 1 is 1-2 sentences max. The entire email must feel like something a person actually sent, not a marketing piece. No section headers. No bullet lists longer than 3 items. STRUCTURAL ELEMENTS — default included unless the user explicitly opts out: (1) salutation on its own line at the top ("Hi [audience first name]," or similar — use "[name]" as a placeholder if the audience is not a single named person); (2) signoff on its own line at the bottom ("Best,\\n[Sender]" or similar). Honor explicit opt-out: if the user said "this is a thread reply" or "no salutation" or "skip the signoff", omit those elements without protest. Round 3.2 Item 10 — these defaults exist because Cowork observed the bug shape "deliverable lacks salutation and signoff" repeating in autonomous flows.',
     tone: 'Direct and personal. Written to one person, not a list.',
   },
   blog: {
@@ -48,8 +48,8 @@ export const MEDIUM_SPECS: Record<string, MediumSpec> = {
     description: 'Web page with a single conversion goal',
     wordRange: [200, 500],
     chapterBudgets: [40, 120, 60, 80, 30],
-    format: 'Hero headline + subhead, 3-4 value sections with short headers, social proof snippet, CTA button text.',
-    formatRules: 'Scannable. Short paragraphs, subheads, and bullet points. The reader skims — make every line standalone.',
+    format: 'Hero H1 headline, sub-headline, hero copy, 3-4 value sections with short headers, social proof snippet, primary CTA button text.',
+    formatRules: 'Scannable. Short paragraphs, subheads, and bullet points. The reader skims — make every line standalone. STRUCTURAL ELEMENTS — default included unless the user explicitly opts out: (1) H1 hero headline at the top; (2) sub-headline directly below; (3) primary CTA button text at the bottom (or wherever the user-stated CTA lands). Without all three, this is not a complete landing page.',
     tone: 'Confident and clear. Every word earns its place.',
   },
   in_person: {
@@ -68,8 +68,8 @@ export const MEDIUM_SPECS: Record<string, MediumSpec> = {
     description: 'Slide-by-slide narrative for a presentation deck',
     wordRange: [300, 600],
     chapterBudgets: [60, 150, 90, 120, 30],
-    format: 'Slide-by-slide narrative. Each slide gets a short headline plus one or two lines of what the presenter says out loud. Order the slides to match the five-chapter arc — pain, solution, de-risking, proof, next step.',
-    formatRules: 'Short and scannable. Written to be spoken out loud to a room of executives, not read quietly on a page. Each slide should stand on its own. No heavy paragraphs. No markdown formatting. Do not number slides — just label them with a short headline.',
+    format: 'Slide-by-slide narrative. Title slide first, executive-summary slide that captures the ask in one line, then slides for the five-chapter arc — pain, solution, de-risking, proof, next step — and a closing ask-slide. Each slide gets a short headline plus one or two lines of what the presenter says out loud.',
+    formatRules: 'Short and scannable. Written to be spoken out loud to a room of executives, not read quietly on a page. Each slide should stand on its own. No heavy paragraphs. No markdown formatting. Do not number slides — just label them with a short headline. STRUCTURAL ELEMENTS — default included unless the user explicitly opts out: (1) title slide at the start with the offering name and audience; (2) executive-summary slide that names the ask in one line; (3) closing ask-slide as the final slide. The five-chapter arc fills the middle slides.',
     tone: 'Conversational and confident. The presenter knows the audience and their world. Do not sound like a TED talk or a brochure.',
   },
   press_release: {
@@ -98,8 +98,8 @@ export const MEDIUM_SPECS: Record<string, MediumSpec> = {
     description: 'Detailed analytical content',
     wordRange: [800, 2000],
     chapterBudgets: [200, 500, 300, 350, 100],
-    format: 'Executive summary, problem statement, analysis sections, recommendations, conclusion.',
-    formatRules: 'Detailed and structured. Data-driven. Use evidence to support every claim. Formal section headers.',
+    format: 'Cover or title section, executive summary, problem statement, analysis sections, recommendations, conclusion or close.',
+    formatRules: 'Detailed and structured. Data-driven. Use evidence to support every claim. Formal section headers. STRUCTURAL ELEMENTS — default included unless the user explicitly opts out: (1) cover/title section at the top; (2) executive summary; (3) body sections (problem, approach, scope or analysis); (4) recommendations; (5) conclusion or close. Without these, the document is not a complete report or proposal.',
     tone: 'Analytical and evidence-based. Show your work.',
   },
 };
