@@ -41,6 +41,10 @@ import {
   SOFT_NOTE_STAGGER_MS,
   BLEND_HEARTBEAT,
   BLEND_HEARTBEAT_MS,
+  TIER_GENERATION_HEARTBEAT,
+  TIER_GENERATION_HEARTBEAT_MS,
+  CHAPTERS_HEARTBEAT,
+  CHAPTERS_HEARTBEAT_MS,
   buildAutonomousPostDeliveryOffer,
   AUTONOMOUS_POST_DELIVERY_CHIP_YES,
   buildAutonomousPostDeliveryChipNo,
@@ -246,10 +250,26 @@ function extractAndStripMarkers(content: string): {
 // 60s blend heartbeat fires independently of the 30s blend stage
 // check-in. Both can land in a single long blend run; both are at-most
 // once per pipeline.
-type StageCheckinKey = 'tier' | 'chapters' | 'blend' | 'blend-heartbeat';
+// Round 3.3 Item 1 — extended the heartbeat pattern to tier-generation
+// and chapters (90s threshold each). All three heartbeats are flag-
+// gated for at-most-once-per-pipeline; the regen cycle does not reset.
+type StageCheckinKey =
+  | 'tier'
+  | 'chapters'
+  | 'blend'
+  | 'tier-heartbeat'
+  | 'chapters-heartbeat'
+  | 'blend-heartbeat';
 type StageCheckinFlags = Record<StageCheckinKey, boolean>;
 function makeStageCheckinFlags(): StageCheckinFlags {
-  return { tier: false, chapters: false, blend: false, 'blend-heartbeat': false };
+  return {
+    tier: false,
+    chapters: false,
+    blend: false,
+    'tier-heartbeat': false,
+    'chapters-heartbeat': false,
+    'blend-heartbeat': false,
+  };
 }
 function scheduleStageCheckin(opts: {
   stage: StageCheckinKey;
@@ -990,6 +1010,23 @@ ${draftWithElements.offering.elements
         audienceId: draftWithElements.audience.id,
       },
     });
+    // Round 3.3 Item 1 — tier-generation heartbeat. Fires once at the
+    // 90s threshold if tier generation is still running. Same pattern
+    // as BLEND_HEARTBEAT.
+    const cancelTierHeartbeat = scheduleStageCheckin({
+      stage: 'tier-heartbeat',
+      message: TIER_GENERATION_HEARTBEAT,
+      flags: stageCheckinFlags,
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      delayMs: TIER_GENERATION_HEARTBEAT_MS,
+      kind: 'tier-heartbeat',
+    });
 
     const confirmedMappings = await prisma.mapping.findMany({
       where: { draftId: draftWithElements.id, status: 'confirmed' },
@@ -1198,6 +1235,8 @@ AUDIENCE: ${draftWithElements.audience.name}`;
     // Round 3 fix — tier-generation stage complete; cancel the check-in
     // timer so it doesn't fire after the milestone has already landed.
     cancelTierCheckin();
+    // Round 3.3 Item 1 — also cancel the heartbeat.
+    cancelTierHeartbeat();
 
     // Phase 2 — Milestone 1: Foundation confirmed. Path B narration only;
     // Path A stays silent. Live consultation read inside the helper.
@@ -1460,6 +1499,24 @@ Return ONLY the one sentence.`;
         offeringId: draftWithElements.offering.id,
         audienceId: draftWithElements.audience.id,
       },
+    });
+    // Round 3.3 Item 1 — chapters heartbeat. Fires once at the 90s
+    // threshold if the chapter loop is still running. Same pattern as
+    // BLEND_HEARTBEAT.
+    const cancelChaptersHeartbeat = scheduleStageCheckin({
+      stage: 'chapters-heartbeat',
+      message: CHAPTERS_HEARTBEAT,
+      flags: stageCheckinFlags,
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      delayMs: CHAPTERS_HEARTBEAT_MS,
+      kind: 'chapters-heartbeat',
     });
     do {
     chapterMissingPieces = { 3: [], 4: [], 5: [] };
@@ -1917,6 +1974,8 @@ ${draftForStory.tier2Statements
 
     // Round 3 fix — chapters stage complete; cancel before milestone.
     cancelChaptersCheckin();
+    // Round 3.3 Item 1 — also cancel the heartbeat.
+    cancelChaptersHeartbeat();
 
     // Phase 2 — Milestone 2: Chapters separated. Path B narration only.
     await narrateMilestoneIfPathB({
@@ -3294,6 +3353,22 @@ Return ONLY the one sentence.`;
         audienceId: draftForStory.audience?.id,
       },
     });
+    // Round 3.3 Item 1 — chapters heartbeat for the guided pipeline.
+    const cancelGuidedChaptersHeartbeat = scheduleStageCheckin({
+      stage: 'chapters-heartbeat',
+      message: CHAPTERS_HEARTBEAT,
+      flags: guidedStageCheckinFlags,
+      userId: guidedUserId,
+      workspaceId: guidedWorkspaceId,
+      ctx: {
+        storyId,
+        draftId: guidedDraftId,
+        offeringId: draftForStory.offering?.id,
+        audienceId: draftForStory.audience?.id,
+      },
+      delayMs: CHAPTERS_HEARTBEAT_MS,
+      kind: 'chapters-heartbeat',
+    });
     console.log(`[Perf] jobId=${jobId} stage=chapters-start elapsed_ms=${Date.now() - guidedPipelineStartMs} mode=guided variant=1/1`);
     do {
     guidedChapterMissingPieces = { 3: [], 4: [], 5: [] };
@@ -3557,6 +3632,8 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
 
     // Round 3 fix — chapters stage complete (guided); cancel before milestone.
     cancelGuidedChaptersCheckin();
+    // Round 3.3 Item 1 — also cancel the chapters heartbeat (guided).
+    cancelGuidedChaptersHeartbeat();
 
     // Phase 2 — Milestone 2: Chapters separated. Path B narration only.
     await narrateMilestoneIfPathB({
