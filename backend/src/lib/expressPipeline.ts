@@ -1515,9 +1515,20 @@ ${draftForStory.tier2Statements
   .join('\n')}
 `;
 
+      // Round 3.2 Item 9 follow-up — when the user provided a specific
+      // ask in their situation (now persisted as story.cta verbatim),
+      // chapter-5 must include that exact phrase, not a paraphrase.
+      // The prior chapter-5 generator was rewriting "reply to schedule
+      // a demo" into "One way to start would be to get your team into
+      // TestPilot this week" — losing the specificity. Stricter
+      // directive on chapter-5 only.
+      const ctaVerbatimDirective = chapterNum === 5 && story.cta
+        ? `\nCTA VERBATIM REQUIREMENT — the call-to-action in this chapter must include the exact phrase "${story.cta}" verbatim. Do not paraphrase, summarize, soften, or rewrite the user's ask. Other surrounding language can be yours, but the verbatim phrase must appear in the chapter as the action the reader is invited to take.\n`
+        : '';
+
       const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftForStory.audience.name}
 CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
-${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}
+${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}
 ${threeTierBlock}
 AUDIENCE PRIORITIES:
 ${draftForStory.audience.priorities
@@ -3326,9 +3337,17 @@ ${draftForStory.tier2Statements
   .join('\n')}
 `;
 
+      // Round 3.2 Item 9 follow-up — same cta-verbatim directive as
+      // runPipeline's chapter-5 generator. When the user's specific
+      // ask was preserved as cta, chapter-5 must include the exact
+      // phrase, not a paraphrase.
+      const guidedCtaVerbatimDirective = chapterNum === 5 && cta
+        ? `\nCTA VERBATIM REQUIREMENT — the call-to-action in this chapter must include the exact phrase "${cta}" verbatim. Do not paraphrase, summarize, soften, or rewrite the user's ask. Other surrounding language can be yours, but the verbatim phrase must appear in the chapter as the action the reader is invited to take.\n`
+        : '';
+
       const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE: ${draftForStory.audience.name}
 CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
-${chapterNum === 1 ? '' : `CTA: ${cta}\n`}${readerDirective}
+${chapterNum === 1 ? '' : `CTA: ${cta}\n`}${readerDirective}${guidedCtaVerbatimDirective}
 ${threeTierBlock}
 AUDIENCE PRIORITIES:
 ${draftForStory.audience.priorities

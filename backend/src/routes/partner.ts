@@ -16,7 +16,6 @@ import {
   SKIP_DEMAND_CHIP_AUTONOMOUS,
   SKIP_INTENT_PHRASES,
   buildAutonomousPreBuildExpectation,
-  buildPathAReturnAcknowledgment,
   IDENTITY_ACKNOWLEDGMENT,
   IDENTITY_INTENT_PHRASES,
   pickAffirmation,
@@ -429,58 +428,14 @@ router.get('/status', async (req: Request, res: Response) => {
     }
   }
 
-  // Round 3.2 Item 5B — Path A return-user continuity acknowledgment.
-  // Fires once per session-start (sign-in or >2-hour idle) when:
-  //   - consultation === 'off' (Path A)
-  //   - lastVisitAt is from a prior session (>2h gap, or never set)
-  //   - there's a recent draft (<24h)
-  // The acknowledgment is written DIRECTLY to chat history via
-  // writeMariaMessage so the chat panel renders it on the next history
-  // poll. Within-session navigation re-hits /partner/status but the
-  // 2-hour gap test prevents re-firing because lastVisitAt updates below
-  // on every status call.
-  try {
-    if (introduced && settings.consultation === 'off') {
-      const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-      const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-      const now = Date.now();
-      const lastVisit = lastVisitAt ? new Date(lastVisitAt).getTime() : 0;
-      const sessionStart = !lastVisit || (now - lastVisit) > TWO_HOURS_MS;
-      if (sessionStart) {
-        const recentDraft = await prisma.threeTierDraft.findFirst({
-          where: { offering: { workspaceId: wsId } },
-          orderBy: { updatedAt: 'desc' },
-          select: {
-            updatedAt: true,
-            offering: { select: { name: true } },
-            audience: { select: { name: true } },
-          },
-        });
-        if (recentDraft && (now - recentDraft.updatedAt.getTime()) < TWENTY_FOUR_HOURS_MS) {
-          const offeringName = recentDraft.offering?.name || 'your work';
-          const audienceName = recentDraft.audience?.name || 'your audience';
-          const workName = `${offeringName} → ${audienceName}`;
-          const ackText = buildPathAReturnAcknowledgment({
-            name: displayName,
-            workName,
-          });
-          await prisma.assistantMessage.create({
-            data: {
-              userId,
-              role: 'assistant',
-              content: ackText,
-              context: {
-                ...partnerChannel(wsId),
-                kind: 'path-a-return-ack',
-              },
-            },
-          });
-        }
-      }
-    }
-  } catch (err) {
-    console.error('[Partner] path-a return-ack write failed (non-fatal):', err);
-  }
+  // Round 3.2 Item 5B — DROPPED per Cowork's verification call.
+  // PATH_A_RETURN_ACKNOWLEDGMENTS pool was intended to fire on Path A
+  // session-start; verification showed Round 4 Fix 11's audience-
+  // anchored chat-open opener ("Back to the indie toy store owners?")
+  // already covers return-user continuity for the same scenario.
+  // Adding the ack pool on top would compete with Fix 11's opener for
+  // the same screen real-estate. Dead-code-removed; Fix 11's behavior
+  // is the canonical return-user signal.
 
   // Update lastVisitAt
   try {
@@ -1194,17 +1149,16 @@ Chips are pre-typed reply buttons. Their text is what the USER would say back to
   - Chip text never says "Yes Maria" or "Maria, please" — write it as the user's words, no addressee.
   - Chips are ALWAYS the very last thing in your response, after the question.`;
 
-  // Round 3.2 follow-up Regression 2 — Option A: pre-pick the
-  // affirmation server-side and inject it as a verbatim directive.
-  // The locked-file rule in coaching.ts ("choose from this small pool,
-  // rotating index") was advisory and Opus reverted to "actually
-  // really clear" voice habits. The directive below pins the wording
-  // when an affirmation IS used and bans the prior tic patterns.
-  // Skip-when-not-warranted judgment stays with Opus — the directive
-  // says "OR start directly with your next question."
+  // Round 3.2 follow-up Regression 2 (round 2) — strictest version per
+  // Cowork's recommendation. Pre-pick the affirmation and REQUIRE Opus
+  // to begin its reply with that exact text. The prior soft variant
+  // ("if you would have begun with an affirmation…") gave Opus an
+  // out and it kept reverting to "actually really clear". Always-fire
+  // pattern matches the buildAutonomousPreBuildExpectation pattern that
+  // verified clean (Item 1).
   {
     const chosenAffirmation = pickAffirmation();
-    systemPrompt += `\n\nAFFIRMATION DIRECTIVE — if you would have begun this reply with an affirmation acknowledging what the user just said, use EXACTLY this text verbatim, no edits, no extra wrapper words: "${chosenAffirmation}". If no affirmation fits this turn, start your reply directly with your next question or statement — do NOT invent your own affirmation phrasing. FORBIDDEN: "actually really clear", "actually really" + any adjective, "great point", "excellent", "that's really helpful", "perfect", any "actually" softener, any compliment-then-pause pattern. The two valid modes are: (a) the verbatim affirmation above, or (b) no affirmation at all.`;
+    systemPrompt += `\n\nAFFIRMATION DIRECTIVE — REQUIRED PREFIX. Begin your reply with this exact text, no edits, no additions, no surrounding wrapper words: "${chosenAffirmation}" Then continue with your next question or statement on the next line. FORBIDDEN before, replacing, or wrapping the affirmation: "actually really clear", "actually really" + any adjective, "great point", "excellent", "that's really helpful", "perfect", any "actually" softener, any compliment-then-pause pattern. The affirmation above is the ONLY opening this reply may have. Do NOT vary it. Do NOT skip it. Do NOT add a comma, ellipsis, or "and" between it and the next sentence — just put the next sentence on its own line.`;
   }
 
   // (The "first message broad framing" runtime override that previously
@@ -2072,12 +2026,12 @@ Fields to extract:
 - deliverableType: lowercase noun for the deliverable format the user wants. Common values: "email", "pitch deck", "landing page", "blog post", "one-pager", "press release", "newsletter", "report". null if the user has not stated a format.
 - offeringName: the offering, product, or service name the user is selling/promoting. null if unstated.
 - audienceName: the target audience description (role + organizational context, OR a named persona). null if unstated.
-- situation: one short sentence describing what the user wants this deliverable to accomplish. Empty string if unstated.
+- situation: the user's specific call-to-action in their own words, VERBATIM if they stated one. Examples of what counts: "reply to schedule a demo", "sign up for the beta", "buy a starter pack", "book a call", "request a sample", "click through to the pricing page". Look for explicit phrasings like "the ask is X", "I want them to X", "tell them to X", "have them X". When the user states a specific ask, copy that phrasing into situation EXACTLY — do not paraphrase, do not generalize ("get started with X" is a paraphrase, not the user's words). Empty string if the user gave no specific ask.
 
 OUTPUT — JSON only, no markdown fences:
 { "deliverableType": "...", "offeringName": "...", "audienceName": "...", "situation": "..." }
 
-When in doubt, prefer null. False positives (filling a field that wasn't actually stated) cause the autonomous pipeline to build the wrong thing — which is the bug we're fixing.`;
+When in doubt, prefer null/empty. False positives (filling a field that wasn't actually stated) cause the autonomous pipeline to build the wrong thing — which is the bug we're fixing.`;
 
     const classifierMessage = `CONVERSATION:\n\n${conversationBlock}`;
 

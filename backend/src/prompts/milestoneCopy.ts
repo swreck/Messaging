@@ -263,33 +263,12 @@ export const BLEND_HEARTBEAT_MS = 60000;
 export const SPLASH_FRESH_USER =
   "Hi — I'm Maria. What are we working on?";
 
-// ─── Round 3.2 Item 5B — Path A return-user continuity ────────────────
-// Fires once per session-start (sign-in or >2-hour idle) when a returning
-// Path A user (toggle off) opens the chat panel with active work in the
-// last 24 hours. NOT on within-session navigation. {name} substitutes
-// with the user's displayName, {workName} with the most recent draft's
-// "<offering> → <audience>" string. Empty-workspace return falls back to
-// SPLASH_FRESH_USER.
-
-export const PATH_A_RETURN_ACKNOWLEDGMENTS: ReadonlyArray<string> = [
-  "Welcome back. {workName} is saved if you want to keep going.",
-  "Hey, {name}. {workName} is here when you're ready.",
-  "Picking back up? {workName} is right where you left it.",
-  "Back at it — {workName} is queued up.",
-  "Welcome back. Tell me when you're ready to dig into {workName}.",
-];
-
-let _pathAReturnIdx = 0;
-export function buildPathAReturnAcknowledgment(opts: {
-  name?: string;
-  workName: string;
-}): string {
-  const template = PATH_A_RETURN_ACKNOWLEDGMENTS[_pathAReturnIdx % PATH_A_RETURN_ACKNOWLEDGMENTS.length];
-  _pathAReturnIdx += 1;
-  return template
-    .replace(/\{name\}/g, opts.name && opts.name.trim() ? opts.name.trim() : 'there')
-    .replace(/\{workName\}/g, opts.workName);
-}
+// ─── Round 3.2 Item 5B — DROPPED per Cowork's verification call. ──────
+// PATH_A_RETURN_ACKNOWLEDGMENTS and buildPathAReturnAcknowledgment were
+// removed because Round 4 Fix 11's audience-anchored chat-open opener
+// ("Back to the [audience]?") already covers return-user continuity
+// for the same trigger condition. Adding a separate locked-pool layer
+// on top competed with Fix 11 for the same chat-panel slot.
 
 // ─── Round 3.2 Item 7 — Affirmation pool ──────────────────────────────
 // Replaces the templated "That was actually really clear" tic. Maria
