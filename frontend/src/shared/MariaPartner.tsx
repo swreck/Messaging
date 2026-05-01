@@ -837,10 +837,16 @@ export function MariaPartner() {
     // conversation greeting still reads "Hi <username>" after the user
     // just told Maria their real name.
     setSuggestedName(name.charAt(0).toUpperCase() + name.slice(1));
-    // Round 4 Fix 12 — skip the time-budget step. Fresh users go straight
-    // from name confirmation to the chat-open opener (OPENER_FRESH_USER
-    // for empty workspaces, state-aware welcome for returning users).
-    advanceIntro(INTRO_DONE);
+    // Round 3.1 follow-up regression fix — PUT /partner/name now
+    // advances introStep=4, introduced=true server-side directly.
+    // Mirror the advance into local state and trigger the history
+    // reload so the chat-open opener fires immediately. The previous
+    // advanceIntro(INTRO_DONE) call (and its parallel PUT
+    // /partner/intro-step) was racing the /name PUT and being
+    // clobbered, leaving fresh users stuck at introStep=1.
+    setIntroStep(INTRO_DONE);
+    setIntroduced(true);
+    setLoaded(false);
   }
 
   // ─── Send message ───────────────────────────────────

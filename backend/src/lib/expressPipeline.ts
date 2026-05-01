@@ -2374,15 +2374,13 @@ ${draftForStory.tier2Statements
           });
           if (draftForGaps) {
             // Per-tier2 gap: any column with 0 or 1 proof bullets is a
-            // candidate. The suggestion text below is CC-authored
-            // placeholder pending Cowork review (locked-files diff scope
-            // is unchanged because Observation.suggestion is freeform DB
-            // content, not a methodology-prompt string). Flagged in the
-            // commit message and the round report.
+            // candidate. Suggestion body is Cowork-authored locked
+            // wording (Round 3.1 follow-up); {label} substitutes the
+            // column label (ROI / Focus / Support / etc.).
             for (const t2 of draftForGaps.tier2Statements) {
               if (t2.tier3Bullets.length <= 1) {
                 const label = (t2.categoryLabel || '').trim() || 'this column';
-                const suggestion = `[GAP] ${label}: I filled this with my best guess from limited input. Add a number, named customer, or verifiable fact and the column gets stronger.`;
+                const suggestion = `[GAP] I filled this with my best guess from what you gave me. A number, a named customer, or something someone could verify will tighten ${label}.`;
                 await prisma.observation.create({
                   data: {
                     draftId: draftForGaps.id,
@@ -2397,13 +2395,13 @@ ${draftForStory.tier2Statements
             // Tier 1 gap: only flagged when the situation block was empty
             // (hasMeaningfulCta proxies "user told us what they want this
             // to do"). Empty situation means Tier 1 was inferred entirely
-            // from the offering+audience, so a refinement opportunity is
-            // worth surfacing.
+            // from the offering+audience. Suggestion body is Cowork-
+            // authored locked wording (Round 3.1 follow-up).
             const ctaProvided =
               typeof interpretation.situation === 'string' &&
               interpretation.situation.trim().length > 0;
             if (!ctaProvided && draftForGaps.tier1Statement) {
-              const suggestion = `[GAP] Top tier was inferred from offering + audience alone. If you can name what you want this draft to do, refine here.`;
+              const suggestion = `[GAP] I built the top tier from your offering and audience alone — I didn't know what you most want this draft to do. Tell me and I'll tighten it.`;
               await prisma.observation.create({
                 data: {
                   draftId: draftForGaps.id,

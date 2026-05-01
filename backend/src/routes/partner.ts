@@ -470,6 +470,13 @@ router.put('/name', async (req: Request, res: Response) => {
   // workspace where another member's name might be the right title.
   const firstName = displayName.split(/\s+/)[0] || displayName;
 
+  // Round 3.1 follow-up regression fix — advance the intro to INTRO_DONE
+  // here. Pre-3.1 the time-budget step came after name capture and
+  // advanced introStep to 4 itself; that step was removed in Round 4
+  // Item 12 but the prior `Math.max(introStep, 1)` was left in place,
+  // leaving fresh users stuck at introStep=1 with introduced=false.
+  // Name capture IS the final intro step now — advance directly to 4
+  // so OPENER_FRESH_USER fires on the next chat-open trigger.
   await prisma.user.update({
     where: { id: req.user!.userId },
     data: {
@@ -480,7 +487,8 @@ router.put('/name', async (req: Request, res: Response) => {
         partner: {
           ...current.partner,
           displayName,
-          introStep: Math.max(current.partner?.introStep || 0, 1),
+          introStep: 4,
+          introduced: true,
           lastVisitAt: new Date().toISOString(),
         },
       },

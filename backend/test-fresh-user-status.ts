@@ -81,26 +81,49 @@ async function main() {
     createdUserId = register.data?.user?.userId || null;
     console.log(`  + registered user ${username}`);
 
-    // 3. GET /api/partner/status with the new user's token.
-    const status = await req('GET', '/partner/status', undefined, token);
-    if (status.status !== 200) {
-      throw new Error(`partner/status failed: status=${status.status} body=${JSON.stringify(status.data)}`);
+    // 3. GET /api/partner/status with the new user's token (pre-name-capture).
+    const preNameStatus = await req('GET', '/partner/status', undefined, token);
+    if (preNameStatus.status !== 200) {
+      throw new Error(`partner/status (pre-name) failed: status=${preNameStatus.status} body=${JSON.stringify(preNameStatus.data)}`);
     }
 
-    // 4. Assertions.
-    const proactiveOffer = status.data?.proactiveOffer;
-    const resumeDraft = status.data?.resumeDraft;
-    const returnContext = status.data?.returnContext;
-    const introduced = status.data?.introduced;
+    // 4. Pre-name-capture assertions.
+    const proactiveOffer = preNameStatus.data?.proactiveOffer;
+    const resumeDraft = preNameStatus.data?.resumeDraft;
+    const returnContext = preNameStatus.data?.returnContext;
+    const introducedPre = preNameStatus.data?.introduced;
+    const introStepPre = preNameStatus.data?.introStep;
+    const displayNamePre = preNameStatus.data?.displayName;
 
-    // Per the CC prompt, the regression backstop covers exactly these
-    // three null fields. introduced=false is checked alongside them as
-    // a sanity test on the introduced-gate that protects them.
+    // 5. Round 3.1 follow-up — submit displayName via PUT /partner/name.
+    const nameRes = await req('PUT', '/partner/name', { displayName: 'Regression Persona' }, token);
+    if (nameRes.status !== 200) {
+      throw new Error(`partner/name PUT failed: status=${nameRes.status} body=${JSON.stringify(nameRes.data)}`);
+    }
+
+    // 6. Re-fetch /partner/status. Assert the intro completed.
+    const postNameStatus = await req('GET', '/partner/status', undefined, token);
+    if (postNameStatus.status !== 200) {
+      throw new Error(`partner/status (post-name) failed: status=${postNameStatus.status} body=${JSON.stringify(postNameStatus.data)}`);
+    }
+    const introducedPost = postNameStatus.data?.introduced;
+    const introStepPost = postNameStatus.data?.introStep;
+    const displayNamePost = postNameStatus.data?.displayName;
+
+    // Per the CC prompt, the regression backstop covers the three null
+    // fields and the introStep/introduced flow. introStep=4 + introduced=true
+    // is the post-name-capture state expected after the Round 3.1
+    // follow-up regression fix.
     const assertions: Array<[string, boolean, string]> = [
-      ['proactiveOffer is null', proactiveOffer === null || proactiveOffer === undefined, `got ${JSON.stringify(proactiveOffer)}`],
-      ['resumeDraft is null', resumeDraft === null || resumeDraft === undefined, `got ${JSON.stringify(resumeDraft)}`],
-      ['returnContext is null', returnContext === null || returnContext === undefined, `got ${JSON.stringify(returnContext)}`],
-      ['introduced is false', introduced === false, `got ${JSON.stringify(introduced)}`],
+      ['pre-name proactiveOffer is null', proactiveOffer === null || proactiveOffer === undefined, `got ${JSON.stringify(proactiveOffer)}`],
+      ['pre-name resumeDraft is null', resumeDraft === null || resumeDraft === undefined, `got ${JSON.stringify(resumeDraft)}`],
+      ['pre-name returnContext is null', returnContext === null || returnContext === undefined, `got ${JSON.stringify(returnContext)}`],
+      ['pre-name introduced is false', introducedPre === false, `got ${JSON.stringify(introducedPre)}`],
+      ['pre-name introStep is 0', introStepPre === 0, `got ${JSON.stringify(introStepPre)}`],
+      ['pre-name displayName is empty', !displayNamePre, `got ${JSON.stringify(displayNamePre)}`],
+      ['post-name introduced is true', introducedPost === true, `got ${JSON.stringify(introducedPost)}`],
+      ['post-name introStep is 4', introStepPost === 4, `got ${JSON.stringify(introStepPost)}`],
+      ['post-name displayName is set', displayNamePost === 'Regression Persona', `got ${JSON.stringify(displayNamePost)}`],
     ];
 
     let passed = 0;
