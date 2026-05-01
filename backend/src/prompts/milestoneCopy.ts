@@ -255,6 +255,21 @@ export const BLEND_HEARTBEAT =
 
 export const BLEND_HEARTBEAT_MS = 60000;
 
+// ─── Round 3.3 Item 1 — tier-generation + chapters heartbeats ─────────
+// Same pattern as BLEND_HEARTBEAT — fire AT MOST once per stage when
+// elapsed exceeds the threshold. Round 3.2 surfaced 4-5 minute silent
+// gaps between STAGE_CHECKIN and the next milestone; users staring at
+// a silent chat close the tab. Cowork-locked wording.
+
+export const TIER_GENERATION_HEARTBEAT =
+  "Still on the foundation — getting the top tier right takes a beat.";
+
+export const CHAPTERS_HEARTBEAT =
+  "Still on the chapters — letting each one breathe before stitching them together.";
+
+export const TIER_GENERATION_HEARTBEAT_MS = 90000;
+export const CHAPTERS_HEARTBEAT_MS = 90000;
+
 // ─── Round 3.2 Item 3 — Splash welcome (fresh-signup dashboard) ────────
 // Replaces the prior 47-word promotional splash. Same six words as
 // OPENER_FRESH_USER — the splash and the chat-panel opener intentionally
