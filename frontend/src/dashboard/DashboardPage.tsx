@@ -5,6 +5,9 @@ import { Spinner } from '../shared/Spinner';
 import { useMaria } from '../shared/MariaContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 import { LEAD_TOGGLE_EVENT } from '../shared/leadershipDetection';
+import { PATH_A_BANNER } from '../shared/milestoneCopy';
+import { MobileHomeAffordances } from '../shared/MobileHomeAffordances';
+import { MOBILE_HOME_BREAKPOINT_PX } from '../shared/breakpoints';
 import { useAuth } from '../auth/AuthContext';
 import type { Offering, Audience } from '../types';
 
@@ -63,6 +66,21 @@ export function DashboardPage() {
   // chat-open opener fires) and the partner history (any assistant
   // message means Maria has spoken to this user). Either signal suffices.
   const [welcomeSuppressed, setWelcomeSuppressed] = useState<boolean | null>(null);
+
+  // Phase 2 — Fix 4: hide the dashboard's consultation toggle bar on small
+  // screens. The toggle moves into the chat-panel header (MariaPartner) so
+  // the iPhone home renders only the two affordance buttons + tiles.
+  const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_HOME_BREAKPOINT_PX;
+  });
+  useEffect(() => {
+    function update() {
+      setIsSmallScreen(window.innerWidth <= MOBILE_HOME_BREAKPOINT_PX);
+    }
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   const { setPageContext, registerRefresh } = useMaria();
   useEffect(() => { setPageContext({ page: 'dashboard' }); registerRefresh(loadAll); }, []);
@@ -205,67 +223,38 @@ export function DashboardPage() {
   const ttCount = allDrafts.length;
   const fcsCount = allDrafts.reduce((sum, d) => sum + d.deliverableCount, 0);
 
-  function toggleConsultation() {
-    const next = !consultation;
-    setConsultation(next);
-    try { localStorage.setItem('maria-consultation', next ? 'on' : 'off'); } catch {}
-    // Path-architecture refactor — Phase 1. Dual-write the toggle to
-    // User.settings.partner.consultation so the toggle follows the user
-    // across devices and the backend can read it for proactive milestone
-    // narration in Phase 3. Fire-and-forget; localStorage above is the
-    // synchronous fast read for the local UI. If the PUT fails (network,
-    // server), we accept the temporary divergence — the next /partner/status
-    // load reconciles.
-    api.put('/partner/consultation', { value: next ? 'on' : 'off' }).catch(() => {});
-    try {
-      document.dispatchEvent(new CustomEvent(LEAD_TOGGLE_EVENT, { detail: { value: next ? 'on' : 'off' } }));
-    } catch {}
-
-    // Change 14 — Bifurcated toggle behavior. ON opens chat with a state recap
-    // and next-move proposals (same content as Change 16's returning-user briefing).
-    // OFF closes chat (banner renders inline below) and suppresses proactive speech.
-    if (next) {
-      // ON: open chat with the shared state-recap synthetic message.
-      try {
-        document.dispatchEvent(new CustomEvent('maria-toggle', {
-          detail: { open: true, message: '[STATE_RECAP]' },
-        }));
-      } catch {}
-    } else {
-      // OFF: close chat if it's open. Banner below renders based on `consultation` state.
-      try {
-        document.dispatchEvent(new CustomEvent('maria-toggle', {
-          detail: { open: false },
-        }));
-      } catch {}
-    }
-  }
+  // Round 4 Fix 10 — toggleConsultation was the dashboard's flip handler.
+  // Removed along with the dashboard toggle UI; the equivalent now lives
+  // in MariaPartner.tsx as toggleConsultationFromPanel and runs at every
+  // breakpoint. The dashboard's PATH_A_BANNER below still reads the
+  // `consultation` state to render the off-state banner.
 
   return (
     <div className="dashboard">
-      {/* Consultation toggle — default ON */}
-      <div className="consultation-toggle-bar">
-        <div className="consultation-toggle-left">
-          {activeWorkspace && (
+      {/* Round 4 Fix 10 — toggle relocated to the chat-panel header at all
+          breakpoints. The dashboard now keeps just the workspace name in
+          this slot. The toggle lives in MariaPartner's header so it sits
+          inside the Maria relationship rather than next to "Work with
+          Maria" on the dashboard. */}
+      {!isSmallScreen && activeWorkspace && (
+        <div className="consultation-toggle-bar">
+          <div className="consultation-toggle-left">
             <h2 className="dashboard-workspace-name" style={{ margin: 0 }}>{activeWorkspace.name}</h2>
-          )}
+          </div>
         </div>
-        <label className="consultation-toggle" title={consultation ? 'Maria guides each step. Take over whenever you want.' : 'You drive. Maria waits on the side.'}>
-          <span className={`consultation-toggle-label ${consultation ? 'consultation-toggle-label-active' : ''}`}>
-            Let Maria lead
-          </span>
-          <button
-            type="button"
-            className={`consultation-switch ${consultation ? 'consultation-switch-on' : ''}`}
-            onClick={toggleConsultation}
-            aria-label="Toggle Maria collaboration"
-          >
-            <span className="consultation-switch-thumb" />
-          </button>
-        </label>
-      </div>
+      )}
 
-      {/* Change 14 — Toggle OFF banner: visible signal that Maria is waiting. */}
+      {/* Phase 2 — Redlines #10, #13, #14: iPhone-only home-screen affordances.
+          The component renders nothing above MOBILE_HOME_BREAKPOINT_PX, so the
+          desktop dashboard is untouched. On small layouts these two buttons sit
+          right below the toggle bar; the rest of the dashboard tiles still
+          render below for users who scroll. */}
+      <MobileHomeAffordances mostRecentDraftId={mostRecent?.draftId} />
+
+      {/* Round 4 Fix 10 Part B — Path A banner with the new locked text.
+          Replaces the prior "You're driving. I'll wait until you ask."
+          metaphor; new wording references the toggle by name so first-
+          time users connect the banner to the affordance directly. */}
       {!consultation && (
         <div
           style={{
@@ -278,7 +267,7 @@ export function DashboardPage() {
             color: 'var(--text-secondary)',
           }}
         >
-          You're driving. I'll wait until you ask.
+          {PATH_A_BANNER}
         </div>
       )}
 
@@ -410,7 +399,14 @@ export function DashboardPage() {
             </h3>
             <button
               className="btn btn-ghost"
-              onClick={() => navigate('/express')}
+              onClick={() => {
+                // Round 4 Fix 2 — fresh-start entry. Open the chat panel
+                // with empty local message state so prior unrelated sessions
+                // don't show through. The chat-open opener fires fresh after.
+                document.dispatchEvent(new CustomEvent('maria-toggle', {
+                  detail: { open: true, freshStart: true },
+                }));
+              }}
               style={{ fontSize: 13, color: 'var(--accent, #007aff)', padding: '4px 10px' }}
             >
               + New message

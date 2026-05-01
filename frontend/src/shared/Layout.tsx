@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useWorkspace } from './WorkspaceContext';
+import { MOBILE_HOME_BREAKPOINT_PX } from './breakpoints';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -14,6 +15,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Round 3 fix — hide the top-nav "Work with Maria" button on iPhone-
+  // sized screens. Below 600px the MobileHomeAffordances component is
+  // the intended Maria entry point; two affordances with the same label
+  // compete for thumb space.
+  const [isSmallScreen, setIsSmallScreen] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth <= MOBILE_HOME_BREAKPOINT_PX,
+  );
+  useEffect(() => {
+    const onResize = () => setIsSmallScreen(window.innerWidth <= MOBILE_HOME_BREAKPOINT_PX);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -70,7 +84,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <nav className="nav-bar">
         <Link to="/" className="nav-brand">
           <span className="nav-brand-name">Maria</span>
-          <span className="nav-brand-tagline">Your Messaging Partner</span>
+          {/* Round 4 Fix 6 — hide the tagline below 600px so the brand
+              mark doesn't truncate to "M…" at iPhone width. The "Maria"
+              wordmark alone fits inside the iPhone nav. */}
+          {!isSmallScreen && (
+            <span className="nav-brand-tagline">Your Messaging Partner</span>
+          )}
         </Link>
         <div className="nav-links">
           {NAV_ITEMS.map(item => (
@@ -153,18 +172,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
         <div className="nav-right">
-          <button
-            onClick={() => {
-              // Open Maria panel in place; don't rip the user away from what
-              // they were looking at. If they're logged in, Maria greets and
-              // asks what they'd like to draft.
-              document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true } }));
-            }}
-            className="btn btn-primary btn-sm nav-start-draft"
-            title="Work with Maria on a new message"
-          >
-            Work with Maria
-          </button>
+          {!isSmallScreen && (
+            <button
+              onClick={() => {
+                // Open Maria panel in place; don't rip the user away from what
+                // they were looking at. If they're logged in, Maria greets and
+                // asks what they'd like to draft.
+                document.dispatchEvent(new CustomEvent('maria-toggle', { detail: { open: true } }));
+              }}
+              className="btn btn-primary btn-sm nav-start-draft"
+              title="Work with Maria on a new message"
+            >
+              Work with Maria
+            </button>
+          )}
           <span className="nav-user">{user?.firstName || user?.displayName || user?.username}</span>
           <button
             onClick={() => navigate('/settings')}

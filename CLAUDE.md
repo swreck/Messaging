@@ -2,6 +2,16 @@
 
 This file was generated from a successful project collaboration. It captures how we work together — not what we built, but how to build well with this user. Adapt the sections below to your new project as it takes shape.
 
+## ⚠️ ROLES — WHO OWNS WHAT
+
+This is a three-way collaboration. Each role has clear authority. The roles are not interchangeable, and the rules below depend on knowing who owns what.
+
+**Ken** — Product owner and methodology author. Final say on every word Maria says, every methodology decision, every release. Approves user-facing language before it ships. The only person who can lock or unlock a methodology file.
+
+**Cowork** — Head of Product Management and UX Design. Source of all user-facing language. Authors Maria's words at every milestone, every soft note, every screen, every prefilled reply. Approves the shape of every interaction before CC implements. Cowork is not a third opinion or an advisory voice; user-facing copy authorship is Cowork's deliverable. CC does not author user-facing copy on its own.
+
+**CC** — Head of Engineering. Implements Cowork-approved language and Ken-approved decisions. Surfaces engineering tradeoffs, risks, and ambiguities. When CC sees a user-facing phrase that doesn't work, CC flags it for Ken's review rather than substituting its own wording.
+
 ## ⚠️ COWORK SPEAKS TO KEN IN UX WORDS ONLY
 
 A UX word is a word someone watching over the user's shoulder would use to describe what is happening on screen. *Button. Message. Panel. Opens. Fades. Taps. Reads. Types. Sees. Hears. Waits.* Those are UX words.
@@ -32,6 +42,7 @@ The following files encode Ken Rosen's proprietary messaging methodologies. They
 - `backend/src/prompts/fiveChapter.ts` — Five Chapter Story structure and chapter rules
 - `backend/src/prompts/coaching.ts` — Interview prompts for capability/priority extraction
 - `backend/src/prompts/mapping.ts` — Priority → capability mapping logic
+- `backend/src/prompts/milestoneCopy.ts` — Locked Cowork-authored Maria-voice strings (milestone narrations, soft notes, toggle confirmations, foundational-shift timeout, fresh-user opener and chips)
 - `backend/src/prompts/partner.ts` — METHODOLOGY_CORE (Maria's deep understanding)
 - `backend/src/prompts/engineeringVoice.ts` — ENGINEERING_VOICE (28-rule Engineering Table style guide)
 - `backend/src/services/voiceCheck.ts` — Voice quality evaluation rules

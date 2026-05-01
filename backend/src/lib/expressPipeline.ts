@@ -11,15 +11,35 @@
 // 2.5 continues working identically.
 
 import { prisma } from './prisma.js';
+import { getConsultationLive } from './partnerSettings.js';
 import { callAI, callAIWithJSON } from '../services/ai.js';
 import { MAPPING_SYSTEM } from '../prompts/mapping.js';
 import { CONVERT_LINES_SYSTEM } from '../prompts/generation.js';
 import {
   buildChapterPrompt,
   BLEND_SYSTEM,
+  JOIN_CHAPTERS_SYSTEM,
   CHAPTER_CRITERIA,
   CHAPTER_NAMES,
 } from '../prompts/fiveChapter.js';
+import {
+  MILESTONE_FOUNDATION_CONFIRMED,
+  MILESTONE_CHAPTERS_SEPARATED_READY,
+  MILESTONE_CHAPTERS_COMBINED_READY,
+  MILESTONE_BLENDED_READY,
+  buildSoftNote,
+  PAUSE_ON_FOUNDATIONAL_SHIFT,
+  buildFoundationalShiftTimeout,
+  TIMEOUT_AREA_TIER1,
+  TIMEOUT_AREA_TIER2,
+  TIMEOUT_AREA_FALLBACK,
+  STAGE_CHECKIN_TIER_GENERATION,
+  STAGE_CHECKIN_CHAPTERS,
+  STAGE_CHECKIN_BLEND,
+  FOUNDATIONAL_SHIFT_HOLD_MIDPOINT,
+  PAUSE_BEFORE_SOFT_NOTES_MS,
+  SOFT_NOTE_STAGGER_MS,
+} from '../prompts/milestoneCopy.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import {
   checkStatements,
@@ -64,6 +84,389 @@ const MEDIUM_ID_MAP: Record<string, string> = {
 
 function pickInternalMedium(extractedMedium: string): string {
   return MEDIUM_ID_MAP[extractedMedium] || 'email';
+}
+
+// ─── Phase 2 helpers — milestone narration, soft notes, shift pause ──
+//
+// These helpers are used by both the autonomous pipeline (runPipeline) and
+// the guided pipeline (runDraftPipeline) so the user-facing chat behavior
+// is identical regardless of which path produced the deliverable. All
+// user-facing strings come from prompts/milestoneCopy.ts — the wording is
+// Cowork-authored and never composed in this file.
+
+interface PartnerCtx {
+  storyId?: string;
+  draftId?: string;
+  audienceId?: string;
+  offeringId?: string;
+}
+
+function buildPartnerContext(workspaceId: string, ctx: PartnerCtx, kind?: string): Record<string, string> {
+  const out: Record<string, string> = { channel: 'partner', workspaceId };
+  if (ctx.storyId) out.storyId = ctx.storyId;
+  if (ctx.draftId) out.draftId = ctx.draftId;
+  if (ctx.audienceId) out.audienceId = ctx.audienceId;
+  if (ctx.offeringId) out.offeringId = ctx.offeringId;
+  if (kind) out.kind = kind;
+  return out;
+}
+
+// Write an assistant message into the persistent partner conversation.
+// Used for milestone narrations, soft notes, the foundational-shift pause
+// message, and toggle confirmations written by the pipeline. Fail-open so
+// pipeline progress is never blocked by a chat-write hiccup.
+async function writeMariaMessage(opts: {
+  userId: string;
+  workspaceId: string;
+  ctx: PartnerCtx;
+  content: string;
+  kind?: string;
+}): Promise<void> {
+  try {
+    await prisma.assistantMessage.create({
+      data: {
+        userId: opts.userId,
+        role: 'assistant',
+        content: opts.content,
+        context: buildPartnerContext(opts.workspaceId, opts.ctx, opts.kind),
+      },
+    });
+  } catch (err) {
+    console.error('[ExpressPipeline] writeMariaMessage failed (fail-open):', err);
+  }
+}
+
+// Path-architecture refactor — Phase 2, Redline #3. Live read of the
+// "Let Maria lead" toggle BEFORE each milestone narration. Flipping the
+// toggle mid-pipeline takes effect on the next milestone — the toggle is
+// a live promise, not a snapshot at job start.
+async function narrateMilestoneIfPathB(opts: {
+  userId: string;
+  workspaceId: string;
+  ctx: PartnerCtx;
+  milestone:
+    | typeof MILESTONE_FOUNDATION_CONFIRMED
+    | typeof MILESTONE_CHAPTERS_SEPARATED_READY
+    | typeof MILESTONE_CHAPTERS_COMBINED_READY
+    | typeof MILESTONE_BLENDED_READY;
+}): Promise<void> {
+  try {
+    const consultation = await getConsultationLive(opts.userId);
+    if (consultation !== 'on') return;
+  } catch (err) {
+    console.error('[ExpressPipeline] consultation read failed (fail-closed, no narration):', err);
+    return;
+  }
+  await writeMariaMessage({
+    userId: opts.userId,
+    workspaceId: opts.workspaceId,
+    ctx: opts.ctx,
+    content: opts.milestone,
+    kind: 'milestone-narration',
+  });
+}
+
+// Round 3 fix — convert verb-form / instruction descriptors into
+// noun-phrase form so they slot grammatically after "with" in the
+// soft-note template. Existing noun-form descriptors (e.g. "the typical
+// engagement length") pass through unchanged. Patterns the regex doesn't
+// catch are logged server-side so Cowork can extend the set over time.
+const KNOWN_NOUN_FORM_PREFIXES = /^(the|a|an|any|your|our|some|two|three|several|specific|named|measurable|approximate|exact)\s/i;
+function normalizeMissingPieceDescriptor(raw: string): string {
+  const original = raw.trim();
+  let s = original;
+  s = s.replace(/^name\s+(?=[a-z\d])/i, 'names of ');
+  s = s.replace(/^list\s+(?=[a-z\d])/i, 'a list of ');
+  s = s.replace(/^tell (us|me) (about |your )?/i, '');
+  s = s.replace(/^give (us|me) (the |a |an |your )?/i, '');
+  s = s.replace(/^share (the |a |an |your )?/i, '');
+  s = s.replace(/^provide (the |a |an |your )?/i, '');
+  s = s.replace(/^add (the |a |an |your )?/i, '');
+  s = s.replace(/^include (the |a |an |your )?/i, '');
+  if (s === original && !KNOWN_NOUN_FORM_PREFIXES.test(s)) {
+    console.log(`[ExpressPipeline] missing-piece descriptor passed through unchanged (flag for Cowork): ${JSON.stringify(original)}`);
+  }
+  return s;
+}
+
+// Round 2 fix — extract [INSERT: <description>] markers from chapter
+// content, return the descriptions (user-facing missing-piece labels) plus
+// the chapter content with marker-bearing sentences stripped. The chapter
+// generators emit markers as a classifier signal; the descriptions feed
+// the soft-note system, and the stripped prose is what goes into join +
+// blend. Net effect: blendedText has zero brackets, and missing-fact
+// metadata reaches the chat as soft notes.
+function extractAndStripMarkers(content: string): {
+  cleanContent: string;
+  missingPieces: string[];
+} {
+  const missingPieces: string[] = [];
+  const markerRe = /\[INSERT:\s*([^\]\n]+?)\s*\]/g;
+  let mm: RegExpExecArray | null;
+  while ((mm = markerRe.exec(content)) !== null) {
+    const desc = mm[1].trim();
+    if (desc) missingPieces.push(normalizeMissingPieceDescriptor(desc));
+  }
+  if (missingPieces.length === 0) {
+    return { cleanContent: content, missingPieces };
+  }
+  // Remove every sentence containing a marker, then collapse the residual
+  // whitespace. Sentence boundary = `.`, `!`, or `?` followed by space or
+  // line break, plus paragraph boundaries. The conservative approach is to
+  // walk paragraphs and rebuild without marker-bearing sentences.
+  const paragraphs = content.split(/\n{2,}/);
+  const cleanedParagraphs = paragraphs
+    .map(par => {
+      // Split paragraph into sentences. Keep terminator with sentence so we
+      // can reassemble cleanly.
+      const sentenceRe = /[^.!?]+[.!?]+["')\]]?\s*|\S[^.!?\n]*$/g;
+      const sentences = par.match(sentenceRe) || [par];
+      const kept = sentences.filter(s => !/\[INSERT:/.test(s));
+      return kept.join('').trim();
+    })
+    .filter(par => par.length > 0);
+  const cleanContent = cleanedParagraphs.join('\n\n').trim();
+  return { cleanContent, missingPieces };
+}
+
+// Round 3 fix — stage-aware presence check-ins. Each pipeline stage
+// (tier_generation, chapters, blend) sets a 30-second timer when it
+// begins. If the timer fires before the stage's completion milestone
+// lands, the corresponding locked Maria-voice check-in is written to
+// chat (kind: 'stage-checkin'). Each check-in fires at most once per
+// pipeline run per stage, even across foundational-shift regen cycles.
+// Path B only — gated by live consultation read, same pattern as
+// milestone narrations. Path A stays silent.
+type StageCheckinKey = 'tier' | 'chapters' | 'blend';
+type StageCheckinFlags = Record<StageCheckinKey, boolean>;
+function makeStageCheckinFlags(): StageCheckinFlags {
+  return { tier: false, chapters: false, blend: false };
+}
+function scheduleStageCheckin(opts: {
+  stage: StageCheckinKey;
+  message: string;
+  flags: StageCheckinFlags;
+  userId: string;
+  workspaceId: string;
+  ctx: PartnerCtx;
+}): () => void {
+  if (opts.flags[opts.stage]) {
+    return () => {};
+  }
+  const handle = setTimeout(async () => {
+    if (opts.flags[opts.stage]) return;
+    try {
+      const consultation = await getConsultationLive(opts.userId);
+      if (consultation !== 'on') return;
+      opts.flags[opts.stage] = true;
+      await writeMariaMessage({
+        userId: opts.userId,
+        workspaceId: opts.workspaceId,
+        ctx: opts.ctx,
+        content: opts.message,
+        kind: 'stage-checkin',
+      });
+    } catch (err) {
+      console.error('[ExpressPipeline] stage-checkin write failed:', err);
+    }
+  }, 30000);
+  return () => clearTimeout(handle);
+}
+
+// Soft-note routing — Round 2 (unified template). After
+// MILESTONE_BLENDED_READY fires, emit one buildSoftNote per chapter that
+// has any gap. Empty case (whole chapter missing per tier-level rules):
+// pass missingPieces=[] so the template uses EMPTY_CASE_FILL. Partial case
+// (chapter exists but content gaps): pass extracted marker descriptions.
+// Soft notes go to chat ONLY — never appended to blendedText. Fires
+// regardless of toggle state: the user needs to know what's missing
+// whether Maria is leading or quiet.
+async function emitChapterSoftNotes(opts: {
+  userId: string;
+  workspaceId: string;
+  ctx: PartnerCtx;
+  wholeChapterEmpty: Set<3 | 4 | 5>;
+  chapterMissingPieces: Record<3 | 4 | 5, string[]>;
+}): Promise<void> {
+  // Round 4 Fix 7 — assemble the soft notes that need to fire BEFORE
+  // sleeping, so we can short-circuit the whole pause when there are
+  // none. No work, no delay.
+  const notesToSend: { chapter: 3 | 4 | 5; text: string }[] = [];
+  for (const chapter of [3, 4, 5] as const) {
+    const isEmpty = opts.wholeChapterEmpty.has(chapter);
+    const pieces = opts.chapterMissingPieces[chapter] || [];
+    if (!isEmpty && pieces.length === 0) continue;
+    notesToSend.push({ chapter, text: buildSoftNote(chapter, isEmpty ? [] : pieces) });
+  }
+  if (notesToSend.length === 0) return;
+
+  // Round 4 Fix 7 — give MILESTONE_BLENDED_READY breathing room before
+  // the first soft note fires. Without the pause, "Take a look" and the
+  // gap notices arrive in the same bubble cluster and undercut each
+  // other.
+  await new Promise(r => setTimeout(r, PAUSE_BEFORE_SOFT_NOTES_MS));
+
+  // Round 4 Fix 8 — stagger soft notes by SOFT_NOTE_STAGGER_MS so the
+  // chat panel doesn't queue-dump bubbles when more than one chapter
+  // has gaps. First note fires immediately after the Fix 7 pause; each
+  // subsequent note waits the stagger interval before writing.
+  for (let i = 0; i < notesToSend.length; i++) {
+    if (i > 0) {
+      await new Promise(r => setTimeout(r, SOFT_NOTE_STAGGER_MS));
+    }
+    await writeMariaMessage({
+      userId: opts.userId,
+      workspaceId: opts.workspaceId,
+      ctx: opts.ctx,
+      content: notesToSend[i].text,
+      kind: 'soft-note',
+    });
+  }
+}
+
+// Foundational-shift pause (Redline #4). Polls User.settings.pendingFoundationalShift
+// for a fresh entry that landed during this pipeline run. If detected:
+// (a) writes PAUSE_ON_FOUNDATIONAL_SHIFT to chat once per pipeline,
+// (b) waits for the pending shift to clear (user resolved via existing
+//     APPLY_FOUNDATIONAL_SHIFT chat marker — that handler clears the flag
+//     and applies the tier update),
+// (c) returns 'regenerate-chapters' if the resolution actually changed the
+//     Tier 1 text since the pipeline started (caller restarts chapter loop),
+//     'continue' if the user declined or the tier didn't change,
+//     'timeout' if no resolution arrived inside the wait window.
+//
+// Cosmetic edits (no pending shift) return 'continue' immediately; the
+// pipeline proceeds normally.
+type ShiftPauseAction = 'continue' | 'regenerate-chapters' | 'timeout';
+interface ShiftPauseResult {
+  action: ShiftPauseAction;
+  // Populated whenever a pending shift was detected (regenerate-chapters or
+  // timeout outcomes). Mirrors the foundationalShift classifier's targetCell:
+  // "tier1" | "tier2-N" | "none" — caller maps to TIMEOUT_AREA_*.
+  targetCell?: string;
+}
+
+// Map a foundational-shift targetCell to the locked timeout-area constant
+// used by buildFoundationalShiftTimeout. The classifier's outputs today are
+// "tier1" | "tier2-N" | "none". TIMEOUT_AREA_AUDIENCE / TIMEOUT_AREA_OFFERING
+// constants exist in milestoneCopy.ts for forward-compat — this mapping
+// falls those cases through to TIMEOUT_AREA_FALLBACK because the current
+// pause path only fires from chapter edits.
+function timeoutAreaForTargetCell(targetCell?: string): string {
+  if (targetCell === 'tier1') return TIMEOUT_AREA_TIER1;
+  if (targetCell && targetCell.startsWith('tier2')) return TIMEOUT_AREA_TIER2;
+  return TIMEOUT_AREA_FALLBACK;
+}
+
+async function checkFoundationalShiftPause(opts: {
+  jobId: string;
+  userId: string;
+  workspaceId: string;
+  ctx: PartnerCtx;
+  draftId: string;
+  pipelineStartMs: number;
+  pauseFlag: { value: boolean };
+  initialTier1Text: string;
+  updateStage: (stage: string) => Promise<void>;
+}): Promise<ShiftPauseResult> {
+  // Fast read — most boundaries have no pending shift.
+  const userRow = await prisma.user.findUnique({
+    where: { id: opts.userId },
+    select: { settings: true },
+  });
+  const settings = (userRow?.settings as Record<string, any>) || {};
+  const pending = settings.pendingFoundationalShift as
+    | { draftId?: string; setAt?: string; targetCell?: string }
+    | undefined;
+  if (!pending || !pending.setAt || !pending.draftId) return { action: 'continue' };
+  if (pending.draftId !== opts.draftId) return { action: 'continue' };
+  const setAtMs = new Date(pending.setAt).getTime();
+  if (isNaN(setAtMs) || setAtMs < opts.pipelineStartMs) return { action: 'continue' };
+
+  const detectedTargetCell = pending.targetCell;
+
+  // Pending shift detected on THIS draft, fresh since pipeline start.
+  // Send the locked pause copy to chat exactly once, regardless of toggle —
+  // the user has just edited; they need to know we're holding off.
+  if (!opts.pauseFlag.value) {
+    opts.pauseFlag.value = true;
+    await writeMariaMessage({
+      userId: opts.userId,
+      workspaceId: opts.workspaceId,
+      ctx: opts.ctx,
+      content: PAUSE_ON_FOUNDATIONAL_SHIFT,
+      kind: 'pause-narration',
+    });
+    await opts.updateStage('Holding for the foundation update');
+  }
+
+  // Round 3 fix — poll for resolution every 3s, max 3 minutes (was 5).
+  // At the 90s midpoint, write FOUNDATIONAL_SHIFT_HOLD_MIDPOINT to chat
+  // once so the user sees Maria is still holding rather than staring at
+  // silence. Three messages over three minutes — pause at 0s, midpoint
+  // at 90s, timeout at 180s.
+  const POLL_INTERVAL_MS = 3000;
+  const MAX_WAIT_MS = 3 * 60 * 1000;
+  const MIDPOINT_MS = 90 * 1000;
+  const waitStart = Date.now();
+  let midpointFired = false;
+  while (Date.now() - waitStart < MAX_WAIT_MS) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+    if (!midpointFired && Date.now() - waitStart >= MIDPOINT_MS) {
+      midpointFired = true;
+      await writeMariaMessage({
+        userId: opts.userId,
+        workspaceId: opts.workspaceId,
+        ctx: opts.ctx,
+        content: FOUNDATIONAL_SHIFT_HOLD_MIDPOINT,
+        kind: 'pause-midpoint',
+      });
+    }
+    const fresh = await prisma.user.findUnique({
+      where: { id: opts.userId },
+      select: { settings: true },
+    });
+    const freshSettings = (fresh?.settings as Record<string, any>) || {};
+    const stillPending = freshSettings.pendingFoundationalShift as
+      | { draftId?: string; setAt?: string; targetCell?: string }
+      | undefined;
+    if (!stillPending || stillPending.draftId !== opts.draftId) {
+      // Resolved. Determine whether the tier text actually changed.
+      const tier1Now = await prisma.tier1Statement.findFirst({
+        where: { draftId: opts.draftId },
+        select: { text: true },
+      });
+      if (tier1Now && tier1Now.text !== opts.initialTier1Text) {
+        return { action: 'regenerate-chapters', targetCell: detectedTargetCell };
+      }
+      return { action: 'continue' };
+    }
+  }
+  return { action: 'timeout', targetCell: detectedTargetCell };
+}
+
+// Missing-chapter detection. Returns the list of chapters with no source
+// content backing them. Mirrors the per-chapter guardrail logic already in
+// the pipeline so the user-facing soft notes line up with the silent
+// guardrails underneath.
+function detectMissingChaptersFromTier(opts: {
+  hasSupportColumn: boolean;
+  hasSocialProofColumn: boolean;
+  namedCustomerCount: number;
+  otherNamedSpecificCount: number;
+  hasMeaningfulCta: boolean;
+}): Array<3 | 4 | 5> {
+  const missing: Array<3 | 4 | 5> = [];
+  if (!opts.hasSupportColumn) missing.push(3);
+  if (
+    !opts.hasSocialProofColumn &&
+    opts.namedCustomerCount === 0 &&
+    opts.otherNamedSpecificCount === 0
+  ) {
+    missing.push(4);
+  }
+  if (!opts.hasMeaningfulCta) missing.push(5);
+  return missing;
 }
 
 // ─── Commit: interpretation → DB rows ─────────────────
@@ -408,6 +811,19 @@ export async function runPipeline(jobId: string): Promise<void> {
     const variantCount = variantDraftIds.length;
     const storyIds: string[] = [];
 
+    // Phase 2 — userId + workspaceId for milestone narration writes. Both
+    // are guaranteed by the ExpressJob row.
+    const pipelineUserId = job.userId;
+    const pipelineWorkspaceId = job.workspaceId;
+    const pipelineStartMs = Date.now();
+    // One-shot pause-narration flag per pipeline run. The PAUSE_ON_FOUNDATIONAL_SHIFT
+    // message fires at most once even if the user makes multiple foundation-changing
+    // edits during the run.
+    const shiftPauseFlag = { value: false };
+    // Round 3 fix — per-pipeline stage-checkin flags. Each stage's check-in
+    // fires at most once per pipeline run, even across regen cycles.
+    const stageCheckinFlags = makeStageCheckinFlags();
+
     for (let variantIndex = 0; variantIndex < variantCount; variantIndex++) {
       const currentDraftId = variantDraftIds[variantIndex];
 
@@ -534,6 +950,19 @@ ${draftWithElements.offering.elements
       status: 'tier_generation',
       stage: `Shaping the Three Tier message${variantStageSuffix}`,
       progress: scaledProgress(25),
+    });
+
+    const cancelTierCheckin = scheduleStageCheckin({
+      stage: 'tier',
+      message: STAGE_CHECKIN_TIER_GENERATION,
+      flags: stageCheckinFlags,
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
     });
 
     const confirmedMappings = await prisma.mapping.findMany({
@@ -672,6 +1101,16 @@ AUDIENCE: ${draftWithElements.audience.name}`;
 
     await update({ progress: scaledProgress(45) });
 
+    // Capture initial Tier 1 text BEFORE chapter generation so the
+    // shift-pause helper can detect whether a mid-pipeline edit actually
+    // changed the foundation.
+    const initialTier1Text = (
+      await prisma.tier1Statement.findFirst({
+        where: { draftId: draftWithElements.id },
+        select: { text: true },
+      })
+    )?.text || '';
+
     // ─── Stage 3: Five Chapter Story ─────────────────
     const mediumKey = pickInternalMedium(interpretation.primaryMedium.value);
     const mediumSpec = getMediumSpec(mediumKey);
@@ -718,7 +1157,30 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       },
     });
 
-    const draftForStory = await prisma.threeTierDraft.findFirst({
+    // Round 3 fix — tier-generation stage complete; cancel the check-in
+    // timer so it doesn't fire after the milestone has already landed.
+    cancelTierCheckin();
+
+    // Phase 2 — Milestone 1: Foundation confirmed. Path B narration only;
+    // Path A stays silent. Live consultation read inside the helper.
+    // Fires after the FCS row exists so storyId is in ctx — the chat panel
+    // scopes history by storyId once it navigates to /five-chapter, and a
+    // foundation message without storyId would be filtered out of view.
+    await narrateMilestoneIfPathB({
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      milestone: MILESTONE_FOUNDATION_CONFIRMED,
+    });
+
+    // Phase 2 — `let` (was `const`) so the foundational-shift pause path
+    // can re-fetch this row after a foundation regeneration.
+    let draftForStory = await prisma.threeTierDraft.findFirst({
       where: { id: draftWithElements.id },
       include: {
         tier1Statement: true,
@@ -737,6 +1199,7 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       await fail('Draft vanished before chapter generation.');
       return;
     }
+    let initialTier1TextForShift = initialTier1Text || draftForStory.tier1Statement?.text || '';
 
     // Detect which content is actually available in the Three Tier so we can
     // write chapter-specific anti-fabrication guardrails below. Each chapter
@@ -930,6 +1393,37 @@ Return ONLY the one sentence.`;
       console.error('[Ch1 thesis] Generation failed, proceeding without:', err);
     }
 
+    // Phase 2 — Fix 3: chapter generation may regenerate up to MAX_REGEN_CYCLES
+    // times if the user makes foundation-changing edits during the run. Each
+    // edit fires its own pause + regen. The cap exists only as a runaway-loop
+    // safety net; in normal use the user makes at most a couple of follow-up
+    // adjustments before settling on a foundation.
+    const MAX_REGEN_CYCLES = 3;
+    let chapterRegenCount = 0;
+    // Round 2 fix — per-chapter missing-piece descriptors extracted from
+    // the chapter generators' [INSERT: <description>] markers. Survives the
+    // chapter loop; resets at the top of each regen cycle. Feeds the
+    // unified soft-note system after blend completes.
+    let chapterMissingPieces: Record<3 | 4 | 5, string[]> = { 3: [], 4: [], 5: [] };
+    // Round 3 fix — chapters stage check-in covers the full 5-chapter
+    // loop. Scheduled once before the loop begins; cancelled when the
+    // CHAPTERS_SEPARATED milestone lands. The flag prevents re-fire on
+    // regen cycles.
+    const cancelChaptersCheckin = scheduleStageCheckin({
+      stage: 'chapters',
+      message: STAGE_CHECKIN_CHAPTERS,
+      flags: stageCheckinFlags,
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+    });
+    do {
+    chapterMissingPieces = { 3: [], 4: [], 5: [] };
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
         status: `chapter_${chapterNum}`,
@@ -1260,6 +1754,21 @@ ${draftForStory.tier2Statements
           .trim();
       }
 
+      // Round 2 fix — extract [INSERT: ...] marker descriptions and strip
+      // marker-bearing sentences from the chapter prose. The descriptions
+      // are the user-facing missing-piece labels; the stripped prose is
+      // what flows into join + blend so blendedText has zero brackets.
+      // Only chapters 3-5 carry methodology-required gaps that should
+      // surface as soft notes; markers in 1-2 still get stripped from
+      // the prose but don't drive a chat note.
+      {
+        const { cleanContent, missingPieces } = extractAndStripMarkers(content);
+        content = cleanContent;
+        if (chapterNum === 3 || chapterNum === 4 || chapterNum === 5) {
+          chapterMissingPieces[chapterNum] = missingPieces;
+        }
+      }
+
       await prisma.chapterContent.upsert({
         where: { storyId_chapterNum: { storyId: story.id, chapterNum } },
         update: { title: ch.name, content },
@@ -1290,11 +1799,162 @@ ${draftForStory.tier2Statements
       }
     }
 
+    // Phase 2 — Foundational-shift pause check after chapter loop. If the
+    // user edited the foundation mid-pipeline, this returns
+    // 'regenerate-chapters' so we delete chapters and re-run the loop ONCE.
+    {
+      const pauseResult = await checkFoundationalShiftPause({
+        jobId,
+        userId: pipelineUserId,
+        workspaceId: pipelineWorkspaceId,
+        ctx: {
+          storyId: story.id,
+          draftId: draftWithElements.id,
+          offeringId: draftWithElements.offering.id,
+          audienceId: draftWithElements.audience.id,
+        },
+        draftId: draftWithElements.id,
+        pipelineStartMs,
+        pauseFlag: shiftPauseFlag,
+        initialTier1Text: initialTier1TextForShift,
+        updateStage: async (s: string) => { await update({ stage: s }); },
+      });
+      if (pauseResult.action === 'timeout') {
+        await writeMariaMessage({
+          userId: pipelineUserId,
+          workspaceId: pipelineWorkspaceId,
+          ctx: {
+            storyId: story.id,
+            draftId: draftWithElements.id,
+            offeringId: draftWithElements.offering.id,
+            audienceId: draftWithElements.audience.id,
+          },
+          content: buildFoundationalShiftTimeout(timeoutAreaForTargetCell(pauseResult.targetCell)),
+          kind: 'pause-timeout',
+        });
+        await fail('Foundation update timed out.');
+        return;
+      }
+      if (pauseResult.action === 'regenerate-chapters' && chapterRegenCount < MAX_REGEN_CYCLES) {
+        chapterRegenCount++;
+        await prisma.chapterContent.deleteMany({ where: { storyId: story.id } });
+        const refreshed = await prisma.threeTierDraft.findFirst({
+          where: { id: draftWithElements.id },
+          include: {
+            tier1Statement: true,
+            tier2Statements: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                tier3Bullets: { orderBy: { sortOrder: 'asc' } },
+                priority: true,
+              },
+            },
+            offering: { include: { elements: true } },
+            audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+          },
+        });
+        if (!refreshed) {
+          await fail('Draft vanished during foundation regeneration.');
+          return;
+        }
+        draftForStory = refreshed;
+        initialTier1TextForShift = draftForStory.tier1Statement?.text || '';
+        continue;  // re-enter chapter loop with refreshed foundation
+      }
+      break;  // no shift, exit do-while
+    }
+    } while (true);
+
+    // Round 3 fix — chapters stage complete; cancel before milestone.
+    cancelChaptersCheckin();
+
+    // Phase 2 — Milestone 2: Chapters separated. Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      milestone: MILESTONE_CHAPTERS_SEPARATED_READY,
+    });
+
+    // ─── Stage 3.5: Join (NEW in Phase 2) ────────────
+    // Combine the five separately-generated chapters into one read with
+    // minimal transitions. Persists `joinedText` and stage='joined' on
+    // the FCS row, then narrates Milestone 3 before the blend pass runs.
+    await update({
+      status: 'joining',
+      stage: `Joining the chapters${variantStageSuffix}`,
+      progress: scaledProgress(88),
+    });
+
+    const storyWithChaptersForJoin = await prisma.fiveChapterStory.findFirst({
+      where: { id: story.id },
+      include: { chapters: { orderBy: { chapterNum: 'asc' } } },
+    });
+    if (!storyWithChaptersForJoin || storyWithChaptersForJoin.chapters.length < 5) {
+      await fail('Not all chapters generated cleanly.');
+      return;
+    }
+    const joinSourceText = storyWithChaptersForJoin.chapters
+      .map(ch => ch.content)
+      .join('\n\n');
+    const joinMessage = `CONTENT FORMAT: ${mediumSpec.label}\n\n${joinSourceText}`;
+    let joinedText = '';
+    try {
+      joinedText = await callAI(JOIN_CHAPTERS_SYSTEM, joinMessage, 'elite');
+      try {
+        const joinCheck = await checkProse(joinedText, `Joined ${mediumSpec.label}`);
+        if (!joinCheck.passed && joinCheck.violations.length > 0) {
+          const feedback = buildProseViolationFeedback(joinCheck.violations);
+          joinedText = await callAI(JOIN_CHAPTERS_SYSTEM, joinMessage + feedback, 'elite');
+        }
+      } catch (err) {
+        console.error(`[ExpressPipeline] ${jobId} join voice check error (fail-open):`, err);
+      }
+      await prisma.fiveChapterStory.update({
+        where: { id: story.id },
+        data: { joinedText, stage: 'joined' },
+      });
+    } catch (err) {
+      console.error(`[ExpressPipeline] ${jobId} join failed (fail-open, blend still runs):`, err);
+    }
+
+    // Phase 2 — Milestone 3: Chapters combined. Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      milestone: MILESTONE_CHAPTERS_COMBINED_READY,
+    });
+
     // ─── Stage 4: Blend into final draft ─────────────
     await update({
       status: 'blending',
       stage: `Polishing the draft${variantStageSuffix}`,
       progress: scaledProgress(92),
+    });
+
+    const cancelBlendCheckin = scheduleStageCheckin({
+      stage: 'blend',
+      message: STAGE_CHECKIN_BLEND,
+      flags: stageCheckinFlags,
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
     });
 
     const storyWithChapters = await prisma.fiveChapterStory.findFirst({
@@ -1461,13 +2121,13 @@ ${draftForStory.tier2Statements
       .replace(/\n{3,}/g, '\n\n')           // collapse excessive blank lines
       .trim();
 
-    // ─── Post-blend credibility pass — wired Cowork April 2026 ─────
-    // Runs provenanceClassify (Round D) and fiveChapterCheck (locked
-    // structural evaluator) against the final blended text. On flag,
-    // replaces the flagged sentence with an [INSERT: ...] marker (option
-    // (b) per Cowork's Steps 4 + 5b). Failures fall through silently —
-    // the user gets the un-marker-substituted draft and any chapter-level
-    // [INSERT: ...] markers Maria already emitted are still preserved.
+    // ─── Post-blend credibility telemetry ─────────────
+    // Runs provenanceClassify (Round D) and fiveChapterCheck against the
+    // final blended text. Round 2 fix — the marker-substitution rewriter
+    // is removed: per Cowork's redesign, fact gaps surface as per-chapter
+    // soft notes in chat, not as [INSERT: ...] markers in the prose.
+    // INFERENCE flags here are logged for telemetry only; chapter-level
+    // marker extraction is the path that drives user-visible gap notices.
     const postBlendTierText = `Tier 1: "${draftForStory.tier1Statement?.text || ''}"
 ${draftForStory.tier2Statements
   .map(
@@ -1489,49 +2149,8 @@ ${draftForStory.tier2Statements
       const inferenceClaims = claims.filter(c => c.origin === 'INFERENCE');
       if (inferenceClaims.length > 0) {
         console.log(
-          `[ExpressPipeline] ${jobId} provenanceClassify flagged ${inferenceClaims.length} INFERENCE-origin claim(s) post-blend; substituting with [INSERT: ...] markers`,
+          `[ExpressPipeline] ${jobId} provenanceClassify flagged ${inferenceClaims.length} INFERENCE-origin claim(s) post-blend (telemetry only — no rewrite)`,
         );
-        // Batched single-call rewrite — Opus converts each flagged sentence
-        // into a one-line [INSERT: ...] marker in the user's voice.
-        const rewriteSystem = `You are converting flagged sentences into placeholder markers. Each flagged sentence makes a concrete claim that does not trace to user input — a fabricated number, name, spec, or commercial term. Your job: for each flagged sentence, output a single [INSERT: <description>] marker that tells the user, in their own voice, exactly what specific input they need to supply to replace this sentence. The description should be one short clause, smart-friend voice, no jargon, no system-warning tone.
-
-OUTPUT shape (JSON, no markdown):
-{
-  "substitutions": [
-    { "sentence": "the flagged sentence verbatim", "marker": "[INSERT: ...]" }
-  ]
-}
-
-One entry per flagged sentence, in input order. The marker must start with [INSERT: and end with ].`;
-        const rewriteUser = `FLAGGED SENTENCES (each one was inferred without supporting input):
-${inferenceClaims.map((c, i) => `${i + 1}. "${c.sentence}"`).join('\n')}
-
-Convert each into an [INSERT: ...] marker.`;
-        try {
-          const rewriteResult = await callAIWithJSON<{
-            substitutions: { sentence: string; marker: string }[];
-          }>(rewriteSystem, rewriteUser, 'elite');
-          const subs = Array.isArray(rewriteResult.substitutions) ? rewriteResult.substitutions : [];
-          let substituted = 0;
-          for (const sub of subs) {
-            if (!sub?.sentence || !sub?.marker) continue;
-            // Conservative substitution: only replace if the exact sentence
-            // text is still present in blendedText (handles the case where
-            // the regex sanitizer above has already trimmed it).
-            if (blendedText.includes(sub.sentence)) {
-              blendedText = blendedText.replace(sub.sentence, sub.marker.trim());
-              substituted++;
-            }
-          }
-          console.log(
-            `[ExpressPipeline] ${jobId} substituted ${substituted}/${inferenceClaims.length} flagged sentences with markers`,
-          );
-        } catch (rewriteErr) {
-          console.error(
-            `[ExpressPipeline] ${jobId} marker-rewrite failed (fall-through, no substitution):`,
-            rewriteErr,
-          );
-        }
       } else {
         console.log(`[ExpressPipeline] ${jobId} provenanceClassify clean (no INFERENCE claims)`);
       }
@@ -1572,25 +2191,24 @@ Convert each into an [INSERT: ...] marker.`;
       console.error(`[ExpressPipeline] ${jobId} fiveChapterCheck error (fall-open):`, err);
     }
 
-    // Banner assembly — deterministic. Extract every [INSERT: ...] marker
-    // present in the final blendedText (whether emitted by chapters during
-    // generation, preserved through blend, or substituted in by the
-    // post-blend rewrite above) and prepend a single banner in Maria's
-    // smart-friend voice listing each gap. If no markers exist, no banner.
-    const markerPattern = /\[INSERT:\s*([^\]\n]+?)\s*\]/g;
-    const markerDescriptions: string[] = [];
-    let mm: RegExpExecArray | null;
-    while ((mm = markerPattern.exec(blendedText)) !== null) {
-      const desc = mm[1].trim();
-      if (desc) markerDescriptions.push(desc);
-    }
-    if (markerDescriptions.length > 0) {
-      const bullets = markerDescriptions.map(d => `• ${d}`).join('\n');
-      const banner = `Before you send this, fill these for me — I won't fake them:\n${bullets}\n\n`;
-      blendedText = banner + blendedText;
-      console.log(
-        `[ExpressPipeline] ${jobId} prepended banner naming ${markerDescriptions.length} [INSERT] gap(s)`,
-      );
+    // Round 2 fix — defensive sweep. If any [INSERT: ...] markers somehow
+    // survive into blendedText (the chapter-level strip should catch them
+    // all, but blend Opus could in principle invent or echo one), strip
+    // every sentence containing a marker so the deliverable surface stays
+    // clean. The user gets the partial-prose; the soft-note system below
+    // tells them what's missing.
+    {
+      const before = blendedText;
+      const stripped = extractAndStripMarkers(blendedText);
+      if (stripped.missingPieces.length > 0) {
+        console.log(
+          `[ExpressPipeline] ${jobId} defensive blend-level strip removed ${stripped.missingPieces.length} marker(s)`,
+        );
+        blendedText = stripped.cleanContent;
+      } else {
+        // No markers — leave blendedText untouched.
+        blendedText = before;
+      }
     }
 
     await prisma.fiveChapterStory.update({
@@ -1601,6 +2219,62 @@ Convert each into an [INSERT: ...] marker.`;
         version: { increment: 1 },
       },
     });
+
+    // Round 3 fix — blend stage complete; cancel before milestone.
+    cancelBlendCheckin();
+
+    // Phase 2 — Milestone 4: Blended ready. Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      milestone: MILESTONE_BLENDED_READY,
+    });
+
+    // Round 2 fix — Soft notes for chapter content gaps. Sent as separate
+    // chat messages AFTER the blended-ready narration; never appended to
+    // the deliverable body. One soft note per gappy chapter (3, 4, or 5).
+    // Two signals feed the soft-note system:
+    //   1. Tier-level whole-chapter empty (mirrors the silent guardrail
+    //      logic): Ch3 if no support column, Ch4 if no named specifics,
+    //      Ch5 if no situation. These pass missingPieces=[] so the
+    //      template uses EMPTY_CASE_FILL.
+    //   2. Chapter-level marker descriptions extracted in the chapter loop
+    //      (chapterMissingPieces). These pass natural-language descriptors
+    //      so the template lists them.
+    // Whole-empty wins over partial: if a chapter is whole-empty per tier
+    // rules, we use the empty-case template even if the chapter generator
+    // also emitted markers.
+    {
+      const ctaProvided =
+        typeof interpretation.situation === 'string' &&
+        interpretation.situation.trim().length > 0;
+      const wholeEmptyArr = detectMissingChaptersFromTier({
+        hasSupportColumn,
+        hasSocialProofColumn,
+        namedCustomerCount: namedCustomers.size,
+        otherNamedSpecificCount: otherNamedSpecifics.length,
+        hasMeaningfulCta: ctaProvided,
+      });
+      const wholeChapterEmpty = new Set<3 | 4 | 5>(wholeEmptyArr);
+      await emitChapterSoftNotes({
+        userId: pipelineUserId,
+        workspaceId: pipelineWorkspaceId,
+        ctx: {
+          storyId: story.id,
+          draftId: draftWithElements.id,
+          offeringId: draftWithElements.offering.id,
+          audienceId: draftWithElements.audience.id,
+        },
+        wholeChapterEmpty,
+        chapterMissingPieces,
+      });
+    }
 
     storyIds.push(story.id);
     } // ─── end variant loop ─────────────────────────────
@@ -1939,6 +2613,16 @@ AUDIENCE: ${audience.name}`;
       tier3: t3Rows,
     });
   }
+
+  // Phase 2 — Milestone 1 narration. Path B only (live toggle read).
+  // Fires once when the foundation row is fully written and we're about to
+  // hand back to the caller for the user's review.
+  await narrateMilestoneIfPathB({
+    userId,
+    workspaceId,
+    ctx: { draftId: draft.id, offeringId: offering.id, audienceId: audience.id },
+    milestone: MILESTONE_FOUNDATION_CONFIRMED,
+  });
 
   return {
     draftId: draft.id,
@@ -2311,6 +2995,23 @@ async function runDraftPipeline(
   }
 
   try {
+    // Phase 2 — read userId / workspaceId / draftId from the job row so the
+    // helpers can write milestone narrations + soft notes into the partner
+    // conversation. Capture start ms + initial Tier 1 text so the
+    // foundational-shift pause helper can detect mid-pipeline edits.
+    const jobRow = await prisma.expressJob.findUnique({
+      where: { id: jobId },
+      select: { userId: true, workspaceId: true, draftId: true },
+    });
+    const guidedUserId = jobRow?.userId || '';
+    const guidedWorkspaceId = jobRow?.workspaceId || '';
+    const guidedDraftId = jobRow?.draftId || draftForStory?.id || '';
+    const guidedPipelineStartMs = Date.now();
+    const guidedShiftPauseFlag = { value: false };
+    let guidedInitialTier1Text = draftForStory?.tier1Statement?.text || '';
+    // Round 3 fix — per-pipeline stage-checkin flags (guided).
+    const guidedStageCheckinFlags = makeStageCheckinFlags();
+
     // Detect support/social proof content for guardrails
     const tier2Labels = draftForStory.tier2Statements
       .map((t: any) => (t.categoryLabel || '').toLowerCase())
@@ -2382,6 +3083,33 @@ Return ONLY the one sentence.`;
       console.error('[GuidedDraft] Ch1 thesis failed:', err);
     }
 
+    // Phase 2 — Fix 3: chapter regeneration loop. Identical pattern to runPipeline:
+    // up to GUIDED_MAX_REGEN_CYCLES regeneration cycles. Cap exists only to
+    // bound runaway loops; normal use rarely exceeds two follow-up edits.
+    const GUIDED_MAX_REGEN_CYCLES = 3;
+    let guidedChapterRegenCount = 0;
+    // Round 2 fix — same per-chapter missing-piece accumulator as
+    // runPipeline. Resets at the top of each regen cycle.
+    let guidedChapterMissingPieces: Record<3 | 4 | 5, string[]> = { 3: [], 4: [], 5: [] };
+    // Round 3 fix — chapters stage check-in (guided). Tier check-in is
+    // skipped for the guided path because foundation generation runs in
+    // commitAndBuildFoundation synchronously before this background
+    // pipeline starts; the user is on a loading state, not chat.
+    const cancelGuidedChaptersCheckin = scheduleStageCheckin({
+      stage: 'chapters',
+      message: STAGE_CHECKIN_CHAPTERS,
+      flags: guidedStageCheckinFlags,
+      userId: guidedUserId,
+      workspaceId: guidedWorkspaceId,
+      ctx: {
+        storyId,
+        draftId: guidedDraftId,
+        offeringId: draftForStory.offering?.id,
+        audienceId: draftForStory.audience?.id,
+      },
+    });
+    do {
+    guidedChapterMissingPieces = { 3: [], 4: [], 5: [] };
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
       await update({
         status: `chapter_${chapterNum}`,
@@ -2551,6 +3279,16 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
           .trim();
       }
 
+      // Round 2 fix — extract chapter-level marker descriptions and strip
+      // marker-bearing sentences before persist. Same logic as runPipeline.
+      {
+        const { cleanContent, missingPieces } = extractAndStripMarkers(content);
+        content = cleanContent;
+        if (chapterNum === 3 || chapterNum === 4 || chapterNum === 5) {
+          guidedChapterMissingPieces[chapterNum] = missingPieces;
+        }
+      }
+
       await prisma.chapterContent.upsert({
         where: { storyId_chapterNum: { storyId, chapterNum } },
         update: { title: ch.name, content },
@@ -2558,8 +3296,147 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
       });
     }
 
+    // Phase 2 — Foundational-shift pause check (guided pipeline). Same
+    // pattern as runPipeline: if the user edited the foundation mid-run,
+    // wait for resolution and regenerate chapters once.
+    {
+      const pauseResult = await checkFoundationalShiftPause({
+        jobId,
+        userId: guidedUserId,
+        workspaceId: guidedWorkspaceId,
+        ctx: {
+          storyId,
+          draftId: guidedDraftId,
+          offeringId: draftForStory.offering?.id,
+          audienceId: draftForStory.audience?.id,
+        },
+        draftId: guidedDraftId,
+        pipelineStartMs: guidedPipelineStartMs,
+        pauseFlag: guidedShiftPauseFlag,
+        initialTier1Text: guidedInitialTier1Text,
+        updateStage: async (s: string) => { await update({ stage: s }); },
+      });
+      if (pauseResult.action === 'timeout') {
+        await writeMariaMessage({
+          userId: guidedUserId,
+          workspaceId: guidedWorkspaceId,
+          ctx: {
+            storyId,
+            draftId: guidedDraftId,
+            offeringId: draftForStory.offering?.id,
+            audienceId: draftForStory.audience?.id,
+          },
+          content: buildFoundationalShiftTimeout(timeoutAreaForTargetCell(pauseResult.targetCell)),
+          kind: 'pause-timeout',
+        });
+        throw new Error('Foundation update timed out.');
+      }
+      if (pauseResult.action === 'regenerate-chapters' && guidedChapterRegenCount < GUIDED_MAX_REGEN_CYCLES) {
+        guidedChapterRegenCount++;
+        await prisma.chapterContent.deleteMany({ where: { storyId } });
+        const refreshed = await prisma.threeTierDraft.findFirst({
+          where: { id: guidedDraftId },
+          include: {
+            tier1Statement: true,
+            tier2Statements: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                tier3Bullets: { orderBy: { sortOrder: 'asc' } },
+                priority: true,
+              },
+            },
+            offering: { include: { elements: true } },
+            audience: { include: { priorities: { orderBy: { sortOrder: 'asc' } } } },
+          },
+        });
+        if (!refreshed) {
+          throw new Error('Draft vanished during foundation regeneration.');
+        }
+        draftForStory = refreshed;
+        guidedInitialTier1Text = draftForStory.tier1Statement?.text || '';
+        continue;
+      }
+      break;
+    }
+    } while (true);
+
+    // Round 3 fix — chapters stage complete (guided); cancel before milestone.
+    cancelGuidedChaptersCheckin();
+
+    // Phase 2 — Milestone 2: Chapters separated. Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: guidedUserId,
+      workspaceId: guidedWorkspaceId,
+      ctx: {
+        storyId,
+        draftId: guidedDraftId,
+        offeringId: draftForStory.offering?.id,
+        audienceId: draftForStory.audience?.id,
+      },
+      milestone: MILESTONE_CHAPTERS_SEPARATED_READY,
+    });
+
+    // ── Join (NEW in Phase 2) ──────────────────────
+    await update({ status: 'joining', stage: 'Joining the chapters', progress: 84 });
+    const guidedStoryWithChaptersForJoin = await prisma.fiveChapterStory.findFirst({
+      where: { id: storyId },
+      include: { chapters: { orderBy: { chapterNum: 'asc' } } },
+    });
+    if (!guidedStoryWithChaptersForJoin || guidedStoryWithChaptersForJoin.chapters.length < 5) {
+      throw new Error('Not all chapters generated.');
+    }
+    const guidedJoinSourceText = guidedStoryWithChaptersForJoin.chapters
+      .map(ch => ch.content)
+      .join('\n\n');
+    const guidedJoinMessage = `CONTENT FORMAT: ${mediumSpec.label}\n\n${guidedJoinSourceText}`;
+    try {
+      let guidedJoinedText = await callAI(JOIN_CHAPTERS_SYSTEM, guidedJoinMessage, 'elite');
+      try {
+        const joinCheck = await checkProse(guidedJoinedText, `Joined ${mediumSpec.label}`);
+        if (!joinCheck.passed && joinCheck.violations.length > 0) {
+          const feedback = buildProseViolationFeedback(joinCheck.violations);
+          guidedJoinedText = await callAI(JOIN_CHAPTERS_SYSTEM, guidedJoinMessage + feedback, 'elite');
+        }
+      } catch (err) {
+        console.error(`[GuidedDraft] join voice check error (fail-open):`, err);
+      }
+      await prisma.fiveChapterStory.update({
+        where: { id: storyId },
+        data: { joinedText: guidedJoinedText, stage: 'joined' },
+      });
+    } catch (err) {
+      console.error(`[GuidedDraft] join failed (fail-open, blend still runs):`, err);
+    }
+
+    // Phase 2 — Milestone 3: Chapters combined. Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: guidedUserId,
+      workspaceId: guidedWorkspaceId,
+      ctx: {
+        storyId,
+        draftId: guidedDraftId,
+        offeringId: draftForStory.offering?.id,
+        audienceId: draftForStory.audience?.id,
+      },
+      milestone: MILESTONE_CHAPTERS_COMBINED_READY,
+    });
+
     // ── Blend ──────────────────────────────────────
     await update({ status: 'blending', stage: 'Polishing the draft', progress: 88 });
+
+    const cancelGuidedBlendCheckin = scheduleStageCheckin({
+      stage: 'blend',
+      message: STAGE_CHECKIN_BLEND,
+      flags: guidedStageCheckinFlags,
+      userId: guidedUserId,
+      workspaceId: guidedWorkspaceId,
+      ctx: {
+        storyId,
+        draftId: guidedDraftId,
+        offeringId: draftForStory.offering?.id,
+        audienceId: draftForStory.audience?.id,
+      },
+    });
 
     const storyWithChapters = await prisma.fiveChapterStory.findFirst({
       where: { id: storyId },
@@ -2608,6 +3485,50 @@ CRITICAL — NO FABRICATION. Only use claims from the source chapters above.`;
       where: { id: storyId },
       data: { blendedText, stage: 'blended', version: { increment: 1 } },
     });
+
+    // Round 3 fix — blend stage complete (guided); cancel before milestone.
+    cancelGuidedBlendCheckin();
+
+    // Phase 2 — Milestone 4: Blended ready (guided). Path B narration only.
+    await narrateMilestoneIfPathB({
+      userId: guidedUserId,
+      workspaceId: guidedWorkspaceId,
+      ctx: {
+        storyId,
+        draftId: guidedDraftId,
+        offeringId: draftForStory.offering?.id,
+        audienceId: draftForStory.audience?.id,
+      },
+      milestone: MILESTONE_BLENDED_READY,
+    });
+
+    // Round 2 fix — Soft notes for chapter content gaps (guided). One soft
+    // note per gappy chapter. Whole-empty (per tier rules) → empty case
+    // template; partial (chapter has content but markers extracted) →
+    // descriptors listed in the template. Same logic as runPipeline.
+    {
+      const ctaProvided = typeof cta === 'string' && cta.trim().length > 0;
+      const wholeEmptyArr = detectMissingChaptersFromTier({
+        hasSupportColumn,
+        hasSocialProofColumn,
+        namedCustomerCount: namedCustomers.size,
+        otherNamedSpecificCount: otherNamedSpecificsGuided.length,
+        hasMeaningfulCta: ctaProvided,
+      });
+      const wholeChapterEmpty = new Set<3 | 4 | 5>(wholeEmptyArr);
+      await emitChapterSoftNotes({
+        userId: guidedUserId,
+        workspaceId: guidedWorkspaceId,
+        ctx: {
+          storyId,
+          draftId: guidedDraftId,
+          offeringId: draftForStory.offering?.id,
+          audienceId: draftForStory.audience?.id,
+        },
+        wholeChapterEmpty,
+        chapterMissingPieces: guidedChapterMissingPieces,
+      });
+    }
 
     await update({ status: 'complete', stage: 'First draft ready', progress: 100 });
     console.log(`[GuidedDraft] ${jobId} complete, story ${storyId}`);

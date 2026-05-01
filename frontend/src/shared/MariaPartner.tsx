@@ -13,9 +13,24 @@ import {
   bumpOverrideCount,
   resetOverrideCount,
   getOverrideCount,
+  LEAD_TOGGLE_EVENT,
   type LeadDirection,
 } from './leadershipDetection';
 import { VoiceInputButton } from './VoiceInputButton';
+import {
+  bumpWhatsNextAndShouldOffer,
+  resetWhatsNextCount,
+  markModeSwitchOfferDeclined,
+} from './whatsNextDetector';
+import {
+  MODE_SWITCH_OFFER_PATH_A_TO_B,
+  MODE_SWITCH_OFFER_CHIP_YES,
+  MODE_SWITCH_OFFER_CHIP_NO,
+  TOGGLE_CONFIRMATION_ON,
+  TOGGLE_CONFIRMATION_OFF,
+} from './milestoneCopy';
+// MOBILE_HOME_BREAKPOINT_PX import dropped in Round 4 Fix 10 (toggle
+// renders at all widths). Re-add if future visual treatments need it.
 
 interface Message {
   role: 'user' | 'assistant';
@@ -148,11 +163,7 @@ function hasAskedTimeBudget(): boolean {
     return true; // err on the side of not re-asking
   }
 }
-function markTimeBudgetAsked() {
-  try {
-    localStorage.setItem(`time-budget-asked-${getSessionDateKey()}`, '1');
-  } catch {}
-}
+// Round 4 Fix 12 — markTimeBudgetAsked removed alongside the budget step.
 
 type PanelSize = 'compact' | 'medium' | 'full';
 
@@ -296,6 +307,49 @@ export function MariaPartner() {
     softened: boolean;
   } | null>(null);
 
+  // Phase 2 — mode-switch offer state. Non-null when the user has just typed
+  // the third consecutive "what's next?" in Path A and Maria has rendered the
+  // locked offer text + chips locally. The chips' handlers persist the user's
+  // accept/decline back to the partner conversation history asynchronously.
+  const [modeSwitchOfferActive, setModeSwitchOfferActive] = useState<boolean>(false);
+
+  // Round 4 Fix 10 — small-screen breakpoint state was used to gate the
+  // chat-panel-header toggle. With the toggle now rendered at every
+  // breakpoint, isSmallScreen is no longer needed inside MariaPartner.
+  // The MOBILE_HOME_BREAKPOINT_PX import survives for future per-pixel
+  // adjustments if Cowork wants different visual treatments by width.
+
+  // Phase 2 — Fix 4: in-panel toggle state, mirrored from localStorage so
+  // the visible switch reflects the current consultation. Listens for
+  // LEAD_TOGGLE_EVENT to stay in sync when toggle moves from any source.
+  const [panelConsultation, setPanelConsultation] = useState<'on' | 'off'>(() => getToggleState());
+  useEffect(() => {
+    function syncFromEvent(e: Event) {
+      const detail = (e as CustomEvent).detail as { value?: 'on' | 'off' } | undefined;
+      if (detail?.value === 'on' || detail?.value === 'off') {
+        setPanelConsultation(detail.value);
+      }
+    }
+    document.addEventListener(LEAD_TOGGLE_EVENT, syncFromEvent);
+    return () => document.removeEventListener(LEAD_TOGGLE_EVENT, syncFromEvent);
+  }, []);
+
+  // Phase 2 — Fix 4: in-panel toggle click handler. Same dual-write pattern
+  // as DashboardPage.toggleConsultation: localStorage + PUT /partner/consultation
+  // + POST /partner/log-message + dispatch LEAD_TOGGLE_EVENT.
+  function toggleConsultationFromPanel() {
+    const next: 'on' | 'off' = panelConsultation === 'on' ? 'off' : 'on';
+    setPanelConsultation(next);
+    setToggleState(next);  // writes localStorage + dispatches LEAD_TOGGLE_EVENT
+    api.put('/partner/consultation', { value: next }).catch(() => {/* non-critical */});
+    api.post('/partner/log-message', {
+      role: 'assistant',
+      content: next === 'on' ? TOGGLE_CONFIRMATION_ON : TOGGLE_CONFIRMATION_OFF,
+      kind: 'toggle-confirmation',
+      ctx: pageContext,
+    }).catch(() => {/* non-critical */});
+  }
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -398,7 +452,6 @@ export function MariaPartner() {
       }
       const qs = new URLSearchParams(scopeParams).toString();
       const url = qs ? `/partner/history?${qs}` : '/partner/history';
-      const isScoped = scopeMode === 'scoped' && !!currentScope.kind;
       api.get<{ messages: (Message & { kind?: string })[] }>(url)
         .then(async ({ messages: rawHistory }) => {
           // Cowork follow-up #2 + #6 — backend now returns chips and kind on
@@ -422,7 +475,10 @@ export function MariaPartner() {
           // useEffect below handles greeting + reply chips in Maria's
           // voice via the partner pipeline. Skip the legacy injection in
           // that case so Maria doesn't speak twice.
-          if (history.length === 0 && !isScoped && getToggleState() !== 'on') {
+          // Phase 2 — Redline #11: legacy greeting block removed. Chat-open
+          // useEffect below now fires unconditionally and is the sole opener.
+          // eslint-disable-next-line no-constant-condition
+          if (false) {
             const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
             const onEntityDetailPage =
               pageContext &&
@@ -514,7 +570,16 @@ export function MariaPartner() {
   // openers from different page-contexts.
   useEffect(() => {
     if (!open || !loaded || !introduced || !user) return;
-    if (getToggleState() !== 'on') return;
+    // Phase 2 — Redline #11: the chat-open opener now fires regardless of
+    // toggle state. Empty workspaces hit the locked OPENER_FRESH_USER path
+    // server-side; populated workspaces hit the existing state-aware
+    // opener. Both paths are unconditional once the panel is open.
+    //
+    // Exception: when a synthetic message is already queued (e.g. the
+    // dashboard toggle-ON flow queues [STATE_RECAP]), let that message
+    // serve as the opener for this open event. The chat-open trigger
+    // would double-greet otherwise.
+    if (pendingMessageRef.current) return;
     const pageKind = pageContext?.page || 'dashboard';
     const deliverableId = pageContext?.draftId || pageContext?.storyId || 'none';
     const gateKey = `maria-opened-${user.userId}-${pageKind}-${deliverableId}`;
@@ -598,6 +663,25 @@ export function MariaPartner() {
   // Stashed hint message (assistant-authored) to be appended when the user opens the panel
   const pendingHintRef = useRef<string | null>(null);
 
+  // Phase 2 — visible toggle-confirmation listener (Redline #9). Every time
+  // the "Let Maria lead" toggle flips (from the dashboard, from the
+  // mode-switch offer, from anywhere) the LEAD_TOGGLE_EVENT fires. Append
+  // the locked confirmation text to the visible thread for instant feel.
+  // Persistence is handled by the flip-trigger site (DashboardPage's
+  // toggleConsultation handler, or the mode-switch offer chip handler) —
+  // this listener is presentation only.
+  useEffect(() => {
+    function onLeadToggleChanged(e: Event) {
+      const detail = (e as CustomEvent).detail as { value?: 'on' | 'off' } | undefined;
+      const next = detail?.value;
+      if (next !== 'on' && next !== 'off') return;
+      const content = next === 'on' ? TOGGLE_CONFIRMATION_ON : TOGGLE_CONFIRMATION_OFF;
+      setMessages(prev => [...prev, { role: 'assistant', content }]);
+    }
+    document.addEventListener(LEAD_TOGGLE_EVENT, onLeadToggleChanged);
+    return () => document.removeEventListener(LEAD_TOGGLE_EVENT, onLeadToggleChanged);
+  }, []);
+
   // Round B Bug #1 — defense-in-depth for the SAVE_PEER_INFO marker.
   // When the frontend dispatches [PRE_CHAPTER_4:storyId:...], we record the
   // storyId here. The user's NEXT message is captured into peerPromptContextRef
@@ -619,6 +703,20 @@ export function MariaPartner() {
         return;
       }
       if (detail?.open) {
+        // Round 4 Fix 2 — `+ New message` and other fresh-start entry
+        // points dispatch maria-toggle with freshStart=true so the panel
+        // resets to empty before the chat-open opener fires. Without this,
+        // the unscoped panel surfaces full prior history including stale
+        // sessions, and the user lands on a "step indicator says ✓ basics"
+        // experience for a build they don't recognize.
+        if (detail.freshStart) {
+          setMessages([]);
+          setLoaded(true);
+          setIntroduced(true);
+          setShowProactiveCard(false);
+          setShowReturnCard(false);
+          setShowBudgetCard(false);
+        }
         setOpen(true);
         setShowDot(false);
         setShowGlow(false);
@@ -688,15 +786,8 @@ export function MariaPartner() {
     } catch { /* non-critical */ }
   }
 
-  async function dismissIntro() {
-    setIntroStep(INTRO_DONE);
-    setIntroduced(true);
-    setOpen(false);
-    setLoaded(false);
-    try {
-      await api.put('/partner/intro-step', { dismiss: true });
-    } catch { /* non-critical */ }
-  }
+  // Round 4 Fix 12 — dismissIntro removed alongside the budget step. The
+  // only call site was the "Not now" button on the budget chips.
 
   // remindLater removed — intro simplified to 2 steps
 
@@ -711,7 +802,10 @@ export function MariaPartner() {
     // conversation greeting still reads "Hi <username>" after the user
     // just told Maria their real name.
     setSuggestedName(name.charAt(0).toUpperCase() + name.slice(1));
-    setIntroStep(1); // advance past name to Phase 1
+    // Round 4 Fix 12 — skip the time-budget step. Fresh users go straight
+    // from name confirmation to the chat-open opener (OPENER_FRESH_USER
+    // for empty workspaces, state-aware welcome for returning users).
+    advanceIntro(INTRO_DONE);
   }
 
   // ─── Send message ───────────────────────────────────
@@ -803,6 +897,39 @@ export function MariaPartner() {
     if (!overrideText) {
       setInput('');
       setMessages(prev => [...prev, { role: 'user', content: (text ? text : '') + (pendingFiles.length > 0 ? ` (${pendingFiles.length} files)` : '') }]);
+    }
+
+    // Phase 2 — Path A what's-next counter. Bump per user message. When the
+    // toggle is OFF and the third consecutive "what's next?"-style intent
+    // arrives, render the locked mode-switch offer locally for snappy feel
+    // and persist it asynchronously. The offer's accept/decline chips fire
+    // toggle promotion + persistence below in the render block.
+    if (getToggleState() === 'off' && !overrideText) {
+      const shouldOffer = bumpWhatsNextAndShouldOffer(user?.userId, text);
+      if (shouldOffer) {
+        // Render locally for instant feel — Redline #6. The offer text is a
+        // normal assistant bubble; the two chips (Yes / No) are rendered by
+        // the dedicated mode-switch-offer card below the thread, similar to
+        // the existing toggle-can't-lie promotion card.
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: MODE_SWITCH_OFFER_PATH_A_TO_B },
+        ]);
+        setModeSwitchOfferActive(true);
+        // Reset so the offer doesn't immediately re-fire if the user keeps asking.
+        resetWhatsNextCount(user?.userId);
+        // Persist asynchronously — survives reload + cross-device.
+        api.post('/partner/log-message', {
+          role: 'assistant',
+          content: MODE_SWITCH_OFFER_PATH_A_TO_B,
+          kind: 'mode-switch-offer',
+          ctx: pageContext,
+        }).catch(() => {/* non-critical */});
+        return;
+      }
+    } else if (getToggleState() === 'on' && !overrideText) {
+      // Toggle ON — counter is meaningless in Path B; keep it cleared.
+      resetWhatsNextCount(user?.userId);
     }
 
     // Round B Bug #1 — capture peer-prompt context for the SAVE_PEER_INFO fallback.
@@ -1240,30 +1367,37 @@ export function MariaPartner() {
         const buildMatch = result.actionResult.match(/\[BUILD_STARTED:([^:]+):([^\]]+)\]/);
         if (buildMatch) {
           const jobId = buildMatch[1];
-          // Show a progress message that updates with fun status lines
-          const progressPhrases = [
-            "Reading between the lines...",
-            "Mapping what matters to your audience...",
-            "Writing chapter 1 — setting the scene...",
-            "Building the case...",
-            "Finding the right words...",
-            "Almost there — polishing the draft...",
-          ];
-          let phraseIdx = 0;
-          const progressMsgId = `build-${jobId}`;
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: progressPhrases[0],
-            id: progressMsgId,
-          } as any]);
-          const phraseInterval = setInterval(() => {
-            phraseIdx = Math.min(phraseIdx + 1, progressPhrases.length - 1);
-            setMessages(prev => prev.map(m =>
-              (m as any).id === progressMsgId
-                ? { ...m, content: progressPhrases[phraseIdx] }
-                : m
-            ));
-          }, 12000);
+          // Round 3 fix — drop the rotating cute-phrase placeholder. The
+          // backend writes Maria-voice milestone narrations (Path B) and
+          // stage-aware presence check-ins (>30s stages) into chat history
+          // as they happen. The chat panel just needs to fast-poll
+          // /partner/history during the build so those messages surface
+          // within ~5s of being written, not in a burst at the end.
+          const buildStartedAt = Date.now();
+          const historyPoll = setInterval(async () => {
+            try {
+              const scopeParams: Record<string, string> = {};
+              if (scopeMode === 'scoped' && currentScope.kind && currentScope.id) {
+                if (currentScope.kind === 'storyId') scopeParams.scopeStoryId = currentScope.id;
+                else if (currentScope.kind === 'draftId') scopeParams.scopeDraftId = currentScope.id;
+                else if (currentScope.kind === 'audienceId') scopeParams.scopeAudienceId = currentScope.id;
+                else if (currentScope.kind === 'offeringId') scopeParams.scopeOfferingId = currentScope.id;
+              }
+              const qs = new URLSearchParams(scopeParams).toString();
+              const url = qs ? `/partner/history?${qs}` : '/partner/history';
+              const fresh = await api.get<{ messages: (Message & { kind?: string })[] }>(url);
+              const remapped: Message[] = fresh.messages.map(m => ({
+                role: m.role,
+                content: m.content,
+                actionResult: m.actionResult,
+                chips: Array.isArray(m.chips) ? m.chips : undefined,
+                isChatOpen: m.kind === 'chat-open-opener' || m.isChatOpen,
+              }));
+              setMessages(remapped);
+            } catch {
+              // Transient error — keep polling
+            }
+          }, 5000);
           const pollInterval = setInterval(async () => {
             try {
               const status = await api.get<{
@@ -1273,12 +1407,11 @@ export function MariaPartner() {
               }>(`/express/status/${jobId}`);
               if (status.status === 'complete' && status.resultStoryId && status.draftId) {
                 clearInterval(pollInterval);
-                clearInterval(phraseInterval);
-                setMessages(prev => prev.filter(m => (m as any).id !== progressMsgId));
+                clearInterval(historyPoll);
                 navigate(`/five-chapter/${status.draftId}?story=${status.resultStoryId}`);
               } else if (status.status === 'error') {
                 clearInterval(pollInterval);
-                clearInterval(phraseInterval);
+                clearInterval(historyPoll);
                 setMessages(prev => [...prev, {
                   role: 'assistant',
                   content: "Something went wrong building the draft. Tell me to try again if you'd like.",
@@ -1289,7 +1422,11 @@ export function MariaPartner() {
             }
           }, 5000);
           // Safety: stop polling after 10 minutes
-          setTimeout(() => { clearInterval(pollInterval); clearInterval(phraseInterval); }, 600000);
+          setTimeout(() => {
+            clearInterval(pollInterval);
+            clearInterval(historyPoll);
+          }, 600000);
+          void buildStartedAt;
         }
       }
 
@@ -1383,39 +1520,13 @@ export function MariaPartner() {
       );
     }
 
-    // Steps 1-2 combined: brief pitch + budget chips. B-1 — the budget
-    // question lives inside the intro on Maria-led first-touch (one
-    // continuous conversation), instead of popping up as a separate chip
-    // card after the intro completes. Chip card stays as the day-to-day
-    // re-ask for returning users (introStep already === INTRO_DONE).
-    if (introStep === 1 || introStep === 2) {
-      const firstName = suggestedName ? suggestedName.split(/\s+/)[0] : '';
-      const pickBudget = (mins: number | null) => {
-        if (mins != null) {
-          const tc: TimeContext = { sessionStartMs: Date.now(), budgetMin: mins, thresholdTriggered: false };
-          setTimeContext(tc);
-          saveTimeContext(tc);
-        }
-        markTimeBudgetAsked();
-        setShowBudgetCard(false);
-        advanceIntro(INTRO_DONE);
-      };
-      return (
-        <div className="partner-intro">
-          <div className="partner-intro-message">
-            <p>{firstName ? `Nice to meet you, ${firstName}. ` : ''}I help people build more persuasive messages and then apply them to almost any medium. Tell me about your work and I'll take it from there.</p>
-            <p style={{ marginTop: 10 }}>How much time do you have? I'll pace accordingly.</p>
-          </div>
-          <div className="partner-intro-actions" style={{ flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={() => pickBudget(15)}>15 min</button>
-            <button className="btn btn-primary" onClick={() => pickBudget(30)}>30 min</button>
-            <button className="btn btn-primary" onClick={() => pickBudget(45)}>45 min</button>
-            <button className="btn btn-ghost" onClick={() => pickBudget(null)}>No budget today</button>
-            <button className="btn btn-ghost" onClick={dismissIntro}>Not now</button>
-          </div>
-        </div>
-      );
-    }
+    // Round 4 Fix 12 — the time-budget intro step (introStep === 1 || 2)
+    // is removed. Fresh users now go from name confirmation directly to
+    // the chat-open opener. The downstream TIME_THRESHOLD logic in
+    // routes/partner.ts is gated on timeContext.budgetMin being truthy,
+    // which it never is once this step is gone — sensible no-op default
+    // matches the CC prompt's "Let Maria lead replaces the lead-vs-
+    // follow signal that the budget step used to provide."
 
     // Step 3: Phase 3 — context
     if (introStep === 3) {
@@ -1565,6 +1676,69 @@ export function MariaPartner() {
             </div>
           </div>
 
+          {/* Round 4 Fix 10 — toggle relocation. The "Let Maria lead"
+              toggle lives in the chat-panel header at every breakpoint
+              now (was small-screen-only in Round 2). It's a setting WITHIN
+              the Maria relationship, so its home is Maria's panel. The
+              dashboard's top-right toggle is removed in this round. */}
+          {(
+            <div
+              className="partner-lead-toggle"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 16px',
+                borderBottom: '1px solid var(--border-light, #e5e5ea)',
+                background: 'var(--bg-secondary, #f8f8fa)',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: panelConsultation === 'on' ? 'var(--text-primary, #1c1c1e)' : 'var(--text-secondary, #6e6e73)',
+                }}
+              >
+                Let Maria lead
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={panelConsultation === 'on'}
+                aria-label="Toggle Maria collaboration"
+                title={panelConsultation === 'on' ? 'Maria guides each step. Take over whenever you want.' : 'You drive. Maria waits on the side.'}
+                onClick={toggleConsultationFromPanel}
+                style={{
+                  width: 50,
+                  height: 30,
+                  borderRadius: 15,
+                  border: 'none',
+                  background: panelConsultation === 'on' ? 'var(--accent, #007aff)' : 'var(--border-light, #c7c7cc)',
+                  position: 'relative',
+                  cursor: 'pointer',
+                  padding: 0,
+                  flexShrink: 0,
+                  transition: 'background 0.15s',
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 3,
+                    left: panelConsultation === 'on' ? 23 : 3,
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: 'white',
+                    transition: 'left 0.15s',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                  }}
+                />
+              </button>
+            </div>
+          )}
+
           <div className="partner-body">
             {!statusLoaded && (
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
@@ -1629,7 +1803,13 @@ export function MariaPartner() {
                       into a single prompt; the user dismisses one and the
                       next one in the queue surfaces on the next render
                       (e.g. budget chips fire after resume is dismissed). */}
-                  {loaded && hasActiveGuidedSession && (
+                  {/* Round 3 fix — only render the cross-draft "Pick it back up"
+                      banner when the chat panel is in dashboard-level (unscoped)
+                      view. Inside a story / draft / audience / offering scope,
+                      the banner pointed at a DIFFERENT draft would violate the
+                      scope promise the panel just made. The banner remains useful
+                      on the dashboard, where the user IS at the cross-draft level. */}
+                  {loaded && hasActiveGuidedSession && !currentScope.kind && (
                     <div className="partner-guided-card partner-guided-card-return">
                       <div className="partner-guided-card-text">
                         Your guided message is still in progress.
@@ -1731,62 +1911,11 @@ export function MariaPartner() {
                     </div>
                   )}
 
-                  {/* Round B6 — time-aware session pacing chips. Render at session
-                      start when no budget is set yet. User picks 15/30/45/Custom/Skip.
-                      Bug D — defers behind any active resume/proactive prompt so the
-                      user isn't asked about time WHILE being asked about resuming. */}
-                  {loaded && !hasActiveGuidedSession && !resumeDraft && !(showReturnCard && returnContext) && !(showProactiveCard && proactiveOffer) && showBudgetCard && !timeContext.budgetMin && (
-                    <div className="partner-return-card" style={{
-                      padding: '12px 16px',
-                      marginBottom: 8,
-                      background: 'var(--bg-secondary, #f8f8fa)',
-                      borderRadius: 'var(--radius-sm, 6px)',
-                      border: '1px solid var(--border-light, #e5e5ea)',
-                    }}>
-                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
-                        What's your time budget for this session? I'll pace accordingly.
-                      </p>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {[15, 30, 45].map((mins) => (
-                          <button
-                            key={mins}
-                            className="btn btn-ghost btn-sm"
-                            style={{ minHeight: 32, padding: '4px 12px' }}
-                            onClick={() => {
-                              const tc: TimeContext = { sessionStartMs: Date.now(), budgetMin: mins, thresholdTriggered: false };
-                              setTimeContext(tc);
-                              saveTimeContext(tc);
-                              markTimeBudgetAsked();
-                              setShowBudgetCard(false);
-                            }}
-                          >{mins} min</button>
-                        ))}
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ minHeight: 32, padding: '4px 12px' }}
-                          onClick={() => {
-                            const m = window.prompt('How many minutes?');
-                            const n = m ? parseInt(m, 10) : NaN;
-                            if (!isNaN(n) && n > 0 && n <= 240) {
-                              const tc: TimeContext = { sessionStartMs: Date.now(), budgetMin: n, thresholdTriggered: false };
-                              setTimeContext(tc);
-                              saveTimeContext(tc);
-                              markTimeBudgetAsked();
-                              setShowBudgetCard(false);
-                            }
-                          }}
-                        >Other</button>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ minHeight: 32, padding: '4px 12px' }}
-                          onClick={() => {
-                            markTimeBudgetAsked();
-                            setShowBudgetCard(false);
-                          }}
-                        >Skip</button>
-                      </div>
-                    </div>
-                  )}
+                  {/* Round 4 Fix 12 — day-to-day budget re-ask card removed.
+                      The "Let Maria lead" toggle covers the lead-vs-follow
+                      pacing distinction; specific time budgets aren't needed.
+                      Downstream TIME_THRESHOLD logic in routes/partner.ts
+                      stays in place but no-ops because no budget gets set. */}
 
                   {/* Bug E — when scope is scoped and the filtered message list
                       is empty, ALWAYS show the empty-state copy so the user
@@ -1945,6 +2074,76 @@ export function MariaPartner() {
                           }}
                         >
                           Just this time
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Phase 2 — mode-switch offer card (Path A only). Appears
+                      below the offer text when the user has hit the third
+                      consecutive what's-next intent. Yes flips the toggle to
+                      ON (Path B) and writes TOGGLE_CONFIRMATION_ON. No just
+                      dismisses. Both outcomes persist asynchronously so chat
+                      history stays complete across reloads / devices. */}
+                  {modeSwitchOfferActive && !sending && (
+                    <div className="partner-lead-promotion">
+                      <div className="partner-lead-promotion-actions">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => {
+                            // Persist the user's accept as a chip-text user message.
+                            api.post('/partner/log-message', {
+                              role: 'user',
+                              content: MODE_SWITCH_OFFER_CHIP_YES,
+                              kind: 'mode-switch-accept',
+                              ctx: pageContext,
+                            }).catch(() => {/* non-critical */});
+                            // Append the user's chip text locally for instant feel.
+                            setMessages(prev => [
+                              ...prev,
+                              { role: 'user', content: MODE_SWITCH_OFFER_CHIP_YES },
+                            ]);
+                            // Persist the toggle state on User.settings so it
+                            // follows the user across devices (Phase 1 promise).
+                            api.put('/partner/consultation', { value: 'on' }).catch(() => {/* non-critical */});
+                            // Persist the toggle confirmation chat row.
+                            api.post('/partner/log-message', {
+                              role: 'assistant',
+                              content: TOGGLE_CONFIRMATION_ON,
+                              kind: 'toggle-confirmation',
+                              ctx: pageContext,
+                            }).catch(() => {/* non-critical */});
+                            // Flip the toggle. setToggleState dispatches the
+                            // LEAD_TOGGLE_EVENT — the dashboard toggle UI moves
+                            // visibly AND the LEAD_TOGGLE_EVENT listener
+                            // appends TOGGLE_CONFIRMATION_ON to the thread.
+                            setToggleState('on');
+                            setModeSwitchOfferActive(false);
+                          }}
+                        >
+                          {MODE_SWITCH_OFFER_CHIP_YES}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => {
+                            api.post('/partner/log-message', {
+                              role: 'user',
+                              content: MODE_SWITCH_OFFER_CHIP_NO,
+                              kind: 'mode-switch-decline',
+                              ctx: pageContext,
+                            }).catch(() => {/* non-critical */});
+                            setMessages(prev => [
+                              ...prev,
+                              { role: 'user', content: MODE_SWITCH_OFFER_CHIP_NO },
+                            ]);
+                            // Round 4 Fix 5 — session-level decline flag so
+                            // the offer doesn't re-fire later in the same
+                            // session if the user crosses threshold again.
+                            markModeSwitchOfferDeclined(user?.userId);
+                            setModeSwitchOfferActive(false);
+                          }}
+                        >
+                          {MODE_SWITCH_OFFER_CHIP_NO}
                         </button>
                       </div>
                     </div>
