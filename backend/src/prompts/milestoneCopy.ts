@@ -217,3 +217,34 @@ export const SOFT_NOTE_STAGGER_MS = 3500;
 
 export const PATH_A_BANNER =
   "Maria is listening. Toggle 'Let Maria Lead' for guidance.";
+
+// ─── Round 3.1 Item 2 — Autonomous skip-demand pipeline messages ───────
+// Templates take the user's stated deliverable type ("email", "pitch
+// deck", "landing page", etc.). The same word substitutes into every
+// slot of a given message — never mix "email" and "draft" inside one
+// post-delivery offer. If the deliverable type is unknown, callers
+// should fall back to "deliverable" verbatim.
+
+export function buildAutonomousPreBuildExpectation(deliverableType: string): string {
+  return `I'll be doing multiple things with the info you've given me to create the ${deliverableType} — this will take a few minutes.`;
+}
+
+export function buildAutonomousPostDeliveryOffer(deliverableType: string): string {
+  return `This is the ${deliverableType} you asked for. Quick context: to write it I built a reusable foundation underneath — a Three Tier — and the deliverable came out of that. If anything in the ${deliverableType} feels off, the Three Tier is the place to fix it, not the ${deliverableType} itself. Take me there to review?`;
+}
+
+export const AUTONOMOUS_POST_DELIVERY_CHIP_YES =
+  "Yes, take me to the Three Tier";
+
+export function buildAutonomousPostDeliveryChipNo(deliverableType: string): string {
+  return `No, I'll review the ${deliverableType} here`;
+}
+
+// ─── Round 3.1 Item 3 — Blend-phase heartbeat ──────────────────────────
+// Fires AT MOST once per blend run, when the blend stage exceeds
+// BLEND_HEARTBEAT_MS. Suppressed if blend completes under the threshold.
+
+export const BLEND_HEARTBEAT =
+  "Still polishing — this last pass takes a minute.";
+
+export const BLEND_HEARTBEAT_MS = 60000;

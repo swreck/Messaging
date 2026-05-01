@@ -28,3 +28,20 @@ export const PAGE_AFTER_NARRATION_DELAY_MS = 1000;
 // Mirror of PATH_A_BANNER in backend/src/prompts/milestoneCopy.ts.
 export const PATH_A_BANNER =
   "Maria is listening. Toggle 'Let Maria Lead' for guidance.";
+
+// Round 3.1 Item 2 — autonomous skip-demand mirrors. Used to detect the
+// AUTONOMOUS chip click and the post-delivery offer chips so the panel
+// can route them deterministically (autonomous chip → /partner/autonomous-build,
+// YES chip → navigate to Three Tier, NO chip → minimize panel).
+export const SKIP_DEMAND_CHIP_AUTONOMOUS = "I understand. Do your best.";
+export const AUTONOMOUS_POST_DELIVERY_CHIP_YES = "Yes, take me to the Three Tier";
+
+// Match function for the NO chip. The chip text is template-generated
+// per deliverable type ("No, I'll review the email here", "No, I'll
+// review the pitch deck here", etc.), so the detector matches the
+// prefix + suffix rather than an exact string.
+export function isAutonomousPostDeliveryChipNo(chip: string): boolean {
+  if (!chip) return false;
+  const trimmed = chip.trim();
+  return /^No, I'll review the .+ here\.?$/.test(trimmed);
+}

@@ -15,7 +15,9 @@ import {
   SKIP_DEMAND_CHIP_CONTINUE,
   SKIP_DEMAND_CHIP_AUTONOMOUS,
   SKIP_INTENT_PHRASES,
+  buildAutonomousPreBuildExpectation,
 } from '../prompts/milestoneCopy.js';
+import { commitExistingForPipeline, runPipeline } from '../lib/expressPipeline.js';
 import { partnerLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
@@ -460,11 +462,21 @@ router.put('/name', async (req: Request, res: Response) => {
   });
   const current = (user?.settings as Record<string, any>) || {};
 
+  // Round 3.1 Item 1 — propagate the captured name to top-level settings
+  // (consumed by auth.ts presentationNames for nav header and JWT
+  // refresh) and rename the user's auto-created workspace if it's still
+  // at the "Your Workspace" placeholder. Only renames a workspace where
+  // this user is the SOLE owner — never touches a multi-member shared
+  // workspace where another member's name might be the right title.
+  const firstName = displayName.split(/\s+/)[0] || displayName;
+
   await prisma.user.update({
     where: { id: req.user!.userId },
     data: {
       settings: {
         ...current,
+        displayName,
+        firstName,
         partner: {
           ...current.partner,
           displayName,
@@ -474,6 +486,31 @@ router.put('/name', async (req: Request, res: Response) => {
       },
     },
   });
+
+  // Rename the user's auto-created placeholder workspace, if any.
+  try {
+    const ownedPlaceholders = await prisma.workspace.findMany({
+      where: {
+        name: 'Your Workspace',
+        members: { some: { userId: req.user!.userId, role: 'owner' } },
+      },
+      include: {
+        _count: { select: { members: true } },
+      },
+    });
+    for (const ws of ownedPlaceholders) {
+      // Only rename solo workspaces — multi-member workspaces stay as-is
+      // even if they happen to be at the placeholder name.
+      if (ws._count.members === 1) {
+        await prisma.workspace.update({
+          where: { id: ws.id },
+          data: { name: `${firstName}'s Workspace` },
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[Partner] workspace rename failed (non-fatal):', err);
+  }
 
   res.json({ success: true, displayName });
 });
@@ -659,9 +696,24 @@ router.get('/history', async (req: Request, res: Response) => {
     .slice(0, 200)
     .map(({ role, content, createdAt, context }) => {
       const ctx = (context as any) || {};
-      const out: { role: string; content: string; createdAt: Date; chips?: string[]; kind?: string } = { role, content, createdAt };
+      const out: {
+        role: string;
+        content: string;
+        createdAt: Date;
+        chips?: string[];
+        kind?: string;
+        autonomousDraftId?: string;
+        autonomousStoryId?: string;
+        autonomousDeliverableType?: string;
+      } = { role, content, createdAt };
       if (Array.isArray(ctx.chips) && ctx.chips.length > 0) out.chips = ctx.chips;
       if (typeof ctx.kind === 'string') out.kind = ctx.kind;
+      // Round 3.1 Item 2 — surface the autonomous-post-delivery draftId
+      // so YES chip click can navigate to /three-tier/{draftId} without
+      // an extra round-trip.
+      if (typeof ctx.autonomousDraftId === 'string') out.autonomousDraftId = ctx.autonomousDraftId;
+      if (typeof ctx.autonomousStoryId === 'string') out.autonomousStoryId = ctx.autonomousStoryId;
+      if (typeof ctx.autonomousDeliverableType === 'string') out.autonomousDeliverableType = ctx.autonomousDeliverableType;
       return out;
     });
   messages.reverse();
@@ -1849,6 +1901,178 @@ router.delete('/history', async (req: Request, res: Response) => {
     await prisma.assistantMessage.deleteMany({ where: { id: { in: idsToDelete } } });
   }
   res.json({ success: true });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Round 3.1 Item 2 — Autonomous skip-demand pipeline
+// ═══════════════════════════════════════════════════════════════
+// Frontend calls this when the user taps SKIP_DEMAND_CHIP_AUTONOMOUS
+// after seeing the locked skip-demand response. Today's behavior was:
+// route the chip text through Opus and hope it fired build_deliverable.
+// In Cowork's walk that produced a Three-Tier-only result instead of the
+// requested deliverable. This endpoint replaces that with deterministic
+// classification + direct pipeline kickoff.
+//
+// Flow:
+//  1. Classify the user's recent conversation to extract deliverable
+//     type + offering name + audience name + situation.
+//  2. Match offering/audience by name (case-insensitive) in the user's
+//     workspace.
+//  3. If everything is present: write AUTONOMOUS_PRE_BUILD_EXPECTATION
+//     to chat, fire the existing commitExistingForPipeline + runPipeline
+//     path, and return started=true so the frontend behaves as if
+//     BUILD_STARTED was received. Tag the ExpressJob's interpretation
+//     with autonomousMode + deliverableType so the pipeline knows to
+//     fire AUTONOMOUS_POST_DELIVERY_OFFER after the deliverable lands.
+//  4. If anything is missing (no deliverable type, no offering, no
+//     audience): return started=false. The frontend falls back to
+//     today's behavior — sends the chip text through Opus.
+router.post('/autonomous-build', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const workspaceId = req.workspaceId!;
+
+  try {
+    // Load recent partner conversation, scoped to workspace + legacy.
+    const allHistory = await prisma.assistantMessage.findMany({
+      where: {
+        userId,
+        context: { path: ['channel'], equals: 'partner' },
+      },
+      select: { role: true, content: true, createdAt: true, context: true },
+      orderBy: { createdAt: 'desc' },
+      take: 60,
+    });
+    const scoped = allHistory.filter(m => {
+      const ctx = m.context as any;
+      return !ctx?.workspaceId || ctx.workspaceId === workspaceId;
+    });
+    if (scoped.length === 0) {
+      res.json({ started: false, reason: 'no-conversation' });
+      return;
+    }
+    // Newest-first → oldest-first for the classifier prompt.
+    scoped.reverse();
+
+    const conversationBlock = scoped
+      .slice(-30)
+      .map(m => `${m.role}: ${m.content.slice(0, 800)}`)
+      .join('\n\n');
+
+    type ClassifierResult = {
+      deliverableType: string | null;
+      offeringName: string | null;
+      audienceName: string | null;
+      situation: string;
+    };
+
+    const classifierSystem = `You are extracting structured info from a conversation between a user and Maria, a messaging-build assistant. Your job is JUDGMENT-light: only fill in a field if the user has CLEARLY stated it. When in doubt, leave the field null.
+
+Fields to extract:
+- deliverableType: lowercase noun for the deliverable format the user wants. Common values: "email", "pitch deck", "landing page", "blog post", "one-pager", "press release", "newsletter", "report". null if the user has not stated a format.
+- offeringName: the offering, product, or service name the user is selling/promoting. null if unstated.
+- audienceName: the target audience description (role + organizational context, OR a named persona). null if unstated.
+- situation: one short sentence describing what the user wants this deliverable to accomplish. Empty string if unstated.
+
+OUTPUT — JSON only, no markdown fences:
+{ "deliverableType": "...", "offeringName": "...", "audienceName": "...", "situation": "..." }
+
+When in doubt, prefer null. False positives (filling a field that wasn't actually stated) cause the autonomous pipeline to build the wrong thing — which is the bug we're fixing.`;
+
+    const classifierMessage = `CONVERSATION:\n\n${conversationBlock}`;
+
+    const classified = await callAIWithJSON<ClassifierResult>(
+      classifierSystem,
+      classifierMessage,
+      'fast',
+    );
+
+    if (!classified.deliverableType || !classified.offeringName || !classified.audienceName) {
+      console.log(`[AutonomousBuild] insufficient inputs — deliverable=${JSON.stringify(classified.deliverableType)} offering=${JSON.stringify(classified.offeringName)} audience=${JSON.stringify(classified.audienceName)}; falling back`);
+      res.json({ started: false, reason: 'insufficient-info', classified });
+      return;
+    }
+
+    // Match offering + audience case-insensitively by name in the user's workspace.
+    const offering = await prisma.offering.findFirst({
+      where: {
+        workspaceId,
+        name: { equals: classified.offeringName, mode: 'insensitive' },
+      },
+    });
+    const audience = await prisma.audience.findFirst({
+      where: {
+        workspaceId,
+        name: { equals: classified.audienceName, mode: 'insensitive' },
+      },
+    });
+    if (!offering || !audience) {
+      console.log(`[AutonomousBuild] no matching offering/audience in workspace; falling back. offering=${!!offering} audience=${!!audience}`);
+      res.json({ started: false, reason: 'no-offering-or-audience' });
+      return;
+    }
+
+    // Persist the pre-build expectation message so the chat panel renders
+    // it on the next history poll. Substitute the deliverable type into
+    // the locked template.
+    const deliverableType = classified.deliverableType;
+    await prisma.assistantMessage.create({
+      data: {
+        userId,
+        role: 'assistant',
+        content: buildAutonomousPreBuildExpectation(deliverableType),
+        context: {
+          ...partnerChannel(workspaceId),
+          kind: 'autonomous-pre-build',
+        },
+      },
+    });
+
+    // Kick off the pipeline. commitExistingForPipeline returns
+    // { jobId, draftId } and creates an ExpressJob row whose
+    // interpretation is the synthesized data. We then update that row's
+    // interpretation to add autonomousMode + deliverableType so the
+    // pipeline knows to fire AUTONOMOUS_POST_DELIVERY_OFFER post-blend.
+    const result = await commitExistingForPipeline(
+      offering.id,
+      audience.id,
+      deliverableType,
+      classified.situation || '',
+      userId,
+      workspaceId,
+    );
+
+    const job = await prisma.expressJob.findUnique({
+      where: { id: result.jobId },
+      select: { interpretation: true },
+    });
+    const interp = (job?.interpretation as Record<string, any>) || {};
+    await prisma.expressJob.update({
+      where: { id: result.jobId },
+      data: {
+        interpretation: {
+          ...interp,
+          autonomousMode: true,
+          deliverableType,
+        },
+      },
+    });
+
+    setImmediate(() => {
+      runPipeline(result.jobId).catch((err: unknown) => {
+        console.error(`[AutonomousBuild] runPipeline error for job ${result.jobId}:`, err);
+      });
+    });
+
+    res.json({
+      started: true,
+      jobId: result.jobId,
+      draftId: result.draftId,
+      deliverableType,
+    });
+  } catch (err) {
+    console.error('[AutonomousBuild] error:', err);
+    res.status(500).json({ started: false, reason: 'server-error' });
+  }
 });
 
 export default router;

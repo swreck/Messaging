@@ -39,6 +39,11 @@ import {
   FOUNDATIONAL_SHIFT_HOLD_MIDPOINT,
   PAUSE_BEFORE_SOFT_NOTES_MS,
   SOFT_NOTE_STAGGER_MS,
+  BLEND_HEARTBEAT,
+  BLEND_HEARTBEAT_MS,
+  buildAutonomousPostDeliveryOffer,
+  AUTONOMOUS_POST_DELIVERY_CHIP_YES,
+  buildAutonomousPostDeliveryChipNo,
 } from '../prompts/milestoneCopy.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import {
@@ -237,10 +242,14 @@ function extractAndStripMarkers(content: string): {
 // pipeline run per stage, even across foundational-shift regen cycles.
 // Path B only — gated by live consultation read, same pattern as
 // milestone narrations. Path A stays silent.
-type StageCheckinKey = 'tier' | 'chapters' | 'blend';
+// Round 3.1 Item 3 — added 'blend-heartbeat' as a separate flag so the
+// 60s blend heartbeat fires independently of the 30s blend stage
+// check-in. Both can land in a single long blend run; both are at-most
+// once per pipeline.
+type StageCheckinKey = 'tier' | 'chapters' | 'blend' | 'blend-heartbeat';
 type StageCheckinFlags = Record<StageCheckinKey, boolean>;
 function makeStageCheckinFlags(): StageCheckinFlags {
-  return { tier: false, chapters: false, blend: false };
+  return { tier: false, chapters: false, blend: false, 'blend-heartbeat': false };
 }
 function scheduleStageCheckin(opts: {
   stage: StageCheckinKey;
@@ -249,10 +258,19 @@ function scheduleStageCheckin(opts: {
   userId: string;
   workspaceId: string;
   ctx: PartnerCtx;
+  // Round 3.1 Item 3 — optional delay override (default 30s for stage
+  // check-ins; 60s for the blend heartbeat).
+  delayMs?: number;
+  // kind override for the assistantMessage row. Default 'stage-checkin';
+  // the blend heartbeat uses 'blend-heartbeat' so soft-note routing and
+  // any future telemetry can distinguish.
+  kind?: string;
 }): () => void {
   if (opts.flags[opts.stage]) {
     return () => {};
   }
+  const delay = typeof opts.delayMs === 'number' ? opts.delayMs : 30000;
+  const writeKind = opts.kind || 'stage-checkin';
   const handle = setTimeout(async () => {
     if (opts.flags[opts.stage]) return;
     try {
@@ -264,12 +282,12 @@ function scheduleStageCheckin(opts: {
         workspaceId: opts.workspaceId,
         ctx: opts.ctx,
         content: opts.message,
-        kind: 'stage-checkin',
+        kind: writeKind,
       });
     } catch (err) {
       console.error('[ExpressPipeline] stage-checkin write failed:', err);
     }
-  }, 30000);
+  }, delay);
   return () => clearTimeout(handle);
 }
 
@@ -1956,6 +1974,25 @@ ${draftForStory.tier2Statements
         audienceId: draftWithElements.audience.id,
       },
     });
+    // Round 3.1 Item 3 — blend-phase heartbeat. Fires once at the
+    // BLEND_HEARTBEAT_MS threshold (default 60s) if the blend is still
+    // running. Cancelled when blend completes; suppressed if blend
+    // finishes under the threshold.
+    const cancelBlendHeartbeat = scheduleStageCheckin({
+      stage: 'blend-heartbeat',
+      message: BLEND_HEARTBEAT,
+      flags: stageCheckinFlags,
+      userId: pipelineUserId,
+      workspaceId: pipelineWorkspaceId,
+      ctx: {
+        storyId: story.id,
+        draftId: draftWithElements.id,
+        offeringId: draftWithElements.offering.id,
+        audienceId: draftWithElements.audience.id,
+      },
+      delayMs: BLEND_HEARTBEAT_MS,
+      kind: 'blend-heartbeat',
+    });
 
     const storyWithChapters = await prisma.fiveChapterStory.findFirst({
       where: { id: story.id },
@@ -2222,6 +2259,9 @@ ${draftForStory.tier2Statements
 
     // Round 3 fix — blend stage complete; cancel before milestone.
     cancelBlendCheckin();
+    // Round 3.1 Item 3 — also cancel the heartbeat so it doesn't fire
+    // after the milestone has already landed.
+    cancelBlendHeartbeat();
 
     // Phase 2 — Milestone 4: Blended ready. Path B narration only.
     await narrateMilestoneIfPathB({
@@ -2274,6 +2314,44 @@ ${draftForStory.tier2Statements
         wholeChapterEmpty,
         chapterMissingPieces,
       });
+    }
+
+    // Round 3.1 Item 2 — autonomous post-delivery offer. Fires after the
+    // soft notes have completed (the stagger inside emitChapterSoftNotes
+    // already paced them). The offer's chip text is persisted in the
+    // assistantMessage context so the frontend can detect a click and
+    // route correctly (YES navigates to the Three Tier; NO minimizes).
+    {
+      const interp = (interpretation as unknown as Record<string, any>) || {};
+      if (interp.autonomousMode === true) {
+        const deliverableType = (typeof interp.deliverableType === 'string' && interp.deliverableType.trim())
+          ? interp.deliverableType
+          : 'deliverable';
+        const offerChips = [
+          AUTONOMOUS_POST_DELIVERY_CHIP_YES,
+          buildAutonomousPostDeliveryChipNo(deliverableType),
+        ];
+        await prisma.assistantMessage.create({
+          data: {
+            userId: pipelineUserId,
+            role: 'assistant',
+            content: buildAutonomousPostDeliveryOffer(deliverableType),
+            context: {
+              channel: 'partner',
+              workspaceId: pipelineWorkspaceId,
+              storyId: story.id,
+              draftId: draftWithElements.id,
+              offeringId: draftWithElements.offering.id,
+              audienceId: draftWithElements.audience.id,
+              kind: 'autonomous-post-delivery',
+              chips: offerChips,
+              autonomousDraftId: draftWithElements.id,
+              autonomousStoryId: story.id,
+              autonomousDeliverableType: deliverableType,
+            },
+          },
+        });
+      }
     }
 
     storyIds.push(story.id);
@@ -3437,6 +3515,22 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
         audienceId: draftForStory.audience?.id,
       },
     });
+    // Round 3.1 Item 3 — blend-phase heartbeat for the guided pipeline.
+    const cancelGuidedBlendHeartbeat = scheduleStageCheckin({
+      stage: 'blend-heartbeat',
+      message: BLEND_HEARTBEAT,
+      flags: guidedStageCheckinFlags,
+      userId: guidedUserId,
+      workspaceId: guidedWorkspaceId,
+      ctx: {
+        storyId,
+        draftId: guidedDraftId,
+        offeringId: draftForStory.offering?.id,
+        audienceId: draftForStory.audience?.id,
+      },
+      delayMs: BLEND_HEARTBEAT_MS,
+      kind: 'blend-heartbeat',
+    });
 
     const storyWithChapters = await prisma.fiveChapterStory.findFirst({
       where: { id: storyId },
@@ -3488,6 +3582,8 @@ CRITICAL — NO FABRICATION. Only use claims from the source chapters above.`;
 
     // Round 3 fix — blend stage complete (guided); cancel before milestone.
     cancelGuidedBlendCheckin();
+    // Round 3.1 Item 3 — also cancel the heartbeat (guided pipeline).
+    cancelGuidedBlendHeartbeat();
 
     // Phase 2 — Milestone 4: Blended ready (guided). Path B narration only.
     await narrateMilestoneIfPathB({
