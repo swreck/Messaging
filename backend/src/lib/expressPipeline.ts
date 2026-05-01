@@ -2351,6 +2351,73 @@ ${draftForStory.tier2Statements
             },
           },
         });
+
+        // Round 3.1 Item A — gap-focused inline observations on the Three
+        // Tier. When the user clicks YES on the post-delivery offer, the
+        // existing observation infrastructure surfaces these as inline
+        // panels per cell. Suggestion text is prefixed with "[GAP] " so
+        // the frontend can render the "Fill this in" input variant
+        // distinct from the existing hedge-cleanup Accept/Discuss panel.
+        // Detection: tier2 columns whose tier3Bullets are sparse (0 or 1)
+        // are the most reliable signal that Maria's content was a best
+        // guess given thin user input.
+        try {
+          const draftForGaps = await prisma.threeTierDraft.findFirst({
+            where: { id: draftWithElements.id },
+            include: {
+              tier1Statement: true,
+              tier2Statements: {
+                orderBy: { sortOrder: 'asc' },
+                include: { tier3Bullets: { orderBy: { sortOrder: 'asc' } } },
+              },
+            },
+          });
+          if (draftForGaps) {
+            // Per-tier2 gap: any column with 0 or 1 proof bullets is a
+            // candidate. The suggestion text below is CC-authored
+            // placeholder pending Cowork review (locked-files diff scope
+            // is unchanged because Observation.suggestion is freeform DB
+            // content, not a methodology-prompt string). Flagged in the
+            // commit message and the round report.
+            for (const t2 of draftForGaps.tier2Statements) {
+              if (t2.tier3Bullets.length <= 1) {
+                const label = (t2.categoryLabel || '').trim() || 'this column';
+                const suggestion = `[GAP] ${label}: I filled this with my best guess from limited input. Add a number, named customer, or verifiable fact and the column gets stronger.`;
+                await prisma.observation.create({
+                  data: {
+                    draftId: draftForGaps.id,
+                    cellType: 'tier2',
+                    cellId: t2.id,
+                    suggestion,
+                    state: 'OPEN',
+                  },
+                });
+              }
+            }
+            // Tier 1 gap: only flagged when the situation block was empty
+            // (hasMeaningfulCta proxies "user told us what they want this
+            // to do"). Empty situation means Tier 1 was inferred entirely
+            // from the offering+audience, so a refinement opportunity is
+            // worth surfacing.
+            const ctaProvided =
+              typeof interpretation.situation === 'string' &&
+              interpretation.situation.trim().length > 0;
+            if (!ctaProvided && draftForGaps.tier1Statement) {
+              const suggestion = `[GAP] Top tier was inferred from offering + audience alone. If you can name what you want this draft to do, refine here.`;
+              await prisma.observation.create({
+                data: {
+                  draftId: draftForGaps.id,
+                  cellType: 'tier1',
+                  cellId: draftForGaps.tier1Statement.id,
+                  suggestion,
+                  state: 'OPEN',
+                },
+              });
+            }
+          }
+        } catch (gapErr) {
+          console.error('[ExpressPipeline] gap-observation create failed (fail-open):', gapErr);
+        }
       }
     }
 
