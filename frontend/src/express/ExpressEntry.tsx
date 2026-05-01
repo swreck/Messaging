@@ -20,7 +20,7 @@ import { InterpretationPreview } from './InterpretationPreview';
 import type { ExpressInterpretation } from './types';
 import { useToast } from '../shared/ToastContext';
 import { getToggleState } from '../shared/leadershipDetection';
-import { PAGE_AFTER_NARRATION_DELAY_MS } from '../shared/milestoneCopy';
+import { PAGE_AFTER_NARRATION_DELAY_MS, SPLASH_FRESH_USER } from '../shared/milestoneCopy';
 import { useAuth } from '../auth/AuthContext';
 import { useWorkspace } from '../shared/WorkspaceContext';
 
@@ -164,7 +164,11 @@ export function ExpressEntry() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { showToast } = useToast();
   const { user } = useAuth();
-  const firstName = user?.firstName || user?.displayName;
+  // Round 3.2 Item 3 — firstName no longer interpolated into the
+  // greeting splash (SPLASH_FRESH_USER is the locked text). Kept the
+  // user destructure because the chrome row at the top still reads
+  // user.firstName / displayName / username for the corner badge.
+  void user;
   const standalone = isMariaThreeHostname();
 
   useEffect(() => {
@@ -369,12 +373,12 @@ export function ExpressEntry() {
     return wrap(
       <div className="express-entry">
         <div className="express-entry-greeting">
-          <h1 className="express-entry-title">{firstName ? `Hi ${firstName} — I'm Maria.` : `Hi, I'm Maria.`}</h1>
-          <p className="express-entry-subtitle">
-            I help people communicate more effectively about what they do — emails, pitch
-            narratives, talking points, landing pages, whatever you need. Tell me a little
-            about your work and what you need me to write.
-          </p>
+          {/* Round 3.2 Item 3 — locked SPLASH_FRESH_USER on the 3.0
+              host's greeting splash too. The prior 30+ word subtitle
+              ("I help people communicate more effectively…") is dropped
+              for the same reason the DashboardPage splash was: NOT
+              Table for 2 voice. */}
+          <h1 className="express-entry-title">{SPLASH_FRESH_USER}</h1>
         </div>
 
         <div className="express-entry-input">

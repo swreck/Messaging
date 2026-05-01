@@ -19,6 +19,7 @@ import {
   buildPathAReturnAcknowledgment,
   IDENTITY_ACKNOWLEDGMENT,
   IDENTITY_INTENT_PHRASES,
+  pickAffirmation,
 } from '../prompts/milestoneCopy.js';
 import { commitExistingForPipeline, runPipeline } from '../lib/expressPipeline.js';
 import { partnerLimiter } from '../middleware/rateLimit.js';
@@ -1192,6 +1193,19 @@ Chips are pre-typed reply buttons. Their text is what the USER would say back to
   - If your turn does NOT end with a question (you are stating a fact, confirming an action, narrating progress), do NOT emit chips.
   - Chip text never says "Yes Maria" or "Maria, please" — write it as the user's words, no addressee.
   - Chips are ALWAYS the very last thing in your response, after the question.`;
+
+  // Round 3.2 follow-up Regression 2 — Option A: pre-pick the
+  // affirmation server-side and inject it as a verbatim directive.
+  // The locked-file rule in coaching.ts ("choose from this small pool,
+  // rotating index") was advisory and Opus reverted to "actually
+  // really clear" voice habits. The directive below pins the wording
+  // when an affirmation IS used and bans the prior tic patterns.
+  // Skip-when-not-warranted judgment stays with Opus — the directive
+  // says "OR start directly with your next question."
+  {
+    const chosenAffirmation = pickAffirmation();
+    systemPrompt += `\n\nAFFIRMATION DIRECTIVE — if you would have begun this reply with an affirmation acknowledging what the user just said, use EXACTLY this text verbatim, no edits, no extra wrapper words: "${chosenAffirmation}". If no affirmation fits this turn, start your reply directly with your next question or statement — do NOT invent your own affirmation phrasing. FORBIDDEN: "actually really clear", "actually really" + any adjective, "great point", "excellent", "that's really helpful", "perfect", any "actually" softener, any compliment-then-pause pattern. The two valid modes are: (a) the verbatim affirmation above, or (b) no affirmation at all.`;
+  }
 
   // (The "first message broad framing" runtime override that previously
   // lived here was dropped once the locked NEW USER GUIDANCE block in
