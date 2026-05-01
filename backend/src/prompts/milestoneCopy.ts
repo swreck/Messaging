@@ -62,16 +62,22 @@ export function buildSoftNote(
   const purpose = CHAPTER_PURPOSE[chapter];
   const valueClaim = pickValueClaim();
 
+  // Round 3.2 Item 4 — strip trailing punctuation from each piece before
+  // joining. Some classifier outputs end with a period; the template
+  // appends its own period after `${missingDescription}`, producing the
+  // doubled-period bug Cowork observed (".. Anything I can use?").
+  const cleanedPieces = missingPieces.map(p => p.replace(/[.!?]+\s*$/, '').trim()).filter(p => p.length > 0);
+
   let missingDescription: string;
-  if (missingPieces.length === 0) {
+  if (cleanedPieces.length === 0) {
     missingDescription = EMPTY_CASE_FILL[chapter];
-  } else if (missingPieces.length === 1) {
-    missingDescription = missingPieces[0];
-  } else if (missingPieces.length === 2) {
-    missingDescription = `${missingPieces[0]} and ${missingPieces[1]}`;
+  } else if (cleanedPieces.length === 1) {
+    missingDescription = cleanedPieces[0];
+  } else if (cleanedPieces.length === 2) {
+    missingDescription = `${cleanedPieces[0]} and ${cleanedPieces[1]}`;
   } else {
-    const last = missingPieces[missingPieces.length - 1];
-    const rest = missingPieces.slice(0, -1).join(", ");
+    const last = cleanedPieces[cleanedPieces.length - 1];
+    const rest = cleanedPieces.slice(0, -1).join(", ");
     missingDescription = `${rest}, and ${last}`;
   }
 
@@ -248,3 +254,72 @@ export const BLEND_HEARTBEAT =
   "Still polishing — this last pass takes a minute.";
 
 export const BLEND_HEARTBEAT_MS = 60000;
+
+// ─── Round 3.2 Item 3 — Splash welcome (fresh-signup dashboard) ────────
+// Replaces the prior 47-word promotional splash. Same six words as
+// OPENER_FRESH_USER — the splash and the chat-panel opener intentionally
+// share this line to reduce visual noise on first impression.
+
+export const SPLASH_FRESH_USER =
+  "Hi — I'm Maria. What are we working on?";
+
+// ─── Round 3.2 Item 5B — DROPPED per Cowork's verification call. ──────
+// PATH_A_RETURN_ACKNOWLEDGMENTS and buildPathAReturnAcknowledgment were
+// removed because Round 4 Fix 11's audience-anchored chat-open opener
+// ("Back to the [audience]?") already covers return-user continuity
+// for the same trigger condition. Adding a separate locked-pool layer
+// on top competed with Fix 11 for the same chat-panel slot.
+
+// ─── Round 3.2 Item 7 — Affirmation pool ──────────────────────────────
+// Replaces the templated "That was actually really clear" tic. Maria
+// chooses an entry only when an affirmation is warranted; many turns
+// have no affirmation at all. Index-rotating selection, same shape as
+// VALUE_CLAIM_POOL.
+
+export const AFFIRMATION_POOL: ReadonlyArray<string> = [
+  "Got it. That's enough to work with.",
+  "OK — I have what I need on that.",
+  "Right there — that's clean.",
+  "Crisp. That helps.",
+  "That tracks. Good enough to build on.",
+  "Clear. Moving on.",
+  "Solid. That's what I needed.",
+  "Got it.",
+];
+
+let _affirmationIdx = 0;
+export function pickAffirmation(): string {
+  const a = AFFIRMATION_POOL[_affirmationIdx % AFFIRMATION_POOL.length];
+  _affirmationIdx += 1;
+  return a;
+}
+
+// ─── Round 3.2 Item 11 — Identity acknowledgment ──────────────────────
+// Fires only when the user asks an identity question ("Are you AI?",
+// "What model are you?", "Who built you?", similar). Maria answers
+// directly, then bridges back to the work at hand on the next turn.
+
+export const IDENTITY_ACKNOWLEDGMENT =
+  "Yes, I'm an AI agent built by Anthropic and trained on techniques to help with persuasive messaging.";
+
+// Phrase list for backend identity-question detection. Lean toward false
+// negatives — if the user phrases the question off-list, Opus's normal
+// flow continues; the rule-detect short-circuit only fires on clear hits.
+export const IDENTITY_INTENT_PHRASES: ReadonlyArray<string> = [
+  "are you ai",
+  "are you a ai",
+  "are you an ai",
+  "are you human",
+  "are you a human",
+  "are you a person",
+  "are you a bot",
+  "are you a chatbot",
+  "what model are you",
+  "what model is this",
+  "which model",
+  "who built you",
+  "who made you",
+  "who created you",
+  "what are you",
+  "are you real",
+];

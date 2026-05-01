@@ -16,6 +16,9 @@ import {
   SKIP_DEMAND_CHIP_AUTONOMOUS,
   SKIP_INTENT_PHRASES,
   buildAutonomousPreBuildExpectation,
+  IDENTITY_ACKNOWLEDGMENT,
+  IDENTITY_INTENT_PHRASES,
+  pickAffirmation,
 } from '../prompts/milestoneCopy.js';
 import { commitExistingForPipeline, runPipeline } from '../lib/expressPipeline.js';
 import { partnerLimiter } from '../middleware/rateLimit.js';
@@ -424,6 +427,15 @@ router.get('/status', async (req: Request, res: Response) => {
       }
     }
   }
+
+  // Round 3.2 Item 5B — DROPPED per Cowork's verification call.
+  // PATH_A_RETURN_ACKNOWLEDGMENTS pool was intended to fire on Path A
+  // session-start; verification showed Round 4 Fix 11's audience-
+  // anchored chat-open opener ("Back to the indie toy store owners?")
+  // already covers return-user continuity for the same scenario.
+  // Adding the ack pool on top would compete with Fix 11's opener for
+  // the same screen real-estate. Dead-code-removed; Fix 11's behavior
+  // is the canonical return-user signal.
 
   // Update lastVisitAt
   try {
@@ -1137,6 +1149,18 @@ Chips are pre-typed reply buttons. Their text is what the USER would say back to
   - Chip text never says "Yes Maria" or "Maria, please" — write it as the user's words, no addressee.
   - Chips are ALWAYS the very last thing in your response, after the question.`;
 
+  // Round 3.2 follow-up Regression 2 (round 2) — strictest version per
+  // Cowork's recommendation. Pre-pick the affirmation and REQUIRE Opus
+  // to begin its reply with that exact text. The prior soft variant
+  // ("if you would have begun with an affirmation…") gave Opus an
+  // out and it kept reverting to "actually really clear". Always-fire
+  // pattern matches the buildAutonomousPreBuildExpectation pattern that
+  // verified clean (Item 1).
+  {
+    const chosenAffirmation = pickAffirmation();
+    systemPrompt += `\n\nAFFIRMATION DIRECTIVE — REQUIRED PREFIX. Begin your reply with this exact text, no edits, no additions, no surrounding wrapper words: "${chosenAffirmation}" Then continue with your next question or statement on the next line. FORBIDDEN before, replacing, or wrapping the affirmation: "actually really clear", "actually really" + any adjective, "great point", "excellent", "that's really helpful", "perfect", any "actually" softener, any compliment-then-pause pattern. The affirmation above is the ONLY opening this reply may have. Do NOT vary it. Do NOT skip it. Do NOT add a comma, ellipsis, or "and" between it and the next sentence — just put the next sentence on its own line.`;
+  }
+
   // (The "first message broad framing" runtime override that previously
   // lived here was dropped once the locked NEW USER GUIDANCE block in
   // prompts/partner.ts was rewritten to broaden the opener directly.
@@ -1334,6 +1358,29 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
       res.json({
         response: SKIP_DEMAND_RESPONSE,
         chips: skipChips,
+        actionResult: undefined,
+        refreshNeeded: false,
+        needsPageContent: false,
+        timeThresholdFired: false,
+      });
+      return;
+    }
+
+    // Round 3.2 Item 11 — identity-question short-circuit. When the user
+    // asks "Are you AI?" / "What model?" / "Who built you?" or similar,
+    // Maria answers verbatim with IDENTITY_ACKNOWLEDGMENT instead of
+    // sidestepping. Same short-circuit pattern as skip-demand: write
+    // locked text directly, skip Opus. The user's next message picks
+    // up normal Opus flow with full conversation context, so the
+    // bridging back to work happens naturally on the next turn.
+    const isIdentityQuestion = IDENTITY_INTENT_PHRASES.some(phrase => normalized.includes(phrase));
+    if (isIdentityQuestion) {
+      const identityCtx = { ...partnerChannel(workspaceId, ctx), kind: 'identity-acknowledgment' };
+      await prisma.assistantMessage.create({
+        data: { userId, role: 'assistant', content: IDENTITY_ACKNOWLEDGMENT, context: identityCtx },
+      });
+      res.json({
+        response: IDENTITY_ACKNOWLEDGMENT,
         actionResult: undefined,
         refreshNeeded: false,
         needsPageContent: false,
@@ -1979,12 +2026,12 @@ Fields to extract:
 - deliverableType: lowercase noun for the deliverable format the user wants. Common values: "email", "pitch deck", "landing page", "blog post", "one-pager", "press release", "newsletter", "report". null if the user has not stated a format.
 - offeringName: the offering, product, or service name the user is selling/promoting. null if unstated.
 - audienceName: the target audience description (role + organizational context, OR a named persona). null if unstated.
-- situation: one short sentence describing what the user wants this deliverable to accomplish. Empty string if unstated.
+- situation: the user's specific call-to-action in their own words, VERBATIM if they stated one. Examples of what counts: "reply to schedule a demo", "sign up for the beta", "buy a starter pack", "book a call", "request a sample", "click through to the pricing page". Look for explicit phrasings like "the ask is X", "I want them to X", "tell them to X", "have them X". When the user states a specific ask, copy that phrasing into situation EXACTLY — do not paraphrase, do not generalize ("get started with X" is a paraphrase, not the user's words). Empty string if the user gave no specific ask.
 
 OUTPUT — JSON only, no markdown fences:
 { "deliverableType": "...", "offeringName": "...", "audienceName": "...", "situation": "..." }
 
-When in doubt, prefer null. False positives (filling a field that wasn't actually stated) cause the autonomous pipeline to build the wrong thing — which is the bug we're fixing.`;
+When in doubt, prefer null/empty. False positives (filling a field that wasn't actually stated) cause the autonomous pipeline to build the wrong thing — which is the bug we're fixing.`;
 
     const classifierMessage = `CONVERSATION:\n\n${conversationBlock}`;
 

@@ -13,6 +13,7 @@ import {
   COPY_EDIT_SYSTEM,
 } from '../prompts/fiveChapter.js';
 import { getMediumSpec } from '../prompts/mediums.js';
+import { buildAutonomousPreBuildExpectation } from '../prompts/milestoneCopy.js';
 import {
   getPersonalize,
   updatePersonalize,
@@ -1459,6 +1460,31 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
             if (!result || !result.jobId) {
               actionResult = 'Could not start the build — setup returned no job.';
             } else {
+              // Round 3.2 Item 1 — write AUTONOMOUS_PRE_BUILD_EXPECTATION
+              // verbatim BEFORE the pipeline kicks off, regardless of how
+              // build_deliverable fired (Opus interpretation OR direct
+              // /partner/autonomous-build endpoint). Cowork observed Opus
+              // paraphrasing the locked text into its own conversational
+              // frame ("I'll bring you right to it…") when build_deliverable
+              // fired via action-call. Direct write here matches the
+              // STAGE_CHECKIN_* pattern: locked text is data, not a
+              // prompt directive Opus renders.
+              try {
+                await prisma.assistantMessage.create({
+                  data: {
+                    userId,
+                    role: 'assistant',
+                    content: buildAutonomousPreBuildExpectation(medium),
+                    context: {
+                      channel: 'partner',
+                      workspaceId: workspaceId || '',
+                      kind: 'autonomous-pre-build',
+                    },
+                  },
+                });
+              } catch (writeErr) {
+                console.error('[build_deliverable] pre-build expectation write failed (non-fatal):', writeErr);
+              }
               setImmediate(() => {
                 runPipeline(result.jobId).catch(err => {
                   console.error(`[build_deliverable] Pipeline error for job ${result.jobId}:`, err);

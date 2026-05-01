@@ -45,3 +45,10 @@ export function isAutonomousPostDeliveryChipNo(chip: string): boolean {
   const trimmed = chip.trim();
   return /^No, I'll review the .+ here\.?$/.test(trimmed);
 }
+
+// Round 3.2 Item 3 — splash welcome text. Mirror of SPLASH_FRESH_USER
+// in backend/src/prompts/milestoneCopy.ts. Same six words as
+// OPENER_FRESH_USER — shared on purpose so the splash and the chat
+// opener don't compete on first impression.
+export const SPLASH_FRESH_USER =
+  "Hi — I'm Maria. What are we working on?";

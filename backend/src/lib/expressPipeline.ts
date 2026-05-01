@@ -864,6 +864,13 @@ export async function runPipeline(jobId: string): Promise<void> {
       stage: `Reading between the lines${variantStageSuffix}`,
       progress: scaledProgress(10),
     });
+    // Round 3.2 Item 2 — perf logging. Marks the start of each stage so
+    // Railway logs capture distributions across users + autonomous-vs-
+    // guided runtimes. Format is grep-friendly: `[Perf] jobId=X stage=Y
+    // elapsed_ms=Z mode=guided|autonomous variant=N`.
+    const interpForPerf = (interpretation as unknown as Record<string, any>) || {};
+    const pipelinePerfMode = interpForPerf.autonomousMode === true ? 'autonomous' : 'guided';
+    console.log(`[Perf] jobId=${jobId} stage=mapping-start elapsed_ms=${Date.now() - pipelineStartMs} mode=${pipelinePerfMode} variant=${variantIndex + 1}/${variantCount}`);
 
     const draftWithElements = await prisma.threeTierDraft.findFirst({
       where: { id: currentDraftId },
@@ -969,6 +976,7 @@ ${draftWithElements.offering.elements
       stage: `Shaping the Three Tier message${variantStageSuffix}`,
       progress: scaledProgress(25),
     });
+    console.log(`[Perf] jobId=${jobId} stage=tier-generation-start elapsed_ms=${Date.now() - pipelineStartMs} mode=${pipelinePerfMode} variant=${variantIndex + 1}/${variantCount}`);
 
     const cancelTierCheckin = scheduleStageCheckin({
       stage: 'tier',
@@ -1166,12 +1174,24 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       return `${mediumLabel} · ${dateLabel}`;
     }
 
+    // Round 3.2 Item 9 — preserve the user's literal ask in the cta.
+    // The prior unconditional "Get started with {offering.name}" override
+    // discarded specificity ("reply with a sample pack request" became
+    // "Get started with Wonderland Toys"). When the situation block
+    // contains a concrete ask, use it verbatim (capped at 200 chars to
+    // keep it usable as a CTA string). Fall back to the generic only
+    // when the user gave us no situation to work from.
+    const situationTrimmed = (interpretation.situation || '').trim();
+    const ctaFromSituation = situationTrimmed.length > 0 && situationTrimmed.length < 200
+      ? situationTrimmed
+      : '';
+    const ctaForStory = ctaFromSituation || `Get started with ${interpretation.offering.name || 'us'}`;
     const story = await prisma.fiveChapterStory.create({
       data: {
         draftId: draftWithElements.id,
         medium: mediumKey,
         customName: buildCustomName(),
-        cta: `Get started with ${interpretation.offering.name || 'us'}`,
+        cta: ctaForStory,
       },
     });
 
@@ -1427,6 +1447,7 @@ Return ONLY the one sentence.`;
     // loop. Scheduled once before the loop begins; cancelled when the
     // CHAPTERS_SEPARATED milestone lands. The flag prevents re-fire on
     // regen cycles.
+    console.log(`[Perf] jobId=${jobId} stage=chapters-start elapsed_ms=${Date.now() - pipelineStartMs} mode=${pipelinePerfMode} variant=${variantIndex + 1}/${variantCount}`);
     const cancelChaptersCheckin = scheduleStageCheckin({
       stage: 'chapters',
       message: STAGE_CHECKIN_CHAPTERS,
@@ -1494,9 +1515,20 @@ ${draftForStory.tier2Statements
   .join('\n')}
 `;
 
+      // Round 3.2 Item 9 follow-up — when the user provided a specific
+      // ask in their situation (now persisted as story.cta verbatim),
+      // chapter-5 must include that exact phrase, not a paraphrase.
+      // The prior chapter-5 generator was rewriting "reply to schedule
+      // a demo" into "One way to start would be to get your team into
+      // TestPilot this week" — losing the specificity. Stricter
+      // directive on chapter-5 only.
+      const ctaVerbatimDirective = chapterNum === 5 && story.cta
+        ? `\nCTA VERBATIM REQUIREMENT — the call-to-action in this chapter must include the exact phrase "${story.cta}" verbatim. Do not paraphrase, summarize, soften, or rewrite the user's ask. Other surrounding language can be yours, but the verbatim phrase must appear in the chapter as the action the reader is invited to take.\n`
+        : '';
+
       const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftForStory.audience.name}
 CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
-${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}
+${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}
 ${threeTierBlock}
 AUDIENCE PRIORITIES:
 ${draftForStory.audience.priorities
@@ -1960,6 +1992,8 @@ ${draftForStory.tier2Statements
       stage: `Polishing the draft${variantStageSuffix}`,
       progress: scaledProgress(92),
     });
+    const blendStartMs = Date.now();
+    console.log(`[Perf] jobId=${jobId} stage=blend-start elapsed_ms=${blendStartMs - pipelineStartMs} mode=${pipelinePerfMode} variant=${variantIndex + 1}/${variantCount}`);
 
     const cancelBlendCheckin = scheduleStageCheckin({
       stage: 'blend',
@@ -2262,6 +2296,10 @@ ${draftForStory.tier2Statements
     // Round 3.1 Item 3 — also cancel the heartbeat so it doesn't fire
     // after the milestone has already landed.
     cancelBlendHeartbeat();
+    // Round 3.2 Item 2 — perf logging for blend-end. Includes blend-only
+    // duration (Date.now() - blendStartMs) so we can isolate blend
+    // latency from the full pipeline runtime.
+    console.log(`[Perf] jobId=${jobId} stage=blend-end elapsed_ms=${Date.now() - pipelineStartMs} blend_ms=${Date.now() - blendStartMs} mode=${pipelinePerfMode} variant=${variantIndex + 1}/${variantCount}`);
 
     // Phase 2 — Milestone 4: Blended ready. Path B narration only.
     await narrateMilestoneIfPathB({
@@ -3152,6 +3190,11 @@ async function runDraftPipeline(
     const guidedPipelineStartMs = Date.now();
     const guidedShiftPauseFlag = { value: false };
     let guidedInitialTier1Text = draftForStory?.tier1Statement?.text || '';
+    // Round 3.2 Item 2 — perf logging (guided pipeline). Tier-generation
+    // happens in commitAndBuildFoundation upstream, so this pipeline only
+    // covers chapters + blend stages. We log mapping-start as a baseline
+    // marker for parity with runPipeline's grep pattern.
+    console.log(`[Perf] jobId=${jobId} stage=guided-pipeline-start elapsed_ms=0 mode=guided variant=1/1`);
     // Round 3 fix — per-pipeline stage-checkin flags (guided).
     const guidedStageCheckinFlags = makeStageCheckinFlags();
 
@@ -3251,6 +3294,7 @@ Return ONLY the one sentence.`;
         audienceId: draftForStory.audience?.id,
       },
     });
+    console.log(`[Perf] jobId=${jobId} stage=chapters-start elapsed_ms=${Date.now() - guidedPipelineStartMs} mode=guided variant=1/1`);
     do {
     guidedChapterMissingPieces = { 3: [], 4: [], 5: [] };
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
@@ -3293,9 +3337,17 @@ ${draftForStory.tier2Statements
   .join('\n')}
 `;
 
+      // Round 3.2 Item 9 follow-up — same cta-verbatim directive as
+      // runPipeline's chapter-5 generator. When the user's specific
+      // ask was preserved as cta, chapter-5 must include the exact
+      // phrase, not a paraphrase.
+      const guidedCtaVerbatimDirective = chapterNum === 5 && cta
+        ? `\nCTA VERBATIM REQUIREMENT — the call-to-action in this chapter must include the exact phrase "${cta}" verbatim. Do not paraphrase, summarize, soften, or rewrite the user's ask. Other surrounding language can be yours, but the verbatim phrase must appear in the chapter as the action the reader is invited to take.\n`
+        : '';
+
       const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE: ${draftForStory.audience.name}
 CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
-${chapterNum === 1 ? '' : `CTA: ${cta}\n`}${readerDirective}
+${chapterNum === 1 ? '' : `CTA: ${cta}\n`}${readerDirective}${guidedCtaVerbatimDirective}
 ${threeTierBlock}
 AUDIENCE PRIORITIES:
 ${draftForStory.audience.priorities
@@ -3566,6 +3618,8 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
 
     // ── Blend ──────────────────────────────────────
     await update({ status: 'blending', stage: 'Polishing the draft', progress: 88 });
+    const guidedBlendStartMs = Date.now();
+    console.log(`[Perf] jobId=${jobId} stage=blend-start elapsed_ms=${guidedBlendStartMs - guidedPipelineStartMs} mode=guided variant=1/1`);
 
     const cancelGuidedBlendCheckin = scheduleStageCheckin({
       stage: 'blend',
@@ -3649,6 +3703,8 @@ CRITICAL — NO FABRICATION. Only use claims from the source chapters above.`;
     cancelGuidedBlendCheckin();
     // Round 3.1 Item 3 — also cancel the heartbeat (guided pipeline).
     cancelGuidedBlendHeartbeat();
+    // Round 3.2 Item 2 — perf logging for blend-end (guided pipeline).
+    console.log(`[Perf] jobId=${jobId} stage=blend-end elapsed_ms=${Date.now() - guidedPipelineStartMs} blend_ms=${Date.now() - guidedBlendStartMs} mode=guided variant=1/1`);
 
     // Phase 2 — Milestone 4: Blended ready (guided). Path B narration only.
     await narrateMilestoneIfPathB({
