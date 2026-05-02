@@ -13,7 +13,15 @@ import {
   COPY_EDIT_SYSTEM,
 } from '../prompts/fiveChapter.js';
 import { getMediumSpec } from '../prompts/mediums.js';
-import { buildAutonomousPreBuildExpectation } from '../prompts/milestoneCopy.js';
+import {
+  buildAutonomousPreBuildExpectation,
+  mediumDisplayLabel,
+  PITCH_DECK_HONEST_FALLBACK,
+  PITCH_DECK_FALLBACK_CHIP_KEEP,
+  PITCH_DECK_FALLBACK_CHIP_SWITCH,
+  FORMAT_QUESTION,
+  FORMAT_CHIPS,
+} from '../prompts/milestoneCopy.js';
 import {
   getPersonalize,
   updatePersonalize,
@@ -1441,13 +1449,25 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
         const scopeFilter = workspaceId ? { workspaceId } : { userId };
         const offeringId = await resolveOfferingId(a.params, userId, ctx.offeringId, workspaceId);
         const audienceId = await resolveAudienceId(a.params, userId, ctx.audienceId, workspaceId);
+        // Round 3.4 Bug 1 — no silent 'email' default. If partner.ts's
+        // medium normalizer could not detect a medium from conversation
+        // and Opus didn't supply one, refuse to start the build and emit
+        // the FORMAT_NEEDED marker. partner.ts replaces Maria's response
+        // with the locked format question + chips on this signal.
+        const requestedMedium =
+          typeof a.params.medium === 'string' && a.params.medium.trim().length > 0
+            ? String(a.params.medium).trim().toLowerCase().replace(/[\s-]+/g, '_')
+            : null;
         if (!offeringId) {
           actionResult = `Could not find the offering. Try including the offering name.`;
         } else if (!audienceId) {
           actionResult = `Could not find the audience. Try including the audience name.`;
+        } else if (!requestedMedium) {
+          actionResult = `[FORMAT_NEEDED] Need to ask the format question before building.`;
+          refreshNeeded = false;
         } else {
           try {
-            const medium = a.params.medium || 'email';
+            const medium = requestedMedium;
             const situation = a.params.situation || '';
             const result = await commitExistingForPipeline(
               offeringId,

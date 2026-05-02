@@ -19,6 +19,12 @@ import {
   IDENTITY_ACKNOWLEDGMENT,
   IDENTITY_INTENT_PHRASES,
   pickAffirmation,
+  FORMAT_QUESTION,
+  FORMAT_CHIPS,
+  PITCH_DECK_HONEST_FALLBACK,
+  PITCH_DECK_FALLBACK_CHIP_KEEP,
+  PITCH_DECK_FALLBACK_CHIP_SWITCH,
+  mediumDisplayLabel,
 } from '../prompts/milestoneCopy.js';
 import { commitExistingForPipeline, runPipeline } from '../lib/expressPipeline.js';
 import { partnerLimiter } from '../middleware/rateLimit.js';
@@ -1632,6 +1638,59 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
     type: ACTION_ALIASES[a.type] || a.type,
   }));
 
+  // ─── Round 3.4 Bug 1 — medium normalization ─────────────────────────
+  // For any build_deliverable action with a missing/empty medium param,
+  // scan the full conversation history for explicit medium signals and
+  // populate it. Cassidy's verification surfaced: user said "pitch deck"
+  // in their first message, Maria's text acknowledged "pitch deck", but
+  // Opus's build_deliverable tool call omitted the medium param — the
+  // silent 'email' default in actions.ts produced an email deliverable.
+  // Detection runs on history + current message; longest-pattern wins.
+  {
+    const allUserTextForMedium =
+      history.filter(m => m.role === 'user').map(m => m.content).join(' ') +
+      ' ' + (message || '');
+
+    function detectMediumFromText(text: string): string | null {
+      // Order matters — most-specific patterns first.
+      if (/pitch\s*deck/i.test(text)) return 'pitch_deck';
+      if (/landing\s*page/i.test(text)) return 'landing_page';
+      if (/sales\s*script|talk\s*track|talking\s*points|in[-\s]*person\s*pitch/i.test(text)) return 'in_person';
+      if (/press\s*release/i.test(text)) return 'press_release';
+      if (/blog\s*post|blog\b/i.test(text)) return 'blog';
+      if (/news\s*letter|newsletter/i.test(text)) return 'newsletter';
+      if (/(white\s*paper|report)\b/i.test(text)) return 'report';
+      if (/one[-\s]*pager|one[-\s]*page|briefing\b/i.test(text)) return 'landing_page';
+      if (/\bemail\b/i.test(text)) return 'email';
+      return null;
+    }
+
+    for (const a of normalizedActions) {
+      if (a.type !== 'build_deliverable') continue;
+      const params = (a.params ||= {});
+      const explicit =
+        typeof params.medium === 'string' && params.medium.trim().length > 0
+          ? String(params.medium).trim().toLowerCase().replace(/[\s-]+/g, '_')
+          : null;
+      // Even if Opus included a medium, if a more-specific medium is in
+      // conversation we trust the user's stated medium over Opus's guess.
+      // This prevents the case where Opus's tool call shorthand ('email')
+      // overrides the user's explicit 'pitch deck' statement.
+      const detected = detectMediumFromText(allUserTextForMedium);
+      if (detected) {
+        params.medium = detected;
+      } else if (explicit) {
+        params.medium = explicit;
+      } else {
+        // Genuinely ambiguous — leave undefined so the build path can
+        // surface the format-question chip flow rather than silently
+        // defaulting. actions.ts's medium fallback logic must check
+        // for missing medium and refuse to start the build.
+        delete params.medium;
+      }
+    }
+  }
+
   if (normalizedActions.length === 1 && normalizedActions[0].type === 'read_page') {
     // Phase 1 hardening (Fix #3) — user message is persisted up-front, so
     // this branch no longer needs to store it. The page-content retry will
@@ -1737,7 +1796,7 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
             ''
           ).trim();
           if (!result.response.includes("I'll bring you")) {
-            const mediumLabel = medium === 'landing_page' ? 'one-pager' : medium === 'pitch_deck' ? 'pitch deck' : medium;
+            const mediumLabel = mediumDisplayLabel(medium);
             result.response += ` I have what I need. I'm building your ${mediumLabel} now — I'll bring you right to it when it's ready.`;
           }
         }
@@ -1772,7 +1831,7 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
           actionResult = retryResult;
           if (retryResult.includes('BUILD_STARTED')) {
             const medium = buildAction.params.medium || 'email';
-            const mediumLabel = medium === 'landing_page' ? 'one-pager' : medium === 'pitch_deck' ? 'pitch deck' : medium;
+            const mediumLabel = mediumDisplayLabel(medium);
             result.response = result.response.replace(/I tried.*$/, '').trim();
             result.response += ` I have what I need. I'm building your ${mediumLabel} now — I'll bring you right to it when it's ready.`;
           }
@@ -1818,7 +1877,7 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
         const buildResult = buildDispatch.results.join(' · ');
         actionResult = (actionResult || '') + ' · ' + forceDispatch.results.join(' · ') + ' · ' + buildResult;
         if (buildResult.includes('BUILD_STARTED')) {
-          const mediumLabel = medium === 'landing_page' ? 'one-pager' : medium === 'pitch_deck' ? 'pitch deck' : medium;
+          const mediumLabel = mediumDisplayLabel(medium);
           result.response += `\n\nI have what I need from your documents. I'm building your ${mediumLabel} now — I'll bring you right to it when it's ready.`;
         }
         if (buildDispatch.refreshNeeded) refreshNeeded = true;
@@ -1847,6 +1906,30 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
       result.response = "Sorry — I lost my train of thought for a second. Could you say that again?";
     }
   }
+
+  // ─── Round 3.4 Bug 1 — FORMAT_NEEDED handler ─────────────────────────
+  // actions.ts emits the "[FORMAT_NEEDED]" marker when build_deliverable
+  // was attempted but no medium was captured (Opus didn't supply, partner
+  // normalizer found none in conversation). Replace Maria's response
+  // entirely with the locked format question + chips. Do NOT auto-build.
+  if (actionResult && actionResult.startsWith('[FORMAT_NEEDED]')) {
+    const formatChipMarkers = FORMAT_CHIPS.map(c => `[CHIP: ${c}]`).join('\n');
+    result.response = `${FORMAT_QUESTION}\n\n${formatChipMarkers}`;
+    actionResult = null;  // Clear the marker so it's not stored as action context.
+    refreshNeeded = false;
+  }
+
+  // ─── Round 3.4 Bug 1 — Pitch deck honest fallback ────────────────────
+  // When the captured medium is pitch_deck and Maria is about to fire
+  // build_deliverable, surface the honest fallback once: explain that
+  // the export comes out as a structured doc (not .pptx), then let the
+  // user keep pitch deck shape or switch to one-pager. Detection is
+  // surface-level: actionResult contains BUILD_STARTED with pitch_deck
+  // medium AND the user has not already seen this fallback this build.
+  // We track via a per-build marker in assistant message context.
+  // (Implementation deferred — surfaces the locked copy via a future
+  // pre-build hook. Current path: pitch_deck builds proceed straight
+  // through, deliverable renders with pitch deck spec from mediums.ts.)
 
   // Cowork follow-up #2 — parse universal [CHIP: ...] markers from every
   // Maria turn (not just chat-open). Strip from visible text; persist

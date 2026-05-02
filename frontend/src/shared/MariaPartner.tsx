@@ -365,6 +365,11 @@ export function MariaPartner() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const followUpRef = useRef(false);
+  // Round 3.4 Bug 2 — queue for messages typed during an in-flight send.
+  // When `sending` flips false the drain useEffect below pulls the next
+  // queued message and fires send() on it. The chat input is never
+  // disabled so the user can always type and queue.
+  const pendingQueueRef = useRef<string[]>([]);
 
   // Round 3.1 Item 4 — when the auth user changes (logout → signup, or a
   // workspace switch), reset every panel-side state slice that can carry
@@ -853,7 +858,20 @@ export function MariaPartner() {
 
   const send = useCallback(async (overrideText?: string, pageContent?: string) => {
     const text = overrideText || input.trim();
-    if ((!text && pendingFiles.length === 0) || sending) return;
+    if (!text && pendingFiles.length === 0) return;
+    // Round 3.4 Bug 2 — chat input never disabled; queue mid-send messages.
+    // If the user types and submits while a previous send is in flight,
+    // push the text into a queue rather than dropping it. The drain
+    // useEffect below picks up queued messages when sending flips false.
+    if (sending) {
+      // Only queue typed messages, not auto-fired overrideText (chip clicks
+      // already have their own retry path).
+      if (!overrideText && text) {
+        pendingQueueRef.current.push(text);
+        setInput('');
+      }
+      return;
+    }
 
     setShowReturnCard(false);
     setShowProactiveCard(false);
@@ -1487,6 +1505,20 @@ export function MariaPartner() {
       }
     }
   }, [input, sending, pageContext, refreshPage, pendingFiles]);
+
+  // Round 3.4 Bug 2 — drain the pending message queue when sending finishes.
+  // If the user typed and submitted while a previous send was in flight,
+  // those messages were pushed to pendingQueueRef. Pull the oldest queued
+  // message and fire send() on it. send() will set sending=true again,
+  // suspending the drain until the next finish, so messages process FIFO
+  // one-at-a-time without re-disabling the input.
+  useEffect(() => {
+    if (sending) return;
+    if (pendingQueueRef.current.length === 0) return;
+    const next = pendingQueueRef.current.shift();
+    if (!next) return;
+    setTimeout(() => send(next), 100);
+  }, [sending, send]);
 
   // Auto-send pending message after panel opens
   useEffect(() => {
@@ -2348,7 +2380,6 @@ export function MariaPartner() {
                       }
                     }}
                     placeholder="Type a reply, or ask Maria anything…"
-                    disabled={sending}
                     rows={1}
                     style={{ minHeight: 44, flexShrink: 0 }}
                   />
@@ -2390,12 +2421,10 @@ export function MariaPartner() {
                         } catch {}
                       }
                     }}
-                    disabled={sending}
                   />
                   <button
                     className="partner-attach"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={sending}
                     aria-label="Attach file"
                     title="Drop a doc — Maria reads PDFs, Word, plain text, screenshots."
                   >
@@ -2403,7 +2432,12 @@ export function MariaPartner() {
                       <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                     </svg>
                   </button>
-                  <button className="partner-send" onClick={() => send()} disabled={(!input.trim() && pendingFiles.length === 0) || sending} aria-label="Send">
+                  {/* Round 3.4 Bug 2 — Send is no longer disabled while a
+                      previous send is in flight. send() handles the queue
+                      logic: mid-send clicks push to pendingQueueRef and
+                      drain when sending flips false. Only stay disabled
+                      when there's literally nothing to send. */}
+                  <button className="partner-send" onClick={() => send()} disabled={!input.trim() && pendingFiles.length === 0} aria-label="Send">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
                     </svg>
