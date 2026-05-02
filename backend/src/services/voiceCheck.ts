@@ -249,20 +249,32 @@ export interface Tier1SentinelResult {
 }
 
 // Imperative-verb openings forbidden by Bug 10 rule 2.
+// Round 3.4 coaching-fix Finding 2 — list expanded after Cowork's walk
+// surfaced "Stop slipped deals from blindsiding you..." passing the
+// sentinel. "Stop" was not in the prior list. Now comprehensive across
+// every imperative shape Cowork has named.
 const TIER1_FORBIDDEN_IMPERATIVES = [
-  'stop', 'get', 'improve', 'boost', 'maximize', 'accelerate',
-  'eliminate', 'reduce', 'increase', 'unlock', 'transform',
-  'discover', 'achieve', 'build', 'enable', 'empower',
-  'streamline', 'optimize', 'drive', 'fuel', 'gain',
+  'stop', 'eliminate', 'prevent', 'drive', 'boost', 'accelerate',
+  'reduce', 'increase', 'maximize', 'achieve', 'deliver', 'transform',
+  'streamline', 'optimize', 'unlock', 'empower',
+  'get', 'improve', 'discover', 'build', 'enable', 'fuel', 'gain',
+  'scale', 'grow', 'win', 'beat', 'crush', 'master', 'capture',
+  'protect', 'avoid', 'minimize', 'simplify', 'modernize',
 ];
 
 // Mechanism vocabulary forbidden by Bug 10 rule 4. Tier 1 names a
 // discipline or consequence; mechanism words belong in Tier 2/3.
+// Round 3.4 coaching-fix Finding 2 — list expanded. Lila's Tier 1
+// contained "scoring" and "signals" and the prior list missed both.
+// Now covers the common analytics/automation shapes that signal
+// vendor-speak in a Tier 1 statement.
 const TIER1_FORBIDDEN_MECHANISM = [
-  'scoring', 'ranking', 'tracking', 'monitoring', 'alerting',
-  'flagging', 'platform', 'engine', 'model', 'ai-powered',
-  'machine-learning', 'machine learning', 'automated',
-  'algorithm', 'dashboard', 'integration', 'api',
+  'scoring', 'signals', 'dashboards', 'dashboard', 'analytics',
+  'tracking', 'monitoring', 'reporting', 'visibility', 'intelligence',
+  'insights', 'predictions', 'automation', 'workflows', 'workflow',
+  'ranking', 'alerting', 'flagging', 'platform', 'engine', 'model',
+  'ai-powered', 'machine-learning', 'machine learning', 'automated',
+  'algorithm', 'integration', 'api', 'data-driven',
 ];
 
 export function checkTier1MarketTruth(
@@ -360,6 +372,54 @@ export function buildTier1SentinelFeedback(violations: string[]): string {
     '',
     'Re-read the closed-door test: write Tier 1 as if you were summarizing a problem a senior leader at the audience\'s company nodded at in a closed-door conversation, not a tagline. The reader should think "yes, I live in that world" — not "what is this trying to sell me."',
   ].join('\n');
+}
+
+// Round 3.4 coaching-fix Finding 2 — second-pass Opus judgment on Tier 1.
+// Pattern-match alone is insufficient: Cowork's walk surfaced cases where
+// Tier 1 violated the rule in ways the regex lists couldn't catch (subtle
+// vendor-speak, paraphrased mechanism vocabulary, novel imperative shapes).
+// This second-pass uses Opus to evaluate the Tier 1 against the rule and
+// returns a typed yes/no judgment plus a one-sentence reason. Caller
+// regenerates on no, with the reason as feedback.
+
+const TIER1_OPUS_JUDGE_SYSTEM = `You evaluate a single Tier 1 message statement against Ken Rosen's market-truth rule.
+
+The Tier 1 must read as something the audience would say to themselves about their own world — not vendor-speak. Specifically:
+1. It must NOT begin with an imperative verb directed at the reader (Stop, Get, Improve, Boost, Eliminate, etc.).
+2. It must NOT contain the offering's name or describe the offering's mechanism (scoring, ranking, tracking, monitoring, dashboards, analytics, predictions, AI, automation, etc.).
+3. It must read like something a senior leader at the audience's company would say to themselves on a Tuesday morning — not a tagline you'd put on a billboard.
+4. It must not stack compound jargon ("reactive churn firefighting", "stakeholder engagement enablement").
+
+Your only job: judge whether this Tier 1 follows the rule. Return a single yes/no plus a one-sentence reason naming the specific violation if no.
+
+Return ONLY valid JSON, no markdown fences:
+{
+  "follows_rule": true | false,
+  "reason": "one short sentence — what passes or what fails"
+}`;
+
+export interface Tier1OpusJudgeResult {
+  followsRule: boolean;
+  reason: string;
+}
+
+export async function judgeTier1AgainstRuleOpus(tier1Text: string, offeringName?: string): Promise<Tier1OpusJudgeResult> {
+  const userMessage = `TIER 1 STATEMENT TO JUDGE:
+"${tier1Text}"${offeringName ? `
+
+Offering name (must NOT appear in Tier 1): "${offeringName}"` : ''}
+
+Does this Tier 1 follow the market-truth rule? Be rigorous. If it begins with an imperative verb, contains the offering name, names a mechanism, or reads like a billboard tagline, the answer is no.`;
+  const { callAIWithJSON } = await import('./ai.js');
+  const result = await callAIWithJSON<{ follows_rule: boolean; reason: string }>(
+    TIER1_OPUS_JUDGE_SYSTEM,
+    userMessage,
+    'elite',
+  );
+  return {
+    followsRule: result.follows_rule === true,
+    reason: typeof result.reason === 'string' ? result.reason : '',
+  };
 }
 
 // ─── Settings check ─────────────────────────────────────────

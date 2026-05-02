@@ -1137,6 +1137,60 @@ This rule supersedes all guidance below it. Always.
     systemPrompt = integrityBlock + systemPrompt;
   }
 
+  // ─── Round 3.4 coaching-fix Finding 4 — locked question order ────────
+  // When the user just clicked a starting chip (the four entry chips
+  // OPENER_FRESH_USER_CHIPS surfaces on chat-open), the next methodology
+  // question is locked: AUDIENCE first, then offering, then format,
+  // then differentiation, then CTA. Bug 1's medium normalizer does not
+  // resolve this — Cowork's walks confirmed Maria asks the offering
+  // first deterministically. We inject a system-prompt directive when
+  // the previous user message matches one of the four starting chips.
+  // The locked methodology prompt file (prompts/partner.ts) is not
+  // modified — this is a route-level runtime augmentation.
+  {
+    const STARTING_CHIPS_LOWER = OPENER_FRESH_USER_CHIPS.map(c => c.trim().toLowerCase());
+    const lastUserMsg = (message || '').trim().toLowerCase();
+    const userJustClickedStartingChip = STARTING_CHIPS_LOWER.includes(lastUserMsg);
+    if (userJustClickedStartingChip) {
+      systemPrompt += `\n\nLOCKED QUESTION ORDER — STARTING-CHIP CLICK DETECTED.
+
+The user just clicked a starting chip ("${(message || '').trim()}"). The next methodology question is LOCKED to AUDIENCE — do not ask about the offering, format, differentiation, or CTA on this turn. Ask one question only, and that question is about the audience: "Who's the person you're writing to?" or a close paraphrase ("Who are you trying to win over?", "Who are you writing this for?").
+
+After the user answers the audience question, the locked sequence continues:
+  Turn 1 (this turn): AUDIENCE
+  Turn 2: OFFERING ("Tell me about what you're offering" or close paraphrase)
+  Turn 3: FORMAT (with the format chips per Bug 1)
+  Turn 4: DIFFERENTIATION ("What makes the offering special?")
+  Turn 5: CTA ("What's the ask?")
+
+Do NOT skip ahead. Do NOT consolidate two questions into one turn (Round 3.4 coaching-fix Finding 6 — never combine methodology questions with "and", "plus", or any joining clause). Each methodology turn asks exactly ONE question.`;
+    }
+  }
+
+  // ─── Round 3.4 coaching-fix Finding 6 — universal no-stacking rule ───
+  // Cowork observed Maria stacking methodology questions intermittently
+  // ("Who's the person you're writing to? And what's the format?",
+  // "What's the ask? And is there a specific commercial offer?"). Hard
+  // rule: ONE methodology question per turn, never two combined with
+  // "and" or any joining clause. Applies across the whole coaching flow
+  // (not just the starting-chip turn).
+  systemPrompt += `\n\nONE METHODOLOGY QUESTION PER TURN — UNIVERSAL RULE.
+
+Every coaching turn asks exactly ONE methodology question. Never combine two methodology questions with "and", "plus", "also", "additionally", a comma plus a second question, or any joining clause. If the next two methodology questions feel naturally adjacent, ask the more important one this turn and let the second come on the next turn.
+
+Examples that are FORBIDDEN (each combines two questions into one turn):
+  ❌ "Who's the person you're writing to? And what's the format?"
+  ❌ "What's the ask? And is there a specific commercial offer?"
+  ❌ "What makes this offering special, and what's your timeline?"
+  ❌ "Who is this for? Plus, what format do you need?"
+
+Examples that are ALLOWED (single question, possibly with a clarifying example):
+  ✓ "Who's the person you're writing to?"
+  ✓ "What format do you need? Pick whichever fits — I can build any of these."
+  ✓ "What's the ask? What do you want them to do?"  ← Same question, two phrasings, allowed.
+
+The chip-emission rule below requires reply chips after each question. Both rules combine: ONE question, with chips, per turn.`;
+
   // Cowork follow-up #2 — UNIVERSAL CHIP-EMISSION RULE.
   // Every Maria turn that ends with a question must emit reply chips so the
   // user can tap rather than invent an opening sentence. Applied as a

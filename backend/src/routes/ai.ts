@@ -21,8 +21,13 @@ import {
   buildProseViolationFeedback,
   checkTier1MarketTruth,
   buildTier1SentinelFeedback,
+  judgeTier1AgainstRuleOpus,
   type StatementInput,
 } from '../services/voiceCheck.js';
+import {
+  checkNumericClaims,
+  buildNumericClaimFeedback,
+} from '../services/numericClaimGuard.js';
 import { checkThreeTier, buildThreeTierFeedback, type ThreeTierInput } from '../services/threeTierCheck.js';
 import { checkFiveChapter, buildFiveChapterFeedback, type FiveChapterInput } from '../services/fiveChapterCheck.js';
 import { checkStatementVoice, checkProofBullet, buildGuardCorrection } from '../lib/voiceGuard.js';
@@ -240,6 +245,7 @@ async function generateTierWithVoiceCheck(
   userId: string,
   priorities?: { id: string; text: string; rank: number }[],
   offeringName?: string,
+  userInputTranscript?: string,
 ): Promise<TierGenResult> {
   let result = await generateTier(convertMessage, rank1Priority);
 
@@ -264,6 +270,66 @@ async function generateTierWithVoiceCheck(
     }
     const feedback = '\n\n' + buildTier1SentinelFeedback(sentinel.violations);
     result = await generateTier(convertMessage + feedback, rank1Priority);
+  }
+
+  // Round 3.4 coaching-fix Finding 2 — second-pass Opus judge on Tier 1.
+  // Pattern-match word lists alone aren't enough; Cowork's walk found
+  // Tier 1 violations the regex couldn't see. The Opus judge evaluates
+  // the Tier 1 against the rule and returns a yes/no judgment + reason.
+  // Hard cap 3 retries. On 3rd failure, log + ship for Cowork QA.
+  for (let opusAttempt = 1; opusAttempt <= 3; opusAttempt++) {
+    try {
+      const judge = await judgeTier1AgainstRuleOpus(result.tier1.text, offeringName);
+      if (judge.followsRule) {
+        if (opusAttempt > 1) {
+          console.log(`[Tier1OpusJudge] passed on attempt ${opusAttempt}`);
+        }
+        break;
+      }
+      console.log(`[Tier1OpusJudge] attempt ${opusAttempt}/3 — failed: ${judge.reason}`);
+      if (opusAttempt === 3) {
+        console.warn('[Tier1OpusJudge] FAILED after 3 retries — surfacing for Cowork QA. Reason:', judge.reason);
+        break;
+      }
+      const feedback = `\n\nTIER 1 SECOND-PASS JUDGMENT FAILED. Reason: ${judge.reason}\nRegenerate Tier 1 satisfying the market-truth rule. Do not begin with an imperative verb. Do not contain the offering name. Do not name the offering's mechanism (scoring, ranking, tracking, monitoring, dashboards, analytics, etc.). Write as if summarizing a problem a senior leader nodded at in a closed-door conversation.`;
+      result = await generateTier(convertMessage + feedback, rank1Priority);
+    } catch (err) {
+      console.error('[Tier1OpusJudge] error (fail-open):', err);
+      break;
+    }
+  }
+
+  // Round 3.4 coaching-fix Finding 1 — numeric-claim guard on Three Tier
+  // statements. Lila's "30%" → "40%" fabrication originated in Tier 2/3
+  // generation (the Tier table had zero fabrication coverage before). On
+  // any number in the output that doesn't trace to userInputTranscript,
+  // regenerate with feedback. Hard cap 3 retries. If userInputTranscript
+  // is empty/missing the guard skips (nothing to verify against).
+  if (userInputTranscript && userInputTranscript.trim().length > 0) {
+    for (let numAttempt = 1; numAttempt <= 3; numAttempt++) {
+      const allTierText = [
+        result.tier1.text,
+        ...result.tier2.map(t => t.text),
+        ...result.tier2.flatMap(t => (t.tier3 || []).map((b: any) => typeof b === 'string' ? b : (b?.text || ''))),
+      ].filter(Boolean).join('\n');
+      const numCheck = checkNumericClaims({
+        outputText: allTierText,
+        userInputTranscript,
+      });
+      if (numCheck.passed) {
+        if (numAttempt > 1) {
+          console.log(`[NumericClaimGuard] Tier 1/2/3 passed on attempt ${numAttempt}`);
+        }
+        break;
+      }
+      console.log(`[NumericClaimGuard] Tier attempt ${numAttempt}/3 — ${numCheck.violations.length} numeric violations:`, numCheck.violations.map(v => v.claim.raw));
+      if (numAttempt === 3) {
+        console.warn('[NumericClaimGuard] Tier FAILED after 3 retries — surfacing for Cowork QA. Violations:', numCheck.violations.map(v => `${v.claim.raw} (context: "${v.claim.context}")`));
+        break;
+      }
+      const feedback = buildNumericClaimFeedback(numCheck.violations);
+      result = await generateTier(convertMessage + feedback, rank1Priority);
+    }
   }
 
   if (!await isVoiceCheckEnabled(userId)) return result;
@@ -728,7 +794,7 @@ ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
     const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
-    const tierResult = await generateTierWithVoiceCheck(convertMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities, draft.offering?.name);
+    const tierResult = await generateTierWithVoiceCheck(convertMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities, draft.offering?.name, convertMessage);
 
     res.json({ status: 'complete', result: tierResult, questions: [] });
     return;
@@ -889,7 +955,7 @@ ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
   const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
-  const result = await generateTierWithVoiceCheck(userMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities, draft.offering?.name);
+  const result = await generateTierWithVoiceCheck(userMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities, draft.offering?.name, userMessage);
 
   res.json(result);
 });

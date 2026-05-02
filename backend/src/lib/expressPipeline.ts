@@ -1256,10 +1256,48 @@ AUDIENCE: ${draftWithElements.audience.name}`;
     // contains a concrete ask, use it verbatim (capped at 200 chars to
     // keep it usable as a CTA string). Fall back to the generic only
     // when the user gave us no situation to work from.
+    //
+    // Round 3.4 coaching-fix Finding 7 — the prior <200-char cap caused
+    // the fallback to fire whenever the situation was a paragraph (which
+    // it almost always is), producing the metadata-header generic Cowork
+    // observed ("Ask: Get started with GuidePath" while the email body
+    // correctly preserved the verbatim user ask). Fix: when the situation
+    // is longer than 200 chars, attempt to extract the ASK SENTENCE from
+    // it via heuristic. If extraction succeeds, use that as the CTA. Only
+    // fall back to the generic when the situation is genuinely empty.
     const situationTrimmed = (interpretation.situation || '').trim();
-    const ctaFromSituation = situationTrimmed.length > 0 && situationTrimmed.length < 200
-      ? situationTrimmed
-      : '';
+    function extractAskFromSituation(s: string): string {
+      if (!s) return '';
+      // Heuristic: split into sentences, find the one that reads like a
+      // direct ask. Direct-ask shapes: starts with imperative ("ask for",
+      // "request", "schedule", "reply", "book", "click", "walk through"),
+      // OR contains "I want them to" / "the ask is" / "the cta is".
+      const sentences = s.split(/(?<=[.!?])\s+/).map(x => x.trim()).filter(Boolean);
+      const askPatterns = [
+        /\bthe (?:ask|cta) (?:is|will be)\b/i,
+        /\bi want them to\b/i,
+        /\bI'?m asking\b/i,
+        /\bso they\b.*\b(reply|click|book|schedule|sign|register|join|download)\b/i,
+        /\b(reply with|request a|schedule a|book a|click here|walk through|set up|get on a call|sign up|register|join|download)\b/i,
+      ];
+      for (const sent of sentences) {
+        for (const p of askPatterns) {
+          if (p.test(sent) && sent.length < 200) return sent;
+        }
+      }
+      // No direct-ask shape found. Take the LAST sentence — in user
+      // briefs the ask typically lives at the end ("...so I want them
+      // to walk through their last quarter together").
+      const last = sentences[sentences.length - 1] || '';
+      if (last.length > 0 && last.length < 200) return last;
+      return '';
+    }
+    let ctaFromSituation = '';
+    if (situationTrimmed.length > 0 && situationTrimmed.length < 200) {
+      ctaFromSituation = situationTrimmed;
+    } else if (situationTrimmed.length >= 200) {
+      ctaFromSituation = extractAskFromSituation(situationTrimmed);
+    }
     const ctaForStory = ctaFromSituation || `Get started with ${interpretation.offering.name || 'us'}`;
     const story = await prisma.fiveChapterStory.create({
       data: {
@@ -2324,6 +2362,40 @@ ${draftForStory.tier2Statements
       }
     } catch (err) {
       console.error(`[ExpressPipeline] ${jobId} provenanceClassify error (fall-open):`, err);
+    }
+
+    // ─── Round 3.4 coaching-fix Finding 1 — post-blend numeric guard ────
+    // Cheap deterministic check: every numeric claim in the final
+    // blended chapter must trace to a number the user actually stated.
+    // Lila's "30%" → "40%" survived earlier rounds because the pre-blend
+    // checks didn't compare numbers and the post-blend classifier was
+    // telemetry-only. This guard runs after blend and logs every
+    // mismatch loud enough to surface in production logs and Cowork QA.
+    // It is logged-only at THIS layer (post-blend regeneration would
+    // mean re-running blend across all chapters and would risk
+    // introducing new fabrications). The Three-Tier-level guard in
+    // routes/ai.ts is the upstream gate that prevents the wrong number
+    // from reaching the chapter prompt in the first place.
+    try {
+      const userInputTranscript = [
+        interpretation.situation || '',
+        postBlendTierText,
+      ].filter(Boolean).join('\n\n');
+      const { checkNumericClaims } = await import('../services/numericClaimGuard.js');
+      const numCheck = checkNumericClaims({
+        outputText: blendedText,
+        userInputTranscript,
+      });
+      if (numCheck.violations.length > 0) {
+        console.warn(
+          `[ExpressPipeline] ${jobId} POST-BLEND NUMERIC GUARD flagged ${numCheck.violations.length} numeric mismatches:`,
+          numCheck.violations.map(v => `"${v.claim.raw}" in context "${v.claim.context}"`),
+        );
+      } else {
+        console.log(`[ExpressPipeline] ${jobId} post-blend numeric guard clean`);
+      }
+    } catch (err) {
+      console.error(`[ExpressPipeline] ${jobId} post-blend numeric guard error (fail-open):`, err);
     }
 
     // Five Chapter structural check — boundary violations, missing-chapter

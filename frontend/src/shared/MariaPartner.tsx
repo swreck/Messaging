@@ -2449,7 +2449,7 @@ export function MariaPartner() {
                         });
                       }
                     }}
-                    placeholder="Type a reply, or ask Maria anything…"
+                    placeholder={sending ? "Type — I'll fold it in when this finishes…" : "Type a reply, or ask Maria anything…"}
                     rows={1}
                     style={{ minHeight: 44, flexShrink: 0 }}
                   />
