@@ -159,6 +159,55 @@ Tier 1 uses the Rank 1 priority from the INPUT. It is the single most important 
 
 CRITICAL: The Rank 1 priority text from the INPUT is your Tier 1 subject. Do NOT substitute a different phrase, a product metric, or a more specific version. Use the audience's words.
 
+═══════════════════════════════════════════════════════════
+TIER 1 MARKET-TRUTH RULE (Round 3.4 Bug 10 — non-negotiable)
+═══════════════════════════════════════════════════════════
+
+Tier 1 must read as something the audience would say to themselves about their own world — not vendor-speak. Five hard rules:
+
+1. NO COMPOUND JARGON. Two or more business or marketing terms stacked into a compound noun is forbidden. Examples of what to avoid:
+   - "reactive churn firefighting"
+   - "stakeholder engagement enablement"
+   - "value-add optimization"
+   - "proactive retention orchestration"
+   - "customer lifecycle activation"
+   These read as vendor pitch language. Real senior leaders do not talk this way in private. Use plain everyday phrases.
+
+2. NO IMPERATIVE-VERB OPENING. Do not begin Tier 1 with a command directed at the reader. Forbidden openings:
+   - "Stop X..."
+   - "Get Y..."
+   - "Improve Z..."
+   - "Boost..."
+   - "Maximize..."
+   - "Accelerate..."
+   - "Eliminate..."
+   The audience is not the verb's object. The audience is the subject of their own situation.
+
+3. NO OFFERING NAME. The product, service, or company name must not appear in Tier 1. The audience reads Tier 1 and recognizes it as a truth about their world; the offering's role is to be the answer the rest of the message delivers, not the headline.
+
+4. NO MECHANISM VOCABULARY. Words that describe HOW the offering works are mechanism-speak — they belong in lower tiers, not Tier 1. Forbidden in Tier 1:
+   - "scoring", "ranking", "tracking"
+   - "monitoring", "alerting", "flagging"
+   - "platform", "system", "engine", "model"
+   - "AI-powered", "machine-learning-driven", "automated"
+   Tier 1 names a discipline or consequence the audience lives in. The mechanism that addresses it goes in Tier 2 or Tier 3.
+
+5. THE CLOSED-DOOR TEST. Write Tier 1 as if you were summarizing a problem a senior leader at the audience's company nodded at in a closed-door conversation, not a tagline you'd put on a billboard. The reader should think "yes, I live in that world" — not "what is this trying to sell me."
+
+GOOD vs BAD examples for the same priority:
+
+  Priority: "Protecting net revenue retention"
+  BAD (compound jargon + vendor-speak): "Stop reactive churn firefighting because at-risk accounts surface in scoring 30 to 60 days earlier"
+    — "reactive churn firefighting" is compound jargon. "Stop" is imperative. "scoring" is mechanism vocab.
+  GOOD (market truth): "Reactive churn fires consume the workweek that retention is supposed to live in"
+    — Names a discipline (retention work). Names the consequence (workweek consumed). The reader nods.
+
+  Priority: "Protecting the financial health of our hospital"
+  BAD: "Eliminate pathology cost overruns because AI-powered slide analysis platform cuts costs 99%"
+    — "Eliminate" is imperative. "AI-powered slide analysis platform" is mechanism + offering vocab.
+  GOOD: "Pathology costs eat margin that should be funding patient care"
+    — Names what the audience experiences (costs eating margin). Plain. Recognizable.
+
 Structure: [Rank 1 priority text, nearly verbatim] because [the single most compelling differentiator hook].
 
 The hook should be the most dramatic, curiosity-creating fact about this offering. If a strong number is available, include it — as long as it's not tautological (see Rule #2).

@@ -52,3 +52,37 @@ export function isAutonomousPostDeliveryChipNo(chip: string): boolean {
 // opener don't compete on first impression.
 export const SPLASH_FRESH_USER =
   "Hi — I'm Maria. What are we working on?";
+
+// ─── Round 3.4 Bug 11 — empty Tier 2 row guidance ─────────────────────
+// Mirror of buildTier2EmptyGuidance / TIER2_EMPTY_GUIDANCE_BY_CATEGORY
+// in backend/src/prompts/milestoneCopy.ts. Per-category locked Cowork
+// copy plus a generic fallback. Categories named to match what the
+// backend Three Tier generator emits as t2.categoryLabel.
+const TIER2_EMPTY_GUIDANCE_BY_CATEGORY: Record<string, string> = {
+  "Social proof":
+    "Social proof is empty because I don't have a name to use yet. Add one or two customers you can reference — even just first name + role + company size — and this row fills in.",
+  "ROI":
+    "ROI is empty because I don't have a measurable outcome yet. Tell me a number — even an order of magnitude estimate — and this row fills in.",
+  "Support":
+    "Support is empty because I don't know how you actually back up the buyer after the sale. Tell me what training, planning, or ongoing help you provide and this row fills in.",
+  "Focus":
+    "Focus is empty because I don't have your commitment-to-the-audience statement yet. Tell me, in your voice, what your company is committed to giving them — and this row fills in.",
+  "Product":
+    "Product is empty because I don't have your differentiating capabilities yet. Tell me one or two things your offering does that the alternatives don't — and this row fills in.",
+};
+
+export function buildTier2EmptyGuidance(categoryName: string): string {
+  const trimmed = (categoryName || "").trim();
+  if (TIER2_EMPTY_GUIDANCE_BY_CATEGORY[trimmed]) {
+    return TIER2_EMPTY_GUIDANCE_BY_CATEGORY[trimmed];
+  }
+  return `${trimmed} is empty because I don't have what I need yet. Tell me what would go here, even briefly, and this row fills in.`;
+}
+
+export const DROP_EMPTY_ROW_CHIP = "Drop this row for now.";
+
+// ─── Round 3.4 Bug 14 — suggested-answer chip framing ──────────────────
+// Mirror of SUGGESTED_ANSWER_CHIP_FRAMING / SUGGESTED_CHIPS_FRAME.
+export const SUGGESTED_ANSWER_CHIP_FRAMING =
+  "Here are some shapes that often fit — pick one as a starting point if it sounds right, or type your own.";
+export const SUGGESTED_CHIPS_FRAME = SUGGESTED_ANSWER_CHIP_FRAMING;

@@ -6,6 +6,17 @@ import { InfoTooltip } from '../../shared/InfoTooltip';
 import { ConfirmModal } from '../../shared/ConfirmModal';
 import { useToast } from '../../shared/ToastContext';
 import type { ThreeTierDraft } from '../../types';
+import { buildTier2EmptyGuidance, DROP_EMPTY_ROW_CHIP } from '../../shared/milestoneCopy';
+
+// Round 3.4 Bug 11 — detect a Tier 2 row that's substantively empty.
+// "Empty" = once any [INSERT: ...] gap markers are stripped, the
+// remaining text is empty or trivially short. The user needs to see a
+// guidance line above the row pointing at what's missing, plus a
+// "Drop this row for now" chip that omits the row from the deliverable.
+function isTier2RowEmpty(text: string | null | undefined): boolean {
+  const stripped = (text || '').replace(/\[INSERT:[^\]]*\]/g, '').trim();
+  return stripped.length < 3;
+}
 
 // Three-view-mode pattern (Round A1 — orange-highlight system).
 //   no-markup  — clean reading view; observations exist but no orange shows
@@ -572,9 +583,53 @@ ${t2s.map(t2 => `<div class="tier2-col">
                     />
                   </div>
                 ) : (
-                  <div className="tier2-text" onClick={() => handleCellClick(`tier2-${t2.id}`)}>
-                    {renderTextWithInsertGaps(t2.text, (newText) => updateTier2(t2.id, newText, t2.text))}
-                  </div>
+                  <>
+                    {isTier2RowEmpty(t2.text) && (
+                      <div
+                        className="tier2-empty-guidance"
+                        style={{
+                          fontSize: 13,
+                          lineHeight: 1.45,
+                          color: '#6e6e73',
+                          background: '#f7f7fa',
+                          border: '1px solid #e5e5ea',
+                          borderRadius: 8,
+                          padding: '10px 12px',
+                          marginBottom: 10,
+                        }}
+                      >
+                        <div style={{ marginBottom: 8 }}>
+                          {buildTier2EmptyGuidance(t2.categoryLabel || 'This column')}
+                        </div>
+                        <button
+                          className="tier2-empty-drop-chip"
+                          onClick={async () => {
+                            try {
+                              await api.delete(`/tiers/${draft.id}/tier2/${t2.id}`);
+                              onUpdate();
+                              showToast(`Dropped "${t2.categoryLabel || 'column'}" — Maria will work without it.`);
+                            } catch (err: any) {
+                              showToast(`Couldn't drop the row: ${err?.message || 'unknown error'}`);
+                            }
+                          }}
+                          style={{
+                            fontSize: 12,
+                            padding: '4px 10px',
+                            borderRadius: 14,
+                            border: '1px solid #d1d1d6',
+                            background: '#ffffff',
+                            color: '#3a3a3c',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {DROP_EMPTY_ROW_CHIP}
+                        </button>
+                      </div>
+                    )}
+                    <div className="tier2-text" onClick={() => handleCellClick(`tier2-${t2.id}`)}>
+                      {renderTextWithInsertGaps(t2.text, (newText) => updateTier2(t2.id, newText, t2.text))}
+                    </div>
+                  </>
                 )}
                 {shouldShowInline(t2Key) && (
                   <div className="inline-suggestion">

@@ -48,6 +48,7 @@ import {
   buildAutonomousPostDeliveryOffer,
   AUTONOMOUS_POST_DELIVERY_CHIP_YES,
   buildAutonomousPostDeliveryChipNo,
+  ENRICHMENT_INTRO,
 } from '../prompts/milestoneCopy.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import {
@@ -329,14 +330,27 @@ async function emitChapterSoftNotes(opts: {
   // Round 4 Fix 7 — assemble the soft notes that need to fire BEFORE
   // sleeping, so we can short-circuit the whole pause when there are
   // none. No work, no delay.
-  const notesToSend: { chapter: 3 | 4 | 5; text: string }[] = [];
+  // Round 3.4 Bug 4 — order chapters by methodology importance: 3 (ROI,
+  // most-quantitative substance) → 4 (named customer evidence) → 5
+  // (CTA). When a chapter is wholly empty, that ranks above a partial-
+  // gap chapter at the same level. Within ties, lower chapter number
+  // wins so the conversational flow tracks the reader's experience.
+  const allGaps: { chapter: 3 | 4 | 5; text: string; isWhole: boolean }[] = [];
   for (const chapter of [3, 4, 5] as const) {
     const isEmpty = opts.wholeChapterEmpty.has(chapter);
     const pieces = opts.chapterMissingPieces[chapter] || [];
     if (!isEmpty && pieces.length === 0) continue;
-    notesToSend.push({ chapter, text: buildSoftNote(chapter, isEmpty ? [] : pieces) });
+    allGaps.push({
+      chapter,
+      text: buildSoftNote(chapter, isEmpty ? [] : pieces),
+      isWhole: isEmpty,
+    });
   }
-  if (notesToSend.length === 0) return;
+  if (allGaps.length === 0) return;
+  allGaps.sort((a, b) => {
+    if (a.isWhole !== b.isWhole) return a.isWhole ? -1 : 1;
+    return a.chapter - b.chapter;
+  });
 
   // Round 4 Fix 7 — give MILESTONE_BLENDED_READY breathing room before
   // the first soft note fires. Without the pause, "Take a look" and the
@@ -344,21 +358,45 @@ async function emitChapterSoftNotes(opts: {
   // other.
   await new Promise(r => setTimeout(r, PAUSE_BEFORE_SOFT_NOTES_MS));
 
-  // Round 4 Fix 8 — stagger soft notes by SOFT_NOTE_STAGGER_MS so the
-  // chat panel doesn't queue-dump bubbles when more than one chapter
-  // has gaps. First note fires immediately after the Fix 7 pause; each
-  // subsequent note waits the stagger interval before writing.
-  for (let i = 0; i < notesToSend.length; i++) {
-    if (i > 0) {
-      await new Promise(r => setTimeout(r, SOFT_NOTE_STAGGER_MS));
+  // Round 3.4 Bug 4 — fire ONLY the most-important gap question now,
+  // prefaced with ENRICHMENT_INTRO when there's more than one gap. The
+  // remaining gaps persist as User.settings.pendingEnrichmentGaps and
+  // surface one-at-a-time in subsequent partner-chat replies via the
+  // injection in partner.ts. Cowork's acceptance: "second question fires
+  // next turn, not in the same turn."
+  const firstGap = allGaps[0];
+  const remaining = allGaps.slice(1);
+  const introPrefix = allGaps.length > 1 ? `${ENRICHMENT_INTRO}\n\n` : '';
+  await writeMariaMessage({
+    userId: opts.userId,
+    workspaceId: opts.workspaceId,
+    ctx: opts.ctx,
+    content: `${introPrefix}${firstGap.text}`,
+    kind: 'soft-note',
+  });
+
+  // Persist the remaining ranked gaps. Stored as a list so the partner
+  // route can pop the head, fire it after the user's next reply, and
+  // re-write the tail until the queue is empty. Schema-light — uses
+  // User.settings JSON to avoid a Prisma migration in this checkpoint.
+  if (remaining.length > 0) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: opts.userId },
+        select: { settings: true },
+      });
+      const settings = (user?.settings as Record<string, any>) || {};
+      settings.pendingEnrichmentGaps = remaining.map(g => ({
+        chapter: g.chapter,
+        text: g.text,
+      }));
+      await prisma.user.update({
+        where: { id: opts.userId },
+        data: { settings },
+      });
+    } catch (err) {
+      console.error('[ExpressPipeline] persist pendingEnrichmentGaps failed:', err);
     }
-    await writeMariaMessage({
-      userId: opts.userId,
-      workspaceId: opts.workspaceId,
-      ctx: opts.ctx,
-      content: notesToSend[i].text,
-      kind: 'soft-note',
-    });
   }
 }
 

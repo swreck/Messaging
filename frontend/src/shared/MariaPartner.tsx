@@ -31,6 +31,7 @@ import {
   SKIP_DEMAND_CHIP_AUTONOMOUS,
   AUTONOMOUS_POST_DELIVERY_CHIP_YES,
   isAutonomousPostDeliveryChipNo,
+  SUGGESTED_CHIPS_FRAME,
 } from './milestoneCopy';
 // MOBILE_HOME_BREAKPOINT_PX import dropped in Round 4 Fix 10 (toggle
 // renders at all widths). Re-add if future visual treatments need it.
@@ -43,6 +44,12 @@ interface Message {
   // "Let Maria lead" toggle on, she emits 2-4 reply chips. Tapping a chip
   // posts the chip text as a normal user message.
   chips?: string[];
+  // Round 3.4 Bug 14 — suggested-answer chips. Distinct from `chips`
+  // (navigation): clicking a suggestChip inserts its text into the input
+  // as editable text rather than auto-submitting. Rendered above
+  // navigation chips with the SUGGESTED_CHIPS_FRAME framing line above
+  // the group.
+  suggestChips?: string[];
   isChatOpen?: boolean;
   // Round 3.1 Item 2 — surfaced from the persisted assistantMessage
   // context for autonomous-post-delivery offer messages so the YES chip
@@ -1013,6 +1020,7 @@ export function MariaPartner() {
       const result = await api.post<{
         response: string;
         chips?: string[];
+        suggestChips?: string[];
         actionResult: string | null;
         refreshNeeded: boolean;
         needsPageContent?: boolean;
@@ -1413,6 +1421,7 @@ export function MariaPartner() {
           content: cleanedResponse || result.response,
           actionResult: result.actionResult,
           chips: result.chips,
+          suggestChips: result.suggestChips,
         }]);
       }
 
@@ -2062,6 +2071,67 @@ export function MariaPartner() {
                     </div>
                     );
                   })}
+                  {/* Round 3.4 Bug 14 — suggested-answer chips. Render
+                      above the navigation chips, with the locked Cowork
+                      framing line above the group. Click inserts text
+                      into the input as editable; user reviews and submits.
+                      Suggested chips do NOT auto-submit. */}
+                  {(() => {
+                    const last = messages[messages.length - 1];
+                    if (!last || last.role !== 'assistant') return null;
+                    const sChips = last.suggestChips || [];
+                    if (sChips.length === 0) return null;
+                    if (sending) return null;
+                    return (
+                      <div className="partner-suggest-chips" style={{
+                        padding: '8px 14px 4px 14px',
+                      }}>
+                        <div style={{
+                          fontSize: 12,
+                          lineHeight: 1.45,
+                          color: '#6e6e73',
+                          marginBottom: 8,
+                          fontStyle: 'italic',
+                        }}>
+                          {SUGGESTED_CHIPS_FRAME}
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 8,
+                        }}>
+                          {sChips.map((chip, i) => (
+                            <button
+                              key={`s-${i}`}
+                              type="button"
+                              className="btn btn-ghost btn-sm partner-suggest-chip"
+                              style={{
+                                borderRadius: 18,
+                                padding: '8px 14px',
+                                fontSize: 13,
+                                border: '1px dashed var(--accent, #007aff)',
+                                color: 'var(--accent, #007aff)',
+                                background: 'transparent',
+                                textAlign: 'left',
+                                lineHeight: 1.4,
+                              }}
+                              onClick={() => {
+                                // Insert as editable text. Append to current
+                                // input rather than replacing — the user may
+                                // have started typing.
+                                setInput(prev => (prev ? `${prev} ${chip}` : chip));
+                                setTimeout(() => textareaRef.current?.focus(), 50);
+                              }}
+                              title="Click to drop this into the chat box. You can edit before sending."
+                            >
+                              {chip}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Chat-open reply chips. Render below the latest assistant
                       message when it carries chips and is the bottom of the
                       thread. Tap echoes the chip text as a normal user reply

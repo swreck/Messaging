@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { callAI, callAIWithJSON } from '../services/ai.js';
-import { ALL_ABOUT_YOU_SYSTEM, ALL_ABOUT_AUDIENCE_SYSTEM, buildCoachingUserContext } from '../prompts/coaching.js';
+import { ALL_ABOUT_YOU_SYSTEM, ALL_ABOUT_AUDIENCE_SYSTEM, buildCoachingUserContext, AUDIENCE_THREE_SLOT_SYSTEM, buildAudienceThreeSlotUserContext } from '../prompts/coaching.js';
+import { pickAffirmation } from '../prompts/milestoneCopy.js';
 import { MAPPING_SYSTEM, LOW_CONFIDENCE_QUESTIONS_SYSTEM } from '../prompts/mapping.js';
 import { CONVERT_LINES_SYSTEM, REVIEW_SYSTEM, REVISE_FROM_EDITS_SYSTEM, DIRECTION_SYSTEM, REFINE_LANGUAGE_SYSTEM, buildRefineLanguageSystem } from '../prompts/generation.js';
 import { resolveStyleForUser } from '../lib/styleResolver.js';
@@ -18,6 +19,8 @@ import {
   checkProse,
   buildViolationFeedback,
   buildProseViolationFeedback,
+  checkTier1MarketTruth,
+  buildTier1SentinelFeedback,
   type StatementInput,
 } from '../services/voiceCheck.js';
 import { checkThreeTier, buildThreeTierFeedback, type ThreeTierInput } from '../services/threeTierCheck.js';
@@ -236,8 +239,32 @@ async function generateTierWithVoiceCheck(
   rank1Priority: { text: string } | undefined,
   userId: string,
   priorities?: { id: string; text: string; rank: number }[],
+  offeringName?: string,
 ): Promise<TierGenResult> {
-  const result = await generateTier(convertMessage, rank1Priority);
+  let result = await generateTier(convertMessage, rank1Priority);
+
+  // Round 3.4 Bug 10 — Tier 1 market-truth sentinel. Cheap regex pre-check
+  // BEFORE Opus statement evaluation. On flag, regenerate with the rule
+  // emphasized. Hard cap: 3 retries. After 3rd failure, log a warning and
+  // continue with whatever Tier 1 we have (the downstream Opus voice
+  // evaluator may catch additional issues; if not, the deliverable
+  // surfaces with the gap and Cowork QA can flag it for follow-up).
+  for (let sentinelAttempt = 1; sentinelAttempt <= 3; sentinelAttempt++) {
+    const sentinel = checkTier1MarketTruth(result.tier1.text, offeringName);
+    if (sentinel.passed) {
+      if (sentinelAttempt > 1) {
+        console.log(`[Tier1Sentinel] passed on attempt ${sentinelAttempt}`);
+      }
+      break;
+    }
+    console.log(`[Tier1Sentinel] attempt ${sentinelAttempt}/3 — ${sentinel.violations.length} violations:`, sentinel.violations);
+    if (sentinelAttempt === 3) {
+      console.warn('[Tier1Sentinel] FAILED after 3 retries — surfacing Tier 1 with violations for Cowork QA. Violations:', sentinel.violations);
+      break;
+    }
+    const feedback = '\n\n' + buildTier1SentinelFeedback(sentinel.violations);
+    result = await generateTier(convertMessage + feedback, rank1Priority);
+  }
 
   if (!await isVoiceCheckEnabled(userId)) return result;
 
@@ -346,6 +373,12 @@ router.post('/coach', requireEditor, async (req: Request, res: Response) => {
   });
 
   // Step 2 = offering interview, Step 3 (was 4) = audience interview
+  // Round 3.4 Bug 7 — audience step uses the three-slot framed-slot
+  // template. The first turn (history.length === 0) still uses the
+  // flat ALL_ABOUT_AUDIENCE_SYSTEM prompt because there's no user
+  // message to paraphrase yet — Maria's opening question fires
+  // unchanged. Subsequent turns route through the three-slot path.
+  const useThreeSlot = step === 3 && history.length > 0;
   const systemPrompt = step === 2 ? ALL_ABOUT_YOU_SYSTEM : ALL_ABOUT_AUDIENCE_SYSTEM;
   const context = buildCoachingUserContext(
     draft.offering.name,
@@ -365,7 +398,51 @@ router.post('/coach', requireEditor, async (req: Request, res: Response) => {
     content: m.content,
   }));
 
-  const response = await callAI(systemPrompt, fullMessage, 'elite', conversationHistory);
+  let response: string;
+  if (useThreeSlot) {
+    const threeSlotUserContext = buildAudienceThreeSlotUserContext(
+      draft.audience.name,
+      draft.offering.name,
+      message,
+      draft.audience.priorities.map(p => ({ text: p.text, rank: p.rank, driver: p.driver })),
+    );
+    interface ThreeSlotResult {
+      paraphrase: string;
+      transition: string;
+    }
+    let slotResult: ThreeSlotResult;
+    try {
+      slotResult = await callAIWithJSON<ThreeSlotResult>(
+        AUDIENCE_THREE_SLOT_SYSTEM,
+        threeSlotUserContext,
+        'elite',
+      );
+    } catch (err) {
+      console.error('[coach Bug 7] three-slot JSON parse failed; falling back to flat prompt:', err);
+      response = await callAI(systemPrompt, fullMessage, 'elite', conversationHistory);
+      slotResult = { paraphrase: '', transition: response };
+    }
+    if (slotResult.paraphrase || slotResult.transition) {
+      const affirmation = pickAffirmation();
+      const isThin = (slotResult.paraphrase || '').trim().toUpperCase().includes('[TOO_THIN]');
+      const paraphrasePart = isThin ? '' : (slotResult.paraphrase || '').trim();
+      const transitionPart = (slotResult.transition || '').trim();
+      // Compose: <Affirmation> <Paraphrase>. <Transition>
+      // When paraphrase is thin: <Affirmation> <Transition (which is the
+      // clarifying ask)>. The single trailing punctuation comes from the
+      // transition's own sentence terminator.
+      const parts = [affirmation];
+      if (paraphrasePart) {
+        parts.push(paraphrasePart.endsWith('.') ? paraphrasePart : `${paraphrasePart}.`);
+      }
+      if (transitionPart) parts.push(transitionPart);
+      response = parts.join(' ');
+    } else {
+      response = await callAI(systemPrompt, fullMessage, 'elite', conversationHistory);
+    }
+  } else {
+    response = await callAI(systemPrompt, fullMessage, 'elite', conversationHistory);
+  }
 
   // Change 3 — Contrarian extraction: when Maria includes "* [CONTRARIAN] ..."
   // in her reply, persist the scenario on the offering and mark it asked. The
@@ -651,7 +728,7 @@ ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
     const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
-    const tierResult = await generateTierWithVoiceCheck(convertMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities);
+    const tierResult = await generateTierWithVoiceCheck(convertMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities, draft.offering?.name);
 
     res.json({ status: 'complete', result: tierResult, questions: [] });
     return;
@@ -812,7 +889,7 @@ ${orphanElements.length > 0 ? `\nORPHAN CAPABILITIES (not mapped to any priority
 AUDIENCE: ${draft.audience?.name || 'Not specified'}`;
 
   const rank1 = draft.audience.priorities.find((p) => p.rank === 1);
-  const result = await generateTierWithVoiceCheck(userMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities);
+  const result = await generateTierWithVoiceCheck(userMessage, rank1 || undefined, req.user!.userId, draft.audience.priorities, draft.offering?.name);
 
   res.json(result);
 });

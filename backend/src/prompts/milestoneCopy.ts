@@ -473,7 +473,11 @@ export const ENRICHMENT_INTRO =
 
 // Spoken before each subsequent enrichment question after the first.
 // Pair with the next-question text from the enrichment generator.
+// Round 3.4 coaching bundle — exported under both ENRICHMENT_NEXT_BRIDGE
+// (original) and ENRICHMENT_TRANSITION (Ken's bundle-spec name) so the
+// wiring layer can use whichever it prefers.
 export const ENRICHMENT_NEXT_BRIDGE = "Good. One more thing: ";
+export const ENRICHMENT_TRANSITION = ENRICHMENT_NEXT_BRIDGE;
 
 // ─── Bug 8 — Methodology vocabulary first-introduction explanations ──
 // Used by coaching/partner prompts. The first time any of these terms
@@ -524,6 +528,36 @@ export const SOCIAL_PROOF_EMPTY_GUIDANCE =
 
 export const DROP_EMPTY_ROW_CHIP = "Drop this row for now.";
 
+// Round 3.4 coaching bundle — parameterized variant. Falls back to the
+// social-proof copy when the empty row IS social proof, otherwise builds
+// a row-category-specific guidance line in Cowork's voice. The category
+// name should be the human-readable label (e.g., "Social proof", "ROI",
+// "Support"), NOT the snake_case enum.
+const TIER2_EMPTY_GUIDANCE_BY_CATEGORY: Record<string, string> = {
+  "Social proof": SOCIAL_PROOF_EMPTY_GUIDANCE,
+  "ROI":
+    "ROI is empty because I don't have a measurable outcome yet. Tell me a number — even an order of magnitude estimate — and this row fills in.",
+  "Support":
+    "Support is empty because I don't know how you actually back up the buyer after the sale. Tell me what training, planning, or ongoing help you provide and this row fills in.",
+  "Focus":
+    "Focus is empty because I don't have your commitment-to-the-audience statement yet. Tell me, in your voice, what your company is committed to giving them — and this row fills in.",
+  "Product":
+    "Product is empty because I don't have your differentiating capabilities yet. Tell me one or two things your offering does that the alternatives don't — and this row fills in.",
+};
+
+export function buildTier2EmptyGuidance(categoryName: string): string {
+  const trimmed = (categoryName || "").trim();
+  if (TIER2_EMPTY_GUIDANCE_BY_CATEGORY[trimmed]) {
+    return TIER2_EMPTY_GUIDANCE_BY_CATEGORY[trimmed];
+  }
+  // Generic fallback for any future category we haven't authored yet.
+  return `${trimmed} is empty because I don't have what I need yet. Tell me what would go here, even briefly, and this row fills in.`;
+}
+
+// Bundle-spec alias — TIER2_EMPTY_GUIDANCE references the builder so
+// callers can do TIER2_EMPTY_GUIDANCE("Social proof") at the call site.
+export const TIER2_EMPTY_GUIDANCE = buildTier2EmptyGuidance;
+
 // ─── Bug 13 — Example-deliverable ribbon ──────────────────────────────
 // Rendered at the top of any deliverable created via Maria's "show me
 // how" example walkthrough path. Visually distinct from real-work
@@ -546,6 +580,10 @@ export const EXAMPLE_DELIVERABLE_NEW_REAL_BUTTON = "Start something real";
 
 export const SUGGESTED_ANSWER_CHIP_FRAMING =
   "Here are some shapes that often fit — pick one as a starting point if it sounds right, or type your own.";
+
+// Bundle-spec alias name — SUGGESTED_CHIPS_FRAME points at the same
+// string. Either export name works at call sites.
+export const SUGGESTED_CHIPS_FRAME = SUGGESTED_ANSWER_CHIP_FRAMING;
 
 // ─── New feature — Stuck-state detection re-engage copy ───────────────
 // Six trigger types, one locked re-engage line per trigger. Some templates

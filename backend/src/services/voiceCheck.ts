@@ -237,6 +237,131 @@ export interface ProseCheckResult {
   violations: string[];
 }
 
+// Round 3.4 Bug 10 — Tier 1 market-truth sentinel. Pattern checks that
+// run BEFORE Opus statement evaluation. Cheap regexes catch the most
+// common vendor-speak shapes the generation prompt explicitly forbids.
+// On any flag, the caller (generation pipeline) regenerates with the
+// rule reiterated. Three-retry hard cap is applied at the call site.
+
+export interface Tier1SentinelResult {
+  passed: boolean;
+  violations: string[];
+}
+
+// Imperative-verb openings forbidden by Bug 10 rule 2.
+const TIER1_FORBIDDEN_IMPERATIVES = [
+  'stop', 'get', 'improve', 'boost', 'maximize', 'accelerate',
+  'eliminate', 'reduce', 'increase', 'unlock', 'transform',
+  'discover', 'achieve', 'build', 'enable', 'empower',
+  'streamline', 'optimize', 'drive', 'fuel', 'gain',
+];
+
+// Mechanism vocabulary forbidden by Bug 10 rule 4. Tier 1 names a
+// discipline or consequence; mechanism words belong in Tier 2/3.
+const TIER1_FORBIDDEN_MECHANISM = [
+  'scoring', 'ranking', 'tracking', 'monitoring', 'alerting',
+  'flagging', 'platform', 'engine', 'model', 'ai-powered',
+  'machine-learning', 'machine learning', 'automated',
+  'algorithm', 'dashboard', 'integration', 'api',
+];
+
+export function checkTier1MarketTruth(
+  tier1Text: string,
+  offeringName?: string,
+): Tier1SentinelResult {
+  const violations: string[] = [];
+  const text = (tier1Text || '').trim();
+  if (!text) {
+    return { passed: true, violations: [] };
+  }
+  const lower = text.toLowerCase();
+
+  // Rule 2 — imperative-verb opening.
+  const firstWord = (text.match(/^\s*([A-Za-z']+)/)?.[1] || '').toLowerCase();
+  if (TIER1_FORBIDDEN_IMPERATIVES.includes(firstWord)) {
+    violations.push(
+      `Tier 1 begins with imperative verb "${firstWord}" — forbidden by market-truth rule. Tier 1 is not a command directed at the reader. Rewrite so the audience is the subject of their own situation, not the object of a verb.`
+    );
+  }
+
+  // Rule 3 — offering name presence (case-insensitive substring match).
+  if (offeringName && offeringName.trim().length >= 2) {
+    const trimmedOffering = offeringName.trim().toLowerCase();
+    // Word-boundary check so "Acme" doesn't match "academy" etc.
+    const pattern = new RegExp(`\\b${trimmedOffering.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (pattern.test(lower)) {
+      violations.push(
+        `Tier 1 contains the offering name "${offeringName}" — forbidden. The audience reads Tier 1 as a truth about their world; the offering's role is the answer the rest of the message delivers.`
+      );
+    }
+  }
+
+  // Rule 4 — mechanism vocabulary.
+  for (const mech of TIER1_FORBIDDEN_MECHANISM) {
+    const pattern = new RegExp(`\\b${mech.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (pattern.test(lower)) {
+      violations.push(
+        `Tier 1 contains mechanism vocabulary "${mech}" — forbidden. The mechanism that addresses the audience's discipline goes in Tier 2 or Tier 3, not the headline.`
+      );
+      break; // One mechanism flag is enough; no need to enumerate every match.
+    }
+  }
+
+  // Rule 1 — compound jargon detector. Flag 3+ consecutive nouns/
+  // nominalized verbs without intervening common words. Heuristic:
+  // identify any 3-word run where each word is 4+ characters AND ends
+  // in a noun-like suffix (-tion, -ment, -ity, -ness, -ization, -ing
+  // when nominalized) OR is a known business/marketing term. This is
+  // cheap and catches the obvious cases like "reactive churn
+  // firefighting" or "stakeholder engagement enablement".
+  const nominalSuffixes = /(tion|ment|ity|ness|ization|ization|ization|ance|ence|ization|ing)$/i;
+  const stopwords = new Set([
+    'the', 'a', 'an', 'of', 'to', 'in', 'on', 'at', 'for', 'and', 'or',
+    'but', 'with', 'by', 'as', 'is', 'are', 'was', 'were', 'be', 'been',
+    'have', 'has', 'had', 'this', 'that', 'these', 'those', 'it', 'its',
+    'their', 'they', 'we', 'you', 'your', 'our', 'us', 'them', 'because',
+    'when', 'while', 'so', 'than',
+  ]);
+  const tokens = text.split(/[\s\-]+/).filter(t => t.trim().length > 0).map(t => t.replace(/[.,;:!?'"()]/g, ''));
+  let runLen = 0;
+  for (const t of tokens) {
+    if (!t) { runLen = 0; continue; }
+    const lc = t.toLowerCase();
+    if (stopwords.has(lc) || lc.length < 4) {
+      runLen = 0;
+      continue;
+    }
+    // Treat nominalized words OR business/marketing-shaped words as run-eligible.
+    const isNominal = nominalSuffixes.test(lc);
+    // Heuristic: any 4+-char non-stopword can extend the run; a non-nominal
+    // verb won't typically appear in a stack of three. False positives are
+    // recoverable via the prompt rule on retry.
+    if (isNominal || lc.length >= 6) {
+      runLen += 1;
+    } else {
+      runLen = 0;
+    }
+    if (runLen >= 3) {
+      violations.push(
+        `Tier 1 contains a compound-jargon stack near "${t}" — three or more consecutive nominalized terms read as vendor-speak. Replace with everyday language a senior leader would use in private.`
+      );
+      break;
+    }
+  }
+
+  return { passed: violations.length === 0, violations };
+}
+
+export function buildTier1SentinelFeedback(violations: string[]): string {
+  if (violations.length === 0) return '';
+  return [
+    'TIER 1 MARKET-TRUTH RULE VIOLATIONS — regenerate Tier 1 satisfying these:',
+    ...violations.map((v, i) => `${i + 1}. ${v}`),
+    '',
+    'Re-read the closed-door test: write Tier 1 as if you were summarizing a problem a senior leader at the audience\'s company nodded at in a closed-door conversation, not a tagline. The reader should think "yes, I live in that world" — not "what is this trying to sell me."',
+  ].join('\n');
+}
+
 // ─── Settings check ─────────────────────────────────────────
 
 export async function isVoiceCheckEnabled(_userId: string): Promise<boolean> {

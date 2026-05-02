@@ -1907,6 +1907,43 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
     }
   }
 
+  // ─── Round 3.4 Bug 4 — pending-enrichment-gap injection ─────────────
+  // The express pipeline emits ENRICHMENT_INTRO + the highest-priority
+  // gap question, then persists remaining ranked gaps in
+  // User.settings.pendingEnrichmentGaps. After the user answers the
+  // current gap (any non-trivial reply), pop the next gap and tail-
+  // append it to Maria's response prefixed with ENRICHMENT_TRANSITION.
+  // Opus's reply naturally acknowledges the user's input, then the
+  // deterministic append asks the next question. Skipped when the
+  // user's reply was empty, a chip-shaped meta-answer, or when there
+  // are no pending gaps.
+  try {
+    const userMsgWasSubstantive = !!(message && message.trim().length >= 2);
+    if (userMsgWasSubstantive && result.response) {
+      const u = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { settings: true },
+      });
+      const settings = (u?.settings as Record<string, any>) || {};
+      const pending = Array.isArray(settings.pendingEnrichmentGaps)
+        ? settings.pendingEnrichmentGaps as { chapter: number; text: string }[]
+        : [];
+      if (pending.length > 0) {
+        const next = pending[0];
+        const remaining = pending.slice(1);
+        result.response = `${result.response}\n\nGood. One more thing: ${next.text}`;
+        if (remaining.length > 0) {
+          settings.pendingEnrichmentGaps = remaining;
+        } else {
+          delete settings.pendingEnrichmentGaps;
+        }
+        await prisma.user.update({ where: { id: userId }, data: { settings } });
+      }
+    }
+  } catch (err) {
+    console.error('[Partner] pendingEnrichmentGap injection failed:', err);
+  }
+
   // ─── Round 3.4 Bug 1 — FORMAT_NEEDED handler ─────────────────────────
   // actions.ts emits the "[FORMAT_NEEDED]" marker when build_deliverable
   // was attempted but no medium was captured (Opus didn't supply, partner
@@ -1935,8 +1972,15 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
   // Maria turn (not just chat-open). Strip from visible text; persist
   // chips in the assistant row's context JSON so they survive history
   // reload; return them on the response so the frontend can render them.
+  // Round 3.4 Bug 14 — also parse [SUGGEST: ...] markers as a separate
+  // class of "suggested-answer" chips (content suggestions vs. navigation
+  // chips). Suggested chips render with SUGGESTED_CHIPS_FRAME framing
+  // above the group and insert their text into the chat input on click
+  // rather than auto-submitting. The two arrays are returned separately.
   const universalChipPattern = /\[CHIP:\s*([^\]\n]+?)\s*\]/g;
+  const suggestChipPattern = /\[SUGGEST:\s*([^\]\n]+?)\s*\]/g;
   const universalChips: string[] = [];
+  const suggestChips: string[] = [];
   // Round 3 fix — skip-affordance chip filter. Path C does not exist as
   // an entry point; coaching chips that end the flow early ("Just build
   // it…", "Skip ahead", etc.) get dropped here regardless of how Opus
@@ -1968,7 +2012,22 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
       if (universalChips.length < 4) universalChips.push(text);
     }
   }
-  result.response = (result.response || '').replace(universalChipPattern, '').replace(/\n{3,}/g, '\n\n').trim();
+  // Round 3.4 Bug 14 — parse [SUGGEST: ...] markers separately. These
+  // are content suggestions, not navigation chips. Cap at 4 to keep the
+  // chip cluster scannable.
+  {
+    let m: RegExpExecArray | null;
+    while ((m = suggestChipPattern.exec(result.response || '')) !== null) {
+      const text = m[1].trim();
+      if (!text) continue;
+      if (suggestChips.length < 4) suggestChips.push(text);
+    }
+  }
+  result.response = (result.response || '')
+    .replace(universalChipPattern, '')
+    .replace(suggestChipPattern, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 
   // Store the assistant reply — serialize response with action result for history.
   // Phase 1 hardening (Fix #3) — user message was persisted before the Opus
@@ -1978,18 +2037,19 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
     ? `${result.response}\n\n[${actionResult}]`
     : result.response;
 
-  const assistantCtx = universalChips.length > 0
-    ? { ...partnerChannel(workspaceId, ctx), chips: universalChips }
-    : partnerChannel(workspaceId, ctx);
+  const assistantCtxBase: Record<string, any> = partnerChannel(workspaceId, ctx);
+  if (universalChips.length > 0) assistantCtxBase.chips = universalChips;
+  if (suggestChips.length > 0) assistantCtxBase.suggestChips = suggestChips;
   await prisma.assistantMessage.create({
-    data: { userId, role: 'assistant', content: storedResponse, context: assistantCtx },
+    data: { userId, role: 'assistant', content: storedResponse, context: assistantCtxBase },
   });
 
-  console.log(`[Partner] RESPONSE: text=${(result.response || '').length}chars, actionResult=${(actionResult || '').length}chars, chips=${universalChips.length}, hasBuildStarted=${(actionResult || '').includes('BUILD_STARTED')}`);
+  console.log(`[Partner] RESPONSE: text=${(result.response || '').length}chars, actionResult=${(actionResult || '').length}chars, chips=${universalChips.length}, suggestChips=${suggestChips.length}, hasBuildStarted=${(actionResult || '').includes('BUILD_STARTED')}`);
 
   res.json({
     response: result.response,
     chips: universalChips.length > 0 ? universalChips : undefined,
+    suggestChips: suggestChips.length > 0 ? suggestChips : undefined,
     actionResult,
     refreshNeeded,
     needsPageContent: false,

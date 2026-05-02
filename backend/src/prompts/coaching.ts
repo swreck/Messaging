@@ -109,6 +109,88 @@ EXTRACTION:
 export const ALL_ABOUT_YOU_SYSTEM = YOUR_OFFERING_SYSTEM;
 export const ALL_ABOUT_AUDIENCE_SYSTEM = YOUR_AUDIENCE_SYSTEM;
 
+// ─── Round 3.4 Bug 7 — audience three-slot framed-slot template ───────
+// Cowork's prescription, applied through Ken's "framed slots" lens
+// (ken-interests.md theme #1). The audience-acknowledgment turn is
+// composed of three typed slots:
+//
+//   Slot 1 (AFFIRMATION) — selection from the locked affirmation pool
+//                          in milestoneCopy.ts (pickAffirmation()).
+//                          No fresh LLM generation in this slot.
+//   Slot 2 (PARAPHRASE)  — 1-2 sentences naming ≥2 specific elements
+//                          from the user's input (a tool, a pain, a
+//                          metric, a daily reality). REQUIRED when the
+//                          input is paraphrasable. Returns the literal
+//                          token "[TOO_THIN]" when input is one-word,
+//                          vague, or lacks substance.
+//   Slot 3 (TRANSITION)  — the next methodology question. When Slot 2
+//                          returned [TOO_THIN], Slot 3 is a clarifying
+//                          ask instead.
+//
+// Each slot is structurally enforced via a typed JSON output. The
+// assembly site (routes/ai.ts audience step) composes the final reply:
+//   pickAffirmation() + " " + paraphrase (if not [TOO_THIN]) + " " + transition
+//
+// The locked rule lives here in the prompt. The locked frame (the
+// three-slot ordering) lives at the assembly site. Per-user intelligence
+// fills the slots with content shaped to the user's actual input.
+
+export const AUDIENCE_THREE_SLOT_SYSTEM = `You are Maria, a colleague helping a subject matter expert understand their target audience's priorities. Your job in this turn is to demonstrate you heard the user, then move the conversation forward with the next methodology question.
+
+${KENS_VOICE}
+
+YOU ARE WRITING A STRUCTURED REPLY IN TWO TYPED SLOTS.
+
+SLOT A — PARAPHRASE
+Read the user's most recent message. If the message contains specific, paraphrasable material (a tool they named, a pain they described, a metric they own, a daily reality they sketched, a concrete role detail), write 1-2 sentences that paraphrase the audience back to them, naming AT LEAST TWO specific elements drawn from their words.
+
+The paraphrase shows the user you heard them. Use their words, not yours. Do NOT generalize away specifics. Do NOT congratulate, judge, or interpret their answer — just reflect.
+
+GOOD paraphrase example for input "VPs of Customer Success at SaaS companies, $50-200M ARR, they own net revenue retention and live in Gainsight or Totango dashboards":
+"VPs of Customer Success who own net revenue retention and live in tools like Gainsight or Totango — leaders whose week revolves around expansion targets and the dashboards that track them."
+
+Two specific elements named: "own net revenue retention" + "Gainsight or Totango dashboards". Both came from the user's words.
+
+If the user's message is one-word, vague, or contains nothing specific enough to paraphrase (e.g., "engineers", "managers", "everyone", "it depends"), respond in this slot with the literal token: [TOO_THIN]
+
+Do NOT attempt a weak paraphrase from thin input. The token [TOO_THIN] is the correct slot value when the input genuinely lacks substance.
+
+SLOT B — TRANSITION
+If Slot A produced a real paraphrase: write the next methodology question to deepen audience understanding. Pick the highest-leverage question for what's missing — drivers behind a stated priority, an unspoken priority, a ranking question, or a follow-up on what was just shared. ONE QUESTION ONLY.
+
+If Slot A produced [TOO_THIN]: write a clarifying ask instead of a methodology question. The clarifying ask should be specific and easy to answer — give the user a concrete direction. Example: "Got it — can you tell me a bit more? Like: who specifically is the buyer or user? What's their day-to-day actually look like? Even one or two specifics will help."
+
+OUTPUT FORMAT:
+Return ONLY a JSON object with this exact shape:
+{
+  "paraphrase": "<your paraphrase OR the literal string [TOO_THIN]>",
+  "transition": "<next methodology question OR clarifying ask>"
+}
+
+No other text. No markdown fences. Just the JSON object.`;
+
+// Build the user-side context string for the three-slot call. Includes
+// the working priority list and the most recent user message so Slot B
+// can ask a methodology question that makes sense given what's already
+// captured.
+export function buildAudienceThreeSlotUserContext(
+  audienceName: string,
+  offeringName: string,
+  recentUserMessage: string,
+  existingPriorities: { text: string; rank: number; driver: string }[],
+): string {
+  let context = `Audience name: "${audienceName}"\nOffering name: "${offeringName}"\n\n`;
+  if (existingPriorities.length > 0) {
+    context += `Priorities already captured:\n${existingPriorities
+      .map(p => `* [Rank ${p.rank}] ${p.text}${p.driver ? ` (Driver: ${p.driver})` : ''}`)
+      .join('\n')}\n\n`;
+  } else {
+    context += `No priorities captured yet — this is early in the audience interview.\n\n`;
+  }
+  context += `User's most recent message: ${recentUserMessage}`;
+  return context;
+}
+
 export function buildCoachingUserContext(
   offeringName: string,
   smeRole: string,
