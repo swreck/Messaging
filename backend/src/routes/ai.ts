@@ -19,9 +19,7 @@ import {
   checkProse,
   buildViolationFeedback,
   buildProseViolationFeedback,
-  checkTier1MarketTruth,
-  buildTier1SentinelFeedback,
-  judgeTier1AgainstRuleOpus,
+  runTier1MarketTruthGuard,
   type StatementInput,
 } from '../services/voiceCheck.js';
 import {
@@ -249,77 +247,20 @@ async function generateTierWithVoiceCheck(
 ): Promise<TierGenResult> {
   let result = await generateTier(convertMessage, rank1Priority);
 
-  // Round 3.4 Bug 10 — Tier 1 market-truth sentinel. Cheap regex pre-check
-  // BEFORE Opus statement evaluation. On flag, regenerate with the rule
-  // emphasized. Hard cap: 3 retries. After 3rd failure, log a warning and
-  // continue with whatever Tier 1 we have (the downstream Opus voice
-  // evaluator may catch additional issues; if not, the deliverable
-  // surfaces with the gap and Cowork QA can flag it for follow-up).
-  for (let sentinelAttempt = 1; sentinelAttempt <= 3; sentinelAttempt++) {
-    const sentinel = checkTier1MarketTruth(result.tier1.text, offeringName);
-    if (sentinel.passed) {
-      if (sentinelAttempt > 1) {
-        console.log(`[Tier1Sentinel] passed on attempt ${sentinelAttempt}`);
-      }
-      break;
-    }
-    console.log(`[Tier1Sentinel] attempt ${sentinelAttempt}/3 — ${sentinel.violations.length} violations:`, sentinel.violations);
-    if (sentinelAttempt === 3) {
-      console.warn('[Tier1Sentinel] FAILED after 3 retries — surfacing Tier 1 with violations for Cowork QA. Violations:', sentinel.violations);
-      break;
-    }
-    const feedback = '\n\n' + buildTier1SentinelFeedback(sentinel.violations);
-    result = await generateTier(convertMessage + feedback, rank1Priority);
-  }
-
-  // Round 3.4 coaching-fix Finding 2 — second-pass Opus judge on Tier 1.
-  // Pattern-match word lists alone aren't enough; Cowork's walk found
-  // Tier 1 violations the regex couldn't see. The Opus judge evaluates
-  // the Tier 1 against the rule and returns a yes/no judgment + reason.
-  // Hard cap 3 retries. On 3rd failure, log + ship for Cowork QA.
-  for (let opusAttempt = 1; opusAttempt <= 3; opusAttempt++) {
-    try {
-      const judge = await judgeTier1AgainstRuleOpus(result.tier1.text, offeringName);
-      if (judge.followsRule) {
-        if (opusAttempt > 1) {
-          console.log(`[Tier1OpusJudge] passed on attempt ${opusAttempt}`);
-        }
-        break;
-      }
-      console.log(`[Tier1OpusJudge] attempt ${opusAttempt}/3 — failed: ${judge.reason}`);
-      if (opusAttempt === 3) {
-        console.warn('[Tier1OpusJudge] FAILED after 3 retries — surfacing for Cowork QA. Reason:', judge.reason);
-        break;
-      }
-      const feedback = `\n\nTIER 1 SECOND-PASS JUDGMENT FAILED. Reason: ${judge.reason}\nRegenerate Tier 1 satisfying the market-truth rule. Do not begin with an imperative verb. Do not contain the offering name. Do not name the offering's mechanism (scoring, ranking, tracking, monitoring, dashboards, analytics, etc.). Write as if summarizing a problem a senior leader nodded at in a closed-door conversation.`;
+  // Bundle 1A rev3 W1 — Tier 1 market-truth retry loop now lives in the
+  // shared runTier1MarketTruthGuard helper in voiceCheck.ts. Both this
+  // route and the autonomous-build pipeline (lib/expressPipeline.ts)
+  // call the same helper. Caller passes a regenerate closure that
+  // re-runs generateTier with the appended feedback. Helper handles
+  // sentinel + Opus judge + hard-block on offering name.
+  result.tier1.text = await runTier1MarketTruthGuard(
+    result.tier1.text,
+    offeringName,
+    async (feedback) => {
       result = await generateTier(convertMessage + feedback, rank1Priority);
-    } catch (err) {
-      console.error('[Tier1OpusJudge] error (fail-open):', err);
-      break;
-    }
-  }
-
-  // Bundle 1A rev2 W1 — hard-block on offering-name in Tier 1 after all
-  // retries exhaust. Cowork's verification surfaced "Make the ClarityAudit
-  // partnership..." shipping. The pattern is: (a) regex retries fail to
-  // remove the offering name (Opus keeps regenerating with it), (b) Opus
-  // judge also fails to flag it, (c) Tier 1 ships with the offering name
-  // visible. Per Cowork: offering-name in Tier 1 must hard-block, not
-  // surface-and-ship. Prepend [TIER1_RETRY_FAILED] sentinel marker so QA
-  // sees the failure mode in Tier 1 text. Downstream rendering can choose
-  // to flag the marker visually rather than rendering it as prose.
-  if (offeringName && offeringName.trim().length >= 2) {
-    const offeringPattern = new RegExp(
-      `\\b${offeringName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
-      'i',
-    );
-    if (offeringPattern.test(result.tier1.text) && !result.tier1.text.startsWith('[TIER1_RETRY_FAILED]')) {
-      console.error(
-        `[Tier1HardBlock] OFFERING NAME "${offeringName}" still in Tier 1 after all retries — flagging with [TIER1_RETRY_FAILED] sentinel for Cowork QA. Final Tier 1: "${result.tier1.text}"`,
-      );
-      result.tier1.text = `[TIER1_RETRY_FAILED] ${result.tier1.text}`;
-    }
-  }
+      return result.tier1.text;
+    },
+  );
 
   // Round 3.4 coaching-fix Finding 1 — numeric-claim guard on Three Tier
   // statements. Lila's "30%" → "40%" fabrication originated in Tier 2/3

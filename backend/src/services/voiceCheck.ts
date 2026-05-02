@@ -249,31 +249,23 @@ export interface Tier1SentinelResult {
 }
 
 // Imperative-verb openings forbidden by Bug 10 rule 2.
-// Round 3.4 coaching-fix Finding 2 — list expanded.
-// Bundle 1A rev2 W1 — list expanded again after Cowork's walk surfaced
-// "Make the ClarityAudit partnership visibly productive..." passing
-// the sentinel. "Make" — the most common imperative verb in English —
-// was missing. Now covers the top imperative-verb shapes that read as
-// commands directed at the reader, audited against a top-200 corpus.
+// Round 3.4 coaching-fix Finding 2 — list expanded after Cowork's walk
+// surfaced "Stop slipped deals from blindsiding you..." passing the
+// sentinel.
+//
+// Bundle 1A rev3 W1 — list reverted to 36 terms. Cowork's shape rule
+// for Round 3.4: the cheap regex is a fast-path pre-filter, not a
+// classifier. The Opus judge (judgeTier1AgainstRuleOpus) is the
+// methodology floor. If a Tier 1 violation slips through, the fix
+// belongs in the judge prompt or the rule articulation in
+// generation.ts — not in growing this list.
 const TIER1_FORBIDDEN_IMPERATIVES = [
-  // Commands originally captured.
   'stop', 'eliminate', 'prevent', 'drive', 'boost', 'accelerate',
   'reduce', 'increase', 'maximize', 'achieve', 'deliver', 'transform',
   'streamline', 'optimize', 'unlock', 'empower',
   'get', 'improve', 'discover', 'build', 'enable', 'fuel', 'gain',
   'scale', 'grow', 'win', 'beat', 'crush', 'master', 'capture',
   'protect', 'avoid', 'minimize', 'simplify', 'modernize',
-  // Bundle 1A rev2 W1 additions — the high-frequency imperatives the
-  // prior list missed. "Make" was the explicit failure case.
-  'make', 'create', 'have', 'give', 'take', 'bring', 'put', 'set',
-  'keep', 'run', 'do', 'turn', 'find', 'show', 'tell', 'lead',
-  'start', 'stop', 'spend', 'save', 'cut', 'add', 'shift', 'move',
-  'use', 'try', 'see', 'hold', 'open', 'close', 'fix', 'free',
-  'leave', 'send', 'pull', 'push', 'meet', 'replace', 'remove',
-  'restore', 'recover', 'reclaim', 'regain', 'reach', 'land', 'earn',
-  'know', 'understand', 'remember', 'forget', 'plan', 'choose',
-  'decide', 'commit', 'invest', 'focus', 'align', 'connect',
-  'engage', 'embrace', 'adopt', 'integrate', 'consolidate', 'centralize',
 ];
 
 // Mechanism vocabulary forbidden by Bug 10 rule 4. Tier 1 names a
@@ -434,6 +426,93 @@ Does this Tier 1 follow the market-truth rule? Be rigorous. If it begins with an
     followsRule: result.follows_rule === true,
     reason: typeof result.reason === 'string' ? result.reason : '',
   };
+}
+
+// ─── Bundle 1A rev3 W1 — shared Tier 1 guard helper ───────────────────
+// One source of truth for the Tier 1 market-truth retry logic. Both the
+// guided 3T flow (routes/ai.ts:generateTierWithVoiceCheck) and the
+// autonomous-build pipeline (lib/expressPipeline.ts: its local tier-
+// generation helper) call this same function. The previous rev2 wired
+// the retry logic into routes/ai.ts only — Cowork verified Lila's
+// "Make the ClarityAudit partnership..." Tier 1 ran through the
+// autonomous-build path which had its OWN local tier helper that
+// never called the sentinel or the judge. This shared helper closes
+// that gap.
+//
+// Caller passes a `regenerate` closure that re-runs the underlying
+// tier-1 generation with the appended feedback. Helper returns the
+// final Tier 1 text (possibly prefixed with [TIER1_RETRY_FAILED] if
+// the offering name still appears after all retries exhaust).
+
+export async function runTier1MarketTruthGuard(
+  initialTier1Text: string,
+  offeringName: string | undefined,
+  regenerate: (feedbackToAppend: string) => Promise<string>,
+): Promise<string> {
+  let tier1Text = initialTier1Text;
+
+  // Pass 1 — cheap regex sentinel with up to 3 retries. Catches the
+  // obvious imperative-verb / offering-name / mechanism violations
+  // without an Opus round-trip.
+  for (let sentinelAttempt = 1; sentinelAttempt <= 3; sentinelAttempt++) {
+    const sentinel = checkTier1MarketTruth(tier1Text, offeringName);
+    if (sentinel.passed) {
+      if (sentinelAttempt > 1) {
+        console.log(`[Tier1Sentinel] passed on attempt ${sentinelAttempt}`);
+      }
+      break;
+    }
+    console.log(`[Tier1Sentinel] attempt ${sentinelAttempt}/3 — ${sentinel.violations.length} violations:`, sentinel.violations);
+    if (sentinelAttempt === 3) {
+      console.warn('[Tier1Sentinel] FAILED after 3 retries — handing to Opus judge. Violations:', sentinel.violations);
+      break;
+    }
+    const feedback = '\n\n' + buildTier1SentinelFeedback(sentinel.violations);
+    tier1Text = await regenerate(feedback);
+  }
+
+  // Pass 2 — Opus judge (the methodology floor). Catches subtle vendor-
+  // speak the regex can't see. Up to 3 retries.
+  for (let opusAttempt = 1; opusAttempt <= 3; opusAttempt++) {
+    try {
+      const judge = await judgeTier1AgainstRuleOpus(tier1Text, offeringName);
+      if (judge.followsRule) {
+        if (opusAttempt > 1) {
+          console.log(`[Tier1OpusJudge] passed on attempt ${opusAttempt}`);
+        }
+        break;
+      }
+      console.log(`[Tier1OpusJudge] attempt ${opusAttempt}/3 — failed: ${judge.reason}`);
+      if (opusAttempt === 3) {
+        console.warn('[Tier1OpusJudge] FAILED after 3 retries — surfacing for Cowork QA. Reason:', judge.reason);
+        break;
+      }
+      const feedback = `\n\nTIER 1 SECOND-PASS JUDGMENT FAILED. Reason: ${judge.reason}\nRegenerate Tier 1 satisfying the market-truth rule. Do not begin with an imperative verb. Do not contain the offering name. Do not name the offering's mechanism (scoring, ranking, tracking, monitoring, dashboards, analytics, etc.). Write as if summarizing a problem a senior leader nodded at in a closed-door conversation.`;
+      tier1Text = await regenerate(feedback);
+    } catch (err) {
+      console.error('[Tier1OpusJudge] error (fail-open):', err);
+      break;
+    }
+  }
+
+  // Pass 3 — hard-block. After all retries exhaust, if the offering
+  // name STILL appears in Tier 1, prepend the [TIER1_RETRY_FAILED]
+  // sentinel marker. The deliverable surfaces with a visible failure
+  // flag that QA can route. Idempotent — does not double-prefix.
+  if (offeringName && offeringName.trim().length >= 2) {
+    const offeringPattern = new RegExp(
+      `\\b${offeringName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
+      'i',
+    );
+    if (offeringPattern.test(tier1Text) && !tier1Text.startsWith('[TIER1_RETRY_FAILED]')) {
+      console.error(
+        `[Tier1HardBlock] OFFERING NAME "${offeringName}" still in Tier 1 after all retries — flagging with [TIER1_RETRY_FAILED] sentinel. Final Tier 1: "${tier1Text}"`,
+      );
+      tier1Text = `[TIER1_RETRY_FAILED] ${tier1Text}`;
+    }
+  }
+
+  return tier1Text;
 }
 
 // ─── Settings check ─────────────────────────────────────────

@@ -1172,6 +1172,37 @@ AUDIENCE: ${draftWithElements.audience.name}`;
 
     const tierResult = await generateTierWithVoiceCheck();
 
+    // Bundle 1A rev3 W1 — Tier 1 market-truth guard wired into the
+    // autonomous-build path. The previous local generateTierWithVoiceCheck
+    // ran only checkStatements (Tier 2/3 evaluator); it had no Tier 1
+    // sentinel and no Opus judge. Cowork's Walk A surfaced "Make the
+    // ClarityAudit partnership..." sailing through this path with no
+    // Tier 1 check. The shared runTier1MarketTruthGuard helper now runs
+    // the same retry budget as routes/ai.ts uses for the guided 3T flow.
+    if (tierResult.tier1?.text) {
+      const { runTier1MarketTruthGuard } = await import(
+        '../services/voiceCheck.js'
+      );
+      tierResult.tier1.text = await runTier1MarketTruthGuard(
+        tierResult.tier1.text,
+        draftWithElements.offering.name,
+        async (feedback) => {
+          const regen = await callAIWithJSON<TierResult>(
+            CONVERT_LINES_SYSTEM,
+            convertMessage + feedback,
+            'elite',
+          );
+          // Replace the WHOLE tierResult so the Tier 2/3 statements stay
+          // consistent with the regenerated Tier 1. Without this, the
+          // Tier 1 retry would diverge from the Tier 2 columns that
+          // reference it.
+          if (regen.tier1?.text) tierResult.tier1 = regen.tier1;
+          if (regen.tier2) tierResult.tier2 = regen.tier2;
+          return regen.tier1?.text || tierResult.tier1.text;
+        },
+      );
+    }
+
     if (tierResult.tier1?.text) {
       await prisma.tier1Statement.create({
         data: { draftId: draftWithElements.id, text: tierResult.tier1.text },
@@ -1250,90 +1281,25 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       return `${mediumLabel} · ${dateLabel}`;
     }
 
-    // Round 3.2 Item 9 — preserve the user's literal ask in the cta.
-    // The prior unconditional "Get started with {offering.name}" override
-    // discarded specificity ("reply with a sample pack request" became
-    // "Get started with Wonderland Toys"). When the situation block
-    // contains a concrete ask, use it verbatim (capped at 200 chars to
-    // keep it usable as a CTA string). Fall back to the generic only
-    // when the user gave us no situation to work from.
-    //
-    // Round 3.4 coaching-fix Finding 7 — the prior <200-char cap caused
-    // the fallback to fire whenever the situation was a paragraph (which
-    // it almost always is), producing the metadata-header generic Cowork
-    // observed ("Ask: Get started with GuidePath" while the email body
-    // correctly preserved the verbatim user ask). Fix: when the situation
-    // is longer than 200 chars, attempt to extract the ASK SENTENCE from
-    // it via heuristic. If extraction succeeds, use that as the CTA. Only
-    // fall back to the generic when the situation is genuinely empty.
+    // Bundle 1A rev3 W2 — verbatim_ask is now extracted by the
+    // autonomous-build classifier (routes/partner.ts) directly from the
+    // user's input and lands on the interpretation object. The previous
+    // pattern-matching scored-selector in this file was layered guessing
+    // on top of Opus output. Reading interpretation.verbatim_ask is the
+    // single source of truth.
+    const interpretationCast = interpretation as unknown as Record<string, any>;
+    const verbatimAsk = typeof interpretationCast.verbatim_ask === 'string'
+      ? interpretationCast.verbatim_ask.trim()
+      : '';
     const situationTrimmed = (interpretation.situation || '').trim();
-    function extractAskFromSituation(s: string): string {
-      if (!s) return '';
-      // Bundle 1A rev2 W2 — sentence selection is scored, not first-match.
-      // Cowork's walk produced an "Ask:" header that read "Tone should be
-      // partner-to-partner, not sales pitch." — a tone note, not the CTA.
-      // The fix: tone/voice/style sentences are NEGATIVE-scored; sentences
-      // with an ask-verb (confirm, reply, schedule, book, register, etc.)
-      // PLUS a target action are POSITIVE-scored. Pick the highest score.
-      const sentences = s.split(/(?<=[.!?])\s+/).map(x => x.trim()).filter(Boolean);
-
-      // Negative pattern — sentences that read as tone/voice/style notes
-      // are NOT the CTA. They describe HOW the deliverable should sound,
-      // not WHAT the audience should do.
-      const isToneNote = (sent: string): boolean => {
-        return /\b(tone|voice|style|feel|register|cadence|sound|read like|come across|should be (?:partner|conversational|formal|casual|warm|direct|short|long))\b/i.test(sent);
-      };
-
-      // Positive pattern — verb-of-asking PLUS a target action makes a
-      // sentence read as a direct CTA. Verb-of-asking covers the common
-      // shapes Maria's users name when stating their ask.
-      const askVerbs = /\b(confirm|reply|sign\s*up|register|schedule|book|order|buy|join|download|click|walk\s*(?:me|us)?\s*through|set\s*up|get\s*on\s*a\s*call|attend|rsvp|respond|approve|review|enroll|subscribe|opt\s*in|share|forward|introduce|connect|meet|opt-in)\b/i;
-      const directAskMarkers = [
-        /\bthe (?:ask|cta) (?:is|will be|should be)\b/i,
-        /\bi want them to\b/i,
-        /\bI'?m asking\b/i,
-        /\bI need them to\b/i,
-        /\bplease (?:confirm|reply|sign|register|schedule|book|join|attend)\b/i,
-        /\bso (?:they|the reader)\b.*\b(reply|click|book|schedule|sign|register|join|download|confirm|attend|respond)\b/i,
-      ];
-
-      type Scored = { sent: string; score: number };
-      const scored: Scored[] = [];
-      for (const sent of sentences) {
-        if (sent.length === 0 || sent.length >= 200) continue;
-        let score = 0;
-        if (isToneNote(sent)) score -= 100;
-        if (askVerbs.test(sent)) score += 50;
-        for (const p of directAskMarkers) {
-          if (p.test(sent)) score += 30;
-        }
-        // Mild bias toward later sentences (user briefs often state the
-        // ask near the end), but not enough to override score > 0 hits.
-        score += sentences.indexOf(sent) * 0.5;
-        scored.push({ sent, score });
-      }
-
-      // Best candidate is the highest positive-scored sentence.
-      scored.sort((a, b) => b.score - a.score);
-      const top = scored[0];
-      if (top && top.score > 0) return top.sent;
-
-      // No clearly-asky sentence and the top score is zero or negative.
-      // Fall back to the last NON-tone sentence — user briefs frequently
-      // state the ask at the end. If every sentence is a tone note, return
-      // empty so the generic CTA fallback fires.
-      for (let i = sentences.length - 1; i >= 0; i--) {
-        const sent = sentences[i];
-        if (sent.length === 0 || sent.length >= 200) continue;
-        if (!isToneNote(sent)) return sent;
-      }
-      return '';
-    }
     let ctaFromSituation = '';
-    if (situationTrimmed.length > 0 && situationTrimmed.length < 200) {
+    if (verbatimAsk.length > 0 && verbatimAsk.length < 300) {
+      ctaFromSituation = verbatimAsk;
+    } else if (situationTrimmed.length > 0 && situationTrimmed.length < 200) {
+      // Backward-compat fallback for guided builds where verbatim_ask is
+      // not produced — the situation is itself short enough to use as a
+      // CTA, so use it verbatim.
       ctaFromSituation = situationTrimmed;
-    } else if (situationTrimmed.length >= 200) {
-      ctaFromSituation = extractAskFromSituation(situationTrimmed);
     }
     const ctaForStory = ctaFromSituation || `Get started with ${interpretation.offering.name || 'us'}`;
     const story = await prisma.fiveChapterStory.create({

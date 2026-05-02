@@ -2276,18 +2276,44 @@ router.post('/autonomous-build', async (req: Request, res: Response) => {
       offeringName: string | null;
       audienceName: string | null;
       situation: string;
+      verbatim_ask: string;
     };
 
     const classifierSystem = `You are extracting structured info from a conversation between a user and Maria, a messaging-build assistant. Your job is JUDGMENT-light: only fill in a field if the user has CLEARLY stated it. When in doubt, leave the field null.
 
 Fields to extract:
-- deliverableType: lowercase noun for the deliverable format the user wants. Common values: "email", "pitch deck", "landing page", "blog post", "one-pager", "press release", "newsletter", "report". null if the user has not stated a format.
+
+- deliverableType: lowercase noun for the deliverable FORMAT the user wants. Common values: "email", "pitch deck", "landing page", "blog post", "one-pager", "press release", "newsletter", "report", "in-person", "sales script". null if the user has not stated a format.
+
+  Bundle 1A rev3 W3 — explicit format mentions ("email", "pitch deck", "landing page") OUTRANK topic mentions ("webinar", "demo", "campaign", "launch", "rollout", "kickoff"). The format is the SHAPE of the deliverable; the topic is what the deliverable is ABOUT. Many emails are about webinars, demos, or campaigns — they are still emails.
+
+  Worked examples — read these carefully:
+  - User says "send an email about our Q3 webinar" → deliverableType = "email" (NOT "landing page", NOT "webinar"; webinar is the topic)
+  - User says "build a pitch deck for an investor meeting" → deliverableType = "pitch deck" (NOT "in-person")
+  - User says "write a landing page for our SaaS launch" → deliverableType = "landing page"
+  - User says "I need a one-page email to our partner about our Q3 webinar" → deliverableType = "email" (the user said "email"; "one-page" is a length adjective on the email, not a format change to one-pager)
+  - User says "draft an outreach email about our demo days" → deliverableType = "email"
+  - User says "create a one-pager about our beta program" → deliverableType = "one-pager"
+  - User says "give me a press release about our funding round" → deliverableType = "press release"
+
+  When two formats are stated and one is more specific ("a one-page email" — "email" is more specific than "one-page"), take the more specific format word verbatim. When no explicit format is stated, return null.
+
 - offeringName: the offering, product, or service name the user is selling/promoting. null if unstated.
+
 - audienceName: the target audience description (role + organizational context, OR a named persona). null if unstated.
-- situation: the user's specific call-to-action in their own words, VERBATIM if they stated one. Examples of what counts: "reply to schedule a demo", "sign up for the beta", "buy a starter pack", "book a call", "request a sample", "click through to the pricing page". Look for explicit phrasings like "the ask is X", "I want them to X", "tell them to X", "have them X". When the user states a specific ask, copy that phrasing into situation EXACTLY — do not paraphrase, do not generalize ("get started with X" is a paraphrase, not the user's words). Empty string if the user gave no specific ask.
+
+- situation: a short summary of the specific occasion or context for this deliverable (e.g., "Q3 partnership webinar invitation", "investor meeting next week", "beta launch announcement"). One sentence max. Empty string if the conversation has no specific occasion. This field is for downstream prompt context — it is NOT the user's ask.
+
+- verbatim_ask: the EXACT WORDING the user used to state what they want the audience to do. Bundle 1A rev3 W2 — this field replaces upstream pattern-matching that tried to recover the literal CTA from the situation paragraph. The user has the words; let the user's words be the answer.
+
+  Pull the literal sentence verbatim. Do NOT paraphrase. Do NOT shorten. Do NOT generalize. If the user typed "I want them to confirm participation in our joint Q3 webinar by May 15", verbatim_ask is "confirm participation in our joint Q3 webinar by May 15" (you may strip "I want them to" / "the ask is" / "tell them to" if it leaves a clean imperative; do not change anything else). If the user typed "reply with their availability for next week", verbatim_ask is "reply with their availability for next week".
+
+  TONE NOTES ARE NOT ASKS. If the user said "the tone should be partner-to-partner, not sales pitch" — that's tone, not an ask. Skip it.
+
+  If the user did not state an ask, return empty string. Empty is better than fabricated.
 
 OUTPUT — JSON only, no markdown fences:
-{ "deliverableType": "...", "offeringName": "...", "audienceName": "...", "situation": "..." }
+{ "deliverableType": "...", "offeringName": "...", "audienceName": "...", "situation": "...", "verbatim_ask": "..." }
 
 When in doubt, prefer null/empty. False positives (filling a field that wasn't actually stated) cause the autonomous pipeline to build the wrong thing — which is the bug we're fixing.`;
 
@@ -2366,6 +2392,12 @@ When in doubt, prefer null/empty. False positives (filling a field that wasn't a
           ...interp,
           autonomousMode: true,
           deliverableType,
+          // Bundle 1A rev3 W2 — verbatim_ask from the classifier lands
+          // on the interpretation. Pipeline reads this directly to
+          // populate ctaForStory and the metadata-header CTA.
+          verbatim_ask: typeof classified.verbatim_ask === 'string'
+            ? classified.verbatim_ask
+            : '',
         },
       },
     });
