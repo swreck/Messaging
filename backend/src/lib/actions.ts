@@ -1469,6 +1469,15 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           try {
             const medium = requestedMedium;
             const situation = a.params.situation || '';
+            // Bundle 1A rev5 — pull verbatim_ask from the Opus tool call
+            // params. Opus fills this in per the updated build_deliverable
+            // tool spec (see actionDocs in this file). Forwarded to
+            // commitExistingForPipeline → syntheticInterpretation, which
+            // the pipeline reads for ctaForStory + the metadata-header
+            // CTA. Falls back to situation downstream when empty.
+            const verbatimAsk = typeof a.params.verbatim_ask === 'string'
+              ? a.params.verbatim_ask
+              : '';
             const result = await commitExistingForPipeline(
               offeringId,
               audienceId,
@@ -1476,6 +1485,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
               situation,
               userId,
               workspaceId || '',
+              verbatimAsk,
             );
             if (!result || !result.jobId) {
               actionResult = 'Could not start the build — setup returned no job.';
@@ -2151,7 +2161,7 @@ export function buildActionList(context: ActionContext): string {
   }
 
   // Build deliverable — full pipeline from existing offering + audience
-  actions.push('- build_deliverable: Build a complete first draft (Three Tier + Five Chapter Story) from an existing offering and audience. Runs the full pipeline autonomously — mapping, message generation, story writing, voice check, polishing. Takes a few minutes. Params: { offeringName: string, audienceName: string, medium: string, situation?: string } — medium options: email, blog, landing_page, in_person, press_release, newsletter, one-pager, report, pitch_deck. situation is the specific context or occasion for this deliverable.');
+  actions.push('- build_deliverable: Build a complete first draft (Three Tier + Five Chapter Story) from an existing offering and audience. Runs the full pipeline autonomously — mapping, message generation, story writing, voice check, polishing. Takes a few minutes. Params: { offeringName: string, audienceName: string, medium: string, situation?: string, verbatim_ask?: string } — medium options: email, blog, landing_page, in_person, press_release, newsletter, one-pager, report, pitch_deck. situation is the specific context or occasion for this deliverable (e.g., "Q3 partnership webinar invitation", "investor meeting next week"). verbatim_ask is the EXACT WORDING the user used to state what they want the audience to do — pull the literal sentence verbatim from the user\'s input, do NOT paraphrase, do NOT shorten, do NOT generalize. Strip leading "I want them to" / "the ask is" / "tell them to" only if it leaves a clean imperative (e.g. user said "I want them to confirm participation in our joint Q3 webinar by May 15" → verbatim_ask = "confirm participation in our joint Q3 webinar by May 15"). Tone notes ("the tone should be partner-to-partner") are NOT asks — skip them. If the user did not state an ask, omit verbatim_ask entirely (empty is better than fabricated).');
   actions.push('- check_deliverable: Check status of a deliverable build you started with build_deliverable. When complete, navigates to the finished draft. Params: { jobId?: string } — omit jobId to check the most recent build.');
   actions.push('- rebuild_foundation: Regenerate the Tier 1 and Tier 2 of an in-progress guided Foundation against the current offering + audience state. Use AFTER you have added a new differentiator (via add_capabilities) in response to a mapping gap — this rebuilds so the user sees the updated Tier 1 that reflects the new differentiator. Takes about 60 seconds. Params: { draftId: string } — the guided draftId. Your response while this runs: "Let me rebuild with that in." Returns a FOUNDATION_REBUILT marker the frontend uses to update the foundation card in place.');
 

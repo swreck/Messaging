@@ -2371,6 +2371,10 @@ When in doubt, prefer null/empty. False positives (filling a field that wasn't a
     // interpretation is the synthesized data. We then update that row's
     // interpretation to add autonomousMode + deliverableType so the
     // pipeline knows to fire AUTONOMOUS_POST_DELIVERY_OFFER post-blend.
+    // Bundle 1A rev5 — pass classified.verbatim_ask through so the
+    // pipeline reads it from interpretation.verbatim_ask instead of
+    // requiring the post-call expressJob.update below. The update
+    // below remains as a redundant safety net (idempotent).
     const result = await commitExistingForPipeline(
       offering.id,
       audience.id,
@@ -2378,6 +2382,7 @@ When in doubt, prefer null/empty. False positives (filling a field that wasn't a
       classified.situation || '',
       userId,
       workspaceId,
+      typeof classified.verbatim_ask === 'string' ? classified.verbatim_ask : '',
     );
 
     const job = await prisma.expressJob.findUnique({

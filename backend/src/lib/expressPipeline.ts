@@ -767,6 +767,7 @@ export async function commitExistingForPipeline(
   situation: string,
   userId: string,
   workspaceId: string,
+  verbatimAsk?: string,
 ): Promise<ExistingCommitResult> {
   const offering = await prisma.offering.findFirst({
     where: { id: offeringId },
@@ -797,6 +798,23 @@ export async function commitExistingForPipeline(
 
   // Synthesize an ExpressInterpretation from the existing DB data so the
   // pipeline can use situation/medium/offering metadata without changes.
+  //
+  // Bundle 1A rev5 — the build_deliverable Opus action fires only when
+  // Maria has all the inputs she needs (offering, audience, medium are
+  // required and validated upstream). That is the definition of
+  // autonomous mode; flag it. deliverableType mirrors medium so
+  // downstream surfaces (post-delivery offer, AUTONOMOUS_BUILD_COMPLETE
+  // gate) read it consistently. verbatim_ask: the caller's extracted
+  // CTA (Opus pulls it from the user's input via the build_deliverable
+  // tool spec). Falls back to situation as the verbatim_ask when the
+  // caller didn't supply one — better than the generic "Get started
+  // with [offering]" downstream fallback.
+  const verbatimAskTrimmed = (verbatimAsk || '').trim();
+  const situationTrimmed = (situation || '').trim();
+  const resolvedVerbatimAsk = verbatimAskTrimmed.length > 0
+    ? verbatimAskTrimmed
+    : situationTrimmed;
+
   const syntheticInterpretation = {
     offering: {
       name: offering.name,
@@ -823,6 +841,9 @@ export async function commitExistingForPipeline(
     },
     situation: situation || '',
     confidenceNotes: 'Built from existing offering and audience data.',
+    autonomousMode: true,
+    deliverableType: medium || 'email',
+    verbatim_ask: resolvedVerbatimAsk,
   };
 
   const job = await prisma.expressJob.create({
