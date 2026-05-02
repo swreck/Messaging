@@ -454,8 +454,16 @@ export async function runTier1MarketTruthGuard(
   console.log(
     `[Tier1Guard] ENTER initial="${initialTier1Text.slice(0, 200)}${initialTier1Text.length > 200 ? '…' : ''}" offering=${offeringName ? `"${offeringName}"` : '(none)'}`,
   );
+  const initialForLog = initialTier1Text;
   let tier1Text = initialTier1Text;
-  let exitReason: 'sentinel-passed' | 'opus-passed' | 'hard-blocked' | 'retries-exhausted' = 'sentinel-passed';
+  // Bundle 1A rev6 Phase 2.B — EXIT precedence reflects accurate final
+  // pass outcome. New precedence (highest → lowest):
+  //   hard-blocked > opus-passed > opus-failed-shipped > judge-error-shipped
+  // Removed dead values: sentinel-passed (no longer the terminal state —
+  // sentinel always hands off to Opus judge), retries-exhausted (replaced
+  // by the more precise opus-failed-shipped).
+  let exitReason: 'hard-blocked' | 'opus-passed' | 'opus-failed-shipped' | 'judge-error-shipped' = 'opus-failed-shipped';
+  let judgeReasonLast = '';
 
   // Pass 1 — cheap regex sentinel with up to 3 retries. Catches the
   // obvious imperative-verb / offering-name / mechanism violations
@@ -492,9 +500,11 @@ export async function runTier1MarketTruthGuard(
   // Pass 2 — Opus judge (the methodology floor). Catches subtle vendor-
   // speak the regex can't see. Up to 3 retries.
   let opusPassed = false;
+  let judgeErrored = false;
   for (let opusAttempt = 1; opusAttempt <= 3; opusAttempt++) {
     try {
       const judge = await judgeTier1AgainstRuleOpus(tier1Text, offeringName);
+      judgeReasonLast = judge.reason || '';
       if (judge.followsRule) {
         if (opusAttempt > 1) {
           console.log(`[Tier1OpusJudge] passed on attempt ${opusAttempt}`);
@@ -511,6 +521,7 @@ export async function runTier1MarketTruthGuard(
       tier1Text = await regenerate(feedback);
     } catch (err) {
       console.error('[Tier1OpusJudge] error (fail-open):', err);
+      judgeErrored = true;
       break;
     }
   }
@@ -534,13 +545,23 @@ export async function runTier1MarketTruthGuard(
     }
   }
 
+  // Bundle 1A rev6 Phase 2.B — precedence: hard-blocked > opus-passed >
+  // opus-failed-shipped > judge-error-shipped. sentinelPassed alone is
+  // not a terminal state (Pass 2 always runs after Pass 1); the prior
+  // sentinel-passed exit value is dead. retries-exhausted replaced by
+  // the more precise opus-failed-shipped (judge ran 3 retries, all
+  // returned followsRule=false, no exception).
   if (hardBlocked) exitReason = 'hard-blocked';
   else if (opusPassed) exitReason = 'opus-passed';
-  else if (sentinelPassed) exitReason = 'sentinel-passed';
-  else exitReason = 'retries-exhausted';
+  else if (judgeErrored) exitReason = 'judge-error-shipped';
+  else exitReason = 'opus-failed-shipped';
+  // sentinelPassed retained for diagnostic context only — consumed via
+  // the EXIT log when Pass 1 cleared but Pass 2 didn't get to run a
+  // proper judgment (rare: sentinel passed AND judge errored).
+  void sentinelPassed;
 
   console.log(
-    `[Tier1Guard] EXIT reason=${exitReason} final="${tier1Text.slice(0, 200)}${tier1Text.length > 200 ? '…' : ''}"`,
+    `[Tier1Guard] EXIT reason=${exitReason} initial="${initialForLog.slice(0, 200)}${initialForLog.length > 200 ? '…' : ''}" final="${tier1Text.slice(0, 200)}${tier1Text.length > 200 ? '…' : ''}" judgeReasonLast="${judgeReasonLast.slice(0, 200)}"`,
   );
   return tier1Text;
 }

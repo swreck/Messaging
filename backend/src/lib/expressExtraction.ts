@@ -300,6 +300,67 @@ export function getInterpretationMode(interp: any): 'autonomous' | 'guided' {
   return 'guided';
 }
 
+/**
+ * Bundle 1A rev6 Phase 3 — deterministic verbatim CTA placement in Ch5.
+ *
+ * After chapter 5 generation completes, ensure the chapter content
+ * carries the user's verbatim ask. The soft ctaVerbatimDirective in the
+ * chapter prompt lets Opus integrate the verbatim into prose flow
+ * naturally on most attempts; this post-process is the safety net
+ * when Opus paraphrases despite the directive.
+ *
+ * Behavior:
+ * - If verbatimAsk is empty: return content unchanged (skip).
+ * - If verbatimAsk already appears in content (case-insensitive,
+ *   whitespace-normalized substring match): return content unchanged
+ *   (Opus honored the directive).
+ * - Otherwise: replace the LAST sentence of content with the verbatimAsk.
+ *   Last-sentence detection: split on /[.!?]+\s+/, drop empty trailing
+ *   splits, take the final segment. Replacement: capitalize first char
+ *   of verbatimAsk if currently lowercase; append '.' if verbatimAsk
+ *   does not end with terminal punctuation.
+ *
+ * Ensures Ch5 always closes with the user's verbatim ask — consistent
+ * with Ch5's methodology role as the call-to-action chapter.
+ */
+export function ensureCh5VerbatimAsk(content: string, verbatimAsk: string): string {
+  if (!verbatimAsk || verbatimAsk.trim().length === 0) return content;
+  if (!content || content.trim().length === 0) return content;
+
+  const askTrimmed = verbatimAsk.trim();
+  // Whitespace-normalized case-insensitive substring check.
+  const contentNorm = content.toLowerCase().replace(/\s+/g, ' ');
+  const askNorm = askTrimmed.toLowerCase().replace(/\s+/g, ' ');
+  if (contentNorm.includes(askNorm)) {
+    return content; // Opus already integrated the verbatim.
+  }
+
+  // Capitalize the first letter of verbatimAsk if currently lowercase.
+  const first = askTrimmed.charAt(0);
+  const isLowerLetter = first >= 'a' && first <= 'z';
+  const capitalized = isLowerLetter ? first.toUpperCase() + askTrimmed.slice(1) : askTrimmed;
+  // Append terminal punctuation if missing.
+  const lastChar = capitalized.charAt(capitalized.length - 1);
+  const hasTerminalPunct = lastChar === '.' || lastChar === '!' || lastChar === '?';
+  const finalAsk = hasTerminalPunct ? capitalized : `${capitalized}.`;
+
+  // Replace the LAST sentence. Sentence boundary regex: [.!?]+ followed
+  // by whitespace OR end-of-string. We split, drop trailing empties, then
+  // rejoin everything but the last segment, appending the verbatim ask.
+  const trailingWs = content.match(/\s*$/)?.[0] ?? '';
+  const trimmedContent = content.replace(/\s+$/, '');
+  // Find the start position of the last sentence by scanning back from
+  // the end for the most recent terminal-punct-followed-by-whitespace.
+  // Pattern matches the boundary BEFORE the final sentence.
+  const boundaryMatch = trimmedContent.match(/^(.*[.!?]+\s+)([^.!?]+(?:[.!?]+)?)$/s);
+  if (!boundaryMatch) {
+    // Single-sentence content — replace the whole thing.
+    return `${finalAsk}${trailingWs}`;
+  }
+  const prefix = boundaryMatch[1];
+  return `${prefix}${finalAsk}${trailingWs}`;
+}
+
 export function getInterpretationVerbatimAsk(interp: any): string {
   if (!interp || typeof interp !== 'object') return '';
   // Canonical (rev6+): explicit verbatimAsk field.

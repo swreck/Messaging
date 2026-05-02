@@ -295,6 +295,27 @@ export function buildAutonomousPostDeliveryChipNo(deliverableType: string): stri
 export const AUTONOMOUS_BUILD_COMPLETE =
   "Done — your draft is ready. Open it from 3 Tiers or 5 Ch. Stories whenever you want a look.";
 
+// Bundle 1A rev6 Phase 2.A — structural regeneration heartbeat. Fires
+// AT MOST once per pipeline run when the methodology-gate retry phase
+// (per-chapter regenerate after fiveChapterCheck failure) exceeds the
+// 90-second threshold. Same shape as TIER_GENERATION_HEARTBEAT and
+// CHAPTERS_HEARTBEAT.
+export const STRUCTURAL_REGEN_HEARTBEAT =
+  "Tightening up a couple of the chapters — won't be much longer.";
+
+export const STRUCTURAL_REGEN_HEARTBEAT_MS = 90000;
+
+// Bundle 1A rev6 Phase 2.A — methodology-failure chat message. Fires
+// when fiveChapterCheck retries exhaust without producing a passing
+// chapter set. Maria's voice, specific gap explanation, no
+// AUTONOMOUS_BUILD_COMPLETE follow-up. The deliverable is still
+// persisted; the user can review it via 3 Tiers / 5 Ch. Stories from
+// their workspace. Template parameterizes over the joined issueList
+// (chapter violations + cross-check details from fcResult).
+export function buildMethodologyFailureMessage(issueList: string): string {
+  return `I built the five chapters, but the structural shape didn't quite land — ${issueList}. I'd rather we look at this together than ship something I'm not happy with. Want to walk through it?`;
+}
+
 // ─── Round 3.1 Item 3 — Blend-phase heartbeat ──────────────────────────
 // Fires AT MOST once per blend run, when the blend stage exceeds
 // BLEND_HEARTBEAT_MS. Suppressed if blend completes under the threshold.

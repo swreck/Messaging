@@ -77,7 +77,7 @@ import {
 import { classifyClaims } from '../services/provenanceClassify.js';
 import { checkFiveChapter, type FiveChapterInput } from '../services/fiveChapterCheck.js';
 import type { ExpressInterpretation } from './expressExtraction.js';
-import { getInterpretationMode, getInterpretationVerbatimAsk } from './expressExtraction.js';
+import { getInterpretationMode, getInterpretationVerbatimAsk, ensureCh5VerbatimAsk } from './expressExtraction.js';
 
 // ─── Medium translation ────────────────────────────────
 // The extraction prompt uses human-readable medium labels like "talking points".
@@ -912,6 +912,14 @@ export async function runPipeline(jobId: string): Promise<void> {
     const pipelineUserId = job.userId;
     const pipelineWorkspaceId = job.workspaceId;
     const pipelineStartMs = Date.now();
+    // Bundle 1A rev6 Phase 2.A — methodology-failed flag declared at
+    // runPipeline scope so the AUTONOMOUS_BUILD_COMPLETE write site
+    // (downstream of post-blend processing) can read it. Set true when
+    // fiveChapterCheck retries exhaust without producing a passing
+    // chapter set; suppresses AUTONOMOUS_BUILD_COMPLETE so Maria
+    // doesn't tell the user "your draft is ready" right after telling
+    // them "the structural shape didn't quite land."
+    let methodologyFailed = false;
     // One-shot pause-narration flag per pipeline run. The PAUSE_ON_FOUNDATIONAL_SHIFT
     // message fires at most once even if the user makes multiple foundation-changing
     // edits during the run.
@@ -2004,6 +2012,23 @@ ${draftForStory.tier2Statements
         }
       }
 
+      // Bundle 1A rev6 Phase 3 — deterministic verbatim CTA placement in
+      // Ch5. Two-layer defense: the soft ctaVerbatimDirective (above)
+      // gives Opus the chance to integrate the verbatim into prose flow
+      // naturally; this post-process is the safety net when Opus
+      // paraphrases despite the directive. ensureCh5VerbatimAsk skips
+      // when verbatimAsk is empty OR already present in content.
+      if (chapterNum === 5) {
+        const interpAskForCh5 = getInterpretationVerbatimAsk(interpretation);
+        if (interpAskForCh5) {
+          const before = content;
+          content = ensureCh5VerbatimAsk(content, interpAskForCh5);
+          if (content !== before) {
+            console.log(`[ExpressPipeline] ${jobId} Ch5 verbatim-ask post-process replaced last sentence`);
+          }
+        }
+      }
+
       await prisma.chapterContent.upsert({
         where: { storyId_chapterNum: { storyId: story.id, chapterNum } },
         update: { title: ch.name, content },
@@ -2457,34 +2482,168 @@ ${draftForStory.tier2Statements
       console.error(`[ExpressPipeline] ${jobId} post-blend numeric guard error (fail-open):`, err);
     }
 
-    // Five Chapter structural check — boundary violations, missing-chapter
-    // detection, persuasion-arc compliance. Logged for telemetry; does not
-    // block. Full evaluator tuning is a separate cycle if its outputs are
-    // wrong-shape against the build pipeline's chapter set.
+    // Bundle 1A rev6 Phase 2.A — fiveChapterCheck transitions from
+    // telemetry to per-chapter regenerate-on-fail enforcement. When
+    // chapters fail the structural check, regenerate each failing
+    // chapter with the methodology violations appended as feedback,
+    // then re-check. Hard cap 2 retries per failing chapter (worst
+    // case 5 chapters × 2 retries = 10 extra Opus calls).
+    //
+    // The regenerate is SHALLOW: prompt construction → callAI →
+    // marker strip → Ch5 verbatim post-process → persist. Voice,
+    // fabrication, and altitude checks DO NOT run on regenerated
+    // content; the methodology feedback in the regenerated prompt
+    // is what's driving the retry. If voice/fabrication regressions
+    // surface in regenerated chapters, a follow-up round can refactor
+    // the chapter loop body into a shared closure that runs all
+    // quality gates on the retry path.
+    //
+    // After retries: if still failing, write the locked Cowork
+    // methodology-failure message and set methodologyFailed=true.
+    // The flag suppresses AUTONOMOUS_BUILD_COMPLETE downstream.
     try {
-      const fcInput: FiveChapterInput = {
-        offeringName: draftForStory.offering?.name || '',
-        audienceName: draftForStory.audience?.name || '',
+      // Capture non-null reference to draftForStory for the closure.
+      // TS narrows draftForStory inside the original chapter loop but
+      // widens at closure boundaries because closures can be called
+      // later. The non-null guard at line 1399 has already returned on
+      // null; capturing here is safe.
+      const draftRef = draftForStory!;
+      // Closure: rebuilds chapter prompt for one chapter, runs
+      // callAI, strips markers, applies Phase-3 Ch5 post-process,
+      // persists via the same upsert path. Captures all closure
+      // state from runPipeline scope (interpretation, draftRef,
+      // mediumKey, mediumSpec, story, ch1Thesis).
+      async function regenerateChapterShallow(chapterNum: number, additionalFeedback: string): Promise<void> {
+        const systemPrompt = buildChapterPrompt(chapterNum, mediumKey);
+        const ch = CHAPTER_CRITERIA[chapterNum - 1];
+        const chapterGuardrail = buildChapterGuardrails(chapterNum);
+        const prevChapters = await prisma.chapterContent.findMany({
+          where: { storyId: story.id, chapterNum: { lt: chapterNum } },
+          orderBy: { chapterNum: 'asc' },
+        });
+        void prevChapters; // diagnostic context only — included in original block but not strictly required for regen
+        const sit = interpretation.situation?.trim() || '';
+        const situationBlock = sit
+          ? `SITUATION — THIS IS WHAT THE DRAFT MUST DO:\n${sit}\n\nThe draft must serve this specific situation. A generic value story about the offering is not acceptable. The reader must recognize this as a draft written FOR them, FOR this occasion, not a recycled template.\n\n`
+          : '';
+        const readerDirective = `\nTHE READER: "${draftRef.audience.name}" is the person reading this. Every sentence should be written for THIS person — their concerns, their perspective, their level of seniority. ${
+          chapterNum === 1
+            ? `The opening must be a BUSINESS THESIS at the strategic level, not a tactical narrative.${ch1Thesis ? ` USE THIS AS YOUR OPENING THESIS (adapt for tone but keep the strategic frame): "${ch1Thesis}"` : ' Format: "[Missing category/discipline] means [reader\'s strategic loss]."'} Then show dual value: what end customers experience translates into the reader\'s strategic outcome.`
+            : chapterNum === 2
+              ? 'Do NOT open with the product name as the sentence subject. Lead with what the READER gets or how their situation changes. The product is the mechanism, not the headline.'
+              : chapterNum === 5
+                ? 'Match tone to seniority. For senior executives: offer a path they can evaluate, never give directives. "One approach would be..." not "Pick X and do Y."'
+                : ''
+        }\n`;
+        const threeTierBlock = chapterNum === 1 ? '' : `\nTHREE TIER MESSAGE:\nTier 1: "${draftRef.tier1Statement?.text || ''}"\n${draftRef.tier2Statements.map((t2, i) => `Tier 2 #${i + 1}: "${t2.text}" (Priority: "${t2.priority?.text || 'unlinked'}"${t2.priority?.driver ? `, Driver: "${t2.priority.driver}"` : ''})\n  Proof: ${t2.tier3Bullets.map(t3 => t3.text).join(', ')}`).join('\n')}\n`;
+        const ctaVerbatimDirective = chapterNum === 5 && story.cta
+          ? `\nCTA VERBATIM REQUIREMENT — the call-to-action in this chapter must include the exact phrase "${story.cta}" verbatim.\n`
+          : '';
+        const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftRef.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftRef.audience.name}\nCONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)\n${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}\n${threeTierBlock}\nWrite Chapter ${chapterNum}: "${ch.name}"\n\nIMPORTANT: Start this chapter fresh. ${chapterGuardrail}\n\nMETHODOLOGY REGENERATION — the structural check flagged this chapter. Address these specific violations in your rewrite:\n${additionalFeedback}\n\nRewrite the chapter satisfying these methodology constraints while preserving the voice and prose-shape of the existing draft. Do not invent new claims; tighten what's already there.`;
+
+        let regenContent = await callAI(systemPrompt, userMessage, 'elite');
+        const stripped = extractAndStripMarkers(regenContent);
+        regenContent = stripped.cleanContent;
+        if (chapterNum === 5) {
+          const ask = getInterpretationVerbatimAsk(interpretation);
+          if (ask) regenContent = ensureCh5VerbatimAsk(regenContent, ask);
+        }
+        await prisma.chapterContent.upsert({
+          where: { storyId_chapterNum: { storyId: story.id, chapterNum } },
+          update: { title: ch.name, content: regenContent },
+          create: { storyId: story.id, chapterNum, title: ch.name, content: regenContent },
+        });
+      }
+
+      const buildFcInput = (chapters: { chapterNum: number; content: string }[]): FiveChapterInput => ({
+        offeringName: draftRef.offering?.name || '',
+        audienceName: draftRef.audience?.name || '',
         medium: mediumSpec.label,
         cta: '',
-        tier1Text: draftForStory.tier1Statement?.text || '',
-        chapters: storyWithChapters.chapters.map((ch) => ({
+        tier1Text: draftRef.tier1Statement?.text || '',
+        chapters: chapters.map((ch) => ({
           num: ch.chapterNum,
           title: CHAPTER_NAMES[ch.chapterNum - 1] || `Chapter ${ch.chapterNum}`,
           content: ch.content || '',
         })),
-      };
-      const fcResult = await checkFiveChapter(fcInput);
-      if (!fcResult.passed) {
-        const violations = fcResult.chapters
-          .filter(c => !c.pass)
-          .flatMap(c => c.violations.map(v => `Ch${c.num}: ${v}`))
-          .concat(fcResult.crossChecks.filter(x => !x.pass).map(x => `${x.id}: ${x.detail}`));
+      });
+
+      let fcInput = buildFcInput(storyWithChapters.chapters);
+      let fcResult = await checkFiveChapter(fcInput);
+      let regenStartedAt: number | null = null;
+      let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+
+      for (let retry = 0; retry < 2 && !fcResult.passed; retry++) {
+        // Schedule STRUCTURAL_REGEN_HEARTBEAT once on first retry —
+        // fires after STRUCTURAL_REGEN_HEARTBEAT_MS (90s) if we're
+        // still in the retry phase. Path-B-gated via the existing
+        // pattern (autonomous mode → write to chat).
+        if (heartbeatTimer === null && getInterpretationMode(interpretation) === 'autonomous') {
+          regenStartedAt = Date.now();
+          heartbeatTimer = setTimeout(async () => {
+            try {
+              const { STRUCTURAL_REGEN_HEARTBEAT } = await import('../prompts/milestoneCopy.js');
+              await prisma.assistantMessage.create({
+                data: {
+                  userId: pipelineUserId,
+                  role: 'assistant',
+                  content: STRUCTURAL_REGEN_HEARTBEAT,
+                  context: { channel: 'partner', workspaceId: pipelineWorkspaceId, kind: 'structural-regen-heartbeat' },
+                },
+              });
+            } catch (err) {
+              console.error(`[ExpressPipeline] ${jobId} STRUCTURAL_REGEN_HEARTBEAT write failed:`, err);
+            }
+          }, 90000);
+        }
+
+        const failingChapters = fcResult.chapters.filter(c => !c.pass);
         console.log(
-          `[ExpressPipeline] ${jobId} fiveChapterCheck flagged ${violations.length} structural issue(s): ${violations.slice(0, 5).join(' | ')}`,
+          `[ExpressPipeline] ${jobId} fiveChapterCheck retry ${retry + 1}/2 — regenerating ${failingChapters.length} chapter(s): ${failingChapters.map(c => c.num).join(', ')}`,
         );
+        for (const ch of failingChapters) {
+          try {
+            await regenerateChapterShallow(ch.num, ch.violations.join('\n'));
+          } catch (err) {
+            console.error(`[ExpressPipeline] ${jobId} regenerate Ch${ch.num} threw:`, err);
+          }
+        }
+
+        const refreshed = await prisma.chapterContent.findMany({
+          where: { storyId: story.id },
+          orderBy: { chapterNum: 'asc' },
+        });
+        fcInput = buildFcInput(refreshed);
+        fcResult = await checkFiveChapter(fcInput);
+      }
+
+      if (heartbeatTimer !== null) clearTimeout(heartbeatTimer);
+      void regenStartedAt; // diagnostic only
+
+      if (!fcResult.passed) {
+        const issueList = [
+          ...fcResult.chapters.filter(c => !c.pass).flatMap(c => c.violations),
+          ...fcResult.crossChecks.filter(x => !x.pass).map(x => x.detail),
+        ].join(', ');
+        console.warn(
+          `[ExpressPipeline] ${jobId} fiveChapterCheck FAILED after 2 retries — writing methodology-failure message. Issues: ${issueList}`,
+        );
+        methodologyFailed = true;
+        try {
+          const { buildMethodologyFailureMessage } = await import('../prompts/milestoneCopy.js');
+          await prisma.assistantMessage.create({
+            data: {
+              userId: pipelineUserId,
+              role: 'assistant',
+              content: buildMethodologyFailureMessage(issueList),
+              context: { channel: 'partner', workspaceId: pipelineWorkspaceId, kind: 'methodology-failure' },
+            },
+          });
+        } catch (writeErr) {
+          console.error(`[ExpressPipeline] ${jobId} methodology-failure message write failed:`, writeErr);
+        }
       } else {
-        console.log(`[ExpressPipeline] ${jobId} fiveChapterCheck clean`);
+        console.log(`[ExpressPipeline] ${jobId} fiveChapterCheck clean${fcInput.chapters.length > 0 ? ' after retries' : ''}`);
       }
     } catch (err) {
       console.error(`[ExpressPipeline] ${jobId} fiveChapterCheck error (fall-open):`, err);
@@ -2725,11 +2884,13 @@ ${draftForStory.tier2Statements
     // post-delivery offer block; if the pipeline errored, the catch
     // branch below skips this).
     try {
-      // Bundle 1A rev6 Phase 1 — gate via canonical mode helper.
-      // Phase 2 will additionally suppress this write when
-      // methodologyFailed is true (Cowork-locked methodology message
-      // IS the completion notification in that path).
-      if (getInterpretationMode(interpretation) === 'autonomous') {
+      // Bundle 1A rev6 Phase 1+2.A — gate via canonical mode helper.
+      // Phase 2.A SUPPRESSES this write when methodologyFailed is true
+      // (the Cowork-locked methodology-failure message IS the
+      // completion notification in that path; firing both would tell
+      // the user "your draft is ready" right after telling them
+      // "the structural shape didn't quite land").
+      if (getInterpretationMode(interpretation) === 'autonomous' && !methodologyFailed) {
         await prisma.assistantMessage.create({
           data: {
             userId: pipelineUserId,
@@ -3804,6 +3965,21 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
         content = cleanContent;
         if (chapterNum === 3 || chapterNum === 4 || chapterNum === 5) {
           guidedChapterMissingPieces[chapterNum] = missingPieces;
+        }
+      }
+
+      // Bundle 1A rev6 Phase 3 — deterministic verbatim CTA placement
+      // in Ch5. Mirrors the runPipeline post-process at line ~2009.
+      // The guided pipeline reads the verbatim ask from the `cta`
+      // parameter (the same value that lands on story.cta).
+      if (chapterNum === 5) {
+        const ctaTrimmed = (cta || '').trim();
+        if (ctaTrimmed) {
+          const before = content;
+          content = ensureCh5VerbatimAsk(content, ctaTrimmed);
+          if (content !== before) {
+            console.log(`[GuidedDraft] ${jobId} Ch5 verbatim-ask post-process replaced last sentence`);
+          }
         }
       }
 
