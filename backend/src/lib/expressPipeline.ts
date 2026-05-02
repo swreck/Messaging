@@ -49,6 +49,7 @@ import {
   AUTONOMOUS_POST_DELIVERY_CHIP_YES,
   buildAutonomousPostDeliveryChipNo,
   ENRICHMENT_INTRO,
+  AUTONOMOUS_BUILD_COMPLETE,
 } from '../prompts/milestoneCopy.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import {
@@ -1268,28 +1269,64 @@ AUDIENCE: ${draftWithElements.audience.name}`;
     const situationTrimmed = (interpretation.situation || '').trim();
     function extractAskFromSituation(s: string): string {
       if (!s) return '';
-      // Heuristic: split into sentences, find the one that reads like a
-      // direct ask. Direct-ask shapes: starts with imperative ("ask for",
-      // "request", "schedule", "reply", "book", "click", "walk through"),
-      // OR contains "I want them to" / "the ask is" / "the cta is".
+      // Bundle 1A rev2 W2 — sentence selection is scored, not first-match.
+      // Cowork's walk produced an "Ask:" header that read "Tone should be
+      // partner-to-partner, not sales pitch." — a tone note, not the CTA.
+      // The fix: tone/voice/style sentences are NEGATIVE-scored; sentences
+      // with an ask-verb (confirm, reply, schedule, book, register, etc.)
+      // PLUS a target action are POSITIVE-scored. Pick the highest score.
       const sentences = s.split(/(?<=[.!?])\s+/).map(x => x.trim()).filter(Boolean);
-      const askPatterns = [
-        /\bthe (?:ask|cta) (?:is|will be)\b/i,
+
+      // Negative pattern — sentences that read as tone/voice/style notes
+      // are NOT the CTA. They describe HOW the deliverable should sound,
+      // not WHAT the audience should do.
+      const isToneNote = (sent: string): boolean => {
+        return /\b(tone|voice|style|feel|register|cadence|sound|read like|come across|should be (?:partner|conversational|formal|casual|warm|direct|short|long))\b/i.test(sent);
+      };
+
+      // Positive pattern — verb-of-asking PLUS a target action makes a
+      // sentence read as a direct CTA. Verb-of-asking covers the common
+      // shapes Maria's users name when stating their ask.
+      const askVerbs = /\b(confirm|reply|sign\s*up|register|schedule|book|order|buy|join|download|click|walk\s*(?:me|us)?\s*through|set\s*up|get\s*on\s*a\s*call|attend|rsvp|respond|approve|review|enroll|subscribe|opt\s*in|share|forward|introduce|connect|meet|opt-in)\b/i;
+      const directAskMarkers = [
+        /\bthe (?:ask|cta) (?:is|will be|should be)\b/i,
         /\bi want them to\b/i,
         /\bI'?m asking\b/i,
-        /\bso they\b.*\b(reply|click|book|schedule|sign|register|join|download)\b/i,
-        /\b(reply with|request a|schedule a|book a|click here|walk through|set up|get on a call|sign up|register|join|download)\b/i,
+        /\bI need them to\b/i,
+        /\bplease (?:confirm|reply|sign|register|schedule|book|join|attend)\b/i,
+        /\bso (?:they|the reader)\b.*\b(reply|click|book|schedule|sign|register|join|download|confirm|attend|respond)\b/i,
       ];
+
+      type Scored = { sent: string; score: number };
+      const scored: Scored[] = [];
       for (const sent of sentences) {
-        for (const p of askPatterns) {
-          if (p.test(sent) && sent.length < 200) return sent;
+        if (sent.length === 0 || sent.length >= 200) continue;
+        let score = 0;
+        if (isToneNote(sent)) score -= 100;
+        if (askVerbs.test(sent)) score += 50;
+        for (const p of directAskMarkers) {
+          if (p.test(sent)) score += 30;
         }
+        // Mild bias toward later sentences (user briefs often state the
+        // ask near the end), but not enough to override score > 0 hits.
+        score += sentences.indexOf(sent) * 0.5;
+        scored.push({ sent, score });
       }
-      // No direct-ask shape found. Take the LAST sentence — in user
-      // briefs the ask typically lives at the end ("...so I want them
-      // to walk through their last quarter together").
-      const last = sentences[sentences.length - 1] || '';
-      if (last.length > 0 && last.length < 200) return last;
+
+      // Best candidate is the highest positive-scored sentence.
+      scored.sort((a, b) => b.score - a.score);
+      const top = scored[0];
+      if (top && top.score > 0) return top.sent;
+
+      // No clearly-asky sentence and the top score is zero or negative.
+      // Fall back to the last NON-tone sentence — user briefs frequently
+      // state the ask at the end. If every sentence is a tone note, return
+      // empty so the generic CTA fallback fires.
+      for (let i = sentences.length - 1; i >= 0; i--) {
+        const sent = sentences[i];
+        if (sent.length === 0 || sent.length >= 200) continue;
+        if (!isToneNote(sent)) return sent;
+      }
       return '';
     }
     let ctaFromSituation = '';
@@ -1597,6 +1634,18 @@ Return ONLY the one sentence.`;
     do {
     chapterMissingPieces = { 3: [], 4: [], 5: [] };
     for (let chapterNum = 1; chapterNum <= 5; chapterNum++) {
+      // Bundle 1A rev2 W7 — wrap each chapter iteration in its own
+      // try/catch so a thrown error in chapter N (network, timeout,
+      // unexpected exception in a check) does not prevent chapter N+1
+      // from attempting. Cowork's verification surfaced a deliverable
+      // with Ch1-3 generated but Ch4/Ch5 missing — the pipeline reached
+      // post-chapter-loop processing without all five chapters. The
+      // most likely cause is an exception in chapter 4's body that
+      // escaped the per-check catches and broke the loop iteration.
+      // This wrapper catches and logs so the loop continues. If
+      // chapters fail clean, "Not yet generated" rendering is the
+      // accurate frontend state until the user requests regeneration.
+      try {
       await update({
         status: `chapter_${chapterNum}`,
         stage: `Drafting chapter ${chapterNum} of 5${variantStageSuffix}`,
@@ -1979,6 +2028,13 @@ ${draftForStory.tier2Statements
             changeSource: 'ai_generate',
           },
         });
+      }
+      } catch (chapterErr) {
+        // Bundle 1A rev2 W7 — log and continue to next chapter.
+        const errMsg = chapterErr instanceof Error ? chapterErr.message : String(chapterErr);
+        console.error(
+          `[ExpressPipeline] ${jobId} CHAPTER ${chapterNum} FAILED — error caught, continuing to next chapter. Error: ${errMsg}`,
+        );
       }
     }
 
@@ -2646,6 +2702,35 @@ ${draftForStory.tier2Statements
       stage: 'First draft ready',
       progress: 100,
     });
+
+    // Bundle 1A rev2 W4 — autonomous-build hand-off message. Cowork's
+    // verification surfaced that after kicking off an autonomous build,
+    // there was no follow-up chat message when the pipeline completed.
+    // Path B keeps the chat as the primary surface, so the user needs
+    // to know the draft is ready without auto-navigating away. Locked
+    // copy: AUTONOMOUS_BUILD_COMPLETE. Fires only in autonomous mode
+    // and only on full pipeline success (this code is past the
+    // post-delivery offer block; if the pipeline errored, the catch
+    // branch below skips this).
+    try {
+      const interpRef = (interpretation as unknown as Record<string, any>) || {};
+      if (interpRef.autonomousMode === true) {
+        await prisma.assistantMessage.create({
+          data: {
+            userId: pipelineUserId,
+            role: 'assistant',
+            content: AUTONOMOUS_BUILD_COMPLETE,
+            context: {
+              channel: 'partner',
+              workspaceId: pipelineWorkspaceId,
+              kind: 'autonomous-build-complete',
+            },
+          },
+        });
+      }
+    } catch (writeErr) {
+      console.error(`[ExpressPipeline] ${jobId} AUTONOMOUS_BUILD_COMPLETE write failed (non-fatal):`, writeErr);
+    }
 
     console.log(
       `[ExpressPipeline] ${jobId} complete (${storyIds.length} variant${

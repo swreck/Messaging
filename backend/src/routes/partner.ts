@@ -394,7 +394,12 @@ router.get('/status', async (req: Request, res: Response) => {
         });
         const hasOffering = await prisma.offering.count({ where: { workspaceId: wsId } });
         if (audNoDriver && hasOffering > 0) {
-          proactiveOffer = `${audNoDriver.name}'s top priority doesn't have a driver yet. I can draft it — I understand the offering.`;
+          // Bundle 1A rev2 W5 — replaced methodology vocab "driver" with
+          // market-truth framing. Also dropped the "[name]'s" possessive
+          // which Cowork found awkward when the audience name contained a
+          // company suffix ("Diagnostics's"). The replacement names the
+          // audience plainly and offers the work without methodology jargon.
+          proactiveOffer = `${audNoDriver.name} — I have what I need to draft. Want me to start?`;
         }
       }
 
@@ -1137,6 +1142,57 @@ This rule supersedes all guidance below it. Always.
     systemPrompt = integrityBlock + systemPrompt;
   }
 
+  // ─── Bundle 1A rev2 W6 — thin-audience-input gate ────────────────────
+  // Cowork's walk: clicking an audience-suggestion chip ("A VP of Sales
+  // at a tech company") got an affirming "Right there — that's clean.
+  // What are you offering them?" response. False claim of comprehension
+  // from no real input. The Bug 7 [TOO_THIN] route lives in coaching.ts
+  // (guided-3T flow) — partner.ts (Maria-leads flow) needs the same gate.
+  //
+  // Detection: previous user message is short AND reads as title-only or
+  // generic role-only ("A [title] at a [company-type]" shape). When
+  // detected, inject a directive that forbids affirming-paraphrase AND
+  // forbids advancing to the next methodology question — Maria must ask
+  // the locked clarifying question instead.
+  {
+    const lastUserMsg = (message || '').trim();
+    function isThinAudienceInput(msg: string): boolean {
+      if (!msg) return false;
+      if (msg.length > 100) return false; // genuine prose answers are usually longer
+      const lower = msg.toLowerCase();
+      // Pattern: "A [title]" or "An [title]" or "The [title]" with optional
+      // "at a [generic-company-shape]" suffix. The title is one of the
+      // common executive/manager shapes; the optional suffix is generic
+      // ("a tech company", "a mid-size company", "a SaaS startup").
+      const titleShape = /^(?:a|an|the)?\s*(?:vp|svp|evp|chief|c[a-z]o|director|head of|manager|lead|principal|senior\s+)?\s*(?:of\s+)?(?:sales|marketing|engineering|product|operations|customer\s+success|finance|hr|people|it|technology|security|legal|partnerships|growth|revenue|strategy|design|data|research|content|brand|business\s+development)\b/i;
+      const titleOnly = titleShape.test(lower) && msg.split(/\s+/).length < 12;
+      // "VP of Sales", "Director of Engineering", "Head of Product" — bare
+      // titles, no company specifics.
+      if (titleOnly) return true;
+      // "IT director", "CFO", "Chief of Staff" — short executive shorthands.
+      if (/^(?:[a-z]+\s+)?(?:vp|svp|cfo|ceo|coo|cto|cmo|cio|cdo|cpo|cso|director|manager|lead|chief\s+of\s+staff)\b/i.test(lower) && msg.split(/\s+/).length < 8) {
+        return true;
+      }
+      return false;
+    }
+    if (isThinAudienceInput(lastUserMsg)) {
+      systemPrompt += `\n\nTHIN AUDIENCE INPUT DETECTED — ASK CLARIFYING QUESTION, DO NOT ADVANCE.
+
+The user's last message ("${lastUserMsg.replace(/"/g, '\\"')}") is title-only or generic role-only — it names a title and possibly a vague company shape, but does not name: a tool the persona uses, a pain they live with, a metric they own, what their week actually looks like, who reports to them, or what specifically keeps them up at night.
+
+You MUST NOT:
+  - Issue any affirming-paraphrase response ("I know what keeps them up at night", "I know that persona well", "Right there — that's clean", or any locked affirmation pool entry).
+  - Advance to the next methodology question (do not ask about the offering, format, differentiation, or CTA).
+  - Pretend you have enough to work with.
+
+You MUST ask the LOCKED clarifying question, parameterizing over the title the user named:
+
+"An ${lastUserMsg.replace(/^(?:a|an|the)\s+/i, '').replace(/"/g, '\\"')} — got it on title. Tell me a bit more about them. What kind of company, what size of team, what's actually keeping them up at night right now?"
+
+Render the locked text above. After the question, emit reply chips per the universal rule.`;
+    }
+  }
+
   // ─── Round 3.4 coaching-fix Finding 4 — locked question order ────────
   // When the user just clicked a starting chip (the four entry chips
   // OPENER_FRESH_USER_CHIPS surfaces on chat-open), the next methodology
@@ -1726,15 +1782,20 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
         typeof params.medium === 'string' && params.medium.trim().length > 0
           ? String(params.medium).trim().toLowerCase().replace(/[\s-]+/g, '_')
           : null;
-      // Even if Opus included a medium, if a more-specific medium is in
-      // conversation we trust the user's stated medium over Opus's guess.
-      // This prevents the case where Opus's tool call shorthand ('email')
-      // overrides the user's explicit 'pitch deck' statement.
+      // Bundle 1A rev2 W3 — explicit Opus-supplied medium TAKES PRECEDENCE
+      // over conversation-text detection. The prior code overrode Opus's
+      // explicit 'email' with a conversation-derived 'landing_page' when
+      // a phrase like "one page" or "briefing" appeared incidentally
+      // (e.g., in audience description, tone notes, or unrelated context).
+      // The user's explicit format choice — whether typed verbatim or
+      // captured by Opus from a chip click — is the canonical signal.
+      // Conversation detection is the fallback when Opus didn't supply
+      // anything.
       const detected = detectMediumFromText(allUserTextForMedium);
-      if (detected) {
-        params.medium = detected;
-      } else if (explicit) {
+      if (explicit) {
         params.medium = explicit;
+      } else if (detected) {
+        params.medium = detected;
       } else {
         // Genuinely ambiguous — leave undefined so the build path can
         // surface the format-question chip flow rather than silently

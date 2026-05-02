@@ -299,6 +299,28 @@ async function generateTierWithVoiceCheck(
     }
   }
 
+  // Bundle 1A rev2 W1 — hard-block on offering-name in Tier 1 after all
+  // retries exhaust. Cowork's verification surfaced "Make the ClarityAudit
+  // partnership..." shipping. The pattern is: (a) regex retries fail to
+  // remove the offering name (Opus keeps regenerating with it), (b) Opus
+  // judge also fails to flag it, (c) Tier 1 ships with the offering name
+  // visible. Per Cowork: offering-name in Tier 1 must hard-block, not
+  // surface-and-ship. Prepend [TIER1_RETRY_FAILED] sentinel marker so QA
+  // sees the failure mode in Tier 1 text. Downstream rendering can choose
+  // to flag the marker visually rather than rendering it as prose.
+  if (offeringName && offeringName.trim().length >= 2) {
+    const offeringPattern = new RegExp(
+      `\\b${offeringName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
+      'i',
+    );
+    if (offeringPattern.test(result.tier1.text) && !result.tier1.text.startsWith('[TIER1_RETRY_FAILED]')) {
+      console.error(
+        `[Tier1HardBlock] OFFERING NAME "${offeringName}" still in Tier 1 after all retries — flagging with [TIER1_RETRY_FAILED] sentinel for Cowork QA. Final Tier 1: "${result.tier1.text}"`,
+      );
+      result.tier1.text = `[TIER1_RETRY_FAILED] ${result.tier1.text}`;
+    }
+  }
+
   // Round 3.4 coaching-fix Finding 1 — numeric-claim guard on Three Tier
   // statements. Lila's "30%" → "40%" fabrication originated in Tier 2/3
   // generation (the Tier table had zero fabrication coverage before). On

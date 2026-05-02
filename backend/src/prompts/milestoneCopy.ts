@@ -285,6 +285,16 @@ export function buildAutonomousPostDeliveryChipNo(deliverableType: string): stri
   return `No, I'll review the ${label} here`;
 }
 
+// Bundle 1A rev2 W4 — autonomous-build completion message. After Maria
+// fires build_deliverable in autonomous (Path B) mode and the pipeline
+// finishes, the chat needs a hand-off message so the user knows the
+// build completed and where to find the deliverable. Locked Cowork
+// copy: surfaces the deliverable location without auto-navigating —
+// Path B keeps the chat as the primary surface, the user opens the
+// deliverable when they're ready.
+export const AUTONOMOUS_BUILD_COMPLETE =
+  "Done — your draft is ready. Open it from 3 Tiers or 5 Ch. Stories whenever you want a look.";
+
 // ─── Round 3.1 Item 3 — Blend-phase heartbeat ──────────────────────────
 // Fires AT MOST once per blend run, when the blend stage exceeds
 // BLEND_HEARTBEAT_MS. Suppressed if blend completes under the threshold.

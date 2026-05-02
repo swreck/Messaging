@@ -249,17 +249,31 @@ export interface Tier1SentinelResult {
 }
 
 // Imperative-verb openings forbidden by Bug 10 rule 2.
-// Round 3.4 coaching-fix Finding 2 — list expanded after Cowork's walk
-// surfaced "Stop slipped deals from blindsiding you..." passing the
-// sentinel. "Stop" was not in the prior list. Now comprehensive across
-// every imperative shape Cowork has named.
+// Round 3.4 coaching-fix Finding 2 — list expanded.
+// Bundle 1A rev2 W1 — list expanded again after Cowork's walk surfaced
+// "Make the ClarityAudit partnership visibly productive..." passing
+// the sentinel. "Make" — the most common imperative verb in English —
+// was missing. Now covers the top imperative-verb shapes that read as
+// commands directed at the reader, audited against a top-200 corpus.
 const TIER1_FORBIDDEN_IMPERATIVES = [
+  // Commands originally captured.
   'stop', 'eliminate', 'prevent', 'drive', 'boost', 'accelerate',
   'reduce', 'increase', 'maximize', 'achieve', 'deliver', 'transform',
   'streamline', 'optimize', 'unlock', 'empower',
   'get', 'improve', 'discover', 'build', 'enable', 'fuel', 'gain',
   'scale', 'grow', 'win', 'beat', 'crush', 'master', 'capture',
   'protect', 'avoid', 'minimize', 'simplify', 'modernize',
+  // Bundle 1A rev2 W1 additions — the high-frequency imperatives the
+  // prior list missed. "Make" was the explicit failure case.
+  'make', 'create', 'have', 'give', 'take', 'bring', 'put', 'set',
+  'keep', 'run', 'do', 'turn', 'find', 'show', 'tell', 'lead',
+  'start', 'stop', 'spend', 'save', 'cut', 'add', 'shift', 'move',
+  'use', 'try', 'see', 'hold', 'open', 'close', 'fix', 'free',
+  'leave', 'send', 'pull', 'push', 'meet', 'replace', 'remove',
+  'restore', 'recover', 'reclaim', 'regain', 'reach', 'land', 'earn',
+  'know', 'understand', 'remember', 'forget', 'plan', 'choose',
+  'decide', 'commit', 'invest', 'focus', 'align', 'connect',
+  'engage', 'embrace', 'adopt', 'integrate', 'consolidate', 'centralize',
 ];
 
 // Mechanism vocabulary forbidden by Bug 10 rule 4. Tier 1 names a
