@@ -183,7 +183,11 @@ Tier 1 must read as something the audience would say to themselves about their o
    - "Eliminate..."
    The audience is not the verb's object. The audience is the subject of their own situation.
 
-3. NO OFFERING NAME. The product, service, or company name must not appear in Tier 1. The audience reads Tier 1 and recognizes it as a truth about their world; the offering's role is to be the answer the rest of the message delivers, not the headline.
+3. NO OFFERING BRAND NAME. The offering's product or service brand name (the thing being sold) must not appear in Tier 1. The audience reads Tier 1 and recognizes it as a truth about THEIR world; the offering's role is to be the answer the rest of the message delivers, not the headline. The AUDIENCE'S organization name, the audience's role, or the audience's industry MAY appear — these describe the reader's world, not the offering.
+
+  Worked example with offering='ClarityAudit' and audience='VP of Strategic Partnerships at Veracore Diagnostics':
+  ALLOWED: "Veracore's CRO buyer audience expects partnerships that produce early visible outcomes because internal momentum stalls when partnership initiatives don't show up in the first quarter" (Veracore is the audience organization, not the offering brand).
+  FORBIDDEN: "ClarityAudit gives Veracore co-branded visibility with CRO buyers" (ClarityAudit is the offering brand name).
 
 4. NO MECHANISM VOCABULARY. Words that describe HOW the offering works are mechanism-speak — they belong in lower tiers, not Tier 1. Forbidden in Tier 1:
    - "scoring", "ranking", "tracking"

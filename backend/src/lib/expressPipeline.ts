@@ -77,6 +77,7 @@ import {
 import { classifyClaims } from '../services/provenanceClassify.js';
 import { checkFiveChapter, type FiveChapterInput } from '../services/fiveChapterCheck.js';
 import type { ExpressInterpretation } from './expressExtraction.js';
+import { getInterpretationMode, getInterpretationVerbatimAsk } from './expressExtraction.js';
 
 // ─── Medium translation ────────────────────────────────
 // The extraction prompt uses human-readable medium labels like "talking points".
@@ -799,23 +800,22 @@ export async function commitExistingForPipeline(
   // Synthesize an ExpressInterpretation from the existing DB data so the
   // pipeline can use situation/medium/offering metadata without changes.
   //
-  // Bundle 1A rev5 — the build_deliverable Opus action fires only when
-  // Maria has all the inputs she needs (offering, audience, medium are
-  // required and validated upstream). That is the definition of
-  // autonomous mode; flag it. deliverableType mirrors medium so
-  // downstream surfaces (post-delivery offer, AUTONOMOUS_BUILD_COMPLETE
-  // gate) read it consistently. verbatim_ask: the caller's extracted
-  // CTA (Opus pulls it from the user's input via the build_deliverable
-  // tool spec). Falls back to situation as the verbatim_ask when the
-  // caller didn't supply one — better than the generic "Get started
-  // with [offering]" downstream fallback.
-  const verbatimAskTrimmed = (verbatimAsk || '').trim();
-  const situationTrimmed = (situation || '').trim();
-  const resolvedVerbatimAsk = verbatimAskTrimmed.length > 0
-    ? verbatimAskTrimmed
-    : situationTrimmed;
-
+  // Bundle 1A rev6 Phase 1.D — INVARIANT: callers must be on the
+  // autonomous build path. mode='autonomous' is set unconditionally.
+  // For guided pipelines, use runDraftPipeline (which constructs its
+  // own canonical interpretation with mode='guided').
+  //
+  // Two callers verified by grep: lib/actions.ts (build_deliverable
+  // Opus action) and routes/partner.ts (/partner/autonomous-build
+  // endpoint). Both autonomous.
+  //
+  // verbatimAsk is the caller-supplied verbatim CTA. NO situation
+  // fallback at the construction layer (rev5 regression — that
+  // collapsed any long situation into a useless "ctaForStory"). The
+  // downstream ctaForStory layer at the consumption site decides what
+  // to do with empty values.
   const syntheticInterpretation = {
+    mode: 'autonomous' as const,
     offering: {
       name: offering.name,
       nameSource: 'stated' as const,
@@ -840,10 +840,8 @@ export async function commitExistingForPipeline(
       reasoning: 'User-selected format',
     },
     situation: situation || '',
+    verbatimAsk: (verbatimAsk || '').trim(),
     confidenceNotes: 'Built from existing offering and audience data.',
-    autonomousMode: true,
-    deliverableType: medium || 'email',
-    verbatim_ask: resolvedVerbatimAsk,
   };
 
   const job = await prisma.expressJob.create({
@@ -948,8 +946,10 @@ export async function runPipeline(jobId: string): Promise<void> {
     // Railway logs capture distributions across users + autonomous-vs-
     // guided runtimes. Format is grep-friendly: `[Perf] jobId=X stage=Y
     // elapsed_ms=Z mode=guided|autonomous variant=N`.
-    const interpForPerf = (interpretation as unknown as Record<string, any>) || {};
-    const pipelinePerfMode = interpForPerf.autonomousMode === true ? 'autonomous' : 'guided';
+    // Bundle 1A rev6 Phase 1 — read mode via canonical helper. Legacy
+    // ExpressJob rows with autonomousMode=true coalesce correctly via
+    // getInterpretationMode (TODO(rev7): remove once aged out).
+    const pipelinePerfMode = getInterpretationMode(interpretation);
     console.log(`[Perf] jobId=${jobId} stage=mapping-start elapsed_ms=${Date.now() - pipelineStartMs} mode=${pipelinePerfMode} variant=${variantIndex + 1}/${variantCount}`);
 
     const draftWithElements = await prisma.threeTierDraft.findFirst({
@@ -1326,27 +1326,19 @@ AUDIENCE: ${draftWithElements.audience.name}`;
       return `${mediumLabel} · ${dateLabel}`;
     }
 
-    // Bundle 1A rev3 W2 — verbatim_ask is now extracted by the
-    // autonomous-build classifier (routes/partner.ts) directly from the
-    // user's input and lands on the interpretation object. The previous
-    // pattern-matching scored-selector in this file was layered guessing
-    // on top of Opus output. Reading interpretation.verbatim_ask is the
-    // single source of truth.
-    const interpretationCast = interpretation as unknown as Record<string, any>;
-    const verbatimAsk = typeof interpretationCast.verbatim_ask === 'string'
-      ? interpretationCast.verbatim_ask.trim()
+    // Bundle 1A rev6 Phase 1.E — read verbatim ask via the canonical
+    // helper. Helper coalesces over the canonical `verbatimAsk` field,
+    // legacy `verbatim_ask` (rev5), and legacy `cta` (guided-old shape).
+    // Preserves existing 200-char UI cap on the CTA string. Drops the
+    // rev5 situation-fallback layer at the construction site (that
+    // collapsed multi-sentence situations into a useless ctaForStory).
+    // Generic "Get started with [offering]" fallback only when the
+    // canonical helper returns empty.
+    const verbatimAsk = getInterpretationVerbatimAsk(interpretation);
+    const ctaFromAsk = (verbatimAsk.length > 0 && verbatimAsk.length <= 200)
+      ? verbatimAsk
       : '';
-    const situationTrimmed = (interpretation.situation || '').trim();
-    let ctaFromSituation = '';
-    if (verbatimAsk.length > 0 && verbatimAsk.length < 300) {
-      ctaFromSituation = verbatimAsk;
-    } else if (situationTrimmed.length > 0 && situationTrimmed.length < 200) {
-      // Backward-compat fallback for guided builds where verbatim_ask is
-      // not produced — the situation is itself short enough to use as a
-      // CTA, so use it verbatim.
-      ctaFromSituation = situationTrimmed;
-    }
-    const ctaForStory = ctaFromSituation || `Get started with ${interpretation.offering.name || 'us'}`;
+    const ctaForStory = ctaFromAsk || `Get started with ${interpretation.offering.name || 'us'}`;
     const story = await prisma.fiveChapterStory.create({
       data: {
         draftId: draftWithElements.id,
@@ -2596,11 +2588,20 @@ ${draftForStory.tier2Statements
     // assistantMessage context so the frontend can detect a click and
     // route correctly (YES navigates to the Three Tier; NO minimizes).
     {
+      // Bundle 1A rev6 Phase 1 — gate via canonical mode helper.
+      // deliverableType reads from primaryMedium.value (canonical
+      // source of truth); legacy interpretation.deliverableType is
+      // gone from new construction.
       const interp = (interpretation as unknown as Record<string, any>) || {};
-      if (interp.autonomousMode === true) {
-        const deliverableType = (typeof interp.deliverableType === 'string' && interp.deliverableType.trim())
-          ? interp.deliverableType
-          : 'deliverable';
+      if (getInterpretationMode(interpretation) === 'autonomous') {
+        const primaryMediumValue = interp.primaryMedium?.value;
+        const deliverableType = (typeof primaryMediumValue === 'string' && primaryMediumValue.trim())
+          ? primaryMediumValue
+          // TODO(rev7): drop legacy interp.deliverableType coalescing once
+          // legacy ExpressJob rows have aged out.
+          : (typeof interp.deliverableType === 'string' && interp.deliverableType.trim())
+            ? interp.deliverableType
+            : 'deliverable';
         const offerChips = [
           AUTONOMOUS_POST_DELIVERY_CHIP_YES,
           buildAutonomousPostDeliveryChipNo(deliverableType),
@@ -2724,8 +2725,11 @@ ${draftForStory.tier2Statements
     // post-delivery offer block; if the pipeline errored, the catch
     // branch below skips this).
     try {
-      const interpRef = (interpretation as unknown as Record<string, any>) || {};
-      if (interpRef.autonomousMode === true) {
+      // Bundle 1A rev6 Phase 1 — gate via canonical mode helper.
+      // Phase 2 will additionally suppress this write when
+      // methodologyFailed is true (Cowork-locked methodology message
+      // IS the completion notification in that path).
+      if (getInterpretationMode(interpretation) === 'autonomous') {
         await prisma.assistantMessage.create({
           data: {
             userId: pipelineUserId,
@@ -3396,6 +3400,44 @@ export async function buildDraftFromFoundation(
     },
   });
 
+  // Bundle 1A rev6 Phase 1.D — guided pipelines build a canonical
+  // ExpressInterpretation. The previous shape `{ guided: true, medium,
+  // cta, situation }` was an ad-hoc 4-field stub; downstream readers
+  // expecting the canonical shape (offering, audiences, primaryMedium,
+  // verbatimAsk) had nothing to read. Build the full canonical shape
+  // from the eagerly-loaded draftForStory.
+  const guidedInterpretation = {
+    mode: 'guided' as const,
+    offering: {
+      name: draftForStory.offering.name,
+      nameSource: 'stated' as const,
+      description: draftForStory.offering.description || '',
+      differentiators: draftForStory.offering.elements.map((e: { text: string; motivatingFactor: string | null }) => ({
+        text: e.text,
+        source: 'stated' as const,
+        motivatingFactor: e.motivatingFactor || '',
+      })),
+    },
+    audiences: [{
+      name: draftForStory.audience.name,
+      description: draftForStory.audience.description || '',
+      source: 'stated' as const,
+      priorities: draftForStory.audience.priorities.map(p => ({
+        text: p.text,
+        source: 'stated' as const,
+        driver: p.driver || '',
+      })),
+    }],
+    primaryMedium: {
+      value: medium || 'email',
+      source: 'stated' as const,
+      reasoning: 'User-selected format',
+    },
+    situation: situation || '',
+    verbatimAsk: (cta || '').trim(),
+    confidenceNotes: 'Built from guided 3T draft.',
+  };
+
   const job = await prisma.expressJob.create({
     data: {
       userId,
@@ -3405,7 +3447,7 @@ export async function buildDraftFromFoundation(
       stage: 'Writing your first draft',
       progress: 5,
       resultStoryId: story.id,
-      interpretation: { guided: true, medium, cta, situation } as unknown as object,
+      interpretation: guidedInterpretation as unknown as object,
     },
   });
 

@@ -392,7 +392,7 @@ const TIER1_OPUS_JUDGE_SYSTEM = `You evaluate a single Tier 1 message statement 
 
 The Tier 1 must read as something the audience would say to themselves about their own world — not vendor-speak. Specifically:
 1. It must NOT begin with an imperative verb directed at the reader (Stop, Get, Improve, Boost, Eliminate, etc.).
-2. It must NOT contain the offering's name or describe the offering's mechanism (scoring, ranking, tracking, monitoring, dashboards, analytics, predictions, AI, automation, etc.).
+2. It must NOT contain the offering's BRAND NAME (the product or service being sold) or describe the offering's mechanism (scoring, ranking, tracking, monitoring, dashboards, analytics, predictions, AI, automation, etc.). The audience's organization name, the audience's role, or the audience's industry MAY appear — these describe the reader's world, not the offering. For example, with offering='ClarityAudit' and audience='VP of Strategic Partnerships at Veracore Diagnostics': ALLOWED — 'Veracore's CRO buyer audience expects partnerships that produce early visible outcomes because internal momentum stalls when partnership initiatives don't show up in the first quarter' (Veracore is the audience organization). FORBIDDEN — 'ClarityAudit gives Veracore co-branded visibility with CRO buyers' (ClarityAudit is the offering brand name).
 3. It must read like something a senior leader at the audience's company would say to themselves on a Tuesday morning — not a tagline you'd put on a billboard.
 4. It must not stack compound jargon ("reactive churn firefighting", "stakeholder engagement enablement").
 

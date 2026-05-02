@@ -120,6 +120,27 @@ user will rename it in the review step.
   confused the task for the offering. Rename the offering to the underlying
   business and move the task concept into primaryMedium.
 
+═══ THE VERBATIM ASK ═══
+
+Extract verbatimAsk: the EXACT WORDING the user used to state what they want
+the audience to do. Pull the literal sentence. Do NOT paraphrase. Do NOT
+shorten. Do NOT generalize.
+
+If the user typed "I want them to confirm participation in our joint Q3
+webinar by May 15", verbatimAsk is "confirm participation in our joint Q3
+webinar by May 15". You may strip leading "I want them to" / "the ask is"
+/ "tell them to" if it leaves a clean imperative; do not change anything
+else.
+
+If the user typed "reply with their availability for next week",
+verbatimAsk is "reply with their availability for next week".
+
+TONE NOTES ARE NOT ASKS. If the user said "the tone should be partner-to-
+partner, not sales pitch" — that's tone, not an ask. Skip it.
+
+If the user did not state an ask, return empty string. Empty is better
+than fabricated.
+
 ═══ ENRICHMENT — MOTIVATING FACTORS AND DRIVERS ═══
 
 For EACH differentiator, draft a Motivating Factor (MF): WHY would someone
@@ -179,6 +200,7 @@ Return ONLY valid JSON in this exact shape (no markdown, no code fences):
     "reasoning": "one short sentence on why this medium"
   },
   "situation": "two to four sentences capturing the specific thing this deliverable needs to do — the occasion, the trigger, the audience reaction you're aiming for, any constraint or deadline. See Example A and Example B above.",
+  "verbatimAsk": "the user's literal call-to-action sentence — see THE VERBATIM ASK section above. Empty string when the user did not state an ask.",
   "confidenceNotes": "one sentence on overall confidence — were you mostly reading stated facts, or mostly inferring? Flag any place where you felt the description was too thin to extract reliably.",
   "mariaAcknowledgment": "...",
   "mariaContextNote": "...",
@@ -200,7 +222,16 @@ export type ExpressMedium =
   | 'one-pager'
   | 'report';
 
+// Bundle 1A rev6 Phase 1 — canonical interpretation interface.
+// `mode` and `verbatimAsk` were previously ad-hoc fields applied at
+// various construction sites (rev2 added `autonomousMode: boolean`,
+// rev5 added `verbatim_ask: string`, runDraftPipeline wrote `cta`).
+// All ad-hoc additions removed; this interface is the single source
+// of truth. mariaAcknowledgment/Maria*-fields are Express-extraction-
+// specific and now optional (commitExistingForPipeline and
+// runDraftPipeline have no meaningful values).
 export interface ExpressInterpretation {
+  mode: 'autonomous' | 'guided';
   offering: {
     name: string;
     nameSource: FactSource;
@@ -219,10 +250,11 @@ export interface ExpressInterpretation {
     reasoning: string;
   };
   situation: string;
+  verbatimAsk: string;
   confidenceNotes: string;
-  mariaAcknowledgment: string;
-  mariaContextNote: string;
-  mariaQuestion: string;
+  mariaAcknowledgment?: string;
+  mariaContextNote?: string;
+  mariaQuestion?: string;
 }
 
 // ─── Extraction function ────────────────────────────────────
@@ -230,9 +262,61 @@ export interface ExpressInterpretation {
 export async function extractExpressInterpretation(
   userMessage: string,
 ): Promise<ExpressInterpretation> {
-  return callAIWithJSON<ExpressInterpretation>(
+  const result = await callAIWithJSON<ExpressInterpretation>(
     EXPRESS_EXTRACTION_SYSTEM,
     userMessage,
     'deep', // Sonnet 4.6 — validated by spike
   );
+  // Bundle 1A rev6 — coerce to canonical shape. Express extraction is
+  // unconditionally autonomous (the only entry point that calls this
+  // function is the Express-flow autonomous build). verbatimAsk is
+  // trimmed; downstream readers expect a non-undefined string.
+  result.mode = 'autonomous';
+  result.verbatimAsk = (result.verbatimAsk ?? '').trim();
+  return result;
+}
+
+// ─── Schema migration helpers (Bundle 1A rev6 Phase 1.F) ──────────────
+// Legacy ExpressJob rows in the database were written with various
+// ad-hoc field shapes during rev2-5. These helpers coalesce: prefer
+// the canonical shape; fall back to legacy shapes; default if nothing
+// matches. TODO(rev7): remove legacy coalescing once legacy ExpressJob
+// rows have aged out (>30 days post-rev6 deploy is a reasonable cutoff).
+
+export function getInterpretationMode(interp: any): 'autonomous' | 'guided' {
+  if (!interp || typeof interp !== 'object') return 'guided';
+  // Canonical (rev6+): explicit mode field.
+  if (interp.mode === 'autonomous' || interp.mode === 'guided') {
+    return interp.mode;
+  }
+  // Legacy (rev2-5): autonomousMode boolean.
+  // TODO(rev7): remove legacy coalescing once legacy ExpressJob rows have aged out.
+  if (interp.autonomousMode === true) return 'autonomous';
+  if (interp.guided === true) return 'guided';
+  // Default: guided. Safer fallback than autonomous because guided
+  // skips the AUTONOMOUS_BUILD_COMPLETE write and post-delivery offer
+  // — i.e., a misclassification falls quiet rather than firing the
+  // wrong locked Cowork copy.
+  return 'guided';
+}
+
+export function getInterpretationVerbatimAsk(interp: any): string {
+  if (!interp || typeof interp !== 'object') return '';
+  // Canonical (rev6+): explicit verbatimAsk field.
+  if (typeof interp.verbatimAsk === 'string' && interp.verbatimAsk.trim().length > 0) {
+    return interp.verbatimAsk.trim();
+  }
+  // Legacy rev5 shape: snake_case verbatim_ask.
+  // TODO(rev7): remove legacy coalescing once legacy ExpressJob rows have aged out.
+  if (typeof interp.verbatim_ask === 'string' && interp.verbatim_ask.trim().length > 0) {
+    return interp.verbatim_ask.trim();
+  }
+  // Legacy guided-old shape: cta field on the interpretation object
+  // (runDraftPipeline:3408 wrote `interpretation: { guided: true, medium, cta, situation }`).
+  // No active reader downstream; defensive against persisted ExpressJob
+  // rows that may have been written by an older code path per Cowork.
+  if (typeof interp.cta === 'string' && interp.cta.trim().length > 0) {
+    return interp.cta.trim();
+  }
+  return '';
 }

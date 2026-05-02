@@ -1189,7 +1189,11 @@ You MUST ask the LOCKED clarifying question, parameterizing over the title the u
 
 "An ${lastUserMsg.replace(/^(?:a|an|the)\s+/i, '').replace(/"/g, '\\"')} — got it on title. Tell me a bit more about them. What kind of company, what size of team, what's actually keeping them up at night right now?"
 
-Render the locked text above. After the question, emit reply chips per the universal rule.`;
+Render the locked text above. After the question, emit reply chips per the universal rule.
+
+Bundle 1A rev6 Phase 5 — affirmation gate completeness:
+
+On this turn ONLY: do NOT begin your reply with any affirmation, validation, or acknowledgment phrase. Begin directly with the locked clarifying question — "A [title] — got it on title. Tell me a bit more about them. What kind of company, what size of team, what's actually keeping them up at night right now?" Do NOT say "That tracks," "Got it," "Crisp," "Right there," or any equivalent. These phrases reinforce a false claim of understanding when the audience input is too thin for understanding to be possible.`;
     }
   }
 
@@ -2276,7 +2280,11 @@ router.post('/autonomous-build', async (req: Request, res: Response) => {
       offeringName: string | null;
       audienceName: string | null;
       situation: string;
-      verbatim_ask: string;
+      // Bundle 1A rev6 Phase 1 — renamed from verbatim_ask (snake_case)
+      // to verbatimAsk (camelCase) to match the canonical
+      // ExpressInterpretation interface. The classifier prompt JSON
+      // schema below uses verbatimAsk too.
+      verbatimAsk: string;
     };
 
     const classifierSystem = `You are extracting structured info from a conversation between a user and Maria, a messaging-build assistant. Your job is JUDGMENT-light: only fill in a field if the user has CLEARLY stated it. When in doubt, leave the field null.
@@ -2304,16 +2312,16 @@ Fields to extract:
 
 - situation: a short summary of the specific occasion or context for this deliverable (e.g., "Q3 partnership webinar invitation", "investor meeting next week", "beta launch announcement"). One sentence max. Empty string if the conversation has no specific occasion. This field is for downstream prompt context — it is NOT the user's ask.
 
-- verbatim_ask: the EXACT WORDING the user used to state what they want the audience to do. Bundle 1A rev3 W2 — this field replaces upstream pattern-matching that tried to recover the literal CTA from the situation paragraph. The user has the words; let the user's words be the answer.
+- verbatimAsk: the EXACT WORDING the user used to state what they want the audience to do. This field replaces upstream pattern-matching that tried to recover the literal CTA from the situation paragraph. The user has the words; let the user's words be the answer.
 
-  Pull the literal sentence verbatim. Do NOT paraphrase. Do NOT shorten. Do NOT generalize. If the user typed "I want them to confirm participation in our joint Q3 webinar by May 15", verbatim_ask is "confirm participation in our joint Q3 webinar by May 15" (you may strip "I want them to" / "the ask is" / "tell them to" if it leaves a clean imperative; do not change anything else). If the user typed "reply with their availability for next week", verbatim_ask is "reply with their availability for next week".
+  Pull the literal sentence verbatim. Do NOT paraphrase. Do NOT shorten. Do NOT generalize. If the user typed "I want them to confirm participation in our joint Q3 webinar by May 15", verbatimAsk is "confirm participation in our joint Q3 webinar by May 15" (you may strip "I want them to" / "the ask is" / "tell them to" if it leaves a clean imperative; do not change anything else). If the user typed "reply with their availability for next week", verbatimAsk is "reply with their availability for next week".
 
   TONE NOTES ARE NOT ASKS. If the user said "the tone should be partner-to-partner, not sales pitch" — that's tone, not an ask. Skip it.
 
   If the user did not state an ask, return empty string. Empty is better than fabricated.
 
 OUTPUT — JSON only, no markdown fences:
-{ "deliverableType": "...", "offeringName": "...", "audienceName": "...", "situation": "...", "verbatim_ask": "..." }
+{ "deliverableType": "...", "offeringName": "...", "audienceName": "...", "situation": "...", "verbatimAsk": "..." }
 
 When in doubt, prefer null/empty. False positives (filling a field that wasn't actually stated) cause the autonomous pipeline to build the wrong thing — which is the bug we're fixing.`;
 
@@ -2367,14 +2375,13 @@ When in doubt, prefer null/empty. False positives (filling a field that wasn't a
     });
 
     // Kick off the pipeline. commitExistingForPipeline returns
-    // { jobId, draftId } and creates an ExpressJob row whose
-    // interpretation is the synthesized data. We then update that row's
-    // interpretation to add autonomousMode + deliverableType so the
-    // pipeline knows to fire AUTONOMOUS_POST_DELIVERY_OFFER post-blend.
-    // Bundle 1A rev5 — pass classified.verbatim_ask through so the
-    // pipeline reads it from interpretation.verbatim_ask instead of
-    // requiring the post-call expressJob.update below. The update
-    // below remains as a redundant safety net (idempotent).
+    // Bundle 1A rev6 Phase 1.D — commitExistingForPipeline now
+    // synthesizes the canonical interpretation directly with
+    // mode='autonomous', primaryMedium.value=medium, and
+    // verbatimAsk=<classified ask>. The redundant post-call
+    // expressJob.update block (rev3-5) is REMOVED — its purpose was to
+    // patch the missing fields onto the synthesized interpretation,
+    // which now has them at construction time.
     const result = await commitExistingForPipeline(
       offering.id,
       audience.id,
@@ -2382,30 +2389,8 @@ When in doubt, prefer null/empty. False positives (filling a field that wasn't a
       classified.situation || '',
       userId,
       workspaceId,
-      typeof classified.verbatim_ask === 'string' ? classified.verbatim_ask : '',
+      typeof classified.verbatimAsk === 'string' ? classified.verbatimAsk : '',
     );
-
-    const job = await prisma.expressJob.findUnique({
-      where: { id: result.jobId },
-      select: { interpretation: true },
-    });
-    const interp = (job?.interpretation as Record<string, any>) || {};
-    await prisma.expressJob.update({
-      where: { id: result.jobId },
-      data: {
-        interpretation: {
-          ...interp,
-          autonomousMode: true,
-          deliverableType,
-          // Bundle 1A rev3 W2 — verbatim_ask from the classifier lands
-          // on the interpretation. Pipeline reads this directly to
-          // populate ctaForStory and the metadata-header CTA.
-          verbatim_ask: typeof classified.verbatim_ask === 'string'
-            ? classified.verbatim_ask
-            : '',
-        },
-      },
-    });
 
     setImmediate(() => {
       runPipeline(result.jobId).catch((err: unknown) => {
