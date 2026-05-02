@@ -1179,28 +1179,52 @@ AUDIENCE: ${draftWithElements.audience.name}`;
     // ClarityAudit partnership..." sailing through this path with no
     // Tier 1 check. The shared runTier1MarketTruthGuard helper now runs
     // the same retry budget as routes/ai.ts uses for the guided 3T flow.
+    //
+    // Bundle 1A rev4 — wrap the guard call in a fail-OPEN try/catch.
+    // rev3 introduced a regression where any throw from the guard
+    // (callAIWithJSON inside the regenerate closure, the Opus judge
+    // call, JSON parse errors on retry) aborted runPipeline before
+    // tier1Statement.create at line below — leaving an empty Three
+    // Tier and no email. The guard layer is a quality enhancement, not
+    // a gate. On any guard failure, log with jobId, KEEP the original
+    // tierResult.tier1.text from the initial generateTierWithVoiceCheck,
+    // and proceed to persistence. The pipeline must always produce
+    // SOME persisted Three Tier even if the guard layer crashes.
     if (tierResult.tier1?.text) {
-      const { runTier1MarketTruthGuard } = await import(
-        '../services/voiceCheck.js'
-      );
-      tierResult.tier1.text = await runTier1MarketTruthGuard(
-        tierResult.tier1.text,
-        draftWithElements.offering.name,
-        async (feedback) => {
-          const regen = await callAIWithJSON<TierResult>(
-            CONVERT_LINES_SYSTEM,
-            convertMessage + feedback,
-            'elite',
-          );
-          // Replace the WHOLE tierResult so the Tier 2/3 statements stay
-          // consistent with the regenerated Tier 1. Without this, the
-          // Tier 1 retry would diverge from the Tier 2 columns that
-          // reference it.
-          if (regen.tier1?.text) tierResult.tier1 = regen.tier1;
-          if (regen.tier2) tierResult.tier2 = regen.tier2;
-          return regen.tier1?.text || tierResult.tier1.text;
-        },
-      );
+      const originalTier1Text = tierResult.tier1.text;
+      try {
+        const { runTier1MarketTruthGuard } = await import(
+          '../services/voiceCheck.js'
+        );
+        tierResult.tier1.text = await runTier1MarketTruthGuard(
+          tierResult.tier1.text,
+          draftWithElements.offering.name,
+          async (feedback) => {
+            const regen = await callAIWithJSON<TierResult>(
+              CONVERT_LINES_SYSTEM,
+              convertMessage + feedback,
+              'elite',
+            );
+            // Replace the WHOLE tierResult so the Tier 2/3 statements stay
+            // consistent with the regenerated Tier 1. Without this, the
+            // Tier 1 retry would diverge from the Tier 2 columns that
+            // reference it.
+            if (regen.tier1?.text) tierResult.tier1 = regen.tier1;
+            if (regen.tier2) tierResult.tier2 = regen.tier2;
+            return regen.tier1?.text || tierResult.tier1.text;
+          },
+        );
+      } catch (guardErr) {
+        const errMsg = guardErr instanceof Error ? guardErr.message : String(guardErr);
+        const stack = guardErr instanceof Error ? guardErr.stack : '';
+        console.error(
+          `[ExpressPipeline] ${jobId} Tier1Guard FAIL-OPEN — keeping original Tier 1, proceeding to persistence. Error: ${errMsg}`,
+          stack,
+        );
+        // Restore the original Tier 1 in case a partial regeneration
+        // mutated tierResult.tier1.text mid-flight.
+        tierResult.tier1.text = originalTier1Text;
+      }
     }
 
     if (tierResult.tier1?.text) {

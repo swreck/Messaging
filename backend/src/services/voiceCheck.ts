@@ -449,17 +449,29 @@ export async function runTier1MarketTruthGuard(
   offeringName: string | undefined,
   regenerate: (feedbackToAppend: string) => Promise<string>,
 ): Promise<string> {
+  // Bundle 1A rev4 — diagnostic log at entry. When the next regression
+  // surfaces, the log trace says exactly which pass crashed.
+  console.log(
+    `[Tier1Guard] ENTER initial="${initialTier1Text.slice(0, 200)}${initialTier1Text.length > 200 ? '…' : ''}" offering=${offeringName ? `"${offeringName}"` : '(none)'}`,
+  );
   let tier1Text = initialTier1Text;
+  let exitReason: 'sentinel-passed' | 'opus-passed' | 'hard-blocked' | 'retries-exhausted' = 'sentinel-passed';
 
   // Pass 1 — cheap regex sentinel with up to 3 retries. Catches the
   // obvious imperative-verb / offering-name / mechanism violations
   // without an Opus round-trip.
+  // Bundle 1A rev4 — inner try/catch around regenerate. If regenerate
+  // throws (network glitch, JSON parse error from Opus), keep the
+  // current tier1Text and break out of Pass 1 — DO NOT propagate.
+  // The pipeline must continue with whatever Tier 1 we have.
+  let sentinelPassed = false;
   for (let sentinelAttempt = 1; sentinelAttempt <= 3; sentinelAttempt++) {
     const sentinel = checkTier1MarketTruth(tier1Text, offeringName);
     if (sentinel.passed) {
       if (sentinelAttempt > 1) {
         console.log(`[Tier1Sentinel] passed on attempt ${sentinelAttempt}`);
       }
+      sentinelPassed = true;
       break;
     }
     console.log(`[Tier1Sentinel] attempt ${sentinelAttempt}/3 — ${sentinel.violations.length} violations:`, sentinel.violations);
@@ -468,11 +480,18 @@ export async function runTier1MarketTruthGuard(
       break;
     }
     const feedback = '\n\n' + buildTier1SentinelFeedback(sentinel.violations);
-    tier1Text = await regenerate(feedback);
+    try {
+      tier1Text = await regenerate(feedback);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[Tier1Sentinel] regenerate threw on attempt ${sentinelAttempt} — keeping current Tier 1, breaking out. Error: ${errMsg}`);
+      break;
+    }
   }
 
   // Pass 2 — Opus judge (the methodology floor). Catches subtle vendor-
   // speak the regex can't see. Up to 3 retries.
+  let opusPassed = false;
   for (let opusAttempt = 1; opusAttempt <= 3; opusAttempt++) {
     try {
       const judge = await judgeTier1AgainstRuleOpus(tier1Text, offeringName);
@@ -480,6 +499,7 @@ export async function runTier1MarketTruthGuard(
         if (opusAttempt > 1) {
           console.log(`[Tier1OpusJudge] passed on attempt ${opusAttempt}`);
         }
+        opusPassed = true;
         break;
       }
       console.log(`[Tier1OpusJudge] attempt ${opusAttempt}/3 — failed: ${judge.reason}`);
@@ -499,6 +519,7 @@ export async function runTier1MarketTruthGuard(
   // name STILL appears in Tier 1, prepend the [TIER1_RETRY_FAILED]
   // sentinel marker. The deliverable surfaces with a visible failure
   // flag that QA can route. Idempotent — does not double-prefix.
+  let hardBlocked = false;
   if (offeringName && offeringName.trim().length >= 2) {
     const offeringPattern = new RegExp(
       `\\b${offeringName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
@@ -509,9 +530,18 @@ export async function runTier1MarketTruthGuard(
         `[Tier1HardBlock] OFFERING NAME "${offeringName}" still in Tier 1 after all retries — flagging with [TIER1_RETRY_FAILED] sentinel. Final Tier 1: "${tier1Text}"`,
       );
       tier1Text = `[TIER1_RETRY_FAILED] ${tier1Text}`;
+      hardBlocked = true;
     }
   }
 
+  if (hardBlocked) exitReason = 'hard-blocked';
+  else if (opusPassed) exitReason = 'opus-passed';
+  else if (sentinelPassed) exitReason = 'sentinel-passed';
+  else exitReason = 'retries-exhausted';
+
+  console.log(
+    `[Tier1Guard] EXIT reason=${exitReason} final="${tier1Text.slice(0, 200)}${tier1Text.length > 200 ? '…' : ''}"`,
+  );
   return tier1Text;
 }
 

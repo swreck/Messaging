@@ -253,14 +253,34 @@ async function generateTierWithVoiceCheck(
   // call the same helper. Caller passes a regenerate closure that
   // re-runs generateTier with the appended feedback. Helper handles
   // sentinel + Opus judge + hard-block on offering name.
-  result.tier1.text = await runTier1MarketTruthGuard(
-    result.tier1.text,
-    offeringName,
-    async (feedback) => {
-      result = await generateTier(convertMessage + feedback, rank1Priority);
-      return result.tier1.text;
-    },
-  );
+  //
+  // Bundle 1A rev4 — fail-OPEN wrap. The guard is a quality enhancement,
+  // not a gate. On any throw (network glitch, JSON parse error, Opus
+  // judge crash), keep the original Tier 1 and let the response ship.
+  // Cowork's verification surfaced rev3 aborting the autonomous-build
+  // pipeline on guard exception — the guided flow has the same call
+  // site and the same risk shape, so apply the same defense.
+  {
+    const originalTier1Text = result.tier1.text;
+    try {
+      result.tier1.text = await runTier1MarketTruthGuard(
+        result.tier1.text,
+        offeringName,
+        async (feedback) => {
+          result = await generateTier(convertMessage + feedback, rank1Priority);
+          return result.tier1.text;
+        },
+      );
+    } catch (guardErr) {
+      const errMsg = guardErr instanceof Error ? guardErr.message : String(guardErr);
+      const stack = guardErr instanceof Error ? guardErr.stack : '';
+      console.error(
+        `[generateTierWithVoiceCheck] Tier1Guard FAIL-OPEN — keeping original Tier 1. Error: ${errMsg}`,
+        stack,
+      );
+      result.tier1.text = originalTier1Text;
+    }
+  }
 
   // Round 3.4 coaching-fix Finding 1 — numeric-claim guard on Three Tier
   // statements. Lila's "30%" → "40%" fabrication originated in Tier 2/3
