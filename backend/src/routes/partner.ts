@@ -2075,6 +2075,43 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
     refreshNeeded = false;
   }
 
+  // ─── Bundle 1A rev7 Pair A — GAP_NOTICE handler ──────────────────────
+  // actions.ts emits "[GAP_NOTICE:<key>:<question>:<dismissChip>]" when
+  // build_deliverable detects a missing user data piece (display name
+  // for email sign-off, Support-category Tier 2 substance for Ch3) and
+  // hasn't been dismissed for this build. Replace Maria's response
+  // with the locked Cowork question + the dismissal chip + a typed-
+  // reply prompt. The user either clicks the dismissal chip (Opus
+  // re-fires build_deliverable with gapDismissals.<key>: true) or
+  // types the missing data (Opus persists it and re-fires
+  // build_deliverable). The user is never blocked.
+  if (actionResult && actionResult.startsWith('[GAP_NOTICE:')) {
+    // Marker shape: [GAP_NOTICE:displayName:What name goes...:Skip — no name]
+    // Split on first three colons; the dismissChip may not contain colons,
+    // and the question may. Cowork-locked questions don't contain colons
+    // today, but we strip greedily by location anyway.
+    const gapMatch = actionResult.match(/^\[GAP_NOTICE:([^:]+):(.*?):([^\]]+)\]$/);
+    if (gapMatch) {
+      const [, gapKey, gapQuestion, gapDismissChip] = gapMatch;
+      result.response = `${gapQuestion}\n\n[CHIP: ${gapDismissChip}]`;
+      actionResult = null;
+      refreshNeeded = false;
+      // Augment the system prompt for the NEXT turn so Opus knows how
+      // to interpret the user's reply. Two paths Opus must handle:
+      //   1. User clicked the dismissal chip verbatim ("Skip — no
+      //      name" / "Skip — figure out support later") — Opus
+      //      re-fires build_deliverable with the prior params PLUS
+      //      gapDismissals.<key>: true.
+      //   2. User typed actual gap-filling content (a name like
+      //      "Reza", or Support specifics like "weekly check-ins
+      //      and a dedicated PM") — Opus persists the data and
+      //      re-fires build_deliverable.
+      // The augment is consumed via persistence on the assistant
+      // message context (the next /partner/message call reads it).
+      void gapKey; // marker key surfaced for future consumption
+    }
+  }
+
   // ─── Round 3.4 Bug 1 — Pitch deck honest fallback ────────────────────
   // When the captured medium is pitch_deck and Maria is about to fire
   // build_deliverable, surface the honest fallback once: explain that

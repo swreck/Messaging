@@ -316,6 +316,33 @@ export function buildMethodologyFailureMessage(issueList: string): string {
   return `I built the five chapters, but the structural shape didn't quite land — ${issueList}. I'd rather we look at this together than ship something I'm not happy with. Want to walk through it?`;
 }
 
+// Bundle 1A rev7 Pair A — gap-notice-before-build copy. Fires before
+// autonomous-build kicks off when Maria detects user data missing for
+// a deliverable that needs it. Maria asks once, with a one-line reason
+// for why filling the gap makes the message stronger. Dismissal chip
+// lets the user proceed without filling the gap; the deliverable
+// then renders a graceful default rather than a placeholder string.
+//
+// Rule 1 — display-name gap. Triggered when User.name is empty/null
+// AND medium is email (the medium with a sign-off requirement). The
+// fall-through close is the literal text the email signs with when
+// the gap is dismissed or the user has no name on file.
+export const GAP_NOTICE_DISPLAY_NAME =
+  "What name goes on this? Yours reads stronger than a generic close.";
+export const GAP_NOTICE_DISPLAY_NAME_CHIP_DISMISS = "Skip — no name";
+export const GAP_NOTICE_DISPLAY_NAME_FALLTHROUGH_CLOSE = "Best regards";
+
+// Rule 3 — Support-gap notice. Triggered when the source Three Tier
+// has no Support-category Tier 2 with substantive content (text +
+// non-empty tier3Bullets). The fall-through Ch3 line is the literal
+// text Ch3 reads when the gap is dismissed; per Cowork the support
+// arrangement gets defined in scoping rather than padded into prose.
+export const GAP_NOTICE_SUPPORT =
+  "I don't see how you actually back the buyer up once they say yes. Tell me one or two concrete ways — training, weekly check-ins, a dedicated person — so the email shows real support, not just promises.";
+export const GAP_NOTICE_SUPPORT_CHIP_DISMISS = "Skip — figure out support later";
+export const GAP_NOTICE_SUPPORT_FALLTHROUGH_CH3 =
+  "We'll define the implementation path with you in scoping.";
+
 // ─── Round 3.1 Item 3 — Blend-phase heartbeat ──────────────────────────
 // Fires AT MOST once per blend run, when the blend stage exceeds
 // BLEND_HEARTBEAT_MS. Suppressed if blend completes under the threshold.

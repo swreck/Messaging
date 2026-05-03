@@ -286,6 +286,17 @@ export interface ExpressInterpretation {
   mariaAcknowledgment?: string;
   mariaContextNote?: string;
   mariaQuestion?: string;
+  // Bundle 1A rev7 Pair A — gap-notice dismissals captured at the
+  // build_deliverable action gate (lib/actions.ts). When the user
+  // dismissed a gap-notice question via chip, the corresponding key
+  // is true. Pipeline reads these at Ch3 generation (support →
+  // fall-through line) and Ch5 sign-off (displayName → "Best regards"
+  // alone). Optional because legacy ExpressJob rows don't carry it
+  // and Express extraction doesn't produce it.
+  gapDismissals?: {
+    displayName?: boolean;
+    support?: boolean;
+  };
 }
 
 // ─── Extraction function ────────────────────────────────────

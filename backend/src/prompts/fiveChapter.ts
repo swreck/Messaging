@@ -118,10 +118,27 @@ SELF-CHECK: Read every sentence. Does any sentence tell the reader something abo
 - ANTI-EMBELLISHMENT ON PROVENANCE: when the user has supplied a fact about the founding team, the company history, or the product's origin, USE IT VERBATIM or in close paraphrase. Do NOT extend it into a narrative tail. "Founders came out of Pure Storage and Fusion-io" is the user's words; you can write that. You may NOT extend it into "this drive is where that experience went next, applied specifically to..." — that is invented narrative the user did not author. The KENS_VOICE rule against origin stories applies here at chapter level: stop where the user's words stop.`,
 
     3: `CHAPTER 3 RULES:
-- Help people feel comfortable making the adoption decision.
-- Content must be specific: easy transaction, questions answered, smooth deployment, fast service, monitoring usage, advocating for their needs.
-- Don't be vague — give concrete details about HOW you support customers.
-- This is about reducing perceived risk and building trust.`,
+
+Chapter 3 builds the audience's trust that they'll receive the value Ch2 promised. Trust doesn't come from claims of partnership; it comes from specifics concrete enough that the audience can picture how the trust-building actually works for them. Trust comes before proof; Ch4 reinforces a trust Ch3 already established.
+
+THE FORM TRUST TAKES IS AUDIENCE-PARAMETERIZED. Read the audience type and role from the AUDIENCE block above and shape Ch3 content accordingly:
+
+- SALES / B2B CUSTOMER audiences trust through implementation, onboarding, and service specifics — the hand-holding moments after they say yes. Specifics include: configuring, planning, training, onboarding, answering questions, monitoring usage, smoothing deployment, advocating for the audience's needs.
+- INVESTOR audiences trust through unit economics, market sizing, and customer acquisition math — the financial proof the value scales. Specifics include: customer acquisition cost, sales cycle length, net retention, gross margin, market growth rate, the mechanism by which unit economics improve at scale.
+- PARTNER audiences trust through specifics of how the partnership operates — joint accountability, mutual support, escalation paths. Specifics include: joint planning cadence, shared escalation paths, revenue split tracking, mutual commitments, how disputes get resolved.
+- BOARD AND INTERNAL-LEADERSHIP audiences trust through governance specifics — oversight cadence, risk surfaces, decision rights. Specifics include: phase gates, risk reviews tied to quantified thresholds, decision rights, oversight cadence, how exceptions escalate.
+
+Open Ch3 with the specific that closes THIS reader's most likely trust gap. A senior B2B buyer's gap is usually commitment and relationship; an operations lead's is whether implementation fits their systems; a technical evaluator's is whether their team will actually adopt and use it. An investor's gap is usually whether the unit economics work at scale or only at small scale. A partner's gap is usually whether joint accountability survives when one side has competing priorities. A board's gap is usually whether risk surfaces stay visible or get hidden in execution detail. Lead with the specific that closes that gap.
+
+If other specifics also belong, integrate them through verb choice — let one sentence carry weight from multiple specifics. Examples:
+- Sales/B2B: "Your dedicated implementation manager runs weekly check-ins and pulls in a specialist for the first 48 hours" carries three specifics in one sentence.
+- Investor: "Customer acquisition cost is $X over a 6-month sales cycle; net retention sits at Y%; the unit economics work at scale because [mechanism]" carries three specifics in one sentence.
+- Partner: "The partnership runs through quarterly joint planning, shared escalation paths, and revenue split tracking on a single dashboard" carries three specifics in one sentence.
+- Board: "Implementation rolls out with phase gates at 30/60/90 days and risk reviews tied to quantified thresholds" carries two specifics in one sentence.
+
+In every case: integrate via verbs, do not list. "We provide X. We hold Y. We have Z." is a list; replace it with one sentence whose verbs carry all three specifics. Do the first form, never the second. Don't list. Don't pad.
+
+If the source has only one concrete specific (of any audience-shape), write a tight chapter on that one. If the user dismissed the support-gap question, Ch3 reads exactly: "We'll define the implementation path with you in scoping."`,
 
     4: `CHAPTER 4 RULES:
 - Show organizations/people SIMILAR to the prospect who are already succeeding.

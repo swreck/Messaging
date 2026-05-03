@@ -1466,6 +1466,68 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           actionResult = `[FORMAT_NEEDED] Need to ask the format question before building.`;
           refreshNeeded = false;
         } else {
+          // Bundle 1A rev7 Pair A — gap-notice-before-build. Detect
+          // missing user data the deliverable needs (display-name for
+          // email sign-off, Support-category Tier 2 substance for Ch3)
+          // BEFORE the pipeline kicks off. When a gap is detected and
+          // hasn't been dismissed for this build, return a [GAP_NOTICE:
+          // <key>:<question>:<dismissChip>] marker. partner.ts
+          // recognizes the marker shape, writes Maria's question into
+          // chat with the dismissal chip, and re-fires build_deliverable
+          // with gapDismissals populated when the user responds.
+          try {
+            const medium = requestedMedium;
+            const { detectNextGap } = await import('./gapNoticeService.js');
+            const userRow = await prisma.user.findUnique({
+              where: { id: userId },
+              select: { settings: true },
+            });
+            const draftForGap = await prisma.threeTierDraft.findFirst({
+              where: {
+                offeringId,
+                audienceId,
+                ...(workspaceId ? { offering: { workspaceId } } : {}),
+              },
+              orderBy: { createdAt: 'desc' },
+              include: {
+                tier2Statements: {
+                  orderBy: { sortOrder: 'asc' },
+                  include: { tier3Bullets: true },
+                },
+              },
+            });
+            const tier2Snapshot = draftForGap
+              ? draftForGap.tier2Statements.map(t2 => ({
+                  categoryLabel: t2.categoryLabel,
+                  text: t2.text,
+                  tier3BulletCount: t2.tier3Bullets.length,
+                }))
+              : [];
+            const dismissalsRaw =
+              (a.params.gapDismissals && typeof a.params.gapDismissals === 'object')
+                ? (a.params.gapDismissals as Record<string, any>)
+                : {};
+            const dismissals = {
+              displayName: dismissalsRaw.displayName === true,
+              support: dismissalsRaw.support === true,
+            };
+            const userSettings = (userRow?.settings as Record<string, any>) || {};
+            const userDisplayName = typeof userSettings.displayName === 'string' ? userSettings.displayName : null;
+            const gap = detectNextGap({
+              userDisplayName,
+              medium,
+              tier2: tier2Snapshot,
+              dismissals,
+            });
+            if (gap) {
+              actionResult = `[GAP_NOTICE:${gap.key}:${gap.question}:${gap.dismissChip}]`;
+              refreshNeeded = false;
+              continue;
+            }
+          } catch (gapErr) {
+            const errMsg = gapErr instanceof Error ? gapErr.message : String(gapErr);
+            console.error(`[build_deliverable] gap detection error (proceeding to build): ${errMsg}`);
+          }
           try {
             const medium = requestedMedium;
             const situation = a.params.situation || '';
@@ -1483,6 +1545,17 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
             const verbatimAsk = typeof a.params.verbatimAsk === 'string'
               ? a.params.verbatimAsk
               : (typeof a.params.verbatim_ask === 'string' ? a.params.verbatim_ask : '');
+            // Bundle 1A rev7 Pair A — forward gap dismissals into the
+            // pipeline's interpretation so Ch3 (support) and Ch5 (sign-
+            // off) generation can read them. The gate already passed
+            // by this point; the dismissal flag tells downstream
+            // generation which fall-through to use.
+            const gapDismissalsForBuild = (a.params.gapDismissals && typeof a.params.gapDismissals === 'object')
+              ? {
+                  displayName: (a.params.gapDismissals as Record<string, any>).displayName === true,
+                  support: (a.params.gapDismissals as Record<string, any>).support === true,
+                }
+              : undefined;
             const result = await commitExistingForPipeline(
               offeringId,
               audienceId,
@@ -1491,6 +1564,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
               userId,
               workspaceId || '',
               verbatimAsk,
+              gapDismissalsForBuild,
             );
             if (!result || !result.jobId) {
               actionResult = 'Could not start the build — setup returned no job.';
@@ -2166,7 +2240,7 @@ export function buildActionList(context: ActionContext): string {
   }
 
   // Build deliverable — full pipeline from existing offering + audience
-  actions.push('- build_deliverable: Build a complete first draft (Three Tier + Five Chapter Story) from an existing offering and audience. Runs the full pipeline autonomously — mapping, message generation, story writing, voice check, polishing. Takes a few minutes. Params: { offeringName: string, audienceName: string, medium: string, situation?: string, verbatimAsk?: string } — medium options: email, blog, landing_page, in_person, press_release, newsletter, one-pager, report, pitch_deck. situation is the specific context or occasion for this deliverable (e.g., "Q3 partnership webinar invitation", "investor meeting next week"). verbatimAsk is the user\'s call-to-action with all signal preserved and only the noise dropped. PRESERVE the signal — every word that carries action meaning: the action verb and its object, real deadlines (a date, "by Friday"), real scope (the audience-org name, possessives that specify what the action is about), modifiers and articles that come with the action. DROP the noise — only these: imperative-marker prefixes ("I want them to", "we want him to", "tell them to", "have them", "the ask is", and close variants); filler words ("like", "kind of", "sort of"); hedges ("or whenever works", "if possible"). Do NOT touch anything outside that list. Possessives stay. Articles stay. Modifiers stay. Worked examples: user said "We want him to confirm Veracore\'s participation in our joint Q3 webinar by May 15." → verbatimAsk = "confirm Veracore\'s participation in our joint Q3 webinar by May 15." (possessive "Veracore\'s" preserved). User said "we want him to like sign up for the demo by friday or whenever works." → verbatimAsk = "sign up for the demo by Friday." (filler and hedge dropped, real deadline preserved). Tone notes ("the tone should be partner-to-partner") are NOT asks — skip them. If the user did not state an ask, omit verbatimAsk entirely (empty is better than fabricated).');
+  actions.push('- build_deliverable: Build a complete first draft (Three Tier + Five Chapter Story) from an existing offering and audience. Runs the full pipeline autonomously — mapping, message generation, story writing, voice check, polishing. Takes a few minutes. Params: { offeringName: string, audienceName: string, medium: string, situation?: string, verbatimAsk?: string, gapDismissals?: { displayName?: boolean; support?: boolean } }. The build may be gated by a gap-notice when Maria detects user data missing for the deliverable (display name for email sign-off, Support-category Tier 2 substance for Ch3). When the user dismisses a gap-notice via chip, re-fire build_deliverable with gapDismissals.<key>: true (e.g., { gapDismissals: { displayName: true } }). The dismissal lets the build proceed with a graceful default (e.g., "Best regards" close, or the locked Ch3 fall-through line) instead of a placeholder. — medium options: email, blog, landing_page, in_person, press_release, newsletter, one-pager, report, pitch_deck. situation is the specific context or occasion for this deliverable (e.g., "Q3 partnership webinar invitation", "investor meeting next week"). verbatimAsk is the user\'s call-to-action with all signal preserved and only the noise dropped. PRESERVE the signal — every word that carries action meaning: the action verb and its object, real deadlines (a date, "by Friday"), real scope (the audience-org name, possessives that specify what the action is about), modifiers and articles that come with the action. DROP the noise — only these: imperative-marker prefixes ("I want them to", "we want him to", "tell them to", "have them", "the ask is", and close variants); filler words ("like", "kind of", "sort of"); hedges ("or whenever works", "if possible"). Do NOT touch anything outside that list. Possessives stay. Articles stay. Modifiers stay. Worked examples: user said "We want him to confirm Veracore\'s participation in our joint Q3 webinar by May 15." → verbatimAsk = "confirm Veracore\'s participation in our joint Q3 webinar by May 15." (possessive "Veracore\'s" preserved). User said "we want him to like sign up for the demo by friday or whenever works." → verbatimAsk = "sign up for the demo by Friday." (filler and hedge dropped, real deadline preserved). Tone notes ("the tone should be partner-to-partner") are NOT asks — skip them. If the user did not state an ask, omit verbatimAsk entirely (empty is better than fabricated).');
   actions.push('- check_deliverable: Check status of a deliverable build you started with build_deliverable. When complete, navigates to the finished draft. Params: { jobId?: string } — omit jobId to check the most recent build.');
   actions.push('- rebuild_foundation: Regenerate the Tier 1 and Tier 2 of an in-progress guided Foundation against the current offering + audience state. Use AFTER you have added a new differentiator (via add_capabilities) in response to a mapping gap — this rebuilds so the user sees the updated Tier 1 that reflects the new differentiator. Takes about 60 seconds. Params: { draftId: string } — the guided draftId. Your response while this runs: "Let me rebuild with that in." Returns a FOUNDATION_REBUILT marker the frontend uses to update the foundation card in place.');
 

@@ -769,6 +769,7 @@ export async function commitExistingForPipeline(
   userId: string,
   workspaceId: string,
   verbatimAsk?: string,
+  gapDismissals?: { displayName?: boolean; support?: boolean },
 ): Promise<ExistingCommitResult> {
   const offering = await prisma.offering.findFirst({
     where: { id: offeringId },
@@ -842,6 +843,12 @@ export async function commitExistingForPipeline(
     situation: situation || '',
     verbatimAsk: (verbatimAsk || '').trim(),
     confidenceNotes: 'Built from existing offering and audience data.',
+    gapDismissals: gapDismissals
+      ? {
+          displayName: gapDismissals.displayName === true,
+          support: gapDismissals.support === true,
+        }
+      : undefined,
   };
 
   const job = await prisma.expressJob.create({
@@ -920,6 +927,22 @@ export async function runPipeline(jobId: string): Promise<void> {
     // doesn't tell the user "your draft is ready" right after telling
     // them "the structural shape didn't quite land."
     let methodologyFailed = false;
+    // Bundle 1A rev7 Rule 1 — fetch user display name once at pipeline
+    // start. Threaded into Ch5 prompt context (email sign-off) and
+    // post-polish [Name] regex sweep. Empty string when User.name is
+    // empty/null OR the user dismissed the display-name gap (the gate
+    // in lib/actions.ts let the build proceed despite empty name).
+    let pipelineUserDisplayName = '';
+    try {
+      const userRow = await prisma.user.findUnique({
+        where: { id: pipelineUserId },
+        select: { settings: true },
+      });
+      const userSettings = (userRow?.settings as Record<string, any>) || {};
+      pipelineUserDisplayName = (typeof userSettings.displayName === 'string' ? userSettings.displayName : '').trim();
+    } catch (err) {
+      console.error(`[ExpressPipeline] ${jobId} fetch User.settings.displayName failed (proceeding with empty name):`, err);
+    }
     // One-shot pause-narration flag per pipeline run. The PAUSE_ON_FOUNDATIONAL_SHIFT
     // message fires at most once even if the user makes multiple foundation-changing
     // edits during the run.
@@ -1666,6 +1689,52 @@ Return ONLY the one sentence.`;
       const systemPrompt = buildChapterPrompt(chapterNum, mediumKey);
       const ch = CHAPTER_CRITERIA[chapterNum - 1];
       const chapterGuardrail = buildChapterGuardrails(chapterNum);
+
+      // Bundle 1A rev7 Rule 3 — Ch3 dismissed-support fall-through.
+      // When the user dismissed the Support gap-notice AND no
+      // substantive Support material exists in Tier 2, write the
+      // locked Cowork fall-through line directly and skip Opus
+      // generation. Per Cowork: "Ch3 reads exactly: 'We'll define
+      // the implementation path with you in scoping.'"
+      if (chapterNum === 3) {
+        const interpForGap = interpretation as ExpressInterpretation;
+        const supportDismissed = interpForGap.gapDismissals?.support === true;
+        const hasSubstantiveSupport = draftForStory.tier2Statements.some(
+          t2 => (t2.categoryLabel || '').trim().toLowerCase() === 'support'
+            && t2.text.trim().length > 0
+            && t2.tier3Bullets.length > 0,
+        );
+        if (supportDismissed && !hasSubstantiveSupport) {
+          const { GAP_NOTICE_SUPPORT_FALLTHROUGH_CH3 } = await import('../prompts/milestoneCopy.js');
+          const fallthroughContent = GAP_NOTICE_SUPPORT_FALLTHROUGH_CH3;
+          console.log(`[ExpressPipeline] ${jobId} Ch3 fall-through: support dismissed, writing locked line`);
+          await prisma.chapterContent.upsert({
+            where: { storyId_chapterNum: { storyId: story.id, chapterNum: 3 } },
+            update: { title: ch.name, content: fallthroughContent },
+            create: { storyId: story.id, chapterNum: 3, title: ch.name, content: fallthroughContent },
+          });
+          const fallthroughChapterRow = await prisma.chapterContent.findFirst({
+            where: { storyId: story.id, chapterNum: 3 },
+          });
+          if (fallthroughChapterRow) {
+            const maxVer = await prisma.chapterVersion.aggregate({
+              where: { chapterContentId: fallthroughChapterRow.id },
+              _max: { versionNum: true },
+            });
+            await prisma.chapterVersion.create({
+              data: {
+                chapterContentId: fallthroughChapterRow.id,
+                title: ch.name,
+                content: fallthroughContent,
+                versionNum: (maxVer._max?.versionNum ?? 0) + 1,
+                changeSource: 'ai_generate',
+              },
+            });
+          }
+          continue; // Skip the rest of the chapter-3 loop body.
+        }
+      }
+
       const prevChapters = await prisma.chapterContent.findMany({
         where: { storyId: story.id, chapterNum: { lt: chapterNum } },
         orderBy: { chapterNum: 'asc' },
@@ -1719,9 +1788,21 @@ ${draftForStory.tier2Statements
         ? `\nCTA VERBATIM REQUIREMENT — the call-to-action in this chapter must include the exact phrase "${story.cta}" verbatim. Do not paraphrase, summarize, soften, or rewrite the user's ask. Other surrounding language can be yours, but the verbatim phrase must appear in the chapter as the action the reader is invited to take.\n`
         : '';
 
+      // Bundle 1A rev7 Rule 1 — Ch5 sign-off context. When this is an
+      // email and a user display name exists, surface it for the
+      // sign-off. When empty, instruct the no-name fall-through close
+      // ("Best regards" alone, no placeholder). The prompts/mediums.ts
+      // email formatRules carries the structural shape; this surfaces
+      // the runtime data the rule consumes.
+      const signoffDirective = chapterNum === 5 && (mediumKey === 'email')
+        ? (pipelineUserDisplayName.length > 0
+            ? `\nUSER DISPLAY NAME (use in sign-off, exactly as written): "${pipelineUserDisplayName}"\n`
+            : `\nUSER DISPLAY NAME — NONE PROVIDED. The sign-off MUST be "Best regards" alone, on its own line, with no name beneath it. Do NOT emit any bracketed placeholder ("[Name]", "[Sender]", "[Your name]", or any variant). The literal text of the sign-off is: Best regards\n`)
+        : '';
+
       const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftForStory.audience.name}
 CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
-${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}
+${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}${signoffDirective}
 ${threeTierBlock}
 AUDIENCE PRIORITIES:
 ${draftForStory.audience.priorities
@@ -2682,6 +2763,44 @@ ${draftForStory.tier2Statements
         blendedText = ensureCh5VerbatimAsk(blendedText, verbatimAskForBlend);
         if (blendedText !== beforeBlend) {
           console.log(`[ExpressPipeline] ${jobId} post-polish verbatim-ask placement replaced closing sentence`);
+        }
+      }
+    }
+
+    // Bundle 1A rev7 Rule 1 — post-polish [Name] regex sweep. The
+    // prompt-level instructions in prompts/mediums.ts:email formatRules
+    // and the Ch5 signoffDirective should produce a clean sign-off
+    // (user's actual name OR "Best regards" alone). Belt-and-suspenders
+    // for the prompt-level instruction failing: scan blendedText for
+    // any bracketed-name placeholder (\[Name\] / \[Sender\] /
+    // \[Your name\] / \[your name\] / \[audience first name\] / etc.)
+    // and replace with the resolved sign-off form. The literal
+    // placeholder string never reaches the user-visible deliverable.
+    {
+      const placeholderPattern = /\[(?:name|sender|your name|audience first name|recipient|first name)\]/gi;
+      if (placeholderPattern.test(blendedText)) {
+        const replacement = pipelineUserDisplayName.length > 0 ? pipelineUserDisplayName : '';
+        // Reset the regex's lastIndex (test() with /g moves the cursor).
+        placeholderPattern.lastIndex = 0;
+        const beforeSweep = blendedText;
+        if (replacement) {
+          // User has a name on file — substitute.
+          blendedText = blendedText.replace(placeholderPattern, replacement);
+        } else {
+          // No name — replace the placeholder AND its enclosing line
+          // when the line is just the sign-off "Best,\n[Name]" shape.
+          // First pass: replace bare placeholder lines.
+          blendedText = blendedText.replace(/\n\s*\[(?:name|sender|your name|audience first name|recipient|first name)\]\s*\n?/gi, '\n');
+          // Second pass: replace any inline placeholder with empty.
+          blendedText = blendedText.replace(placeholderPattern, '');
+          // Normalize the sign-off block: if "Best,\n" is followed by
+          // nothing or whitespace, replace the whole "Best,\n" with
+          // "Best regards" alone so the sign-off renders cleanly.
+          blendedText = blendedText.replace(/\bBest,?\s*\n+\s*$/i, 'Best regards');
+          blendedText = blendedText.replace(/\n{3,}/g, '\n\n');
+        }
+        if (blendedText !== beforeSweep) {
+          console.log(`[ExpressPipeline] ${jobId} post-polish [Name] sweep replaced ${replacement ? 'with display name' : 'with neutral close'}`);
         }
       }
     }
@@ -3675,6 +3794,22 @@ async function runDraftPipeline(
     const guidedPipelineStartMs = Date.now();
     const guidedShiftPauseFlag = { value: false };
     let guidedInitialTier1Text = draftForStory?.tier1Statement?.text || '';
+    // Bundle 1A rev7 Rule 1 — guided pipeline parallel: fetch user
+    // display name once for Ch5 sign-off context + post-polish [Name]
+    // sweep. Mirrors runPipeline.
+    let guidedUserDisplayName = '';
+    if (guidedUserId) {
+      try {
+        const userRow = await prisma.user.findUnique({
+          where: { id: guidedUserId },
+          select: { settings: true },
+        });
+        const userSettings = (userRow?.settings as Record<string, any>) || {};
+        guidedUserDisplayName = (typeof userSettings.displayName === 'string' ? userSettings.displayName : '').trim();
+      } catch (err) {
+        console.error(`[GuidedDraft] ${jobId} fetch User.settings.displayName failed (proceeding with empty name):`, err);
+      }
+    }
     // Round 3.2 Item 2 — perf logging (guided pipeline). Tier-generation
     // happens in commitAndBuildFoundation upstream, so this pipeline only
     // covers chapters + blend stages. We log mapping-start as a baseline
@@ -3846,9 +3981,19 @@ ${draftForStory.tier2Statements
         ? `\nCTA VERBATIM REQUIREMENT — the call-to-action in this chapter must include the exact phrase "${cta}" verbatim. Do not paraphrase, summarize, soften, or rewrite the user's ask. Other surrounding language can be yours, but the verbatim phrase must appear in the chapter as the action the reader is invited to take.\n`
         : '';
 
+      // Bundle 1A rev7 Rule 1 — Ch5 sign-off context for guided
+      // pipeline. Mirrors runPipeline. When this is an email Ch5 and
+      // a user display name exists, surface it for the sign-off. When
+      // empty, instruct the no-name fall-through close.
+      const guidedSignoffDirective = chapterNum === 5 && (mediumKey === 'email')
+        ? (guidedUserDisplayName.length > 0
+            ? `\nUSER DISPLAY NAME (use in sign-off, exactly as written): "${guidedUserDisplayName}"\n`
+            : `\nUSER DISPLAY NAME — NONE PROVIDED. The sign-off MUST be "Best regards" alone, on its own line, with no name beneath it. Do NOT emit any bracketed placeholder ("[Name]", "[Sender]", "[Your name]", or any variant). The literal text of the sign-off is: Best regards\n`)
+        : '';
+
       const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE: ${draftForStory.audience.name}
 CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
-${chapterNum === 1 ? '' : `CTA: ${cta}\n`}${readerDirective}${guidedCtaVerbatimDirective}
+${chapterNum === 1 ? '' : `CTA: ${cta}\n`}${readerDirective}${guidedCtaVerbatimDirective}${guidedSignoffDirective}
 ${threeTierBlock}
 AUDIENCE PRIORITIES:
 ${draftForStory.audience.priorities
@@ -4223,6 +4368,30 @@ CRITICAL — NO FABRICATION. Only use claims from the source chapters above.`;
         blendedText = ensureCh5VerbatimAsk(blendedText, ctaTrimmedForBlend);
         if (blendedText !== beforeBlend) {
           console.log(`[GuidedDraft] ${jobId} post-polish verbatim-ask placement replaced closing sentence`);
+        }
+      }
+    }
+
+    // Bundle 1A rev7 Rule 1 — post-polish [Name] regex sweep (guided
+    // pipeline). Mirrors runPipeline. Belt-and-suspenders for the
+    // prompt-level instruction: any bracketed-name placeholder gets
+    // resolved to the user's display name OR removed when none exists.
+    {
+      const placeholderPattern = /\[(?:name|sender|your name|audience first name|recipient|first name)\]/gi;
+      if (placeholderPattern.test(blendedText)) {
+        const replacement = guidedUserDisplayName.length > 0 ? guidedUserDisplayName : '';
+        placeholderPattern.lastIndex = 0;
+        const beforeSweep = blendedText;
+        if (replacement) {
+          blendedText = blendedText.replace(placeholderPattern, replacement);
+        } else {
+          blendedText = blendedText.replace(/\n\s*\[(?:name|sender|your name|audience first name|recipient|first name)\]\s*\n?/gi, '\n');
+          blendedText = blendedText.replace(placeholderPattern, '');
+          blendedText = blendedText.replace(/\bBest,?\s*\n+\s*$/i, 'Best regards');
+          blendedText = blendedText.replace(/\n{3,}/g, '\n\n');
+        }
+        if (blendedText !== beforeSweep) {
+          console.log(`[GuidedDraft] ${jobId} post-polish [Name] sweep replaced ${replacement ? 'with display name' : 'with neutral close'}`);
         }
       }
     }
