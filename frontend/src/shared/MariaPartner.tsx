@@ -394,6 +394,15 @@ export function MariaPartner() {
       setIntroduced(null);
       setIntroStep(0);
       setLoaded(false);
+      // Bundle 1B Rule 4 — clear input + pending queue + stale
+      // localStorage residue on sign-out so the next user starts
+      // with an empty textarea. The textarea also gets autoComplete
+      // off so the browser doesn't refill it from autofill history.
+      setInput('');
+      pendingQueueRef.current = [];
+      try {
+        localStorage.removeItem('voice-persistent-intent-pending');
+      } catch {}
     }
   }, [user?.userId]);
 
@@ -2420,6 +2429,9 @@ export function MariaPartner() {
                   <textarea
                     ref={textareaRef}
                     value={input}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="true"
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
                     onInput={e => {
