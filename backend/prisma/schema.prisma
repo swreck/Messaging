@@ -179,6 +179,12 @@ model ThreeTierDraft {
   version          Int      @default(1)
   archived         Boolean  @default(false)
   noStrongPairings Boolean? // True if the most recent mapping evaluation found no STRONG pairings — drives Maria's audience-fit conversation
+  // Bundle 1B Rule 9 — example deliverables visually distinguished
+  // from user-built content. "real" (default) for user-authored work;
+  // "example" for seeded/onboarding content. Existing rows backfill
+  // to "real" via the @default. Frontend reads this to render the
+  // EXAMPLE tag and to filter out examples from work counts.
+  kind             String   @default("real")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -257,6 +263,10 @@ model FiveChapterStory {
   joinedText    String         @default("")
   blendedText   String         @default("")
   version       Int            @default(1)
+  // Bundle 1B Rule 9 — example tag, mirrors ThreeTierDraft.kind.
+  // "real" for user-authored stories; "example" for seeded onboarding
+  // content. Existing rows backfill to "real" via the @default.
+  kind          String         @default("real")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
