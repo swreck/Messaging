@@ -2669,6 +2669,23 @@ ${draftForStory.tier2Statements
       }
     }
 
+    // Bundle 1A rev7 Rule 2 — CTA preservation through polish. The
+    // chapter-level ensureCh5VerbatimAsk (rev6b Phase 3) ran on Ch5
+    // BEFORE blend rewrites it. Polish/blend can drop the verbatim ask
+    // by paraphrasing the closing. Belt-and-suspenders: re-run the
+    // helper on the blended whole so the post-polish output the user
+    // reads carries the verbatim ask in its closing sentence.
+    {
+      const verbatimAskForBlend = getInterpretationVerbatimAsk(interpretation);
+      if (verbatimAskForBlend) {
+        const beforeBlend = blendedText;
+        blendedText = ensureCh5VerbatimAsk(blendedText, verbatimAskForBlend);
+        if (blendedText !== beforeBlend) {
+          console.log(`[ExpressPipeline] ${jobId} post-polish verbatim-ask placement replaced closing sentence`);
+        }
+      }
+    }
+
     await prisma.fiveChapterStory.update({
       where: { id: story.id },
       data: {
@@ -4194,6 +4211,21 @@ CRITICAL — NO FABRICATION. Only use claims from the source chapters above.`;
       .replace(/^>\s?/gm, '')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
+
+    // Bundle 1A rev7 Rule 2 — CTA preservation through polish (guided
+    // pipeline). Mirrors the runPipeline post-polish pass. The guided
+    // pipeline reads the verbatim ask from the cta parameter (the
+    // same value that lands on story.cta).
+    {
+      const ctaTrimmedForBlend = (cta || '').trim();
+      if (ctaTrimmedForBlend) {
+        const beforeBlend = blendedText;
+        blendedText = ensureCh5VerbatimAsk(blendedText, ctaTrimmedForBlend);
+        if (blendedText !== beforeBlend) {
+          console.log(`[GuidedDraft] ${jobId} post-polish verbatim-ask placement replaced closing sentence`);
+        }
+      }
+    }
 
     await prisma.fiveChapterStory.update({
       where: { id: storyId },

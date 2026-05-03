@@ -2312,9 +2312,19 @@ Fields to extract:
 
 - situation: a short summary of the specific occasion or context for this deliverable (e.g., "Q3 partnership webinar invitation", "investor meeting next week", "beta launch announcement"). One sentence max. Empty string if the conversation has no specific occasion. This field is for downstream prompt context — it is NOT the user's ask.
 
-- verbatimAsk: the EXACT WORDING the user used to state what they want the audience to do. This field replaces upstream pattern-matching that tried to recover the literal CTA from the situation paragraph. The user has the words; let the user's words be the answer.
+- verbatimAsk: the user's call-to-action with all signal preserved and only the noise dropped.
 
-  Pull the literal sentence verbatim. Do NOT paraphrase. Do NOT shorten. Do NOT generalize. If the user typed "I want them to confirm participation in our joint Q3 webinar by May 15", verbatimAsk is "confirm participation in our joint Q3 webinar by May 15" (you may strip "I want them to" / "the ask is" / "tell them to" if it leaves a clean imperative; do not change anything else). If the user typed "reply with their availability for next week", verbatimAsk is "reply with their availability for next week".
+  PRESERVE the signal — every word that carries action meaning: the action verb and its object, real deadlines (a date, "by Friday", "before quarter-end"), real scope (the audience-org name, possessives that specify what the action is about), modifiers and articles that come with the action.
+
+  DROP the noise — only these: imperative-marker prefixes ("I want them to", "we want him to", "I'm asking them to", "tell them to", "have them", "the ask is", "the cta is", and close variants); filler words ("like", "kind of", "sort of", "you know"); hedges ("or whenever works", "if possible", "when they get a chance").
+
+  Do NOT touch anything outside that list. Possessives stay. Articles stay. Modifiers stay.
+
+  WORKED EXAMPLES:
+  - User typed: "We want him to confirm Veracore's participation in our joint Q3 webinar by May 15." → verbatimAsk: "confirm Veracore's participation in our joint Q3 webinar by May 15." (Possessive "Veracore's" preserved.)
+  - User typed: "we want him to like sign up for the demo by friday or whenever works." → verbatimAsk: "sign up for the demo by Friday." (Filler "like" dropped, hedge "or whenever works" dropped, real deadline preserved.)
+  - User typed: "Tell them to confirm participation by May 15." → verbatimAsk: "confirm participation by May 15."
+  - User typed: "I want them to schedule the partner's onboarding kickoff by Friday." → verbatimAsk: "schedule the partner's onboarding kickoff by Friday." (Possessive "the partner's" preserved.)
 
   TONE NOTES ARE NOT ASKS. If the user said "the tone should be partner-to-partner, not sales pitch" — that's tone, not an ask. Skip it.
 

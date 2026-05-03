@@ -30,12 +30,20 @@ interface BaselineCase {
   };
 }
 
-const CASES: BaselineCase[] = [
+interface BaselineCaseExtended extends BaselineCase {
+  // Bundle 1A rev7 Rule 4 — verbatim ask must contain certain
+  // substrings (preserved signal) AND must NOT contain certain
+  // substrings (dropped noise).
+  verbatimAskMustContain?: string[];
+  verbatimAskMustNotContain?: string[];
+}
+
+const CASES: BaselineCaseExtended[] = [
   {
-    label: 'A — full free-form with explicit ask',
+    label: 'A — full free-form with explicit ask (rev7: possessive preserved)',
     input: `We make ClarityAudit, a partnership operations platform for healthcare diagnostics companies. We help midmarket diagnostics partner-ops teams (typically VPs of Strategic Partnerships at companies like Veracore Diagnostics or Synthesis Health) close their first-quarter partnership outcomes faster — 31 of our 47 audits last year produced a CRO-buyer outcome inside the first quarter, and four sponsor companies traced their FDA approvals directly to fixes our reviews surfaced.
 I'm writing a one-page email to Liam Patel, VP Strategic Partnerships at Veracore Diagnostics. The tone should be partner-to-partner, not sales pitch.
-I want them to confirm Veracore's participation in our joint Q3 webinar by May 15.`,
+We want him to confirm Veracore's participation in our joint Q3 webinar by May 15.`,
     expectedFields: {
       offeringNameContains: 'ClarityAudit',
       differentiatorsMin: 4,
@@ -44,6 +52,10 @@ I want them to confirm Veracore's participation in our joint Q3 webinar by May 1
       situationMinChars: 80,
       verbatimAskExpected: 'present',
     },
+    // Rule 4: possessive "Veracore's" must survive into verbatimAsk.
+    // Imperative-marker prefix "We want him to" must be dropped.
+    verbatimAskMustContain: ["Veracore's", "May 15"],
+    verbatimAskMustNotContain: ["We want him to", "we want him to"],
   },
   {
     label: 'B — no explicit ask',
@@ -58,9 +70,46 @@ I need a pitch deck for a regional bank CFO conference on Friday in Charlotte.`,
       verbatimAskExpected: 'empty',
     },
   },
+  {
+    label: 'C — rev7 Rule 4: filler + hedge dropped, real deadline preserved',
+    input: `Selling DemoBox, a sales-tool platform for B2B SaaS demo teams. Buyers are sales-ops managers. Sample-size friction is their main pain.
+I need an email to a sales-ops contact at a mid-size SaaS.
+we want him to like sign up for the demo by friday or whenever works.`,
+    expectedFields: {
+      offeringNameContains: 'DemoBox',
+      differentiatorsMin: 1,
+      audiencesMin: 1,
+      primaryMediumValue: 'email',
+      situationMinChars: 30,
+      verbatimAskExpected: 'present',
+    },
+    // Rule 4: filler "like" and hedge "or whenever works" must be
+    // dropped. Real deadline "Friday" must be preserved. Imperative
+    // marker "we want him to" must be dropped.
+    verbatimAskMustContain: ["sign up for the demo", "Friday"],
+    verbatimAskMustNotContain: ["like ", "or whenever works", "we want him to"],
+  },
+  {
+    label: 'D — rev7 Rule 4: simple imperative, full noun phrase preserved',
+    input: `Building OnboardCo, a SaaS onboarding platform. We help RevOps managers shorten onboarding cycles.
+I need a follow-up email after our demo last week.
+I want them to schedule the partner's onboarding kickoff by Friday.`,
+    expectedFields: {
+      offeringNameContains: 'OnboardCo',
+      differentiatorsMin: 1,
+      audiencesMin: 1,
+      primaryMediumValue: 'email',
+      situationMinChars: 25,
+      verbatimAskExpected: 'present',
+    },
+    // Rule 4: possessive "the partner's" must survive. Imperative
+    // marker "I want them to" must be dropped.
+    verbatimAskMustContain: ["the partner's", "Friday"],
+    verbatimAskMustNotContain: ["I want them to"],
+  },
 ];
 
-async function runCase(c: BaselineCase): Promise<void> {
+async function runCase(c: BaselineCaseExtended): Promise<void> {
   console.log(`\n═══ CASE ${c.label} ═══`);
   console.log(`Input: ${c.input.slice(0, 200)}…\n`);
   const t0 = Date.now();
@@ -127,6 +176,25 @@ async function runCase(c: BaselineCase): Promise<void> {
       pass: typeof result.verbatimAsk === 'string' && result.verbatimAsk.length === 0,
       detail: `verbatimAsk=${JSON.stringify(result.verbatimAsk)}`,
     });
+  }
+  // Rule 4 — preserved-signal / dropped-noise assertions.
+  if (c.verbatimAskMustContain) {
+    for (const must of c.verbatimAskMustContain) {
+      checks.push({
+        label: `verbatimAsk preserves "${must}"`,
+        pass: typeof result.verbatimAsk === 'string' && result.verbatimAsk.includes(must),
+        detail: `verbatimAsk=${JSON.stringify(result.verbatimAsk)}`,
+      });
+    }
+  }
+  if (c.verbatimAskMustNotContain) {
+    for (const mustNot of c.verbatimAskMustNotContain) {
+      checks.push({
+        label: `verbatimAsk drops "${mustNot}"`,
+        pass: typeof result.verbatimAsk === 'string' && !result.verbatimAsk.includes(mustNot),
+        detail: `verbatimAsk=${JSON.stringify(result.verbatimAsk)}`,
+      });
+    }
   }
   for (const ck of checks) {
     console.log(`  ${ck.pass ? '✓' : '✗'} ${ck.label}${ck.detail ? ` — ${ck.detail}` : ''}`);
