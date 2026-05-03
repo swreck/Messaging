@@ -1197,6 +1197,22 @@ On this turn ONLY: do NOT begin your reply with any affirmation, validation, or 
     }
   }
 
+  // ─── Bundle 1B Rule 5 — build-promise + tool-call pairing rule ───────
+  // Cowork's verification: Maria sometimes tells the user "I'm setting
+  // up your offering and audience now, then building the email. I'll
+  // bring you right to it when it's ready" — but the build_deliverable
+  // tool call doesn't fire on the same turn. The user sees a promise,
+  // then a separate "Want me to start?" offer, then has to click yes.
+  // Rule: when Maria promises a build, she fires the tool call on the
+  // SAME turn. Never promise without firing.
+  systemPrompt += `\n\nBUILD-PROMISE + TOOL-CALL PAIRING — UNIVERSAL RULE.
+
+When you tell the user you're about to build (any phrasing of "I'll build it," "I'll create your offering and audience now," "I'm setting up," "I'll bring you right to it when it's ready," "Building your draft now," or any variation that promises an autonomous build is starting), you MUST fire the build_deliverable tool call in the SAME action set on this turn. Never promise a build without firing the tool call.
+
+If you do not yet have all build_deliverable required parameters (offeringName, audienceName, medium), ask the missing parameter as a question BEFORE making the build promise. Do not promise to build, then ask, then build. The sequence is: gather inputs, then promise + fire together.
+
+After firing build_deliverable, the system surfaces a [BUILD_STARTED:...] marker; do NOT also surface a separate "Want me to start?" offer chip. The promise + tool-call pair is the user's signal the build is in progress; nothing else needs to be confirmed.`;
+
   // ─── Round 3.4 coaching-fix Finding 4 — locked question order ────────
   // When the user just clicked a starting chip (the four entry chips
   // OPENER_FRESH_USER_CHIPS surfaces on chat-open), the next methodology
@@ -1227,7 +1243,40 @@ Do NOT skip ahead. Do NOT consolidate two questions into one turn (Round 3.4 coa
     }
   }
 
-  // ─── Round 3.4 coaching-fix Finding 6 — universal no-stacking rule ───
+  // ─── Bundle 1B Rule 10 — methodology vocabulary first-use gating ─────
+  // Per-calendar-day per-user state: methodology terms get a brief
+  // framing on first use of each day, then are used unframed. The
+  // gate reads User.settings.methodologyVocab and produces a
+  // directive Opus consumes about which terms need framing this turn.
+  try {
+    const { getVocabIntroductionState } = await import('../lib/methodologyVocabGate.js');
+    const { METHODOLOGY_TERM_EXPLANATIONS, buildFirstUseExplanation } = await import('../prompts/milestoneCopy.js');
+    const vocabKeys = Object.keys(METHODOLOGY_TERM_EXPLANATIONS);
+    const vocabState = await getVocabIntroductionState(userId, vocabKeys);
+    if (vocabState.framed.length > 0) {
+      const framedExamples = vocabState.framed
+        .slice(0, 6)
+        .map((term: string) => `- "${term}" → ${buildFirstUseExplanation(term)}`)
+        .join('\n');
+      const unframedList = vocabState.unframed.length > 0
+        ? vocabState.unframed.map((t: string) => `"${t}"`).join(', ')
+        : '(none yet)';
+      systemPrompt += `\n\nMETHODOLOGY VOCABULARY FIRST-USE FRAMING — UNIVERSAL RULE.
+
+Methodology terms get a brief framing parenthetical on FIRST use today; subsequent uses today are bare. Today's calendar day's first-use status:
+
+Already introduced today (use bare, no framing): ${unframedList}
+
+Not yet introduced today (frame on FIRST use this turn, bare on any subsequent use within the same reply). When you use any of these for the first time today, wrap with the parenthetical — example shape:
+${framedExamples}
+
+After the first framed use, use the term bare on every subsequent reference. The system tracks this state per-user-per-calendar-day; on the next calendar day, framing fires again on first use. Do NOT frame a term that's already in the "already introduced" list above.`;
+    }
+  } catch (vocabErr) {
+    console.error('[Partner] methodology-vocab gate error (proceeding without):', vocabErr);
+  }
+
+  // Round 3.4 coaching-fix Finding 6 — universal no-stacking rule.
   // Cowork observed Maria stacking methodology questions intermittently
   // ("Who's the person you're writing to? And what's the format?",
   // "What's the ask? And is there a specific commercial offer?"). Hard
@@ -2199,6 +2248,29 @@ After this turn, the frontend marks thresholdTriggered=true AND writes a localSt
   await prisma.assistantMessage.create({
     data: { userId, role: 'assistant', content: storedResponse, context: assistantCtxBase },
   });
+
+  // Bundle 1B Rule 10 — mark methodology terms introduced today.
+  // Scan Maria's response text for any methodology vocabulary term
+  // mention. For each match, mark introduced. The next turn's
+  // gate-introduction-state read picks up the new state and tells
+  // Opus to use the term unframed for the rest of today.
+  try {
+    const { markIntroducedToday } = await import('../lib/methodologyVocabGate.js');
+    const { METHODOLOGY_TERM_EXPLANATIONS } = await import('../prompts/milestoneCopy.js');
+    const responseText = result.response || '';
+    for (const term of Object.keys(METHODOLOGY_TERM_EXPLANATIONS)) {
+      // Word-boundary match — case-insensitive — to avoid matching
+      // "Tier 1" inside e.g. "tier1Statement" (no spaces in code-y
+      // strings, but defensive).
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pattern = new RegExp(`\\b${escaped}\\b`, 'i');
+      if (pattern.test(responseText)) {
+        await markIntroducedToday(userId, term);
+      }
+    }
+  } catch (vocabErr) {
+    console.error('[Partner] methodology-vocab mark error (non-fatal):', vocabErr);
+  }
 
   console.log(`[Partner] RESPONSE: text=${(result.response || '').length}chars, actionResult=${(actionResult || '').length}chars, chips=${universalChips.length}, suggestChips=${suggestChips.length}, hasBuildStarted=${(actionResult || '').includes('BUILD_STARTED')}`);
 

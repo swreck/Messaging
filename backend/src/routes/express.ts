@@ -166,6 +166,45 @@ router.post('/commit-for-wizard', requireWorkspace, async (req: Request, res: Re
 // Returns current pipeline stage, progress (0-100), and — once complete —
 // the finished FiveChapterStory with chapters and blended text.
 
+// Bundle 1B Rules 1 + 8 — derived build status for Recent Work cards.
+// The cards on home need a single derived status that aligns with
+// what the user sees in chat — never "Complete" while the pipeline
+// is still running, never "Building" after AUTONOMOUS_BUILD_COMPLETE
+// has fired. The deriveBuildStatus helper reads the canonical
+// terminal-chat-message signal AND the ExpressJob status.
+//
+// Query params: storyId (optional — when present, scopes the
+// terminal message lookup to this story).
+router.get('/build-status', requireWorkspace, async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const storyId = typeof req.query.storyId === 'string' ? req.query.storyId : null;
+  const jobId = typeof req.query.jobId === 'string' ? req.query.jobId : null;
+
+  let job: { status: string; stage: string; userId: string; draftId: string | null } | null = null;
+  if (jobId) {
+    job = await prisma.expressJob.findFirst({
+      where: { id: jobId, userId },
+      select: { status: true, stage: true, userId: true, draftId: true },
+    });
+  } else if (storyId) {
+    // Look up the most-recent job tied to this story.
+    job = await prisma.expressJob.findFirst({
+      where: { userId, OR: [{ resultStoryId: storyId }] },
+      orderBy: { createdAt: 'desc' },
+      select: { status: true, stage: true, userId: true, draftId: true },
+    });
+  }
+
+  const { deriveBuildStatus } = await import('../lib/buildStatus.js');
+  const result = await deriveBuildStatus({
+    job,
+    storyId,
+    userId,
+  });
+
+  res.json(result);
+});
+
 router.get('/status/:jobId', requireWorkspace, async (req: Request, res: Response) => {
   const job = await prisma.expressJob.findFirst({
     where: { id: param(req.params.jobId), userId: req.user!.userId },

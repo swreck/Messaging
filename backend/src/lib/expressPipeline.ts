@@ -893,6 +893,11 @@ export async function runPipeline(jobId: string): Promise<void> {
     });
   }
 
+  // Bundle 1B Rule 7 — declare watchdogHandle in runPipeline scope so
+  // the top-level catch block can stop it on error. Initialized null;
+  // assigned once the watchdog starts inside the try.
+  let watchdogHandle: { stop: () => void } | null = null;
+
   try {
     const job = await prisma.expressJob.findUnique({ where: { id: jobId } });
     if (!job || !job.draftId) {
@@ -943,6 +948,14 @@ export async function runPipeline(jobId: string): Promise<void> {
     } catch (err) {
       console.error(`[ExpressPipeline] ${jobId} fetch User.settings.displayName failed (proceeding with empty name):`, err);
     }
+    // Bundle 1B Rule 7 — start the pipeline-stall watchdog. Cancels
+    // automatically when the job reaches a terminal state OR when
+    // the recovery message fires once. The watchdog is a separate
+    // interval that runs alongside the per-stage heartbeats; if a
+    // stage timer fails to schedule (thrown error mid-transition),
+    // the watchdog catches the resulting silence within 4 minutes.
+    const { startPipelineWatchdog } = await import('./pipelineWatchdog.js');
+    watchdogHandle = startPipelineWatchdog(jobId, pipelineUserId, pipelineWorkspaceId);
     // One-shot pause-narration flag per pipeline run. The PAUSE_ON_FOUNDATIONAL_SHIFT
     // message fires at most once even if the user makes multiple foundation-changing
     // edits during the run.
@@ -2093,6 +2106,21 @@ ${draftForStory.tier2Statements
         }
       }
 
+      // Bundle 1B Rule 6 — extract Ch3 audience-branch diagnostic
+      // marker from the generated content. Maria emits
+      // [CH3_AUDIENCE_BRANCH: partner|sales|investor|board] as the
+      // first line of Ch3; this strips it from the persisted prose
+      // and writes it to the perf log so audience-branch distribution
+      // is grep-able across builds without per-walk inspection.
+      if (chapterNum === 3) {
+        const branchMatch = content.match(/^\[CH3_AUDIENCE_BRANCH:\s*(partner|sales|investor|board)\s*\]\s*\n?/i);
+        if (branchMatch) {
+          const branch = branchMatch[1].toLowerCase();
+          content = content.replace(branchMatch[0], '').trimStart();
+          console.log(`[Perf] jobId=${jobId} stage=ch3-audience-branch branch=${branch} mode=${pipelinePerfMode}`);
+        }
+      }
+
       // Bundle 1A rev6 Phase 3 — deterministic verbatim CTA placement in
       // Ch5. Two-layer defense: the soft ctaVerbatimDirective (above)
       // gives Opus the chance to integrate the verbatim into prose flow
@@ -3049,9 +3077,21 @@ ${draftForStory.tier2Statements
         storyIds.length === 1 ? '' : 's'
       }: ${storyIds.join(', ')})`,
     );
+    // Bundle 1B Rule 7 — pipeline reached terminal complete state;
+    // stop the watchdog so it doesn't fire post-completion.
+    if (watchdogHandle) watchdogHandle.stop();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await fail(message);
+    // Bundle 1B Rule 7 — pipeline reached terminal error state; stop
+    // the watchdog. The recovery message fires only on SILENT stalls,
+    // not on caught errors (the error message in chat is the user's
+    // signal in the error case).
+    if (watchdogHandle) {
+      try {
+        watchdogHandle.stop();
+      } catch { /* defensive */ }
+    }
   }
 }
 
@@ -4127,6 +4167,17 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
         content = cleanContent;
         if (chapterNum === 3 || chapterNum === 4 || chapterNum === 5) {
           guidedChapterMissingPieces[chapterNum] = missingPieces;
+        }
+      }
+
+      // Bundle 1B Rule 6 — extract Ch3 audience-branch diagnostic
+      // marker (guided pipeline). Mirrors runPipeline.
+      if (chapterNum === 3) {
+        const branchMatch = content.match(/^\[CH3_AUDIENCE_BRANCH:\s*(partner|sales|investor|board)\s*\]\s*\n?/i);
+        if (branchMatch) {
+          const branch = branchMatch[1].toLowerCase();
+          content = content.replace(branchMatch[0], '').trimStart();
+          console.log(`[Perf] jobId=${jobId} stage=ch3-audience-branch branch=${branch} mode=guided`);
         }
       }
 

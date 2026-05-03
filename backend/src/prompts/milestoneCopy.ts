@@ -316,6 +316,24 @@ export function buildMethodologyFailureMessage(issueList: string): string {
   return `I built the five chapters, but the structural shape didn't quite land — ${issueList}. I'd rather we look at this together than ship something I'm not happy with. Want to walk through it?`;
 }
 
+// Bundle 1B Rule 7 — pipeline-stall recovery copy. Fires when the
+// autonomous-build pipeline goes silent for more than 4 minutes
+// between heartbeats. Maria writes this locked message + three chips
+// (in order: "Start over", "I'll take it from here", "Get help").
+// Cowork-locked verbatim. The chip 2 phrasing is the user's voice
+// because the user is clicking it; the click action transitions the
+// build to Path A so the user can edit the partial state directly.
+//
+// At-most-once per pipeline run. The watchdog cancels itself once
+// the recovery message fires OR the pipeline reaches a terminal
+// state (complete, methodology-failed, error).
+export const PIPELINE_STALL_RECOVERY_MESSAGE =
+  "Hmm, I've been quiet too long. The build stalled on something I can't see from here. Pick how you'd like to keep going.";
+export const PIPELINE_STALL_RECOVERY_CHIP_RESTART = "Start over";
+export const PIPELINE_STALL_RECOVERY_CHIP_TAKE_OVER = "I'll take it from here";
+export const PIPELINE_STALL_RECOVERY_CHIP_GET_HELP = "Get help";
+export const PIPELINE_STALL_RECOVERY_THRESHOLD_MS = 240000; // 4 minutes
+
 // Bundle 1A rev7 Pair A — gap-notice-before-build copy. Fires before
 // autonomous-build kicks off when Maria detects user data missing for
 // a deliverable that needs it. Maria asks once, with a one-line reason

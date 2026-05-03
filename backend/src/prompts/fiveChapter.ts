@@ -121,6 +121,25 @@ SELF-CHECK: Read every sentence. Does any sentence tell the reader something abo
 
 Chapter 3 builds the audience's trust that they'll receive the value Ch2 promised. Trust doesn't come from claims of partnership; it comes from specifics concrete enough that the audience can picture how the trust-building actually works for them. Trust comes before proof; Ch4 reinforces a trust Ch3 already established.
 
+PRE-WRITE STEP — AUDIENCE TYPE DETECTION (Bundle 1B Rule 6).
+
+Before writing Ch3, read the AUDIENCE block above. Identify the audience type from role keywords:
+- Role contains "Strategic Partnerships," "Channel Partner," "Alliance," "Partnerships," "BD" / "Business Development with partner focus" → PARTNER audience.
+- Role contains "Investor," "VC," "Partner at <fund/firm>," "CFO of <fund>," "LP," "Venture" → INVESTOR audience.
+- Role contains "Board," "Director on board," "Chair of the board" → BOARD audience.
+- Otherwise (role indicates a P&L function buyer: VP Sales, VP Revenue Operations, CFO of an operating company, Director of <function>, Head of <function>, CRO, COO, CEO) → SALES / B2B-CUSTOMER audience.
+
+Emit your detected branch as the FIRST line of your output, in this exact format:
+[CH3_AUDIENCE_BRANCH: partner]
+or
+[CH3_AUDIENCE_BRANCH: sales]
+or
+[CH3_AUDIENCE_BRANCH: investor]
+or
+[CH3_AUDIENCE_BRANCH: board]
+
+Then write the chapter using THAT branch's specifics. The marker line is stripped from the rendered chapter post-processing — surfacing it lets the system grep audience-branch distribution across builds without per-walk inspection.
+
 THE FORM TRUST TAKES IS AUDIENCE-PARAMETERIZED. Read the audience type and role from the AUDIENCE block above and shape Ch3 content accordingly:
 
 - SALES / B2B CUSTOMER audiences trust through implementation, onboarding, and service specifics — the hand-holding moments after they say yes. Specifics include: configuring, planning, training, onboarding, answering questions, monitoring usage, smoothing deployment, advocating for the audience's needs.
