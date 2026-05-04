@@ -17,6 +17,7 @@ import { MAPPING_SYSTEM } from '../prompts/mapping.js';
 import { CONVERT_LINES_SYSTEM } from '../prompts/generation.js';
 import {
   buildChapterPrompt,
+  buildPeerStatusBlock,
   BLEND_SYSTEM,
   JOIN_CHAPTERS_SYSTEM,
   CHAPTER_CRITERIA,
@@ -1753,6 +1754,22 @@ Return ONLY the one sentence.`;
         orderBy: { chapterNum: 'asc' },
       });
 
+      // Bundle 1A rev8.1 — refresh peer-reference state at chapter prompt time.
+      // partner.ts may have persisted peerInfo + peerAsked since `story` was
+      // created at the top of runPipeline. The peer-status block reads the
+      // freshest state so Ch4's angle path picks up dismissals reliably.
+      const peerStatus = chapterNum === 4
+        ? await prisma.fiveChapterStory.findUnique({
+            where: { id: story.id },
+            select: { peerInfo: true, peerAsked: true },
+          })
+        : null;
+      const peerStatusBlock = buildPeerStatusBlock(
+        chapterNum,
+        peerStatus?.peerAsked === true,
+        peerStatus?.peerInfo || '',
+      );
+
       const situation = interpretation.situation?.trim() || '';
       const situationBlock = situation
         ? `SITUATION — THIS IS WHAT THE DRAFT MUST DO:
@@ -1830,7 +1847,7 @@ ${draftForStory.audience.priorities
 ${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftForStory.audience.name}
 CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
 ${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}${signoffDirective}
-${threeTierBlock}
+${threeTierBlock}${peerStatusBlock}
 ${
   prevChapters.length > 0
     ? `PREVIOUS CHAPTERS (context — do NOT repeat their facts or phrases):
@@ -2650,7 +2667,22 @@ ${draftForStory.tier2Statements
         // so the priority-most-acute rule in the system prompt has its
         // ground truth at the top of the user message.
         const regenAudiencePrioritiesBlock = `AUDIENCE PRIORITIES (rank order — rank 1 is the most-acute priority for this audience):\n${draftRef.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}"${p.driver ? ` — Driver: "${p.driver}"` : ''}`).join('\n')}\n`;
-        const userMessage = `${regenAudiencePrioritiesBlock}\n${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftRef.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftRef.audience.name}\nCONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)\n${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}\n${threeTierBlock}\nWrite Chapter ${chapterNum}: "${ch.name}"\n\nIMPORTANT: Start this chapter fresh. ${chapterGuardrail}\n\nMETHODOLOGY REGENERATION — the structural check flagged this chapter. Address these specific violations in your rewrite:\n${additionalFeedback}\n\nRewrite the chapter satisfying these methodology constraints while preserving the voice and prose-shape of the existing draft. Do not invent new claims; tighten what's already there.`;
+        // Bundle 1A rev8.1 — refresh peer state on regen too. A regen of
+        // Ch4 may run after partner.ts persisted a dismissal; this block
+        // surfaces the user's signal so the angle's typical-results path
+        // overrides the [INSERT:] placeholder default.
+        const regenPeerStatus = chapterNum === 4
+          ? await prisma.fiveChapterStory.findUnique({
+              where: { id: story.id },
+              select: { peerInfo: true, peerAsked: true },
+            })
+          : null;
+        const regenPeerStatusBlock = buildPeerStatusBlock(
+          chapterNum,
+          regenPeerStatus?.peerAsked === true,
+          regenPeerStatus?.peerInfo || '',
+        );
+        const userMessage = `${regenAudiencePrioritiesBlock}\n${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftRef.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftRef.audience.name}\nCONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)\n${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}\n${threeTierBlock}${regenPeerStatusBlock}\nWrite Chapter ${chapterNum}: "${ch.name}"\n\nIMPORTANT: Start this chapter fresh. ${chapterGuardrail}\n\nMETHODOLOGY REGENERATION — the structural check flagged this chapter. Address these specific violations in your rewrite:\n${additionalFeedback}\n\nRewrite the chapter satisfying these methodology constraints while preserving the voice and prose-shape of the existing draft. Do not invent new claims; tighten what's already there.`;
 
         let regenContent = await callAI(systemPrompt, userMessage, 'elite');
         const stripped = extractAndStripMarkers(regenContent);
@@ -3990,6 +4022,19 @@ Return ONLY the one sentence.`;
         orderBy: { chapterNum: 'asc' },
       });
 
+      // Bundle 1A rev8.1 — peer-status block for guided draft pipeline.
+      const guidedPeerStatus = chapterNum === 4
+        ? await prisma.fiveChapterStory.findUnique({
+            where: { id: storyId },
+            select: { peerInfo: true, peerAsked: true },
+          })
+        : null;
+      const guidedPeerStatusBlock = buildPeerStatusBlock(
+        chapterNum,
+        guidedPeerStatus?.peerAsked === true,
+        guidedPeerStatus?.peerInfo || '',
+      );
+
       const situationBlock = situation
         ? `SITUATION — THIS IS WHAT THE DRAFT MUST DO:\n${situation}\n\n`
         : '';
@@ -4044,7 +4089,7 @@ ${draftForStory.audience.priorities
 ${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE: ${draftForStory.audience.name}
 CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
 ${chapterNum === 1 ? '' : `CTA: ${cta}\n`}${readerDirective}${guidedCtaVerbatimDirective}${guidedSignoffDirective}
-${threeTierBlock}
+${threeTierBlock}${guidedPeerStatusBlock}
 ${prevChapters.length > 0 ? `PREVIOUS CHAPTERS:\n${prevChapters.map((c: any) => `Ch ${c.chapterNum}: ${c.content.substring(0, 500)}`).join('\n')}\n` : ''}
 Write Chapter ${chapterNum}: "${ch.name}"
 Start fresh. Each chapter is self-contained.

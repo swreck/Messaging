@@ -93,6 +93,8 @@ Implementation-support content — dedicated implementation manager, weekly chec
 
 The chapter presents proof — results from organizations similar to the reader — that landed in the SAME outcome the most-acute priority describes. Each proof point follows problem → intervention → result, with the result clearly tied to the rank-1 priority's outcome.
 
+Read the user message for what Maria knows about peer references for THIS audience. If a specific peer is named (peer evidence block in the user message), that peer is the chapter's primary proof point. If the user has been asked and explicitly declined to name a peer, the user has told Maria there is no specific reference — describe the TYPE of results typical leaders in similar contexts see, in language that ties to the rank-1 priority's outcome, and do NOT surface a customer-name [INSERT: ...] placeholder in this chapter, because the user has already answered the question Maria would be asking with the placeholder.
+
 Generic peer-trust references ("100+ customers across the industry") do NOT appear in Chapter 4 unless the rank-1 priority is one that volume itself addresses (a market-confidence priority, for example). Proof is RESULTS achieved, not mechanisms used — "under 30-minute incident response across the customer base" is a result and belongs here; "working from one screen" is a mechanism and belongs in Chapter 2.`,
 
   5: `CHAPTER 5'S ANGLE — frame the next step around the most-acute priority's payoff.
@@ -101,6 +103,32 @@ The chapter closes by inviting the reader to take the user-supplied next step, f
 
 For senior audiences: present a path the reader can evaluate ("One approach: select a segment of accounts and run a pilot"). Never directives. Match tone to the reader's seniority. The first step must be easy to take, low-cost, and aligned with the medium and CTA the user specified.`,
 };
+
+// Bundle 1A rev8.1 — peer-status block for Chapter 4 prompt assembly.
+// Returns the block to insert in the user message based on the user's signal:
+// - peerAsked=false (no signal at all) → no block; HARD RULE 14 placeholder path is in play
+// - peerAsked=true + peerInfo non-empty → NAMED PEER EVIDENCE block (existing shape)
+// - peerAsked=true + peerInfo empty (user actively dismissed) → dismissal directive;
+//   the angle's typical-results path applies. The directive is a clarity helper —
+//   the Ch4 angle's wording is grounded in the user's signal, so the rule remains
+//   correct even if a future site forgets to emit this block.
+// Only emits content for chapterNum === 4. Other chapters get an empty string.
+export function buildPeerStatusBlock(
+  chapterNum: number,
+  peerAsked: boolean,
+  peerInfo: string,
+): string {
+  if (chapterNum !== 4) return '';
+  const peerInfoTrimmed = (peerInfo || '').trim();
+  if (peerAsked && peerInfoTrimmed.length > 0) {
+    return `\nNAMED PEER EVIDENCE (use this as Chapter 4's primary social proof — the user contributed it directly):\n${peerInfoTrimmed}\n`;
+  }
+  if (peerAsked && peerInfoTrimmed.length === 0) {
+    return `\nUSER ASKED ABOUT PEER REFERENCE — declined. The user was offered a chip flow asking for a specific named peer or customer reference, and the user explicitly chose "No one specific." Per the Chapter 4 angle, the typical-results path applies: describe the TYPE of results typical leaders in similar contexts see, in language that ties to the rank-1 priority's outcome. Do NOT surface a customer-name [INSERT: ...] placeholder in this chapter — the user has already answered the question the placeholder would be asking.\n`;
+  }
+  // peerAsked === false: no signal yet; fall through to HARD RULE 14 placeholder protocol.
+  return '';
+}
 
 export function buildChapterPrompt(chapterNum: number, medium?: string, emphasisChapter?: number, sourceContent?: { medium: string; chapterText: string }): string {
   // Bundle 1A rev8 — chapter header (CHAPTER/GOAL/OUTCOME/SUCCESS TEST) replaced
@@ -169,7 +197,7 @@ SELF-CHECK: Read every sentence. Does any sentence tell the reader something abo
 - Format for each proof point: problem the similar org had → intervention (your offering) → result they achieved, with the result tied to the rank-1 priority's outcome.
 - If no specific customer stories are available, describe the TYPE of results typical customers see in language that ties to the rank-1 priority's outcome.
 - NEVER invent specific company names, metrics, or quotes.
-- ANTI-INVENTION ON CUSTOMER NUMBERS — refuse to invent customer-specific results. When you'd ordinarily write a claim about the user's own product results ("our customers cut crashes 42%", "average savings of $X", "94% retention rate") and you have no user-supplied data backing it, do NOT invent a number. Two acceptable moves: (a) ask the user inline for the real number ("do you have a real number for this?"), OR (b) write a clearly-labeled placeholder ("placeholder: cite your own measurement") that surfaces in the deliverable as obviously needing the user's data. Customer-specific numbers are the user's measurement, not category research — Maria has no business making them up.
+- ANTI-INVENTION ON CUSTOMER NUMBERS — refuse to invent customer-specific results. When you'd ordinarily write a claim about the user's own product results ("our customers cut crashes 42%", "94% retention rate") and you have no user-supplied data backing it, do NOT invent a number. The placeholder ("placeholder: cite your own measurement") is reserved for the case where Maria has no user signal on whether such data exists. When the user has explicitly told Maria there is no specific peer reference (Maria asked, the user declined), the angle's typical-results path is the answer — surfacing a placeholder in their finished deliverable is bad UX, not honesty. Customer-specific numbers are the user's measurement, not category research — Maria has no business making them up.
 - Describe RESULTS other organizations achieved, not HOW the product works mechanically. "Under 30-minute incident response" is a result — it belongs here. "Working from one screen" is a product mechanism — it belongs in Chapter 2. Social proof answers "what happened for them?" not "how does the product work?"`,
 
     5: `CHAPTER 5 GUARDRAILS:
@@ -226,6 +254,8 @@ HARD RULES (ALL CHAPTERS):
 12. NEVER REFERENCE THE METHODOLOGY OR ITS MECHANICS. The reader does not know about priorities, rankings, tiers, chapters, or any internal structure. "Your fourth priority" or "the top-ranked concern" are methodology leaks — write about the substance directly without referencing the framework. "You need proof before committing budget" NOT "Your fourth priority is seeing proof at scale."
 13. NEVER STATE FACTS THE READER ALREADY KNOWS from their own position. An SVP at a company knows their own org structure and subsidiaries. A CFO knows financial terminology. A CTO knows their tech stack. State only what this specific reader would find NEW, surprising, or useful. Every sentence must earn the reader's attention by telling them something they didn't already know. If they'd read a sentence and think "obviously" — cut it.
 14. UNIVERSAL ANTI-INVENTION + [INSERT: …] PROTOCOL. No chapter may invent a number, named entity, specification, latency, throughput, percentage, dollar amount, certification, customer name, customer quote, pilot detail, partner name, commercial term, evaluation period, refund policy, or any other concrete fact. Every concrete fact in the chapter must trace to user input — the conversation, the situation block, attached documents, or a Tier 3 proof bullet that itself traces to user input. If the user did not give you a specific concrete fact and the chapter would benefit from one, emit a placeholder marker INSTEAD of inventing.
+
+   Where a chapter's angle prescribes a specific path for a known-shape user signal — for example, the user has actively answered the question the placeholder would be asking — that angle path takes precedence over emitting a placeholder marker. The placeholder is the floor when Maria has no signal; the angle is the ceiling when she does.
 
    GRAMMAR: \`[INSERT: <one-sentence description, in the user's voice, telling the user exactly what specific input goes here>]\`
 

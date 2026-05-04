@@ -7,7 +7,7 @@ import { pickAffirmation } from '../prompts/milestoneCopy.js';
 import { MAPPING_SYSTEM, LOW_CONFIDENCE_QUESTIONS_SYSTEM } from '../prompts/mapping.js';
 import { CONVERT_LINES_SYSTEM, REVIEW_SYSTEM, REVISE_FROM_EDITS_SYSTEM, DIRECTION_SYSTEM, REFINE_LANGUAGE_SYSTEM, buildRefineLanguageSystem } from '../prompts/generation.js';
 import { resolveStyleForUser } from '../lib/styleResolver.js';
-import { buildChapterPrompt, BLEND_SYSTEM, JOIN_CHAPTERS_SYSTEM, REFINE_CHAPTER_SYSTEM, COPY_EDIT_SYSTEM, CHAPTER_CRITERIA, buildRefineChapterSystem, buildCopyEditSystem } from '../prompts/fiveChapter.js';
+import { buildChapterPrompt, buildPeerStatusBlock, BLEND_SYSTEM, JOIN_CHAPTERS_SYSTEM, REFINE_CHAPTER_SYSTEM, COPY_EDIT_SYSTEM, CHAPTER_CRITERIA, buildRefineChapterSystem, buildCopyEditSystem } from '../prompts/fiveChapter.js';
 import { resolveStyleForStory } from '../lib/styleResolver.js';
 import { getMediumSpec } from '../prompts/mediums.js';
 import { AUDIENCE_DISCOVERY_SYSTEM } from '../prompts/audienceDiscovery.js';
@@ -1975,10 +1975,17 @@ is completely honest is better than three sentences with one fabricated line.`;
 
   // Round B4 — pre-Chapter-4 peer prompt: when the user has supplied
   // named-peer context for Chapter 4, weave it through as evidence the
-  // chapter can rely on. Empty string = user skipped or hasn't been asked yet.
-  const peerInfoBlock = (chapterNum === 4 && story.peerInfo && story.peerInfo.trim())
-    ? `\nNAMED PEER EVIDENCE (use this as Chapter 4's primary social proof — the user contributed it directly):\n${story.peerInfo.trim()}\n`
-    : '';
+  // chapter can rely on.
+  // Bundle 1A rev8.1 — three-state behavior. When the user was asked and
+  // declined ("No one specific"), surface the dismissal as a directive so
+  // the Ch4 angle's typical-results path overrides the [INSERT:] placeholder
+  // default. When peerAsked=false the user has no signal yet; HARD RULE 14
+  // placeholder protocol stays in play.
+  const peerInfoBlock = buildPeerStatusBlock(
+    chapterNum,
+    story.peerAsked === true,
+    story.peerInfo || '',
+  );
 
   const userMessage = `${chapterNum === 1 ? '' : `OFFERING: ${story.draft.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${story.draft.audience.name}
 CONTENT FORMAT: ${spec.label} (${spec.wordRange[0]}-${spec.wordRange[1]} words total)
