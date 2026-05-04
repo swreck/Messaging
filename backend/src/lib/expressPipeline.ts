@@ -2106,20 +2106,12 @@ ${draftForStory.tier2Statements
         }
       }
 
-      // Bundle 1B Rule 6 — extract Ch3 audience-branch diagnostic
-      // marker from the generated content. Maria emits
-      // [CH3_AUDIENCE_BRANCH: partner|sales|investor|board] as the
-      // first line of Ch3; this strips it from the persisted prose
-      // and writes it to the perf log so audience-branch distribution
-      // is grep-able across builds without per-walk inspection.
-      if (chapterNum === 3) {
-        const branchMatch = content.match(/^\[CH3_AUDIENCE_BRANCH:\s*(partner|sales|investor|board)\s*\]\s*\n?/i);
-        if (branchMatch) {
-          const branch = branchMatch[1].toLowerCase();
-          content = content.replace(branchMatch[0], '').trimStart();
-          console.log(`[Perf] jobId=${jobId} stage=ch3-audience-branch branch=${branch} mode=${pipelinePerfMode}`);
-        }
-      }
+      // Bundle 1A rev7-followup — Bundle 1B Rule 6's [CH3_AUDIENCE_BRANCH:...]
+      // marker-extraction block REMOVED. The Ch3 methodology no longer
+      // pre-categorizes audiences by type, so Maria does not emit the
+      // marker and there's nothing to strip or log. Ch3 now MAPs
+      // differentiators to priorities directly from the audience's
+      // stated priorities — see prompts/fiveChapter.ts:chapterRules[3].
 
       // Bundle 1A rev6 Phase 3 — deterministic verbatim CTA placement in
       // Ch5. Two-layer defense: the soft ctaVerbatimDirective (above)
@@ -4170,16 +4162,10 @@ ${draftForStory.tier2Statements.map((t2: any, i: number) => `Tier 2 #${i + 1}: "
         }
       }
 
-      // Bundle 1B Rule 6 — extract Ch3 audience-branch diagnostic
-      // marker (guided pipeline). Mirrors runPipeline.
-      if (chapterNum === 3) {
-        const branchMatch = content.match(/^\[CH3_AUDIENCE_BRANCH:\s*(partner|sales|investor|board)\s*\]\s*\n?/i);
-        if (branchMatch) {
-          const branch = branchMatch[1].toLowerCase();
-          content = content.replace(branchMatch[0], '').trimStart();
-          console.log(`[Perf] jobId=${jobId} stage=ch3-audience-branch branch=${branch} mode=guided`);
-        }
-      }
+      // Bundle 1A rev7-followup — Bundle 1B Rule 6's [CH3_AUDIENCE_BRANCH:...]
+      // marker-extraction block REMOVED (guided pipeline). See the
+      // matching removal in runPipeline. Ch3 methodology no longer
+      // pre-categorizes audiences by type.
 
       // Bundle 1A rev6 Phase 3 — deterministic verbatim CTA placement
       // in Ch5. Mirrors the runPipeline post-process at line ~2009.

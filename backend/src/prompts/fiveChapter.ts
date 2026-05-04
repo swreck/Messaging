@@ -119,45 +119,21 @@ SELF-CHECK: Read every sentence. Does any sentence tell the reader something abo
 
     3: `CHAPTER 3 RULES:
 
-Chapter 3 builds the audience's trust that they'll receive the value Ch2 promised. Trust doesn't come from claims of partnership; it comes from specifics concrete enough that the audience can picture how the trust-building actually works for them. Trust comes before proof; Ch4 reinforces a trust Ch3 already established.
+Chapter 3 builds the audience's trust that they'll receive the value Ch2 promised. Trust comes from specifics concrete enough that the audience can picture how the value gets delivered to them. Trust comes before proof; Ch4 reinforces a trust Ch3 already established.
 
-PRE-WRITE STEP — AUDIENCE TYPE DETECTION (Bundle 1B Rule 6).
+Read the audience block carefully. The audience's PRIORITIES are listed there — what this person cares about, in their language. Read also the offering's Tier 2 differentiators — the concrete proofs of what makes this offering special. Your Chapter 3 work is to MAP differentiators to the priorities they serve, then write specifics that show how the mapped differentiators serve those priorities.
 
-Before writing Ch3, read the AUDIENCE block above. Identify the audience type from role keywords:
-- Role contains "Strategic Partnerships," "Channel Partner," "Alliance," "Partnerships," "BD" / "Business Development with partner focus" → PARTNER audience.
-- Role contains "Investor," "VC," "Partner at <fund/firm>," "CFO of <fund>," "LP," "Venture" → INVESTOR audience.
-- Role contains "Board," "Director on board," "Chair of the board" → BOARD audience.
-- Otherwise (role indicates a P&L function buyer: VP Sales, VP Revenue Operations, CFO of an operating company, Director of <function>, Head of <function>, CRO, COO, CEO) → SALES / B2B-CUSTOMER audience.
+The mapping is many-to-many. One differentiator may serve multiple priorities. A single priority may need multiple differentiators working together to be fully served. Find the right mappings for THIS audience — the differentiators most resonant for the priorities most acute — and write specifics that show how those mappings work.
 
-Emit your detected branch as the FIRST line of your output, in this exact format:
-[CH3_AUDIENCE_BRANCH: partner]
-or
-[CH3_AUDIENCE_BRANCH: sales]
-or
-[CH3_AUDIENCE_BRANCH: investor]
-or
-[CH3_AUDIENCE_BRANCH: board]
+The lead specific addresses the priority most acute for this audience: the priority where the audience would most need to be convinced the offering delivers. The lead may carry one differentiator (if a single differentiator strongly serves that priority) or multiple differentiators integrated through verb choice (if the priority needs several differentiators working together to be fully addressed).
 
-Then write the chapter using THAT branch's specifics. The marker line is stripped from the rendered chapter post-processing — surfacing it lets the system grep audience-branch distribution across builds without per-walk inspection.
+Audience type is not a categorization you use. The audience's stated priorities are the only categorization needed.
 
-THE FORM TRUST TAKES IS AUDIENCE-PARAMETERIZED. Read the audience type and role from the AUDIENCE block above and shape Ch3 content accordingly:
+SELF-CHECK before writing Chapter 3: am I about to reach for a template based on the audience's apparent type (a "partner template," an "investor template," etc.)? If yes, stop. Re-read the audience's listed priorities. Pick the priority most acute for this audience. Look at the offering's differentiators and identify which ones map to that priority. If one differentiator strongly serves it, lead with that. If multiple differentiators together serve it, integrate them in one sentence through verb choice. Open Chapter 3 with that.
 
-- SALES / B2B CUSTOMER audiences trust through implementation, onboarding, and service specifics — the hand-holding moments after they say yes. Specifics include: configuring, planning, training, onboarding, answering questions, monitoring usage, smoothing deployment, advocating for the audience's needs.
-- INVESTOR audiences trust through unit economics, market sizing, and customer acquisition math — the financial proof the value scales. Specifics include: customer acquisition cost, sales cycle length, net retention, gross margin, market growth rate, the mechanism by which unit economics improve at scale.
-- PARTNER audiences trust through specifics of how the partnership operates — joint accountability, mutual support, escalation paths. Specifics include: joint planning cadence, shared escalation paths, revenue split tracking, mutual commitments, how disputes get resolved.
-- BOARD AND INTERNAL-LEADERSHIP audiences trust through governance specifics — oversight cadence, risk surfaces, decision rights. Specifics include: phase gates, risk reviews tied to quantified thresholds, decision rights, oversight cadence, how exceptions escalate.
+When multiple differentiators all map to one priority, integrate them through verb choice in one sentence. Let one sentence carry weight from multiple differentiators serving the same priority. "Your dedicated implementation manager runs weekly check-ins and pulls in a specialist for the first 48 hours" integrates three differentiators in one sentence, all three serving the low-burden-support priority. "We provide a dedicated manager. We hold weekly check-ins. We have a specialist for the first 48 hours" lists three. Do the first, never the second. Don't list. Don't pad.
 
-Open Ch3 with the specific that closes THIS reader's most likely trust gap. A senior B2B buyer's gap is usually commitment and relationship; an operations lead's is whether implementation fits their systems; a technical evaluator's is whether their team will actually adopt and use it. An investor's gap is usually whether the unit economics work at scale or only at small scale. A partner's gap is usually whether joint accountability survives when one side has competing priorities. A board's gap is usually whether risk surfaces stay visible or get hidden in execution detail. Lead with the specific that closes that gap.
-
-If other specifics also belong, integrate them through verb choice — let one sentence carry weight from multiple specifics. Examples:
-- Sales/B2B: "Your dedicated implementation manager runs weekly check-ins and pulls in a specialist for the first 48 hours" carries three specifics in one sentence.
-- Investor: "Customer acquisition cost is $X over a 6-month sales cycle; net retention sits at Y%; the unit economics work at scale because [mechanism]" carries three specifics in one sentence.
-- Partner: "The partnership runs through quarterly joint planning, shared escalation paths, and revenue split tracking on a single dashboard" carries three specifics in one sentence.
-- Board: "Implementation rolls out with phase gates at 30/60/90 days and risk reviews tied to quantified thresholds" carries two specifics in one sentence.
-
-In every case: integrate via verbs, do not list. "We provide X. We hold Y. We have Z." is a list; replace it with one sentence whose verbs carry all three specifics. Do the first form, never the second. Don't list. Don't pad.
-
-If the source has only one concrete specific (of any audience-shape), write a tight chapter on that one. If the user dismissed the support-gap question, Ch3 reads exactly: "We'll define the implementation path with you in scoping."`,
+If the source has only one concrete differentiator, write a tight chapter on that one. If the user dismissed the support-gap question, Chapter 3 reads exactly: "We'll define the implementation path with you in scoping."`,
 
     4: `CHAPTER 4 RULES:
 - Show organizations/people SIMILAR to the prospect who are already succeeding.
