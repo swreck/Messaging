@@ -12,6 +12,13 @@ export const CHAPTER_NAMES = [
   "Let's Get Started",
 ] as const;
 
+// Bundle 1A rev8 — CHAPTER_CRITERIA retained for back-compat (actions.ts and
+// routes/ai.ts read ch.name from it). The fields goal/outcome/audienceThinks/
+// salesTechnique are no longer consumed by buildChapterPrompt as of rev8;
+// the chapter-genre framing they encoded was the systemic source of the
+// "chapter genre overrides priority-most-acute" leak Cowork flagged. The
+// new framing lives in chapterAngles below — five angles on the audience's
+// priorities, not five templates Maria picks between.
 export const CHAPTER_CRITERIA = [
   {
     num: 1,
@@ -55,8 +62,51 @@ export const CHAPTER_CRITERIA = [
   },
 ];
 
+// Bundle 1A rev8 — locked Cowork-authored chapter angles. Each angle is the
+// way the chapter ADDRESSES the audience's most-acute priority. The chapter
+// is not a template Maria picks based on apparent audience type; it is one
+// of five angles applied to whatever priorities the audience has stated.
+// These strings are LOCKED methodology copy. Do not modify without Cowork
+// + Ken's explicit approval.
+export const chapterAngles: Record<number, string> = {
+  1: `CHAPTER 1'S ANGLE — a market truth that puts the audience's most-acute priority at stake.
+
+The chapter opens with a market condition the reader independently recognizes — a discipline, a structural shift, a discontinuity, a pressure that exists in their world — and names what is at stake for someone trying to deliver on the audience's most-acute priority. The format is: "[market condition] means [consequence for someone trying to deliver on the audience's most-acute priority]." The reader thinks "that's true about my world, and I am the person who has to deal with it." The reader's most-acute priority is the lens for what counts as a stake worth raising.
+
+The category name and the offering name DO NOT appear in this chapter. Chapter 1 is the reader's world, not the offering's pitch.`,
+
+  2: `CHAPTER 2'S ANGLE — how the offering's differentiators directly address the audience's most-acute priority.
+
+The chapter shows the audience how the offering's differentiators serve the priorities they care about, in priority rank order. Lead with the differentiator (or differentiators integrated through verb choice in one sentence) that most strongly serves the rank-1 priority. Subsequent paragraphs move to the next priorities in rank order, each one carrying the differentiators that serve it.
+
+This is "let me tell you all about me" only in the sense that the differentiators are now in the foreground. The lens is still the audience's priorities — what changes between Chapter 1 and Chapter 2 is whose terms the chapter speaks in, not what counts as relevant. Proof, customer names, third-party endorsements, and credentials do NOT appear in Chapter 2 — those belong in Chapter 3 (trust) and Chapter 4 (proof).`,
+
+  3: `CHAPTER 3'S ANGLE — eliminate the risk most tied to the audience's most-acute priority.
+
+The chapter addresses the failure mode the audience would fear most under their most-acute priority, and shows specifically how the offering's risk-reduction differentiators eliminate that failure mode. Lead with the specific failure mode the audience would fear most under the rank-1 priority, and the differentiator that addresses it.
+
+The risk that gets named here is determined by the rank-1 priority — it is NOT a fixed risk type. For a security-first audience, the risk is a security failure. For a compliance-first audience, the risk is a regulatory miss. For a reliability-first audience, the risk is downtime. For a financial-impact-first audience, the risk is unmeasurable ROI.
+
+Implementation-support content — dedicated implementation manager, weekly check-ins, kickoff specialist — appears in Chapter 3 ONLY when adoption-ease IS the rank-1 priority. When adoption-ease is not rank-1, the chapter's body addresses the failure mode tied to the actual rank-1 priority, not the support process.`,
+
+  4: `CHAPTER 4'S ANGLE — proof anchored to the audience's most-acute priority outcome.
+
+The chapter presents proof — results from organizations similar to the reader — that landed in the SAME outcome the most-acute priority describes. Each proof point follows problem → intervention → result, with the result clearly tied to the rank-1 priority's outcome.
+
+Generic peer-trust references ("100+ customers across the industry") do NOT appear in Chapter 4 unless the rank-1 priority is one that volume itself addresses (a market-confidence priority, for example). Proof is RESULTS achieved, not mechanisms used — "under 30-minute incident response across the customer base" is a result and belongs here; "working from one screen" is a mechanism and belongs in Chapter 2.`,
+
+  5: `CHAPTER 5'S ANGLE — frame the next step around the most-acute priority's payoff.
+
+The chapter closes by inviting the reader to take the user-supplied next step, framed around the payoff to the most-acute priority. The user's verbatim ask appears verbatim. The framing around it speaks to what the audience wins on the rank-1 priority by taking that step.
+
+For senior audiences: present a path the reader can evaluate ("One approach: select a segment of accounts and run a pilot"). Never directives. Match tone to the reader's seniority. The first step must be easy to take, low-cost, and aligned with the medium and CTA the user specified.`,
+};
+
 export function buildChapterPrompt(chapterNum: number, medium?: string, emphasisChapter?: number, sourceContent?: { medium: string; chapterText: string }): string {
-  const ch = CHAPTER_CRITERIA[chapterNum - 1];
+  // Bundle 1A rev8 — chapter header (CHAPTER/GOAL/OUTCOME/SUCCESS TEST) replaced
+  // by priority-most-acute rule + chapter angle. ch is no longer needed inside
+  // this prompt body; CHAPTER_CRITERIA is still exported for callers (actions.ts,
+  // routes/ai.ts) that read ch.name from it.
   const spec = medium ? getMediumSpec(medium) : null;
 
   // Word budget: use per-chapter budgets from the medium spec
@@ -72,89 +122,64 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
     wordGuidance = `WORD BUDGET: ~${thisChapterWords} words for this chapter (~${totalWords} words total for ${spec.label} format). This is proportional guidance, not a hard ceiling. Quality always wins — if the chapter's structural requirements (e.g., problem→solution→result in Ch4) need more words, use them. But be efficient: every word must earn its place. No filler, no padding, no wasted sentences. Ken's Voice demands conversational brevity — say it once, say it well, stop.`;
   }
 
+  // Bundle 1A rev8 — chapterRules trimmed to GUARDRAILS ONLY. The
+  // sub-category framings ("you don't need MY offering," "let me tell you
+  // all about me," "we'll hold your hand," "show similar organizations,"
+  // generic-next-steps) have moved into chapterAngles above as the
+  // chapter's primary frame. What remains in chapterRules is constraints
+  // the angle has to satisfy: anti-fabrication, content boundaries,
+  // verb-choice mechanics, anti-product-name-as-subject, deterministic
+  // CTA placement, format/length, anti-pattern detectors. These strings
+  // are LOCKED methodology copy. Do not modify without Cowork + Ken's
+  // explicit approval.
   const chapterRules: Record<number, string> = {
-    1: `CHAPTER 1 RULES:
-- Category-level ONLY. NEVER mention the specific company or product name.
-- Tone: "You don't need MY offering. But you need to do something."
-- Make the audience profoundly uncomfortable with the status quo.
-- If possible, quantify the cost of inaction.
-- Content comes from the audience's highest priorities — priorities are the "lens" filtering what to emphasize.
-- Chapter 1 is the pain from the ABSENCE of what Chapter 2 will promise.
+    1: `CHAPTER 1 GUARDRAILS:
+- The category name and the offering name do NOT appear in this chapter.
 
-CRITICAL — WHOSE WORLD:
-Chapter 1 describes the READER's world — their challenges, their frustrations, their reality. The AUDIENCE listed above is the READER. Write about what THEY face every day.
+WHOSE WORLD:
+Chapter 1 describes the READER's world — their challenges, their reality. The AUDIENCE listed above is the READER. Write about what THEY face every day. If the reader is an executive who manages a team that serves customers, Chapter 1 is about the EXECUTIVE's challenges (losing revenue, losing competitive position, teams without tools) — NOT the end customer's problems. The end customer's problems may CAUSE the reader's pain, but Chapter 1 lives in the reader's experience, not downstream.
 
-If the reader is an executive who manages a team that serves customers, Chapter 1 is about the EXECUTIVE's challenges (losing revenue, losing competitive position, teams without tools) — NOT the end customer's problems (device depreciation, workflow inefficiency). The end customer's problems may CAUSE the reader's pain, but Chapter 1 lives in the reader's experience, not downstream.
-
-STRATEGIC ALTITUDE — THIS DETERMINES WHETHER CHAPTER 1 SUCCEEDS OR FAILS:
+STRATEGIC ALTITUDE — anti-pattern detector:
 Chapter 1 states a MARKET TRUTH the reader independently recognizes — not a claim about the reader's organization. The writer has NO STANDING to tell the reader what their team does wrong or what their competitors are doing. The reader already knows.
-
-FORMAT: "[Category condition] means [business consequence]."
-This is a statement about the MARKET or INDUSTRY, not about "your team" or "your organization."
 
 EXAMPLE (for an SVP of enterprise sales):
 "Unmanaged device lifecycle management means lost Apple revenue."
 NOT: "Your team has no structured way to stay in front of accounts." (presumes knowledge of their team)
 NOT: "Dell and HP are filling the gap." (teaching them their own competitive landscape)
-The SVP reads the first and thinks "that's true about our industry — do we manage lifecycle well enough?" He applies it to himself. The other two tell him about his own business, which is patronizing.
 
 STANCE: You are sharing an INSIGHT about the market that the reader can verify independently. You are NOT telling them what their team lacks or what their competitors do. A senior executive who reads "your team has no structured way" would think "who are you to tell me about my team?" and stop reading.
 
-After the thesis, show DUAL VALUE: what the market/customers experience translates into the reader's strategic outcome.
-
 SELF-CHECK: Read every sentence. Does any sentence tell the reader something about THEIR organization or THEIR competitors that they obviously already know? If yes, cut it. Does any sentence start with "Your team" or "Your reps" followed by a claim about what they lack? If yes, rewrite as a market truth.`,
 
-    2: `CHAPTER 2 RULES:
-- This IS the "Let me tell you all about me" chapter.
-- Order and emphasis of differentiators follows the audience's priority ranking.
-- Derive from the Three Tier message: Tier 2 statements become the backbone of this chapter.
+    2: `CHAPTER 2 GUARDRAILS:
+- Derive from the Three Tier message: Tier 2 statements are the source of all claims in this chapter. Do not introduce capabilities not in Tier 2.
 - Only include capabilities that map to confirmed priorities — no orphans.
-- Transitions between points ARE appropriate here (unlike Tier 2 statements).
-- NEVER include proof, credentials, institutional names, or social validation. Those belong in Ch3 (trust) and Ch4 (proof).
-- The audience doesn't care WHO made it until they understand WHY it has value. Ch2 establishes value. Ch4 proves it.
-- If you're tempted to write "built by [experts]" or "[institution] is evaluating" — STOP. That's Ch3/Ch4 material.
+- Transitions between points ARE appropriate here (unlike Tier 2 statements, which are atomic).
+- NEVER include proof, credentials, institutional names, or social validation in Chapter 2. Those belong in Ch3 (trust) and Ch4 (proof). If you're tempted to write "built by [experts]" or "[institution] is evaluating" — STOP. That's Ch3/Ch4 material.
 - NEVER open this chapter with the product name as the sentence subject. The product is the mechanism, not the headline. Lead with what the READER gets or how their situation changes. "[Product] gives you X" is wrong. "Your reps now have X" or "Every account gets X" is right.
 - ANTI-INVENTION ON MECHANISM SPECS: do NOT invent latency numbers, throughput numbers, percentages, IOPS counts, dimensions, capacities, interface names, protocol versions, or any other specific specification the user did not supply. If the Tier 2 backbone names "fast I/O on small files" without a specific latency number, your Chapter 2 paragraph stays at that level — "small-block I/O fast enough to keep compute fed" — without inventing "under a millisecond per read." If a specific spec would make the paragraph land harder and you don't have it, emit \`[INSERT: <one-sentence description in user's voice of what spec is needed>]\` in place of the invented number. Examples: \`[INSERT: your measured latency per small-block read]\`, \`[INSERT: the IOPS number from your Schrödinger benchmark]\`.
 - ANTI-EMBELLISHMENT ON PROVENANCE: when the user has supplied a fact about the founding team, the company history, or the product's origin, USE IT VERBATIM or in close paraphrase. Do NOT extend it into a narrative tail. "Founders came out of Pure Storage and Fusion-io" is the user's words; you can write that. You may NOT extend it into "this drive is where that experience went next, applied specifically to..." — that is invented narrative the user did not author. The KENS_VOICE rule against origin stories applies here at chapter level: stop where the user's words stop.`,
 
-    3: `CHAPTER 3 RULES:
+    3: `CHAPTER 3 GUARDRAILS:
+- Verb integration: when multiple differentiators all map to one priority, integrate them through verb choice in one sentence. Let one sentence carry weight from multiple differentiators serving the same priority. "Your dedicated implementation manager runs weekly check-ins and pulls in a specialist for the first 48 hours" integrates three differentiators in one sentence, all three serving the low-burden-support priority. "We provide a dedicated manager. We hold weekly check-ins. We have a specialist for the first 48 hours" lists three. Do the first, never the second. Don't list. Don't pad.
+- If the source has only one concrete risk-reduction differentiator that maps to the rank-1 priority's failure mode, write a tight chapter on that one.
+- If the user dismissed the support-gap question, Chapter 3 reads exactly: "We'll define the implementation path with you in scoping."`,
 
-Chapter 3 builds the audience's trust that they'll receive the value Ch2 promised. Trust comes from specifics concrete enough that the audience can picture how the value gets delivered to them. Trust comes before proof; Ch4 reinforces a trust Ch3 already established.
-
-Read the audience block carefully. The audience's PRIORITIES are listed there — what this person cares about, in their language. Read also the offering's Tier 2 differentiators — the concrete proofs of what makes this offering special. Your Chapter 3 work is to MAP differentiators to the priorities they serve, then write specifics that show how the mapped differentiators serve those priorities.
-
-The mapping is many-to-many. One differentiator may serve multiple priorities. A single priority may need multiple differentiators working together to be fully served. Find the right mappings for THIS audience — the differentiators most resonant for the priorities most acute — and write specifics that show how those mappings work.
-
-The lead specific addresses the priority most acute for this audience: the priority where the audience would most need to be convinced the offering delivers. The lead may carry one differentiator (if a single differentiator strongly serves that priority) or multiple differentiators integrated through verb choice (if the priority needs several differentiators working together to be fully addressed).
-
-Audience type is not a categorization you use. The audience's stated priorities are the only categorization needed.
-
-SELF-CHECK before writing Chapter 3: am I about to reach for a template based on the audience's apparent type (a "partner template," an "investor template," etc.)? If yes, stop. Re-read the audience's listed priorities. Pick the priority most acute for this audience. Look at the offering's differentiators and identify which ones map to that priority. If one differentiator strongly serves it, lead with that. If multiple differentiators together serve it, integrate them in one sentence through verb choice. Open Chapter 3 with that.
-
-When multiple differentiators all map to one priority, integrate them through verb choice in one sentence. Let one sentence carry weight from multiple differentiators serving the same priority. "Your dedicated implementation manager runs weekly check-ins and pulls in a specialist for the first 48 hours" integrates three differentiators in one sentence, all three serving the low-burden-support priority. "We provide a dedicated manager. We hold weekly check-ins. We have a specialist for the first 48 hours" lists three. Do the first, never the second. Don't list. Don't pad.
-
-If the source has only one concrete differentiator, write a tight chapter on that one. If the user dismissed the support-gap question, Chapter 3 reads exactly: "We'll define the implementation path with you in scoping."`,
-
-    4: `CHAPTER 4 RULES:
-- Show organizations/people SIMILAR to the prospect who are already succeeding.
-- The more similar the examples, the better.
-- Format: problem the similar org had → solution (your offering) → result they achieved.
-- Tailor proof to the desired call to action.
-- If no specific customer stories are available, describe the TYPE of results typical customers see.
+    4: `CHAPTER 4 GUARDRAILS:
+- Format for each proof point: problem the similar org had → intervention (your offering) → result they achieved, with the result tied to the rank-1 priority's outcome.
+- If no specific customer stories are available, describe the TYPE of results typical customers see in language that ties to the rank-1 priority's outcome.
 - NEVER invent specific company names, metrics, or quotes.
-- ROUND E1 GUARDRAIL — refuse to invent customer-specific numbers. When you'd ordinarily write a claim about the user's own product results ("our customers cut crashes 42%", "average savings of $X", "94% retention rate") and you have no user-supplied data backing it, do NOT invent a number. Two acceptable moves: (a) ask the user inline for the real number ("do you have a real number for this?"), OR (b) write a clearly-labeled placeholder ("placeholder: cite your own measurement") that surfaces in the deliverable as obviously needing the user's data. Customer-specific numbers are the user's measurement, not category research — Maria has no business making them up.
+- ANTI-INVENTION ON CUSTOMER NUMBERS — refuse to invent customer-specific results. When you'd ordinarily write a claim about the user's own product results ("our customers cut crashes 42%", "average savings of $X", "94% retention rate") and you have no user-supplied data backing it, do NOT invent a number. Two acceptable moves: (a) ask the user inline for the real number ("do you have a real number for this?"), OR (b) write a clearly-labeled placeholder ("placeholder: cite your own measurement") that surfaces in the deliverable as obviously needing the user's data. Customer-specific numbers are the user's measurement, not category research — Maria has no business making them up.
 - Describe RESULTS other organizations achieved, not HOW the product works mechanically. "Under 30-minute incident response" is a result — it belongs here. "Working from one screen" is a product mechanism — it belongs in Chapter 2. Social proof answers "what happened for them?" not "how does the product work?"`,
 
-    5: `CHAPTER 5 RULES:
-- Call to action: first 1-3 concrete, simple steps ONLY.
-- Steps must be easy, low-cost, non-intimidating.
+    5: `CHAPTER 5 GUARDRAILS:
+- First 1-3 concrete steps only.
 - Avoid vague follow-ups like "think about it."
-- Build momentum — once people take a first action, they're more likely to continue.
 - Keep this chapter SHORT. Every sentence must contain action or information — no filler.
-- NEVER write empty closers like "That's it for now," "Simple as that," "That's all there is to it," or any variation. These add zero content. End with the last concrete step or a single direct sentence about what happens next.
+- NEVER write empty closers like "That's it for now," "Simple as that," "That's all there is to it," or any variation. End with the last concrete step or a single direct sentence about what happens next.
 - NEVER open with the recipient's name (e.g., "Amy," or "Ken,"). This is the close of a professional communication — lead with the action, not a greeting.
-- Align the steps with the specified medium and CTA.
-- Match tone to the reader's seniority. For senior executives and decision-makers: offer a path they can evaluate ("One approach: select a segment of accounts and run a pilot"). NEVER give directives ("Pick a segment and run it"). Senior people decide — you present options.
+- Steps must align with the specified medium and CTA.
+- For senior executives and decision-makers: offer a path they can evaluate ("One approach: select a segment of accounts and run a pilot"). NEVER give directives ("Pick a segment and run it"). Senior people decide — you present options.
 - ANTI-INVENTION ON COMMERCIAL TERMS: do NOT invent commercial offers, evaluation periods, refund policies, free-trial durations, money-back guarantees, pilot terms, pricing concessions, demo-call lengths, or any other commercial term the user did not supply. If the user said "I want them to take a 20-minute meeting," you can write "20-minute meeting" — that's their term. You may NOT add "and we offer a 30-day evaluation with a full refund" unless the user named that. If the chapter would benefit from a commercial term and the user didn't supply one, emit \`[INSERT: <one-sentence description in user's voice of what offer goes here>]\` instead. Examples: \`[INSERT: the evaluation, trial, or first-step offer you want to put on the table]\`, \`[INSERT: how much of your time you're willing to commit to this first conversation]\`.`,
   };
 
@@ -169,13 +194,18 @@ ${wordGuidance}` : '';
 
 ${KENS_VOICE}
 
-CHAPTER: "${ch.name}"
-GOAL: ${ch.goal}
-DESIRED OUTCOME: ${ch.outcome}
-SUCCESS TEST — the audience should think: "${ch.audienceThinks}"
-${formatGuidance}
+YOUR TASK — Chapter ${chapterNum} of 5 for THIS audience.
 
+THE PRIORITY-MOST-ACUTE RULE — read this before anything else.
+The audience's priorities are listed in the user message in rank order. The most-acute priority is ranked first. Your task for THIS chapter is to find the differentiators that serve that priority and write specifics that show how. This rule is the same for every chapter. What changes between chapters is the ANGLE through which the priority gets addressed.
+
+The audience's priorities are not a category you reach into — they are the ground truth that determines what counts as relevant. Audience type (sales customer / investor / partner / board / etc.) is NOT a categorization you use. The audience's stated priorities are the only categorization needed. If you find yourself reaching for a template based on the audience's apparent type, stop. Re-read the priorities. Pick the priority most acute. Find the differentiators that serve it.
+
+${chapterAngles[chapterNum]}
+
+GUARDRAILS for Chapter ${chapterNum} (constraints the angle has to satisfy):
 ${chapterRules[chapterNum]}
+${formatGuidance}
 
 HARD RULES (ALL CHAPTERS):
 1. Never invent facts, customer names, metrics, or quotes not provided in the input.

@@ -1813,18 +1813,24 @@ ${draftForStory.tier2Statements
             : `\nUSER DISPLAY NAME — NONE PROVIDED. The sign-off MUST be "Best regards" alone, on its own line, with no name beneath it. Do NOT emit any bracketed placeholder ("[Name]", "[Sender]", "[Your name]", or any variant). The literal text of the sign-off is: Best regards\n`)
         : '';
 
-      const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftForStory.audience.name}
-CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
-${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}${signoffDirective}
-${threeTierBlock}
-AUDIENCE PRIORITIES:
+      // Bundle 1A rev8 — AUDIENCE PRIORITIES leads. The priority-most-acute
+      // rule in the system prompt instructs Maria to read priorities first;
+      // the user message must put priorities at the top so the rule lands on
+      // the priorities before anything else competes for attention.
+      const audiencePrioritiesBlock = `AUDIENCE PRIORITIES (rank order — rank 1 is the most-acute priority for this audience):
 ${draftForStory.audience.priorities
   .map(
     p =>
       `[Rank ${p.rank}] "${p.text}"${p.driver ? ` — Driver: "${p.driver}"` : ''}`,
   )
   .join('\n')}
+`;
 
+      const userMessage = `${audiencePrioritiesBlock}
+${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftForStory.audience.name}
+CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
+${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}${signoffDirective}
+${threeTierBlock}
 ${
   prevChapters.length > 0
     ? `PREVIOUS CHAPTERS (context — do NOT repeat their facts or phrases):
@@ -2640,7 +2646,11 @@ ${draftForStory.tier2Statements
         const ctaVerbatimDirective = chapterNum === 5 && story.cta
           ? `\nCTA VERBATIM REQUIREMENT — the call-to-action in this chapter must include the exact phrase "${story.cta}" verbatim.\n`
           : '';
-        const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftRef.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftRef.audience.name}\nCONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)\n${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}\n${threeTierBlock}\nWrite Chapter ${chapterNum}: "${ch.name}"\n\nIMPORTANT: Start this chapter fresh. ${chapterGuardrail}\n\nMETHODOLOGY REGENERATION — the structural check flagged this chapter. Address these specific violations in your rewrite:\n${additionalFeedback}\n\nRewrite the chapter satisfying these methodology constraints while preserving the voice and prose-shape of the existing draft. Do not invent new claims; tighten what's already there.`;
+        // Bundle 1A rev8 — AUDIENCE PRIORITIES leads in regen path too,
+        // so the priority-most-acute rule in the system prompt has its
+        // ground truth at the top of the user message.
+        const regenAudiencePrioritiesBlock = `AUDIENCE PRIORITIES (rank order — rank 1 is the most-acute priority for this audience):\n${draftRef.audience.priorities.map((p: any) => `[Rank ${p.rank}] "${p.text}"${p.driver ? ` — Driver: "${p.driver}"` : ''}`).join('\n')}\n`;
+        const userMessage = `${regenAudiencePrioritiesBlock}\n${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftRef.offering.name}\n`}AUDIENCE (THIS IS THE READER): ${draftRef.audience.name}\nCONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)\n${chapterNum === 1 ? '' : `CTA: ${story.cta}\n`}${readerDirective}${ctaVerbatimDirective}\n${threeTierBlock}\nWrite Chapter ${chapterNum}: "${ch.name}"\n\nIMPORTANT: Start this chapter fresh. ${chapterGuardrail}\n\nMETHODOLOGY REGENERATION — the structural check flagged this chapter. Address these specific violations in your rewrite:\n${additionalFeedback}\n\nRewrite the chapter satisfying these methodology constraints while preserving the voice and prose-shape of the existing draft. Do not invent new claims; tighten what's already there.`;
 
         let regenContent = await callAI(systemPrompt, userMessage, 'elite');
         const stripped = extractAndStripMarkers(regenContent);
@@ -4023,15 +4033,18 @@ ${draftForStory.tier2Statements
             : `\nUSER DISPLAY NAME — NONE PROVIDED. The sign-off MUST be "Best regards" alone, on its own line, with no name beneath it. Do NOT emit any bracketed placeholder ("[Name]", "[Sender]", "[Your name]", or any variant). The literal text of the sign-off is: Best regards\n`)
         : '';
 
-      const userMessage = `${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE: ${draftForStory.audience.name}
-CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
-${chapterNum === 1 ? '' : `CTA: ${cta}\n`}${readerDirective}${guidedCtaVerbatimDirective}${guidedSignoffDirective}
-${threeTierBlock}
-AUDIENCE PRIORITIES:
+      // Bundle 1A rev8 — AUDIENCE PRIORITIES leads in guided draft path too.
+      const guidedAudiencePrioritiesBlock = `AUDIENCE PRIORITIES (rank order — rank 1 is the most-acute priority for this audience):
 ${draftForStory.audience.priorities
   .map((p: any) => `[Rank ${p.rank}] "${p.text}"${p.driver ? ` — Driver: "${p.driver}"` : ''}`)
   .join('\n')}
+`;
 
+      const userMessage = `${guidedAudiencePrioritiesBlock}
+${situationBlock}${chapterNum === 1 ? '' : `OFFERING: ${draftForStory.offering.name}\n`}AUDIENCE: ${draftForStory.audience.name}
+CONTENT FORMAT: ${mediumSpec.label} (${mediumSpec.wordRange[0]}-${mediumSpec.wordRange[1]} words total)
+${chapterNum === 1 ? '' : `CTA: ${cta}\n`}${readerDirective}${guidedCtaVerbatimDirective}${guidedSignoffDirective}
+${threeTierBlock}
 ${prevChapters.length > 0 ? `PREVIOUS CHAPTERS:\n${prevChapters.map((c: any) => `Ch ${c.chapterNum}: ${c.content.substring(0, 500)}`).join('\n')}\n` : ''}
 Write Chapter ${chapterNum}: "${ch.name}"
 Start fresh. Each chapter is self-contained.
