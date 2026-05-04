@@ -1373,10 +1373,36 @@ export function MariaPartner() {
           // marker emitted by Maria once she has the user's peer answer (or skip).
           // POST to the backend to save peerInfo + peerAsked, then dispatch event
           // so FiveChapterShell resumes Chapter 4 generation. Strip the marker.
+          // Bundle 1A rev8.1 — defense-in-depth normalization. When the user
+          // clicks the "No one specific" dismissal chip, the chip text becomes
+          // their chat reply. Maria sometimes embeds that text verbatim in the
+          // SAVE_PEER_INFO summary instead of emitting the empty-summary form
+          // partner.ts:547 prescribes. Normalize known dismissal phrases to
+          // empty before POST so the dismissal-aware path in Ch4 fires
+          // correctly regardless of which marker shape Maria emitted.
           const peerMatch = cleanedResponse.match(/\[SAVE_PEER_INFO:([^:\]]+):([^\]]*)\]/);
           if (peerMatch) {
             const storyId = peerMatch[1].trim();
-            const peerSummary = peerMatch[2] || '';
+            const rawPeerSummary = peerMatch[2] || '';
+            const dismissalNormalized = ((): string => {
+              const trimmed = rawPeerSummary.trim().toLowerCase();
+              if (trimmed === '') return '';
+              const dismissalPatterns = [
+                'no one specific',
+                'no specific peer',
+                'no specific peers',
+                "don't have anything specific",
+                'dont have anything specific',
+                'no one in particular',
+                'nobody specific',
+                'skip',
+                'none',
+                'no',
+              ];
+              if (dismissalPatterns.includes(trimmed)) return '';
+              return rawPeerSummary;
+            })();
+            const peerSummary = dismissalNormalized;
             // Reject placeholder storyIds — the literal "storyId" or the
             // example sentinel — same as for CONFIRM_PPTX and SET_STORY_STYLE.
             if (isValidStoryId(storyId)) {
@@ -1403,10 +1429,30 @@ export function MariaPartner() {
             if (looksLikeCh4Confirm) {
               const ctx = peerPromptContextRef.current;
               peerPromptContextRef.current = null;
-              api.post(`/ai/stories/${ctx.storyId}/peer-info`, { peerInfo: ctx.userAnswer })
+              // Bundle 1A rev8.1 — same dismissal normalization on the
+              // fallback path. ctx.userAnswer is the user's chat reply
+              // verbatim; chip text "No one specific" should land as
+              // empty peerInfo, not as a literal peer name.
+              const fallbackTrimmed = (ctx.userAnswer || '').trim().toLowerCase();
+              const fallbackDismissals = [
+                'no one specific',
+                'no specific peer',
+                'no specific peers',
+                "don't have anything specific",
+                'dont have anything specific',
+                'no one in particular',
+                'nobody specific',
+                'skip',
+                'none',
+                'no',
+              ];
+              const fallbackPeerInfo = fallbackDismissals.includes(fallbackTrimmed)
+                ? ''
+                : ctx.userAnswer;
+              api.post(`/ai/stories/${ctx.storyId}/peer-info`, { peerInfo: fallbackPeerInfo })
                 .catch((e) => console.error('[peer-info fallback] save failed', e))
                 .finally(() => {
-                  document.dispatchEvent(new CustomEvent('chapter4-peer-info-saved', { detail: { storyId: ctx.storyId, peerInfo: ctx.userAnswer } }));
+                  document.dispatchEvent(new CustomEvent('chapter4-peer-info-saved', { detail: { storyId: ctx.storyId, peerInfo: fallbackPeerInfo } }));
                 });
             }
           }
