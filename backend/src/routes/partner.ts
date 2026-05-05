@@ -56,13 +56,20 @@ async function buildWorkSummary(workspaceId: string): Promise<string> {
   const [offerings, audiences, drafts] = await Promise.all([
     prisma.offering.findMany({
       where: { workspaceId },
-      select: { name: true, description: true },
+      // Bundle 1B Item 2 — id selected so the formatter can emit
+      // [offering-id:<cuid>] markers Maria reads when calling
+      // save_durable_context with target=offering_contrarian.
+      select: { id: true, name: true, description: true },
     }),
     prisma.audience.findMany({
       where: { workspaceId },
-      include: {
+      // Bundle 1B Item 2 — id + priority.id surfaced for marker emission.
+      select: {
+        id: true,
+        name: true,
+        description: true,
         priorities: {
-          select: { text: true, rank: true, driver: true },
+          select: { id: true, text: true, rank: true, driver: true },
           orderBy: { sortOrder: 'asc' },
         },
       },
@@ -92,7 +99,11 @@ async function buildWorkSummary(workspaceId: string): Promise<string> {
 
   lines.push('OFFERINGS:');
   for (const o of offerings) {
-    lines.push(`- "${o.name}"${o.description ? `: ${o.description}` : ''}`);
+    // Bundle 1B Item 2 — [offering-id:<cuid>] marker for save_durable_context
+    // sourcing. Maria reads the marker when offered to save the contrarian
+    // scenario for an offering. The marker is internal to the prompt and
+    // never displayed in the chat UI.
+    lines.push(`- "${o.name}"${o.description ? `: ${o.description}` : ''} [offering-id:${o.id}]`);
   }
 
   lines.push('\nAUDIENCES:');
@@ -100,10 +111,14 @@ async function buildWorkSummary(workspaceId: string): Promise<string> {
     const prioSummary = a.priorities.length > 0
       ? a.priorities.map((p, i) => {
           const hasDriver = p.driver ? ' (has driver)' : '';
-          return `  ${i + 1}. ${p.text}${hasDriver}`;
+          // Bundle 1B Item 2 — [priority-id:<cuid>] marker for
+          // save_durable_context priority_driver sourcing.
+          return `  ${i + 1}. ${p.text}${hasDriver} [priority-id:${p.id}]`;
         }).join('\n')
       : '  (no priorities defined yet)';
-    lines.push(`- "${a.name}"${a.description ? ` — ${a.description}` : ''}`);
+    // Bundle 1B Item 2 — [audience-id:<cuid>] marker for save_durable_context
+    // audience_situation sourcing.
+    lines.push(`- "${a.name}"${a.description ? ` — ${a.description}` : ''} [audience-id:${a.id}]`);
     lines.push(prioSummary);
   }
 

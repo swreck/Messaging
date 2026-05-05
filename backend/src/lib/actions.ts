@@ -1,5 +1,6 @@
 import { prisma } from './prisma.js';
 import { callAI } from '../services/ai.js';
+import { translateError, type ErrorKind } from './userFacingError.js';
 import {
   commitExistingForPipeline,
   runPipeline,
@@ -541,7 +542,8 @@ export async function dispatchActions(
                 actionResult = `Drafted motivating factors for ${drafted.length} differentiator${drafted.length === 1 ? '' : 's'} on "${offering.name}". Each one names multiple audience types so the same offering can speak to different audiences.`;
                 refreshNeeded = true;
               } catch (err: any) {
-                actionResult = `I tried to draft them but ran into an error: ${err.message || 'unknown'}. You can also use the "Ask Maria to draft motivating factors" button on the offering page.`;
+                // Bundle 1B Item 1 — generic kind until Cowork extends with mf-draft copy.
+                actionResult = `${translateError(err, { kind: 'generic', site: 'actions.ts:draft_motivating_factors', userId, workspaceId })} You can also use the "Ask Maria to draft motivating factors" button on the offering page.`;
               }
             }
           }
@@ -1201,7 +1203,7 @@ ADDITIONAL DIRECTION FROM USER: ${a.params.instruction}`;
                     }
                   });
                 }
-                actionResult = `Could not restructure: ${regenErr?.message || 'regeneration failed'}. Your previous table has been restored.`;
+                actionResult = `${translateError(regenErr, { kind: 'tier-generate', site: 'actions.ts:restructure_tier', userId, workspaceId })} Your previous table has been restored.`;
                 refreshNeeded = true;
               }
 
@@ -1306,7 +1308,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
             }
           }
         } catch (err: any) {
-          actionResult = `Could not apply direction: ${err.message || 'unknown error'}`;
+          actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:apply_direction_to_table', userId, workspaceId });
         }
       }
 
@@ -1603,7 +1605,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
             }
             refreshNeeded = false;
           } catch (err: any) {
-            actionResult = `Could not start the build: ${err.message || 'unknown error'}`;
+            actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:build_deliverable start', userId, workspaceId });
           }
         }
       }
@@ -1631,13 +1633,13 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
             actionResult = `[NAVIGATE:/five-chapter/${job.draftId}?story=${job.resultStoryId}] Your first draft is ready.`;
             refreshNeeded = true;
           } else if (job.status === 'error') {
-            actionResult = `The build ran into a problem: ${job.error || 'unknown error'}. You can try again.`;
+            actionResult = translateError(new Error(job.error || 'autonomous build failed'), { kind: 'chapter-generate', site: 'actions.ts:check_build_status job-failed', userId, workspaceId });
           } else {
             actionResult = `Still working — ${job.stage || 'processing'}. ${job.progress || 0}% done.`;
           }
         } catch (err: any) {
           console.error('[check_deliverable] error:', err);
-          actionResult = `Could not check status: ${err.message || 'unknown error'}`;
+          actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:check_build_status catch', userId, workspaceId });
         }
       }
 
@@ -1672,7 +1674,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
             refreshNeeded = false;
           } catch (err: any) {
             console.error('[rebuild_foundation] error:', err);
-            actionResult = `Could not rebuild the foundation: ${err.message || 'unknown error'}`;
+            actionResult = translateError(err, { kind: 'tier-generate', site: 'actions.ts:rebuild_foundation', userId, workspaceId });
           }
         }
       }
@@ -1691,7 +1693,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           refreshNeeded = true;
         } catch (err: any) {
           console.error('[acknowledge_observation] error:', err);
-          actionResult = `Could not acknowledge: ${err.message || 'unknown error'}`;
+          actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:acknowledge_observation', userId, workspaceId });
         }
       }
 
@@ -1707,39 +1709,126 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
       if (a.type === 'save_durable_context' && a.params?.target && a.params?.content) {
         const target = String(a.params.target);
         const content = String(a.params.content).trim();
+        // Bundle 1B Item 2 — kind dispatch by target so translateError emits the
+        // right Maria-voice copy when the save fails.
+        const saveKind: ErrorKind =
+          target === 'priority_driver'
+            ? 'priority-save'
+            : target === 'audience_situation'
+              ? 'audience-save'
+              : target === 'offering_contrarian'
+                ? 'offering-save'
+                : 'generic';
         if (!content) {
           actionResult = 'Nothing to save — the content was empty.';
           refreshNeeded = false;
         } else {
           try {
             if (target === 'priority_driver' && a.params.priorityId) {
-              await prisma.priority.update({
-                where: { id: String(a.params.priorityId) },
-                data: { driver: content },
+              // Bundle 1B Item 2 — defense-in-depth workspace validation. Maria
+              // sources priorityId from the [priority-id:<cuid>] markers in
+              // routes/partner.ts's context block. Validate the ID belongs to a
+              // priority in the user's workspace BEFORE calling update so a stale
+              // or invented CUID surfaces as Maria-voice copy through
+              // translateError, not as Prisma's "Record to update not found."
+              const priorityId = String(a.params.priorityId);
+              const priorityInWorkspace = await prisma.priority.findFirst({
+                where: {
+                  id: priorityId,
+                  ...(workspaceId ? { audience: { workspaceId } } : {}),
+                },
+                select: { id: true },
               });
-              actionResult = 'Saved as the driver.';
-              refreshNeeded = true;
+              if (!priorityInWorkspace) {
+                actionResult = translateError(
+                  new Error(`priorityId ${priorityId} not found in workspace ${workspaceId}`),
+                  {
+                    kind: 'priority-save',
+                    site: 'actions.ts:save_durable_context priority_driver',
+                    userId,
+                    workspaceId,
+                  },
+                );
+                refreshNeeded = false;
+              } else {
+                await prisma.priority.update({
+                  where: { id: priorityId },
+                  data: { driver: content },
+                });
+                actionResult = 'Saved as the driver.';
+                refreshNeeded = true;
+              }
             } else if (target === 'audience_situation' && a.params.audienceId) {
-              await prisma.audience.update({
-                where: { id: String(a.params.audienceId) },
-                data: { situation: content },
+              const audienceId = String(a.params.audienceId);
+              const audienceInWorkspace = await prisma.audience.findFirst({
+                where: { id: audienceId, ...(workspaceId ? { workspaceId } : {}) },
+                select: { id: true },
               });
-              actionResult = 'Saved.';
-              refreshNeeded = true;
+              if (!audienceInWorkspace) {
+                actionResult = translateError(
+                  new Error(`audienceId ${audienceId} not found in workspace ${workspaceId}`),
+                  {
+                    kind: 'audience-save',
+                    site: 'actions.ts:save_durable_context audience_situation',
+                    userId,
+                    workspaceId,
+                  },
+                );
+                refreshNeeded = false;
+              } else {
+                await prisma.audience.update({
+                  where: { id: audienceId },
+                  data: { situation: content },
+                });
+                actionResult = 'Saved.';
+                refreshNeeded = true;
+              }
             } else if (target === 'offering_contrarian' && a.params.offeringId) {
-              await prisma.offering.update({
-                where: { id: String(a.params.offeringId) },
-                data: { contrarianScenario: content, contrarianAsked: true },
+              const offeringId = String(a.params.offeringId);
+              const offeringInWorkspace = await prisma.offering.findFirst({
+                where: { id: offeringId, ...(workspaceId ? { workspaceId } : {}) },
+                select: { id: true },
               });
-              actionResult = 'Saved.';
-              refreshNeeded = true;
+              if (!offeringInWorkspace) {
+                actionResult = translateError(
+                  new Error(`offeringId ${offeringId} not found in workspace ${workspaceId}`),
+                  {
+                    kind: 'offering-save',
+                    site: 'actions.ts:save_durable_context offering_contrarian',
+                    userId,
+                    workspaceId,
+                  },
+                );
+                refreshNeeded = false;
+              } else {
+                await prisma.offering.update({
+                  where: { id: offeringId },
+                  data: { contrarianScenario: content, contrarianAsked: true },
+                });
+                actionResult = 'Saved.';
+                refreshNeeded = true;
+              }
             } else {
-              actionResult = `Could not save — missing target ID for "${target}".`;
+              // Missing target ID — Maria didn't source the marker. Same kind as
+              // the save failure since the user-facing message is identical.
+              actionResult = translateError(
+                new Error(`save_durable_context missing target ID for ${target}`),
+                {
+                  kind: saveKind,
+                  site: `actions.ts:save_durable_context ${target} (no target ID)`,
+                  userId,
+                  workspaceId,
+                },
+              );
               refreshNeeded = false;
             }
           } catch (err: any) {
-            console.error('[save_durable_context] error:', err);
-            actionResult = `Could not save: ${err.message || 'unknown error'}`;
+            actionResult = translateError(err, {
+              kind: saveKind,
+              site: 'actions.ts:save_durable_context catch',
+              userId,
+              workspaceId,
+            });
           }
         }
       }
@@ -1880,7 +1969,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           }
         } catch (err: any) {
           console.error('[research_website] failed:', err);
-          actionResult = `I couldn't read that URL: ${err?.message || 'fetch error'}. Want to paste the content directly so I can work from it?`;
+          actionResult = `${translateError(err, { kind: 'generic', site: 'actions.ts:read_url', userId, workspaceId })} Want to paste the content directly so I can work from it?`;
         }
         refreshNeeded = false;
       }
@@ -1913,7 +2002,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           actionResult = lines.join('\n');
         } catch (err: any) {
           console.error('[research_audience] failed:', err);
-          actionResult = `I couldn't pull research on that audience this round: ${err?.message || 'unknown error'}. Try again, or tell me what you already know about them.`;
+          actionResult = `${translateError(err, { kind: 'generic', site: 'actions.ts:research_audience', userId, workspaceId })} Try again, or tell me what you already know about them.`;
         }
         refreshNeeded = false;
       }
@@ -1981,7 +2070,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           }
         } catch (err: any) {
           console.error('[test_differentiation] failed:', err);
-          actionResult = `Differentiation test failed: ${err?.message || 'unknown error'}.`;
+          actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:run_differentiation_test', userId, workspaceId });
         }
         refreshNeeded = false;
       }
@@ -2024,7 +2113,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
         }
       }
     } catch (err: any) {
-      actionResult = `Action failed: ${err.message}`;
+      actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:dispatchActions catchall', userId, workspaceId });
     }
     if (actionResult) results.push(actionResult);
   }
@@ -2174,7 +2263,11 @@ export async function readPageContent(
       lines.push(`  ${drafts.length} Three Tier draft(s): ${drafts.map(d => `${d.offering.name} → ${d.audience.name} (step ${d.currentStep})`).join(', ')}`);
     }
   } catch (err: any) {
-    lines.push(`Error reading page content: ${err.message}`);
+    // Bundle 1B Item 1 — readPageContent feeds Maria's prompt context. Even
+    // though this isn't direct user chat, raw error vocabulary in the prompt
+    // can leak into Maria's reply. Route through translateError; log the
+    // underlying error for debugging.
+    lines.push(translateError(err, { kind: 'generic', site: 'actions.ts:readPageContent' }));
   }
 
   return lines.join('\n') || 'No content available for this page.';
