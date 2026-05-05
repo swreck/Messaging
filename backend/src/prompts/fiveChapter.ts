@@ -150,6 +150,13 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
     wordGuidance = `WORD BUDGET: ~${thisChapterWords} words for this chapter (~${totalWords} words total for ${spec.label} format). This is proportional guidance, not a hard ceiling. Quality always wins — if the chapter's structural requirements (e.g., problem→solution→result in Ch4) need more words, use them. But be efficient: every word must earn its place. No filler, no padding, no wasted sentences. Ken's Voice demands conversational brevity — say it once, say it well, stop.`;
   }
 
+  // Bundle 1B Item 5 Site 4 — EMAIL ENVELOPE BOUNDARY shared guardrail
+  // (locked Cowork copy). Applied to chapterRules[1-4] to prevent Maria
+  // from emitting salutations or sign-offs in non-Ch5 chapters; the email
+  // envelope is the blend layer's job. Source: cc-prompts/cowork-item-5-
+  // rulings-2026-05-05.md.
+  const EMAIL_ENVELOPE_BOUNDARY = `- EMAIL ENVELOPE BOUNDARY (email format only). Do NOT emit a salutation, opening greeting ("Hi Sarah,", "Dear Sarah,", "Hello,"), recipient name, sign-off ("Best,", "Best regards,", "Sincerely,", "Thanks,"), sender name, or any name placeholder ("[Name]", "[Your name]", "[Sender]", "[INSERT: your name]") in this chapter. The email envelope — salutation at the open, sign-off at the close — is the blend layer's job, not the chapter's. This chapter is body prose only.`;
+
   // Bundle 1A rev8 — chapterRules trimmed to GUARDRAILS ONLY. The
   // sub-category framings ("you don't need MY offering," "let me tell you
   // all about me," "we'll hold your hand," "show similar organizations,"
@@ -163,6 +170,7 @@ export function buildChapterPrompt(chapterNum: number, medium?: string, emphasis
   const chapterRules: Record<number, string> = {
     1: `CHAPTER 1 GUARDRAILS:
 - The category name and the offering name do NOT appear in this chapter.
+${EMAIL_ENVELOPE_BOUNDARY}
 
 WHOSE WORLD:
 Chapter 1 describes the READER's world — their challenges, their reality. The AUDIENCE listed above is the READER. Write about what THEY face every day. If the reader is an executive who manages a team that serves customers, Chapter 1 is about the EXECUTIVE's challenges (losing revenue, losing competitive position, teams without tools) — NOT the end customer's problems. The end customer's problems may CAUSE the reader's pain, but Chapter 1 lives in the reader's experience, not downstream.
@@ -180,20 +188,24 @@ STANCE: You are sharing an INSIGHT about the market that the reader can verify i
 SELF-CHECK: Read every sentence. Does any sentence tell the reader something about THEIR organization or THEIR competitors that they obviously already know? If yes, cut it. Does any sentence start with "Your team" or "Your reps" followed by a claim about what they lack? If yes, rewrite as a market truth.`,
 
     2: `CHAPTER 2 GUARDRAILS:
+${EMAIL_ENVELOPE_BOUNDARY}
 - Derive from the Three Tier message: Tier 2 statements are the source of all claims in this chapter. Do not introduce capabilities not in Tier 2.
 - Only include capabilities that map to confirmed priorities — no orphans.
 - Transitions between points ARE appropriate here (unlike Tier 2 statements, which are atomic).
 - NEVER include proof, credentials, institutional names, or social validation in Chapter 2. Those belong in Ch3 (trust) and Ch4 (proof). If you're tempted to write "built by [experts]" or "[institution] is evaluating" — STOP. That's Ch3/Ch4 material.
+- ANTI-CUSTOMER-SPECIFIC-DATA-IN-CH2. Customer-specific data points (a named customer's time-to-value, a named customer's variance reduction, a named customer's headcount, etc.) belong in Chapter 4. Chapter 2 stays at TYPICAL-RESULTS altitude — "most teams see X within their first quarter" or "customers typically see X" — without naming or quantifying a specific customer. If the chapter would benefit from a customer-specific data point, that's a Ch4 enrichment opportunity, NOT a Ch2 placeholder. Do NOT emit \`[INSERT: a specific customer's ...]\` in Chapter 2; the typical-results phrasing is the floor and Chapter 4 carries any customer-specific quantification.
 - NEVER open this chapter with the product name as the sentence subject. The product is the mechanism, not the headline. Lead with what the READER gets or how their situation changes. "[Product] gives you X" is wrong. "Your reps now have X" or "Every account gets X" is right.
 - ANTI-INVENTION ON MECHANISM SPECS: do NOT invent latency numbers, throughput numbers, percentages, IOPS counts, dimensions, capacities, interface names, protocol versions, or any other specific specification the user did not supply. If the Tier 2 backbone names "fast I/O on small files" without a specific latency number, your Chapter 2 paragraph stays at that level — "small-block I/O fast enough to keep compute fed" — without inventing "under a millisecond per read." If a specific spec would make the paragraph land harder and you don't have it, emit \`[INSERT: <one-sentence description in user's voice of what spec is needed>]\` in place of the invented number. Examples: \`[INSERT: your measured latency per small-block read]\`, \`[INSERT: the IOPS number from your Schrödinger benchmark]\`.
 - ANTI-EMBELLISHMENT ON PROVENANCE: when the user has supplied a fact about the founding team, the company history, or the product's origin, USE IT VERBATIM or in close paraphrase. Do NOT extend it into a narrative tail. "Founders came out of Pure Storage and Fusion-io" is the user's words; you can write that. You may NOT extend it into "this drive is where that experience went next, applied specifically to..." — that is invented narrative the user did not author. The KENS_VOICE rule against origin stories applies here at chapter level: stop where the user's words stop.`,
 
     3: `CHAPTER 3 GUARDRAILS:
+${EMAIL_ENVELOPE_BOUNDARY}
 - Verb integration: when multiple differentiators all map to one priority, integrate them through verb choice in one sentence. Let one sentence carry weight from multiple differentiators serving the same priority. "Your dedicated implementation manager runs weekly check-ins and pulls in a specialist for the first 48 hours" integrates three differentiators in one sentence, all three serving the low-burden-support priority. "We provide a dedicated manager. We hold weekly check-ins. We have a specialist for the first 48 hours" lists three. Do the first, never the second. Don't list. Don't pad.
 - If the source has only one concrete risk-reduction differentiator that maps to the rank-1 priority's failure mode, write a tight chapter on that one.
 - If the user dismissed the support-gap question, Chapter 3 reads exactly: "We'll define the implementation path with you in scoping."`,
 
     4: `CHAPTER 4 GUARDRAILS:
+${EMAIL_ENVELOPE_BOUNDARY}
 - Format for each proof point: problem the similar org had → intervention (your offering) → result they achieved, with the result tied to the rank-1 priority's outcome.
 - If no specific customer stories are available, describe the TYPE of results typical customers see in language that ties to the rank-1 priority's outcome.
 - NEVER invent specific company names, metrics, or quotes.

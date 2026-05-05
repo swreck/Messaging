@@ -269,6 +269,62 @@ export function FiveChapterShell() {
     return () => document.removeEventListener('provenance-claim-resolved', onResolved as EventListener);
   }, [story?.id]);
 
+  // Bundle 1B Item 3 Layer 2 — autonomous-build status polling.
+  //
+  // When a fresh user lands on the Stories page and the autonomous build
+  // pipeline is still running (chapters < 5, story stage in-flight), this
+  // effect polls /api/express/build-status every 5s. As chapters appear in
+  // the DB, the story reload picks them up and they render automatically.
+  // Polling stops when status flips to 'complete' / 'error' / 'methodology-
+  // failed' OR when chapters.length === 5. This closes the Walk B "I clicked
+  // build, then chapters showed Not yet generated" UX gap regardless of
+  // whether the underlying cause was H1 (pipeline failed silently), H2
+  // (page loaded mid-build), or H3 (storyId mismatch — visible because
+  // status=complete but story remains empty).
+  const [buildStatusLabel, setBuildStatusLabel] = useState<string | null>(null);
+  useEffect(() => {
+    if (!story?.id) return;
+    const chaptersCount = story.chapters?.length || 0;
+    if (chaptersCount >= 5 || story.blendedText) return; // build done; no need to poll
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    async function tick() {
+      if (cancelled || !story?.id) return;
+      try {
+        const status = await api.get<{ status: string; label: string }>(`/express/build-status?storyId=${story.id}`);
+        if (cancelled) return;
+        if (status?.label) setBuildStatusLabel(status.label);
+        if (status?.status === 'building' || status?.status === 'polishing') {
+          // Refresh story so any new chapters render. Continue polling.
+          try {
+            const r = await api.get<{ story: FiveChapterStory }>(`/stories/${story.id}`);
+            if (!cancelled && r?.story) setStory(r.story);
+          } catch { /* non-fatal */ }
+          if (!cancelled) timer = setTimeout(tick, 5000);
+        } else if (status?.status === 'complete' || status?.status === 'methodology-failed' || status?.status === 'error') {
+          // Terminal. Refresh once more so the final state is visible, then stop.
+          try {
+            const r = await api.get<{ story: FiveChapterStory }>(`/stories/${story.id}`);
+            if (!cancelled && r?.story) setStory(r.story);
+          } catch { /* non-fatal */ }
+          if (!cancelled) setBuildStatusLabel(null);
+        } else {
+          // Unknown status — stop polling defensively.
+          if (!cancelled) setBuildStatusLabel(null);
+        }
+      } catch {
+        // Build-status endpoint unreachable. Don't burn cycles; stop polling.
+        if (!cancelled) setBuildStatusLabel(null);
+      }
+    }
+    void tick();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      setBuildStatusLabel(null);
+    };
+  }, [story?.id, story?.chapters?.length, story?.blendedText]);
+
   // Track the refinement stage of the blended text for heading display
   const [blendedStage, setBlendedStage] = useState<'blended' | 'polished' | 'personalized'>('blended');
   // Previous stage snapshots — ordered list of user actions, each collapsible
@@ -1654,17 +1710,27 @@ export function FiveChapterShell() {
         <div className="fcs-chapters" style={showCompleteDraft && story.blendedText ? { display: 'none' } : undefined}>
           {/* Progressive toolbar — buttons appear based on story stage */}
           <div className="fcs-chapters-header">
-            {/* Stage 1: Generate / Regenerate */}
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => {
-                if (allChaptersGenerated) { setConfirmRegenerateAll(true); return; }
-                generateAllChapters();
-              }}
-              disabled={generating || blending || polishing || personalizing}
-            >
-              {generating ? <><Spinner size={12} /> Generating...</> : allChaptersGenerated ? 'Regenerate All' : 'Generate All Chapters'}
-            </button>
+            {/* Bundle 1B Item 3 Layer 2 — autonomous-build progress indicator.
+                When buildStatusLabel is set ("Building", "Polishing"), the
+                pipeline is still running; show progress instead of the manual
+                Generate button. */}
+            {buildStatusLabel ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary, #666)' }}>
+                <Spinner size={12} /> {buildStatusLabel}
+                {(story.chapters?.length || 0) > 0 ? ` — ${story.chapters.length} of 5 written` : ''}
+              </span>
+            ) : (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  if (allChaptersGenerated) { setConfirmRegenerateAll(true); return; }
+                  generateAllChapters();
+                }}
+                disabled={generating || blending || polishing || personalizing}
+              >
+                {generating ? <><Spinner size={12} /> Generating...</> : allChaptersGenerated ? 'Regenerate All' : 'Generate All Chapters'}
+              </button>
+            )}
 
             {/* Combine Chapters — instant, no AI. Available once chapters exist, hidden once blended */}
             {allChaptersGenerated && !story.blendedText && (

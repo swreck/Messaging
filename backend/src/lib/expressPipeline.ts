@@ -3116,6 +3116,17 @@ ${draftForStory.tier2Statements
     if (watchdogHandle) watchdogHandle.stop();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Bundle 1B Item 3 Layer 1 — diagnostic instrumentation. The top-level
+    // catch previously logged only via fail(message), which set status='error'
+    // but did not surface the stack trace + context Cowork's Walk B repro
+    // needed. This logs the full exception alongside the jobId so Railway
+    // logs let CC pinpoint the stage that threw (cross-reference against
+    // the [Perf] lines preceding this error to see which stage was active).
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error(
+      `[ExpressPipeline] ${jobId} TOP-LEVEL CATCH — pipeline aborted. Cross-reference [Perf] lines above for last-known stage. Error: ${message}`,
+      stack ? `\nStack: ${stack}` : '',
+    );
     await fail(message);
     // Bundle 1B Rule 7 — pipeline reached terminal error state; stop
     // the watchdog. The recovery message fires only on SILENT stalls,

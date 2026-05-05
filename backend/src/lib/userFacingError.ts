@@ -17,9 +17,20 @@ export type ErrorKind =
   | 'chapter-generate'
   | 'chapter-regenerate'
   | 'tier-generate'
+  | 'tier-restructure'
   | 'export-generate'
   | 'name-save'
   | 'auth-expired'
+  | 'mf-draft'
+  | 'direction-apply'
+  | 'build-start'
+  | 'build-failed'
+  | 'build-status'
+  | 'foundation-rebuild'
+  | 'acknowledge'
+  | 'url-read'
+  | 'audience-research'
+  | 'differentiation-test'
   | 'generic';
 
 export interface ErrorContext {
@@ -34,7 +45,9 @@ export interface ErrorContext {
 }
 
 // Locked Cowork copy per kind. DO NOT EDIT without Cowork sign-off.
-// Source: cc-prompts/cowork-item-1-copy-templates-2026-05-04.md
+// Sources:
+//   - cc-prompts/cowork-item-1-copy-templates-2026-05-04.md (initial 10 kinds)
+//   - cc-prompts/cowork-item-5-rulings-2026-05-05.md (Item 1 follow-up: 10 more kinds)
 const COPY: Record<ErrorKind, string> = {
   'priority-save':
     "I'd save that, but the priority I'm trying to save it under isn't where I expected. Want to refresh the page and try again, or skip the save for now?",
@@ -48,12 +61,34 @@ const COPY: Record<ErrorKind, string> = {
     "That regenerate didn't go through. Want me to try once more, or leave the current version?",
   'tier-generate':
     "Something stalled while I was building your Three Tier. Let me try that again from the last clean step.",
+  'tier-restructure':
+    "Couldn't restructure the table this round — your previous version is back. Try saying it differently, or point me at the specific cells you want to change.",
   'export-generate':
     "That export didn't come through. Want me to try once more?",
   'name-save':
     "I had trouble saving the name — let me try again, or you can re-enter it in Settings.",
   'auth-expired':
     "Looks like your session timed out. Sign back in and we'll pick up where we left off.",
+  'mf-draft':
+    "I tried to draft those motivating factors but couldn't this round. Try again from the offering page, or share what you've got and I'll work with it.",
+  'direction-apply':
+    "I couldn't apply that direction this round. Try saying it differently, or point me at the specific cells you want to change.",
+  'build-start':
+    "Something blocked the build before it started. Want me to try again?",
+  'build-failed':
+    "The build ran into a problem partway through. Tell me which part you'd like to redo, or I can try once more from the start.",
+  'build-status':
+    "I couldn't pull the build status just now. Want me to try again?",
+  'foundation-rebuild':
+    "Couldn't rebuild the foundation this round. Want me to try once more, or work with what we've got?",
+  'acknowledge':
+    "I noted that — keep going.",
+  'url-read':
+    "I couldn't read that URL just now. Want to paste the content directly so I can work from it?",
+  'audience-research':
+    "I couldn't pull research on that audience this round. Try again, or tell me what you already know about them.",
+  'differentiation-test':
+    "Couldn't finish the differentiation test this round. Want me to try once more, or tell me which competitors to focus on?",
   'generic':
     "I ran into something I couldn't get past just now. Want to try that again, or skip it for now?",
 };

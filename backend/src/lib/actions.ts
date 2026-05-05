@@ -542,8 +542,8 @@ export async function dispatchActions(
                 actionResult = `Drafted motivating factors for ${drafted.length} differentiator${drafted.length === 1 ? '' : 's'} on "${offering.name}". Each one names multiple audience types so the same offering can speak to different audiences.`;
                 refreshNeeded = true;
               } catch (err: any) {
-                // Bundle 1B Item 1 — generic kind until Cowork extends with mf-draft copy.
-                actionResult = `${translateError(err, { kind: 'generic', site: 'actions.ts:draft_motivating_factors', userId, workspaceId })} You can also use the "Ask Maria to draft motivating factors" button on the offering page.`;
+                // Bundle 1B Item 1 follow-up — Cowork-locked mf-draft copy (includes path-forward).
+                actionResult = translateError(err, { kind: 'mf-draft', site: 'actions.ts:draft_motivating_factors', userId, workspaceId });
               }
             }
           }
@@ -1203,7 +1203,7 @@ ADDITIONAL DIRECTION FROM USER: ${a.params.instruction}`;
                     }
                   });
                 }
-                actionResult = `${translateError(regenErr, { kind: 'tier-generate', site: 'actions.ts:restructure_tier', userId, workspaceId })} Your previous table has been restored.`;
+                actionResult = translateError(regenErr, { kind: 'tier-restructure', site: 'actions.ts:restructure_tier', userId, workspaceId });
                 refreshNeeded = true;
               }
 
@@ -1308,7 +1308,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
             }
           }
         } catch (err: any) {
-          actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:apply_direction_to_table', userId, workspaceId });
+          actionResult = translateError(err, { kind: 'direction-apply', site: 'actions.ts:apply_direction_to_table', userId, workspaceId });
         }
       }
 
@@ -1605,7 +1605,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
             }
             refreshNeeded = false;
           } catch (err: any) {
-            actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:build_deliverable start', userId, workspaceId });
+            actionResult = translateError(err, { kind: 'build-start', site: 'actions.ts:build_deliverable start', userId, workspaceId });
           }
         }
       }
@@ -1633,13 +1633,13 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
             actionResult = `[NAVIGATE:/five-chapter/${job.draftId}?story=${job.resultStoryId}] Your first draft is ready.`;
             refreshNeeded = true;
           } else if (job.status === 'error') {
-            actionResult = translateError(new Error(job.error || 'autonomous build failed'), { kind: 'chapter-generate', site: 'actions.ts:check_build_status job-failed', userId, workspaceId });
+            actionResult = translateError(new Error(job.error || 'autonomous build failed'), { kind: 'build-failed', site: 'actions.ts:check_build_status job-failed', userId, workspaceId });
           } else {
             actionResult = `Still working — ${job.stage || 'processing'}. ${job.progress || 0}% done.`;
           }
         } catch (err: any) {
           console.error('[check_deliverable] error:', err);
-          actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:check_build_status catch', userId, workspaceId });
+          actionResult = translateError(err, { kind: 'build-status', site: 'actions.ts:check_build_status catch', userId, workspaceId });
         }
       }
 
@@ -1674,7 +1674,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
             refreshNeeded = false;
           } catch (err: any) {
             console.error('[rebuild_foundation] error:', err);
-            actionResult = translateError(err, { kind: 'tier-generate', site: 'actions.ts:rebuild_foundation', userId, workspaceId });
+            actionResult = translateError(err, { kind: 'foundation-rebuild', site: 'actions.ts:rebuild_foundation', userId, workspaceId });
           }
         }
       }
@@ -1693,7 +1693,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           refreshNeeded = true;
         } catch (err: any) {
           console.error('[acknowledge_observation] error:', err);
-          actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:acknowledge_observation', userId, workspaceId });
+          actionResult = translateError(err, { kind: 'acknowledge', site: 'actions.ts:acknowledge_observation', userId, workspaceId });
         }
       }
 
@@ -1969,7 +1969,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           }
         } catch (err: any) {
           console.error('[research_website] failed:', err);
-          actionResult = `${translateError(err, { kind: 'generic', site: 'actions.ts:read_url', userId, workspaceId })} Want to paste the content directly so I can work from it?`;
+          actionResult = translateError(err, { kind: 'url-read', site: 'actions.ts:read_url', userId, workspaceId });
         }
         refreshNeeded = false;
       }
@@ -2002,7 +2002,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           actionResult = lines.join('\n');
         } catch (err: any) {
           console.error('[research_audience] failed:', err);
-          actionResult = `${translateError(err, { kind: 'generic', site: 'actions.ts:research_audience', userId, workspaceId })} Try again, or tell me what you already know about them.`;
+          actionResult = translateError(err, { kind: 'audience-research', site: 'actions.ts:research_audience', userId, workspaceId });
         }
         refreshNeeded = false;
       }
@@ -2070,7 +2070,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
           }
         } catch (err: any) {
           console.error('[test_differentiation] failed:', err);
-          actionResult = translateError(err, { kind: 'generic', site: 'actions.ts:run_differentiation_test', userId, workspaceId });
+          actionResult = translateError(err, { kind: 'differentiation-test', site: 'actions.ts:run_differentiation_test', userId, workspaceId });
         }
         refreshNeeded = false;
       }
