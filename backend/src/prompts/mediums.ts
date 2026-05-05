@@ -6,9 +6,33 @@ export interface MediumSpec {
   description: string;
   wordRange: [number, number];
   chapterBudgets: [number, number, number, number, number];
+  /**
+   * Artifact-level format spec. Read by the BLEND layer when composing
+   * the envelope around the joined chapters. Should describe the
+   * artifact's overall shape — salutation/sign-off for email, hero
+   * H1 for landing page, FOR IMMEDIATE RELEASE for press release —
+   * NOT what each chapter individually should produce.
+   *
+   * Bundle 1B Commit D — refactored from per-chapter prompt injection
+   * to blend-layer-only consumption. The per-chapter prompts read
+   * `perChapterFormat[chapterNum]` instead of this string.
+   */
   format: string;
   formatRules: string;
   tone: string;
+  /**
+   * Per-chapter format directives. Each chapter's prompt reads
+   * `perChapterFormat[chapterNum]` to know which envelope pieces (if
+   * any) it should produce. The artifact-level envelope (subject,
+   * salutation, sign-off, hero H1, FOR IMMEDIATE RELEASE, etc.) is
+   * composed at the blend layer using `format` above.
+   *
+   * Optional: when `perChapterFormat` is undefined for a medium, the
+   * old behavior applies (the artifact-level `format` string is
+   * injected into every chapter's prompt). Email is the first medium
+   * with per-chapter format strings authored.
+   */
+  perChapterFormat?: Record<1 | 2 | 3 | 4 | 5, string>;
 }
 
 export const MEDIUM_SPECS: Record<string, MediumSpec> = {
@@ -18,9 +42,23 @@ export const MEDIUM_SPECS: Record<string, MediumSpec> = {
     description: 'Professional outreach email',
     wordRange: [150, 250],
     chapterBudgets: [30, 60, 25, 25, 20],
-    format: 'Subject line, salutation, opening hook, 2-3 body paragraphs, clear CTA, signoff. No headers beyond subject.',
-    formatRules: 'This is a single-scroll business email. Chapter 1 is 1-2 sentences max. The entire email must feel like something a person actually sent, not a marketing piece. No section headers. No bullet lists longer than 3 items. STRUCTURAL ELEMENTS — default included unless the user explicitly opts out: (1) salutation on its own line at the top — when the audience is a single named person, use the audience\'s first name (e.g., "Hi Liam,"); when the audience is not a single named person, use a role-shaped greeting (e.g., "Hi there,"). NEVER emit a literal placeholder like "[name]" or "[Name]" or "[audience first name]" — those reach the user-visible deliverable as broken text. (2) signoff on its own line at the bottom — Bundle 1A rev7 Rule 1: when a user-side display name is provided in the build context, use "Best,\\n[the user\'s actual name]". When no user display name is available (the user has no name on file or dismissed the gap-notice question), the sign-off is "Best regards" alone — no name, no placeholder. The literal string "[Name]" and any other bracketed placeholder must NEVER appear in the email body. Honor explicit opt-out: if the user said "this is a thread reply" or "no salutation" or "skip the signoff", omit those elements without protest. Round 3.2 Item 10 — these defaults exist because Cowork observed the bug shape "deliverable lacks salutation and signoff" repeating in autonomous flows.',
+    // Bundle 1B Commit D — `format` describes the BLEND-layer envelope shape,
+    // not the per-chapter prompt shape. Verbatim from
+    // cc-prompts/cowork-item-5-site-4-not-fixed-2026-05-05.md.
+    format: 'Email format. The envelope (salutation at the open, signoff at the close) is composed by the blend layer around the joined chapters.',
+    formatRules: 'This is a single-scroll business email. Chapter 1 is 1-2 sentences max. The entire email must feel like something a person actually sent, not a marketing piece. No section headers. No bullet lists longer than 3 items. STRUCTURAL ELEMENTS — composed at the BLEND layer (not by individual chapters): (1) salutation on its own line at the top — when the audience is a single named person, use the audience\'s first name (e.g., "Hi Liam,"); when the audience is not a single named person, use a role-shaped greeting (e.g., "Hi there,"). NEVER emit a literal placeholder like "[name]" or "[Name]" or "[audience first name]" — those reach the user-visible deliverable as broken text. (2) signoff on its own line at the bottom — Bundle 1A rev7 Rule 1: when a user-side display name is provided in the build context, use "Best,\\n[the user\'s actual name]". When no user display name is available (the user has no name on file or dismissed the gap-notice question), the sign-off is "Best regards" alone — no name, no placeholder. The literal string "[Name]" and any other bracketed placeholder must NEVER appear in the email body. Honor explicit opt-out: if the user said "this is a thread reply" or "no salutation" or "skip the signoff", omit those elements without protest. Round 3.2 Item 10 — these defaults exist because Cowork observed the bug shape "deliverable lacks salutation and signoff" repeating in autonomous flows.',
     tone: 'Direct and personal. Written to one person, not a list.',
+    // Bundle 1B Commit D — per-chapter format strings (LOCKED, Cowork-authored
+    // verbatim from cc-prompts/cowork-item-5-site-4-not-fixed-2026-05-05.md).
+    // Each chapter reads ONLY its own directive; the envelope is the blend's
+    // job. DO NOT EDIT without Cowork sign-off.
+    perChapterFormat: {
+      1: 'Body prose only. The opening hook of the email lives here. Do NOT emit Subject, salutation, or signoff.',
+      2: 'Body prose only. Continuing the email body. Do NOT emit salutation or signoff.',
+      3: 'Body prose only. Continuing the email body. Do NOT emit salutation or signoff.',
+      4: 'Body prose only. Continuing the email body. Do NOT emit salutation or signoff.',
+      5: 'The CTA paragraph. Do NOT emit the literal "Best regards" or any signoff — the blend composes that. The signoffDirective handles the user display name.',
+    },
   },
   blog: {
     id: 'blog',
