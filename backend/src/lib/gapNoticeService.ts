@@ -46,11 +46,33 @@ export interface GapNoticeContext {
    *  reads categoryLabel === 'Support' AND text non-empty AND
    *  tier3BulletCount > 0 to consider Support material substantive. */
   tier2: { categoryLabel: string | null; text: string; tier3BulletCount: number }[];
+  /** Bundle 1B Item 6 — audience priorities ordered by rank. The
+   *  support-gap relevance check inspects priorities[0] (rank-1) for
+   *  adoption-ease patterns; if adoption-ease is not the rank-1
+   *  priority, the support gap stays silent regardless of source-
+   *  material absence. Empty array (no priorities yet) means the
+   *  relevance check returns false and the gap is silent. */
+  priorities: { rank: number; text: string }[];
   /** Per-build dismissal flags persisted on
    *  ExpressJob.interpretation.gapDismissals. Each gap fires at most
    *  once per build; user dismissal sticks for that build. */
   dismissals: Partial<Record<GapKey, boolean>>;
 }
+
+// Bundle 1B Item 6 — locked Cowork-authored adoption-ease pattern list.
+// Source: cc-prompts/cowork-item-6-priority-relevance-2026-05-04.md.
+// Any rank-1 priority whose text matches at least one pattern triggers
+// the support gap-notice; otherwise the gap stays silent.
+// DO NOT EDIT without Cowork sign-off.
+const ADOPTION_EASE_PATTERNS: RegExp[] = [
+  /low.{0,5}implementation.{0,5}burden/i,
+  /adoption.{0,5}ease/i,
+  /onboarding.{0,5}burden/i,
+  /can.?t take on another/i,
+  /minimal.{0,5}lift/i,
+  /smooth.{0,5}rollout/i,
+  /quick.{0,5}implementation/i,
+];
 
 /**
  * Detect display-name gap.
@@ -80,16 +102,32 @@ function detectDisplayNameGap(ctx: GapNoticeContext): GapNotice | null {
  * Detect Support-gap.
  *
  * Triggered when:
- *   - The draft's Tier 2 has no Support-category statement with
+ *   - Bundle 1B Item 6: rank-1 priority matches an adoption-ease
+ *     pattern (relevance check). When adoption-ease is not the rank-1
+ *     priority, the gap is silent — Ch3 will lead with the rank-1
+ *     priority's risk-reduction differentiator per rev8's Ch3 angle,
+ *     not implementation-support content. Asking the user for support
+ *     specifics that won't shape the chapter is wasted user effort.
+ *   - AND the draft's Tier 2 has no Support-category statement with
  *     substantive content (non-empty text AND tier3BulletCount > 0)
  *   - AND not already dismissed for this build
  *
  * "Support" here is the Tier 2 categoryLabel that lands Ch3 content
  * in the existing methodology. When source has no substantive Support
- * material, Ch3 has nothing concrete to draw from — that's the gap.
+ * material AND adoption-ease IS the rank-1 priority, Ch3 has nothing
+ * concrete to draw from for the failure mode the audience would fear
+ * most — that's the gap.
  */
 function detectSupportGap(ctx: GapNoticeContext): GapNotice | null {
   if (ctx.dismissals.support === true) return null;
+  // Bundle 1B Item 6 — relevance check. Inspect rank-1 priority text
+  // against ADOPTION_EASE_PATTERNS. Empty priorities array (defense-
+  // in-depth; build should be blocked upstream without priorities)
+  // returns false here so the gap is silent.
+  const rankOne = ctx.priorities.find(p => p.rank === 1) || ctx.priorities[0];
+  if (!rankOne || !rankOne.text) return null;
+  const adoptionEaseIsRankOne = ADOPTION_EASE_PATTERNS.some(rx => rx.test(rankOne.text));
+  if (!adoptionEaseIsRankOne) return null;
   const supportRows = ctx.tier2.filter(
     t2 => (t2.categoryLabel || '').trim().toLowerCase() === 'support',
   );

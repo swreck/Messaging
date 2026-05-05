@@ -125,7 +125,17 @@ export function DashboardPage() {
 
   if (loading) return <div className="loading-screen"><Spinner size={32} /></div>;
 
-  const isNew = offerings.length === 0 && audiences.length === 0;
+  // Bundle 1B Item 7 — splash card "Build your first Three Tier message"
+  // fires only when there's no existing work. Walk B observed Marcus
+  // seeing the splash even though Sarah's draft existed; widening the
+  // isNew check to also require zero drafts prevents the stale-state
+  // splash from displaying when any draft has been started.
+  const totalDraftCount = hierarchy.reduce(
+    (sum, offering) => sum + offering.audiences.length,
+    0,
+  );
+  const isNew =
+    offerings.length === 0 && audiences.length === 0 && totalDraftCount === 0;
 
   // Flatten hierarchy into a list of all drafts, sorted by most recent
   const allDrafts: ActiveDraft[] = [];
@@ -145,13 +155,19 @@ export function DashboardPage() {
   }
   allDrafts.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
-  const inProgressAll = allDrafts.filter(d => d.status !== 'complete' && d.currentStep < 5);
-  const completedAll = allDrafts.filter(d => d.status === 'complete' || d.currentStep === 5);
+  // Bundle 1B Item 7 — "Complete" requires the draft's explicit status
+  // flag, NOT just currentStep === 5. The currentStep marker advances
+  // when Three Tier finishes and stays at 5 indefinitely; equating it
+  // with deliverable completeness produced the rev7 "Complete · just
+  // now" mid-foundation card. Drafts past Three Tier without a
+  // completed deliverable are "In progress" until status flips.
+  const isDraftComplete = (d: ActiveDraft) => d.status === 'complete';
+  const inProgressAll = allDrafts.filter(d => !isDraftComplete(d));
+  const completedAll = allDrafts.filter(isDraftComplete);
   const mostRecent = inProgressAll[0] || null;
 
   // Unified Recent Work pipeline — tab → search → audience → date range → sort.
   const q = recentSearch.trim().toLowerCase();
-  const isDraftComplete = (d: ActiveDraft) => d.status === 'complete' || d.currentStep === 5;
 
   let workingList: ActiveDraft[] = [...allDrafts];
   if (recentTab === 'inProgress') workingList = workingList.filter(d => !isDraftComplete(d));

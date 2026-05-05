@@ -1496,6 +1496,18 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
                   orderBy: { sortOrder: 'asc' },
                   include: { tier3Bullets: true },
                 },
+                // Bundle 1B Item 6 — audience priorities for the support-gap
+                // relevance check. detectSupportGap inspects priorities[rank-1]
+                // against ADOPTION_EASE_PATTERNS; gap stays silent unless
+                // adoption-ease IS the rank-1 priority.
+                audience: {
+                  include: {
+                    priorities: {
+                      orderBy: { sortOrder: 'asc' },
+                      select: { rank: true, text: true },
+                    },
+                  },
+                },
               },
             });
             const tier2Snapshot = draftForGap
@@ -1503,6 +1515,12 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
                   categoryLabel: t2.categoryLabel,
                   text: t2.text,
                   tier3BulletCount: t2.tier3Bullets.length,
+                }))
+              : [];
+            const prioritiesSnapshot = draftForGap?.audience?.priorities
+              ? draftForGap.audience.priorities.map(p => ({
+                  rank: p.rank,
+                  text: p.text,
                 }))
               : [];
             const dismissalsRaw =
@@ -1519,6 +1537,7 @@ ${editDraft.offering.elements.map((e: any) => `"${e.text}"`).join('\n')}`;
               userDisplayName,
               medium,
               tier2: tier2Snapshot,
+              priorities: prioritiesSnapshot,
               dismissals,
             });
             if (gap) {
